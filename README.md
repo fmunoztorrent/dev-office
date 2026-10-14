@@ -56,19 +56,44 @@ dev-team-office tasks                                  # estado de las tareas
 
 Si ya hay una oficina corriendo, `dev-team-office` se conecta a ella en vez de fallar. Puedes tener varias terminales mirando la misma.
 
-**Teclas:** `t` tarea al agente · `x` cancelar tarea · `q` salir · `tab`/flechas o clic para elegir personaje · `m` mensaje al equipo · `s` saludar · `d`/`p` demos · `r` reiniciar · `esc` soltar.
+**Teclas:** `t` (o clic en la pizarra) nuevo encargo · `c` (o clic en ⚙) ajustes · `x` cancelar · `q` salir · `tab`/flechas o clic para elegir personaje · `m` mensaje al equipo · `s` saludar · `d`/`p` demos · `r` reiniciar · `esc` soltar.
 
 **Requisitos de la terminal:** al menos 60×18 (se ve bien desde 120×36). Con *truecolor* se ve mejor: iTerm2, Ghostty, WezTerm, Kitty, la terminal de VS Code y la de Claude lo tienen. En las demás se usan 256 colores; se fuerza con `--color truecolor|256`.
 
 La misma oficina se puede ver en el navegador en `http://127.0.0.1:4317`.
 
-## Enviar tareas a tus agentes
+## Encargos: haz clic en la pizarra
 
-Desde la oficina también se le puede pedir trabajo al agente:
+Al hacer clic en la pizarra de la oficina, en la terminal o en la web (en la terminal también con `t`), se abre el diálogo **Nuevo encargo**. Ahí eliges:
 
-- **En la terminal:** `t` abre el compositor, `tab` elige el destino y `Enter` envía. `x` cancela la última tarea en curso.
-- **En la web:** el formulario "Tarea para un agente".
-- **Desde la CLI:** `dev-team-office task "Agrega paginación" --agent pi`. Sin argumentos muestra a quién se le puede enviar.
+- **Proyecto:** el directorio donde se trabaja.
+- **Pipeline**, o *tarea directa*.
+- **Quién orquesta:** la oficina (un agente por etapa) o el orquestador del harness con sus subagentes.
+- **A qué agente va.**
+- **La tarea**, en una nota adhesiva.
+
+Antes de enviar, el diálogo muestra las etapas: qué personaje hace cada una, con qué agente y modelo, y qué gate tiene.
+
+Un **pipeline** se define en el proyecto (`.devteam/pipelines/*.json`) junto a la configuración de cada harness: los agentes de `.pi/agents`, `.claude/agents` y `.opencode/agents`, un modelo por agente, dependencias entre etapas, gates (`npm test` debe fallar en RED y pasar en GREEN) y bucles si fallan. Lo que hace cada agente por dentro se ve en el juego. Formato completo en [docs/pipelines.md](docs/pipelines.md) y un ejemplo en [`examples/tienda`](examples/tienda):
+
+```bash
+dev-team-office --project examples/tienda
+```
+
+Desde la CLI: `dev-team-office task "Agrega paginación" --agent pi` para una tarea directa. Sin argumentos muestra a quién se le puede enviar.
+
+## ⚙ Ajustes
+
+El engranaje del panel (web) o de la cabecera (terminal, también con `c`) configura todo lo que usa la oficina, y lo aplica en caliente:
+
+| Pestaña | Qué se configura | Dónde se guarda |
+|---|---|---|
+| Oficina | Proyectos que ofrece el diálogo, directorio por defecto, comandos para lanzar Claude/OpenCode/Pi | `~/.dev-team-office/config.json` |
+| Proyecto | Harness por defecto, orquestador, etapas en paralelo, permisos de Claude, agente y modelo de cada personaje | `.devteam/team.json` |
+| Pipelines | Crear, editar, validar y borrar pipelines (en la terminal, ver su estado) | `.devteam/pipelines/<id>.json` |
+| Personajes | Nombre, cargo, colores (camisa, pantalón, pelo, piel), pelo largo, barba y lentes de cada personaje | `~/.dev-team-office/config.json` |
+
+Todo se valida antes de escribir. Sólo se escribe en proyectos que la oficina conoce, y un sitio web ajeno no puede cambiar nada.
 
 | Destino | Cómo llega |
 |---|---|
@@ -135,9 +160,17 @@ server/adapters.js      payload nativo → formato genérico
 server/office.js        estado: sesiones, todos, subagentes, turnos, bitácora
 server/roles.js         qué personaje representa cada herramienta/archivo/comando
 server/tasks.js         tareas hacia los agentes: registro, cola, entrega y ejecuciones lanzadas
+server/project.js       configuración de un proyecto (.devteam/): equipo y pipelines
+server/pipeline.js      pipelines: la oficina orquesta (un proceso por etapa) o el agente orquesta
+server/harness/         Pi, Claude Code y OpenCode: agentes, comando por etapa, lectura de su JSON
+server/settings.js      ⚙ Ajustes: leer, validar y guardar
 server/demo.js          sesiones simuladas (Claude Code y flujo TDD de Pi)
 public/sim.js           la simulación (personajes, rutas, reacciones); la comparten terminal y navegador
 public/targets.js       a quién se le puede mandar una tarea (terminal y navegador)
+public/brief.js         el diálogo de la pizarra (terminal y navegador)
+public/settings-ui.js   ⚙ Ajustes en la web
+tui/settings.js         ⚙ Ajustes en la terminal
+examples/tienda/        proyecto de ejemplo con equipo, pipelines y agentes
 tui/                    la oficina en la terminal: framebuffer de medios bloques, vista, teclado y ratón
 public/game.js          la oficina en canvas, para el navegador
 integrations/           Claude Code, OpenCode, Pi (extensión + skill)

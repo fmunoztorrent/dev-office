@@ -1,9 +1,10 @@
 // Dibuja la simulación (public/sim.js) en el framebuffer de terminal.
 // El mundo de 960×600 se escala a los píxeles disponibles; el texto va en celdas encima.
 
-import { W, H, TEAM, SPOT, STATUS_ICON, PHASE_COLOR, phaseInfo } from '../public/sim.js';
+import { W, H, TEAM, SPOT, BOARD, STATUS_ICON, PHASE_COLOR, phaseInfo } from '../public/sim.js';
 import { hex, mix, fit, wrap, strWidth } from './screen.js';
-import { AGENT_NAME, TASK_STATUS, taskTargets as sharedTargets } from '../public/targets.js';
+import { AGENT_NAME, TASK_STATUS } from '../public/targets.js';
+import { briefOptions, briefFields, briefProblem, projectLabel } from '../public/brief.js';
 
 const C = Object.fromEntries(Object.entries({
   appBg: '#12141f', panelBg: '#1a1d2c', headerBg: '#2b2f47', text: '#e8e9f1', muted: '#9095b0', accent: '#ffd166',
@@ -20,9 +21,7 @@ const C = Object.fromEntries(Object.entries({
 const STATE_LABEL = { idle: 'libre', working: 'trabajando', thinking: 'pensando', blocked: 'bloqueado', waiting: 'esperando', done: 'listo', coffee: 'café', talking: 'hablando', red: 'en rojo' };
 const STATE_COLOR = { idle: C.muted, working: C.blue, thinking: C.purple, talking: C.purple, blocked: C.err, red: C.err, waiting: C.warn, done: C.ok, coffee: C.muted };
 const SESSION_LABEL = { active: 'en curso', waiting: 'esperándote', done: 'terminada', ended: 'cerrada' };
-
-// Destinos de tareas: ver public/targets.js.
-export const taskTargets = (model) => sharedTargets(model.tasks, model.sessions?.values?.() || []);
+const STAGE_ICON = { pending: '◷', running: '▶', done: '✔', failed: '✖', skipped: '⊘', cancelled: '⊘' };
 
 export function computeLayout(cols, rows) {
   const panelW = cols >= 110 ? Math.min(54, Math.max(34, Math.floor(cols * 0.28))) : 0;
@@ -63,6 +62,8 @@ export function drawFrame(scr, L, sim, model, now) {
   drawHeader(scr, L, model);
   drawFooter(scr, L, model);
   if (L.panelW) drawPanel(scr, L, sim, model);
+  if (model.brief) drawBrief(scr, L, model);
+  if (model.settings) model.settings.draw(scr, L);
 }
 
 // ------------------------------------------------------------------ escena
@@ -375,24 +376,14 @@ function drawHeader(scr, L, model) {
   c += scr.text(c, 0, fit(api, L.cols - c - 10), C.muted, C.headerBg);
   const t = new Date().toLocaleTimeString('es', { hour12: false });
   scr.text(L.cols - t.length - 1, 0, t, C.text, C.headerBg);
+  // ⚙ Ajustes: se abre con un clic aquí o con la tecla c
+  L.gearCol = L.cols - t.length - 5;
+  scr.text(L.gearCol, 0, ' ⚙ ', model.settings ? C.headerBg : C.accent, model.settings ? C.accent : C.headerBg);
 }
 
 function drawFooter(scr, L, model) {
   const row = L.rows - 1;
   scr.fill(0, row, L.cols, C.headerBg);
-  if (model.composer) {
-    const targets = taskTargets(model);
-    const t = targets[model.composer.target];
-    const hint = '  tab destino · Enter enviar · Esc ';
-    let c = scr.text(0, row, ' Tarea → ', C.accent, C.headerBg);
-    c += scr.text(c, row, fit(t ? `[${t.label}]` : '[sin destino]', Math.floor(L.cols / 3)), t ? C.ok : C.err, C.headerBg);
-    c += scr.text(c, row, ' ', C.text, C.headerBg);
-    const shown = fit(model.composer.text, L.cols - c - strWidth(hint) - 2);
-    const cc = scr.text(c, row, shown, C.text, C.headerBg);
-    scr.text(c + cc, row, '▌', C.accent, C.headerBg);
-    scr.text(L.cols - strWidth(hint), row, hint, C.muted, C.headerBg);
-    return;
-  }
   if (model.chat !== null) {
     const label = model.selected ? ` Mensaje para ${TEAM[model.selected].name}: ` : ' Mensaje al equipo: ';
     const c = scr.text(0, row, label, C.accent, C.headerBg);
@@ -403,7 +394,7 @@ function drawFooter(scr, L, model) {
     scr.text(L.cols - strWidth(hint), row, hint, C.muted, C.headerBg);
     return;
   }
-  const keys = [['t', 'tarea al agente'], ['q', 'salir'], ['tab', 'elegir'], ['m', 'mensaje'], ['s', 'saludar'], ['x', 'cancelar tarea'], ['d', 'demo'], ['p', 'demo TDD'], ['r', 'reiniciar'], ['esc', 'soltar']];
+  const keys = [['t', 'encargo (o clic en la pizarra)'], ['c', 'ajustes ⚙'], ['q', 'salir'], ['tab', 'elegir'], ['m', 'mensaje'], ['s', 'saludar'], ['x', 'cancelar'], ['d', 'demo'], ['p', 'demo TDD'], ['r', 'reiniciar'], ['esc', 'soltar']];
   let c = 1;
   for (const [k, label] of keys) {
     if (c + k.length + label.length + 3 > L.cols - 2) break;
@@ -477,20 +468,32 @@ function drawPanel(scr, L, sim, model) {
     r++;
   }
 
+  // PIPELINES: cada etapa con el personaje que la hace
+  const runs = (model.pipelines || []).slice(-2).reverse();
+  if (runs.length && r < maxR - 12) {
+    heading('PIPELINES');
+    for (const run of runs) {
+      if (r > maxR) break;
+      const [icon, tone] = { running: ['▶', 'accent'], done: ['✔', 'ok'], failed: ['✖', 'err'], cancelled: ['⊘', 'muted'] }[run.status] || ['·', 'muted'];
+      scr.text(x + 1, r, icon, C[tone], C.panelBg);
+      T(`${run.pipeline.name} · ${run.project.name}${run.strategy === 'agent' ? ' (orquesta el agente)' : ''}`, C.text, x + 3, inner - 2);
+      r++;
+      let c = x + 3;
+      for (const st of run.stages) {
+        const chip = `${STAGE_ICON[st.status] || '·'}${TEAM[st.role]?.name || st.role}${st.attempts > 1 ? `×${st.attempts}` : ''} `;
+        if (c + strWidth(chip) > x + w - 1) { r++; c = x + 3; if (r > maxR) break; }
+        const color = st.status === 'failed' ? C.err : ['pending', 'skipped', 'cancelled'].includes(st.status) ? C.muted : hex(TEAM[st.role]?.shirt || '#888888');
+        c += scr.text(c, r, chip, color, C.panelBg);
+      }
+      r++;
+      if (run.status !== 'running' && run.detail && r <= maxR) { T(`  ${run.detail}`, C.muted); r++; }
+    }
+    r++;
+  }
+
   // TAREAS enviadas a los agentes
   const tasks = (model.tasks?.tasks || []).slice(-4).reverse();
-  if (model.composer) {
-    heading('ENVIAR A', 'tab cambia');
-    taskTargets(model).forEach((t, i) => {
-      if (r > maxR) return;
-      const sel = i === model.composer.target;
-      scr.fill(x, r, w, sel ? C.headerBg : C.panelBg);
-      scr.text(x + 1, r, fit(`${sel ? '▸' : ' '} ${t.label}`, inner), sel ? C.accent : C.text, sel ? C.headerBg : C.panelBg);
-      r++;
-    });
-    if (!taskTargets(model).length) { T('Nadie conectado y ningún CLI en el PATH.', C.err); r++; }
-    r++;
-  } else if (tasks.length) {
+  if (tasks.length) {
     heading('TAREAS', `${(model.tasks.agents || []).length} agente(s) conectado(s)`);
     for (const t of tasks) {
       if (r > maxR) break;
@@ -565,6 +568,122 @@ export function logText(ev) {
   }
   if (ev.kind === 'phase_end') return `termina su turno${ev.text ? `: ${ev.text}` : ''}`;
   return ev.text || ev.kind;
+}
+
+/** ¿Esa celda cae en la pizarra? (un clic abre el diálogo de encargo) */
+export function boardAtCell(L, col, row) {
+  if (L.tooSmall) return false;
+  const x0 = L.ox + Math.round(BOARD.x * L.s), x1 = L.ox + Math.round((BOARD.x + BOARD.w) * L.s);
+  const r0 = Math.floor((L.oy + Math.round(BOARD.y * L.s)) / 2), r1 = Math.floor((L.oy + Math.round((BOARD.y + BOARD.h) * L.s)) / 2);
+  return col >= x0 && col <= x1 && row >= r0 && row <= r1;
+}
+
+// ------------------------------------------------------------------ diálogo "Nuevo encargo"
+
+const CB = Object.fromEntries(Object.entries({
+  cork: '#b9895a', corkDot: '#8f6640', paper: '#fdfcf6', note: '#ffe08a', pin: '#ef476f', gate: '#9b5d1d', err: '#c1121f', shadow: '#0a0b14', soft: '#6c757d',
+}).map(([k, v]) => [k, hex(v)]));
+const STRATEGY_HINT = { office: 'un proceso por etapa, con su agente y su modelo', agent: 'le mando el pipeline al orquestador' };
+
+/** El diálogo de la pizarra: un corcho con una hoja clavada, como en la vista web. */
+function drawBrief(scr, L, model) {
+  const b = model.brief;
+  const opts = briefOptions({ projects: b.projects, tasks: model.tasks, sessions: model.sessions?.values?.() || [] }, b.sel);
+  const fields = briefFields(opts);
+  const w = Math.min(L.cols - 2, 88);
+  const iw = w - 8; // ancho útil dentro de la hoja
+  const labelW = 10;
+  const rows = []; // cada fila: (row, col) => void
+
+  const text = (str, fg, bg = CB.paper) => (row, col) => scr.text(col, row, fit(str, iw), fg, bg);
+  const field = (name, label, value) => (row, col) => {
+    const focus = b.field === name;
+    scr.text(col, row, label.padEnd(labelW), focus ? C.ink : CB.soft, CB.paper);
+    const v = fit(value || '—', iw - labelW - 4);
+    if (focus) scr.text(col + labelW, row, ` ◂ ${v} ▸ `, C.accent, C.ink);
+    else scr.text(col + labelW, row, `   ${v}`, C.ink, CB.paper);
+  };
+
+  rows.push((row, col) => {
+    scr.text(col, row, 'Nuevo encargo', C.ink, CB.paper);
+    const x = 'esc ✕';
+    scr.text(col + iw - strWidth(x), row, x, CB.soft, CB.paper);
+  });
+  rows.push(text('┄'.repeat(iw), CB.soft));
+  const project = opts.project;
+  rows.push(field('project', 'Proyecto', b.loading ? 'cargando…' : project ? projectLabel(project) : 'ninguno conocido'));
+  rows.push(field('pipeline', 'Pipeline', opts.pipelines[b.sel.pipeline]?.label));
+  const desc = opts.pipeline?.description || (project && !project.hasConfig ? 'Este proyecto no tiene .devteam/: sólo tareas directas.' : '');
+  for (const line of wrap(desc, iw - labelW - 3, 2)) rows.push((row, col) => scr.text(col + labelW + 3, row, line, CB.soft, CB.paper));
+  if (fields.includes('strategy')) {
+    const st = opts.strategies.find((x) => x.id === opts.strategy);
+    rows.push(field('strategy', 'Orquesta', st?.label));
+    rows.push((row, col) => scr.text(col + labelW + 3, row, fit(STRATEGY_HINT[opts.strategy], iw - labelW - 3), CB.soft, CB.paper));
+  }
+  if (fields.includes('target')) rows.push(field('target', 'Para', opts.target?.label || 'nadie disponible'));
+  // la tarea, en una nota amarilla
+  const focusTask = b.field === 'task';
+  const noteW = iw - labelW;
+  const noteLines = b.text ? wrap(b.text, noteW - 3, 3) : [''];
+  noteLines.forEach((line, i) => rows.push((row, col) => {
+    scr.text(col, row, i === 0 ? 'Tarea'.padEnd(labelW) : ' '.repeat(labelW), focusTask ? C.ink : CB.soft, CB.paper);
+    scr.fill(col + labelW, row, noteW, CB.note);
+    if (!b.text) scr.text(col + labelW + 1, row, fit('¿Qué necesitas que haga el equipo?', noteW - 3), CB.soft, CB.note);
+    else scr.text(col + labelW + 1, row, line, C.ink, CB.note);
+    if (focusTask && i === noteLines.length - 1) scr.text(col + labelW + 1 + (b.text ? strWidth(line) : 0), row, '▌', C.ink, CB.note);
+  }));
+
+  // etapas
+  const stages = opts.stages;
+  const fixedBelow = 3; // problema + regla + ayuda
+  const room = L.rows - 4 - rows.length - fixedBelow - 2;
+  if (stages.length && room > 2) {
+    rows.push(text('', C.ink));
+    rows.push(text(opts.strategy === 'agent' ? 'Etapas (las delega el orquestador)' : 'Etapas (una por agente)', CB.soft));
+    const withGates = room - 1 >= stages.length + stages.filter((s) => s.check).length;
+    let left = room - 1;
+    for (const [i, st] of stages.entries()) {
+      if (left <= 0) { rows.push(text(`… y ${stages.length - i} más`, CB.soft)); break; }
+      left--;
+      rows.push((row, col) => {
+        let c = col + scr.text(col, row, `${String(i + 1).padStart(2)} `, CB.soft, CB.paper);
+        c += scr.text(c, row, '■ ', hex(TEAM[st.role]?.shirt || '#888888'), CB.paper);
+        const who = `${TEAM[st.role]?.name || st.role} · ${phaseInfo(st.phase).label} — ${st.name}`;
+        const how = [AGENT_NAME[st.harness] || st.harness, st.agent, st.model].filter(Boolean).join(' · ');
+        const howW = Math.min(strWidth(how), Math.floor(iw * 0.45));
+        c += scr.text(c, row, fit(who, col + iw - c - howW - 2), C.ink, CB.paper);
+        scr.text(col + iw - howW, row, fit(how, howW), CB.soft, CB.paper);
+      });
+      if (st.check && withGates) {
+        left--;
+        const gate = `⚙ ${st.check.run} debe ${st.check.expect === 'pass' ? 'pasar' : 'fallar'}${st.onFail ? ` · si no, vuelve a ${st.onFail.goto} (×${st.onFail.max})` : ''}`;
+        rows.push((row, col) => scr.text(col + 5, row, fit(gate, iw - 5), CB.gate, CB.paper));
+      }
+    }
+  }
+
+  const problem = b.error || (b.text.trim() ? briefProblem(opts, b.text) : '');
+  rows.push(text(problem ? `✖ ${problem}` : '', CB.err));
+  rows.push(text('┄'.repeat(iw), CB.soft));
+  rows.push((row, col) => {
+    let c = col;
+    for (const [k, label] of [['tab', 'campo'], ['◂▸', 'cambia'], ['Enter', '▶ ¡A trabajar!'], ['Esc', 'cancelar']]) {
+      c += scr.text(c, row, k, C.ink, CB.paper);
+      c += scr.text(c, row, ` ${label}   `, CB.soft, CB.paper);
+    }
+  });
+
+  const h = rows.length + 2;
+  const x0 = Math.floor((L.cols - w) / 2), y0 = Math.max(1, Math.floor((L.rows - h) / 2));
+  // sombra, corcho, hoja y chinche
+  for (let r = y0 + 1; r <= y0 + h; r++) scr.fill(x0 + 1, r, w, CB.shadow);
+  for (let r = y0; r < y0 + h; r++) {
+    scr.fill(x0, r, w, CB.cork);
+    for (let c = x0; c < x0 + w; c++) if ((c + r * 3) % 7 === 0 && (r === y0 || r === y0 + h - 1 || c < x0 + 2 || c >= x0 + w - 2)) scr.text(c, r, '·', CB.corkDot, CB.cork);
+  }
+  for (let r = y0 + 1; r < y0 + h - 1; r++) scr.fill(x0 + 2, r, w - 4, CB.paper);
+  scr.text(x0 + Math.floor(w / 2), y0, '●', CB.pin, CB.cork);
+  rows.forEach((draw, i) => draw(y0 + 1 + i, x0 + 4));
 }
 
 /** Personaje más cercano a una celda (para clics del ratón). */

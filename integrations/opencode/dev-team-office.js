@@ -12,7 +12,8 @@ function send(event) {
   fetch(`${URL_BASE}/v1/events/opencode`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(event),
+    // `run`: si este OpenCode es una etapa lanzada por la oficina, ya lee su salida y descarta esto.
+    body: JSON.stringify({ ...event, run: process.env.DEV_TEAM_OFFICE_RUN }),
     signal: AbortSignal.timeout(1500),
   }).catch(() => {}); // la oficina es opcional: nunca rompe al agente
 }

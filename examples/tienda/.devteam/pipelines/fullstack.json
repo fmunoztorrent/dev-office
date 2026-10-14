@@ -1,0 +1,15 @@
+{
+  "name": "Full-stack en paralelo",
+  "description": "Plan del Tech Lead; backend y frontend trabajan a la vez; QA verifica todo junto.",
+  "strategy": "office",
+  "stages": [
+    { "id": "plan", "name": "Plan", "role": "tl", "phase": "arquitectura" },
+    { "id": "api", "name": "API", "role": "backend", "phase": "implementa", "needs": ["plan"] },
+    { "id": "ui", "name": "Interfaz", "role": "frontend", "phase": "implementa", "needs": ["plan"] },
+    {
+      "id": "qa", "name": "Verificación", "role": "qa", "phase": "verifica", "needs": ["api", "ui"],
+      "check": { "run": "npm test", "expect": "pass" },
+      "onFail": { "goto": "api", "max": 1 }
+    }
+  ]
+}

@@ -20,6 +20,7 @@
       <header class="brand">
         <h1>Dev Team Office</h1>
         <span id="conn" class="conn off">desconectado</span>
+        <button id="open-settings" class="gear" type="button" title="Ajustes" aria-label="Ajustes">⚙</button>
       </header>
 
       <section class="card" id="task-card">
@@ -40,14 +41,12 @@
 
       <section class="card">
         <div class="card-head">
-          <h2>Tarea para un agente</h2>
+          <h2>Encargos</h2>
           <span id="agents-count" class="muted"></span>
         </div>
-        <form id="task-form" class="task-form">
-          <select id="task-target" aria-label="Destino"></select>
-          <textarea id="task-text" rows="2" maxlength="4000" placeholder="¿Qué debe hacer el agente?"></textarea>
-          <button class="btn">Enviar al agente</button>
-        </form>
+        <button id="open-brief" class="btn wide">📋 Nuevo encargo</button>
+        <p class="muted tip">También haciendo clic en la pizarra de la oficina.</p>
+        <ul id="runs" class="runs"></ul>
         <ul id="tasks" class="tasks"></ul>
       </section>
 
@@ -81,6 +80,57 @@
       </div>
     </aside>
   </div>
+  <dialog id="brief" class="brief" aria-labelledby="brief-title">
+    <form id="brief-form" method="dialog">
+      <header class="brief-head">
+        <span class="pin" aria-hidden="true"></span>
+        <h2 id="brief-title">Nuevo encargo</h2>
+        <button type="button" class="brief-x" id="brief-close" aria-label="Cerrar">✕</button>
+      </header>
+      <div class="brief-body">
+        <label class="b-field"><span>Proyecto</span><select id="b-project"></select></label>
+        <label class="b-field"><span>Pipeline</span><select id="b-pipeline"></select></label>
+        <p id="b-desc" class="b-desc"></p>
+        <div id="b-strategy-row" class="b-field"><span>Orquesta</span><div id="b-strategy" class="segmented" role="radiogroup"></div></div>
+        <label id="b-target-row" class="b-field"><span>Para</span><select id="b-target"></select></label>
+        <label class="note"><span>Tarea</span><textarea id="b-text" rows="3" maxlength="4000" placeholder="¿Qué necesitas que haga el equipo?"></textarea></label>
+        <div id="b-stages" class="b-stages"></div>
+        <p id="b-problem" class="b-problem" role="status"></p>
+      </div>
+      <footer class="brief-foot">
+        <span class="muted">⌘↵ para enviar</span>
+        <button type="button" class="btn ghost" id="brief-cancel">Cancelar</button>
+        <button type="submit" class="btn" id="brief-go">▶ ¡A trabajar!</button>
+      </footer>
+    </form>
+  </dialog>
+  <dialog id="settings" class="brief settings" aria-labelledby="settings-title">
+    <form id="settings-form" method="dialog">
+      <header class="brief-head">
+        <span class="pin" aria-hidden="true"></span>
+        <h2 id="settings-title">⚙ Ajustes</h2>
+        <button type="button" class="brief-x" id="settings-close" aria-label="Cerrar">✕</button>
+      </header>
+      <nav class="tabs" role="tablist">
+        <button type="button" role="tab" data-tab="office" aria-selected="true">Oficina</button>
+        <button type="button" role="tab" data-tab="project" aria-selected="false">Proyecto</button>
+        <button type="button" role="tab" data-tab="pipelines" aria-selected="false">Pipelines</button>
+        <button type="button" role="tab" data-tab="look" aria-selected="false">Personajes</button>
+      </nav>
+      <div class="brief-body">
+        <section data-panel="office" class="s-panel"></section>
+        <section data-panel="project" class="s-panel" hidden></section>
+        <section data-panel="pipelines" class="s-panel" hidden></section>
+        <section data-panel="look" class="s-panel" hidden></section>
+        <p id="s-msg" class="b-problem" role="status"></p>
+      </div>
+      <footer class="brief-foot">
+        <span class="muted" id="s-file"></span>
+        <button type="button" class="btn ghost" id="settings-cancel">Cerrar</button>
+        <button type="button" class="btn" id="settings-save">Guardar</button>
+      </footer>
+    </form>
+  </dialog>
   <script type="module" src="/main.js"></script>
 </body>
 </html>

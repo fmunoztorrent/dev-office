@@ -1,0 +1,15 @@
+{
+  "name": "Tienda (ejemplo)",
+  "harness": "pi",
+  "roles": {
+    "tl": { "agent": "architect", "model": "anthropic/claude-opus-5-5" },
+    "qa": { "agent": "tester", "model": "anthropic/claude-haiku-5-5" },
+    "backend": { "agent": "backend-dev", "model": "anthropic/claude-sonnet-5-5" },
+    "frontend": { "agent": "frontend-dev", "model": "anthropic/claude-sonnet-5-5" }
+  },
+  "harnessOptions": {
+    "claude-code": { "args": ["--permission-mode", "acceptEdits"] }
+  },
+  "orchestrator": { "harness": "pi" },
+  "maxParallel": 3
+}

@@ -5,7 +5,9 @@ const port = Number(process.env.PORT) || DEFAULT_PORT;
 const host = process.env.HOST || DEFAULT_HOST;
 
 try {
-  const server = await startServer({ port, host, log: console.log });
+  // DEV_TEAM_OFFICE_PROJECTS: proyectos para el diálogo de encargos, separados por ":"
+  const projects = (process.env.DEV_TEAM_OFFICE_PROJECTS || '').split(':').filter(Boolean);
+  const server = await startServer({ port, host, log: console.log, projects });
   const stop = async () => { await server.close(); process.exit(0); };
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);

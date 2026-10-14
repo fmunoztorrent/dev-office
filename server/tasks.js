@@ -15,14 +15,14 @@ import { clip } from './roles.js';
 
 export const AGENT_LABEL = { 'claude-code': 'Claude Code', opencode: 'OpenCode', pi: 'Pi' };
 
-const DEFAULT_LAUNCHERS = {
+export const DEFAULT_LAUNCHERS = {
   'claude-code': ['claude', '-p', '{task}', '--permission-mode', 'acceptEdits'],
   opencode: ['opencode', 'run', '{task}'],
   pi: ['pi', '-p', '{task}'],
 };
 const TASKS_MAX = 50;
 const OUTPUT_LINES = 60;
-const TEXT_MAX = 4000;
+const TEXT_MAX = 20_000; // un pipeline compilado para un orquestador puede ser largo
 
 const expandHome = (p) => (p && p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p);
 
@@ -36,7 +36,9 @@ function which(cmd) {
 }
 
 /** ~/.dev-team-office/config.json (opcional): { "cwd": "~/proyecto", "launchers": { "pi": ["pi", "-p", "{task}"] } } */
-export function loadConfig(file = path.join(os.homedir(), '.dev-team-office', 'config.json')) {
+export const configFile = () => process.env.DEV_TEAM_OFFICE_CONFIG || path.join(os.homedir(), '.dev-team-office', 'config.json');
+
+export function loadConfig(file = configFile()) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return {}; }
 }
 
@@ -46,14 +48,21 @@ export class TaskHub extends EventEmitter {
     super();
     this.office = office;
     this.officeUrl = officeUrl;
-    this.defaultCwd = expandHome(config.cwd) || cwd;
-    this.launchers = Object.fromEntries(Object.entries({ ...DEFAULT_LAUNCHERS, ...(config.launchers || {}) })
-      .filter(([, cmd]) => Array.isArray(cmd) && cmd.length && cmd.every((x) => typeof x === 'string'))
-      .map(([agent, cmd]) => [agent, { agent, command: cmd, path: which(cmd[0]) }]));
+    this.processCwd = cwd;
+    this.applyConfig(config);
     this.conns = new Map();   // agentes conectados por WebSocket
     this.tasks = new Map();
     this.runs = new Map();
     this.seq = 0;
+  }
+
+  /** Directorio por defecto y comandos de lanzamiento (también al guardar desde ⚙ Ajustes). */
+  applyConfig(config = {}) {
+    this.defaultCwd = expandHome(config.cwd) || this.processCwd;
+    this.launchers = Object.fromEntries(Object.entries({ ...DEFAULT_LAUNCHERS, ...(config.launchers || {}) })
+      .filter(([, cmd]) => Array.isArray(cmd) && cmd.length && cmd.every((x) => typeof x === 'string'))
+      .map(([agent, cmd]) => [agent, { agent, command: cmd, path: which(cmd[0]) }]));
+    if (this.conns) this.#changed();
   }
 
   // ---------------------------------------------------------------- agentes conectados
@@ -92,7 +101,11 @@ export class TaskHub extends EventEmitter {
   // ---------------------------------------------------------------- tareas
 
   /** @returns {{ ok: boolean, task?: object, error?: string }} */
-  submit({ text, agent, session, mode, cwd, from } = {}) {
+  /**
+   * @param title  texto corto para la oficina (el tablero); por defecto, el propio texto
+   * @param meta   { agentRoles }: nombre de subagente → rol, para la sesión que reciba la tarea
+   */
+  submit({ text, title, meta, agent, session, mode, cwd, from } = {}) {
     text = String(text ?? '').trim();
     if (!text) return { ok: false, error: 'la tarea está vacía' };
     if (text.length > TEXT_MAX) return { ok: false, error: `la tarea supera ${TEXT_MAX} caracteres` };
@@ -102,7 +115,7 @@ export class TaskHub extends EventEmitter {
     if (agent === 'claude') agent = 'claude-code';
 
     const task = {
-      id: `t${++this.seq}`, text, agent, session, mode: mode === 'launch' ? 'launch' : 'session',
+      id: `t${++this.seq}`, text, title: clip(title || text, 300), meta: meta || null, agent, session, mode: mode === 'launch' ? 'launch' : 'session',
       cwd: null, status: 'new', detail: '', from: clip(from || 'Oficina', 30), createdAt: Date.now(), updatedAt: Date.now(),
     };
 
@@ -133,6 +146,7 @@ export class TaskHub extends EventEmitter {
   #deliver(task, conn) {
     task.connId = conn.id;
     task.session ||= conn.session;
+    this.#sessionKnown(task);
     this.#set(task, 'sent', `enviada a ${AGENT_LABEL[conn.agent] || conn.agent}`);
     conn.send({ type: 'task', id: task.id, text: task.text, session: task.session });
   }
@@ -156,6 +170,7 @@ export class TaskHub extends EventEmitter {
   takeForClaude(session) {
     const t = [...this.tasks.values()].find((x) => x.agent === 'claude-code' && x.status === 'queued' && x.session === session);
     if (!t) return null;
+    this.#sessionKnown(t);
     this.#set(t, 'running', 'Claude la tomó al terminar su turno');
     this.#startedEvent(t);
     return t;
@@ -221,7 +236,12 @@ export class TaskHub extends EventEmitter {
   /** Une una ejecución lanzada con la sesión que reporta su agente (hooks/extensiones). */
   linkRun(runId, session) {
     const t = this.runs.get(runId);
-    if (t && session && !t.session) { t.session = clip(session, 100); this.#changed(); }
+    if (t && session && !t.session) { t.session = clip(session, 100); this.#sessionKnown(t); this.#changed(); }
+  }
+
+  // Cuando se sabe qué sesión hará la tarea, la oficina aprende qué subagente es qué rol.
+  #sessionKnown(task) {
+    if (task.session && task.meta?.agentRoles) this.office.setAgentRoles(task.session, task.meta.agentRoles);
   }
 
   /** Mata las ejecuciones en curso (al cerrar la oficina). */
@@ -252,18 +272,18 @@ export class TaskHub extends EventEmitter {
   #dispatchEvent(task) {
     this.office.ingest('generic', {
       session: 'office', kind: 'dispatch', agent: task.agent, mode: task.mode, from: task.from,
-      text: `${task.mode === 'launch' ? 'Lanzo' : 'Para'} ${AGENT_LABEL[task.agent] || task.agent}: ${task.text}`,
+      text: `${task.mode === 'launch' ? 'Lanzo' : 'Para'} ${AGENT_LABEL[task.agent] || task.agent}: ${task.title}`,
     });
   }
 
   // La sesión destino recibe la tarea como su nuevo pedido (el tablero cambia de título).
   #startedEvent(task) {
-    if (task.session) this.office.ingest(task.agent, { session: task.session, kind: 'task', text: task.text });
+    if (task.session) this.office.ingest(task.agent, { session: task.session, kind: 'task', text: task.title });
   }
 
   #public(t) {
     return {
-      id: t.id, text: clip(t.text, 300), agent: t.agent, session: t.session, mode: t.mode, cwd: t.cwd, status: t.status,
+      id: t.id, text: t.title, agent: t.agent, session: t.session, mode: t.mode, cwd: t.cwd, status: t.status,
       detail: t.detail, from: t.from, createdAt: t.createdAt, updatedAt: t.updatedAt, runId: t.runId,
       output: t.run ? t.run.output.slice(-12) : undefined,
     };

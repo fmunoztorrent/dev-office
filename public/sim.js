@@ -15,6 +15,28 @@ export const TEAM = {
   po: { name: 'Sofía', title: 'Product Owner', shirt: '#e0607e', pants: '#3b3355', hair: '#5a3214', skin: '#f2c9a0', long: true, seat: { x: 840, y: 418 }, prop: 'notes' },
 };
 
+// La pizarra de la pared: al hacerle clic se abre el diálogo para encargar una tarea.
+export const BOARD = { x: 336, y: 6, w: 308, h: 112 };
+export const onBoard = (x, y) => x >= BOARD.x && x <= BOARD.x + BOARD.w && y >= BOARD.y && y <= BOARD.y + BOARD.h;
+
+// Apariencia personalizable (⚙ Ajustes › Personajes). TEAM se modifica en el sitio para que
+// los dos renderers y la simulación vean el cambio al instante.
+export const APPEARANCE_KEYS = ['name', 'title', 'shirt', 'pants', 'hair', 'skin', 'long', 'beard', 'glasses'];
+export const DEFAULT_TEAM = Object.fromEntries(Object.entries(TEAM).map(([id, c]) => [id, Object.fromEntries(APPEARANCE_KEYS.map((k) => [k, c[k] ?? false]))]));
+// Paletas para elegir colores sin escribir hex (la terminal las recorre con ◂ ▸; la web también tiene selector libre).
+export const LOOK_PALETTES = {
+  shirt: ['#e0607e', '#f0a73a', '#3f73f0', '#22a68e', '#8ac926', '#6b5bd6', '#ff7a45', '#c86bfa', '#ef476f', '#118ab2', '#06d6a0', '#ffd166'],
+  pants: ['#2a2d3a', '#2f3b52', '#3b3355', '#26313a', '#2b3a2e', '#22222e', '#3a2f45', '#4a3b2a'],
+  hair: ['#151515', '#21160f', '#3d2817', '#5a3214', '#8d8d8d', '#b8322a', '#f2d16b', '#e8e9f1'],
+  skin: ['#f5d0b0', '#f2c9a0', '#f0c8a8', '#e8b98f', '#e0ac7e', '#d9a273', '#c98e62', '#b07a52', '#8d5a3b'],
+};
+export function applyAppearance(overrides = {}) {
+  for (const [id, cfg] of Object.entries(TEAM)) {
+    const o = overrides[id] || {};
+    for (const k of APPEARANCE_KEYS) cfg[k] = o[k] ?? DEFAULT_TEAM[id][k];
+  }
+}
+
 export const SPOT = {
   board: { x: 490, y: 148 },
   coffee: { x: 905, y: 150 },

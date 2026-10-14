@@ -75,9 +75,13 @@ export class Office extends EventEmitter {
 
     if (r.kind === 'tool_start' || r.kind === 'tool_end') {
       const start = r.kind === 'tool_start';
-      if (t === 'task' || t === 'agent') {
+      if (t === 'task' || t === 'agent' || t === 'subagent') {
+        // `subagent` es la herramienta de la extensión de subagentes de Pi: { agent, task } | { tasks } | { chain }
+        const many = input.tasks || input.chain;
+        const agentType = input.subagent_type || input.agent || (Array.isArray(many) ? many[0]?.agent : undefined);
+        const desc = input.description || (Array.isArray(many) ? many.map((x) => x.agent).join(' → ') : input.task || input.prompt);
         return start
-          ? this.#startSub(s, ev, { desc: input.description || input.prompt, agentType: input.subagent_type, toolUseId: r.toolUseId })
+          ? this.#startSub(s, ev, { desc, agentType, toolUseId: r.toolUseId })
           : this.#endSub(s, ev, { toolUseId: r.toolUseId, desc: input.description });
       }
       if (t === 'todowrite') {
@@ -154,6 +158,7 @@ export class Office extends EventEmitter {
       case 'session_start': return { ...ev, role: 'manager', text: 'Nueva sesión de trabajo' };
       case 'session_end': return { ...ev, role: 'manager', text: 'Sesión cerrada' };
       case 'chat': return { ...ev, role, from: clip(r.from || 'Tú', 30), text: clip(r.text, 200) };
+      case 'stage_end': return role ? { ...ev, role, ok: r.ok !== false, text: clip(r.text, 160) } : null;
       case 'dispatch': return { ...ev, role: 'po', from: clip(r.from || 'Tú', 30), agent: clip(r.agent, 30), mode: r.mode === 'launch' ? 'launch' : 'session', text: clip(r.text, 200) };
       case 'poke': return role ? { ...ev, role, from: clip(r.from || 'Tú', 30), text: '👋' } : null;
       default: return null;
@@ -174,7 +179,8 @@ export class Office extends EventEmitter {
     }
     const sub = {
       id: String(agentId || toolUseId || `sub-${ev.id}`), agentId, toolUseId, agentType: agentType || '',
-      desc: clip(desc || agentType || 'Subtarea', 120), role: role || roleForText(desc, agentType), startedAt: now, open: true,
+      desc: clip(desc || agentType || 'Subtarea', 120), startedAt: now, open: true,
+      role: role || s.agentRoles?.[String(agentType || '').toLowerCase()] || roleForText(desc, agentType),
     };
     s.subagents.push(sub);
     if (s.subagents.length > 40) s.subagents.splice(0, s.subagents.length - 40);
@@ -209,6 +215,12 @@ export class Office extends EventEmitter {
     }
     this.log.push(ev);
     if (this.log.length > LOG_MAX) this.log.splice(0, this.log.length - LOG_MAX);
+  }
+
+  /** Nombre de subagente → rol, para que cada subagente de esa sesión caiga en su personaje. */
+  setAgentRoles(sessionId, map = {}) {
+    const s = this.#session(sessionId, 'generic');
+    s.agentRoles = Object.fromEntries(Object.entries(map).map(([k, v]) => [k.toLowerCase(), v]));
   }
 
   sessionSummary(id) {

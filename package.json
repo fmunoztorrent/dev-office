@@ -10,7 +10,7 @@
     "dev": "node --watch server/index.js",
     "demo": "node scripts/demo.js",
     "send": "node scripts/send.js",
-    "test": "node --test",
+    "test": "node --test \"test/*.test.js\"",
     "build": "deno compile --no-check --allow-net --allow-read --allow-write --allow-env --allow-sys --allow-run --include public --output dist/dev-team-office bin/dev-team-office.js",
     "build:mac-x64": "deno compile --no-check --target x86_64-apple-darwin --allow-net --allow-read --allow-write --allow-env --allow-sys --allow-run --include public --output dist/dev-team-office-x64 bin/dev-team-office.js"
   },

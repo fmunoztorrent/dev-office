@@ -1,0 +1,12 @@
+{
+  "name": "Feature con subagentes de Pi",
+  "description": "Pi orquesta: delega cada etapa en sus subagentes (extensión subagent), cada uno con el modelo de su archivo en .pi/agents/.",
+  "strategy": "agent",
+  "orchestrator": { "harness": "pi" },
+  "stages": [
+    { "id": "diseno", "name": "Diseño técnico", "role": "tl", "phase": "arquitectura", "agent": "architect" },
+    { "id": "red", "name": "Tests en rojo", "role": "qa", "phase": "red", "agent": "tester", "needs": ["diseno"], "check": { "run": "npm test", "expect": "fail" } },
+    { "id": "impl", "name": "Implementación", "role": "backend", "phase": "implementa", "agent": "backend-dev", "needs": ["red"] },
+    { "id": "green", "name": "Tests en verde", "role": "qa", "phase": "green", "agent": "tester", "needs": ["impl"], "check": { "run": "npm test", "expect": "pass" }, "onFail": { "goto": "impl", "max": 2 } }
+  ]
+}

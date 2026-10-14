@@ -36,6 +36,33 @@ El puerto se cambia con `--port` o `$DEV_TEAM_OFFICE_PORT`; el socket, con `--so
 
 Las rutas antiguas (`POST /event/<source>`, `GET /api/state`, `/ws`) siguen funcionando.
 
+## Pipelines y proyectos
+
+| Método | Ruta | Cuerpo | Respuesta |
+|---|---|---|---|
+| `GET` | `/v1/projects` | | Proyectos conocidos con sus pipelines y agentes |
+| `GET` | `/v1/project?dir=` | | Un proyecto |
+| `GET` | `/v1/pipelines` | | `{ runs }`: estado de cada ejecución y de sus etapas |
+| `POST` | `/v1/pipelines` | `{ dir, pipeline, task, strategy?: "office" \| "agent", target? }` | `{ ok, run }` |
+| `POST` | `/v1/pipelines/<id>/cancel` | | `{ ok }` |
+
+Formato y estrategias: [pipelines.md](pipelines.md).
+
+## ⚙ Ajustes
+
+| Método | Ruta | Cuerpo |
+|---|---|---|
+| `GET` | `/v1/settings` | Responde `{ office: { projects, cwd, launchers, appearance }, projects, harnesses, pipelineTemplate }` |
+| `PUT` | `/v1/settings` | `{ projects?, cwd?, launchers?: { agente: [...] \| null }, appearance?: { rol: {...} \| null } }` |
+| `GET` | `/v1/settings/project?dir=` | Responde el equipo, los agentes de cada harness y los pipelines en crudo |
+| `PUT` | `/v1/settings/team` | `{ dir, team }` |
+| `POST` | `/v1/settings/pipeline/check` | `{ dir, id, pipeline }`: valida sin guardar |
+| `PUT` / `DELETE` | `/v1/settings/pipeline` | `{ dir, id, pipeline }` / `{ dir, id }` |
+
+- **Validación:** todo se valida antes de escribir. Si hay un error, la respuesta es `400 { error }` y no se toca ningún archivo.
+- **Dónde se puede escribir:** sólo en proyectos que la oficina conoce.
+- **Apariencia en vivo:** al cambiar la apariencia, el servidor difunde `{ type: "appearance", appearance }` y todos los visores la aplican al momento.
+
 ## Tareas para los agentes
 
 La oficina también funciona al revés: puedes mandarle una tarea al agente.

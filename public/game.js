@@ -1,17 +1,18 @@
 // Render en canvas (navegador) de la simulación de sim.js.
 
-import { createSim, W, H, SPOT, STATUS_ICON, PHASE_COLOR, phaseInfo, rand } from './sim.js';
+import { createSim, W, H, SPOT, STATUS_ICON, PHASE_COLOR, phaseInfo, rand, onBoard } from './sim.js';
 export { TEAM, PHASES, phaseInfo } from './sim.js';
 
 const P = 3; // tamaño de un "pixel" del sprite
 const FONT = '"VT323", ui-monospace, monospace';
 
-export function createGame(canvas, { onSelect } = {}) {
+export function createGame(canvas, { onSelect, onBoardClick } = {}) {
   const ctx = canvas.getContext('2d');
   const sim = createSim();
   const { agents } = sim;
   let selected = null;
   let hover = null;
+  let hoverBoard = false;
   let last = performance.now();
   const clouds = [0, 1, 2, 3].map((i) => ({ x: i * 260 + rand(0, 80), y: rand(16, 60), s: rand(0.6, 1.1) }));
 
@@ -61,7 +62,7 @@ export function createGame(canvas, { onSelect } = {}) {
 
   function drawBoard() {
     const x0 = 340, y0 = 10, w = 300, h = 104;
-    R(x0 - 4, y0 - 4, w + 8, h + 8, '#8d99ae');
+    R(x0 - 4, y0 - 4, w + 8, h + 8, hoverBoard ? '#ffd166' : '#8d99ae');
     R(x0, y0, w, h, '#f8f9fa');
     ctx.font = `15px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     ctx.fillStyle = '#2b2d42';
@@ -83,6 +84,14 @@ export function createGame(canvas, { onSelect } = {}) {
       });
       if (items.length > 4) { ctx.fillStyle = '#6c757d'; ctx.fillText(`+${items.length - 4}`, cx + cw - 22, y0 + 22); }
     });
+    if (hoverBoard) {
+      ctx.font = `14px ${FONT}`;
+      const tip = '✎ clic: nuevo encargo';
+      const tw = ctx.measureText(tip).width + 12;
+      R(x0 + w - tw - 4, y0 + h - 20, tw, 16, '#2b2d42');
+      ctx.fillStyle = '#ffd166'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(tip, x0 + w - tw + 2, y0 + h - 12);
+    }
     if (board.todos.length) {
       const done = board.todos.filter((t) => t.status === 'completed').length;
       R(x0, y0 + h - 4, w, 4, '#dee2e6');
@@ -379,9 +388,20 @@ export function createGame(canvas, { onSelect } = {}) {
     const r = canvas.getBoundingClientRect();
     return [((e.clientX - r.left) / r.width) * W, ((e.clientY - r.top) / r.height) * H];
   };
-  canvas.addEventListener('mousemove', (e) => { hover = agentAt(...toCanvas(e)); canvas.style.cursor = hover ? 'pointer' : 'default'; });
-  canvas.addEventListener('mouseleave', () => { hover = null; });
-  canvas.addEventListener('click', (e) => { selected = agentAt(...toCanvas(e)); onSelect?.(selected); });
+  canvas.addEventListener('mousemove', (e) => {
+    const [x, y] = toCanvas(e);
+    hover = agentAt(x, y);
+    hoverBoard = !hover && onBoard(x, y);
+    canvas.style.cursor = hover || hoverBoard ? 'pointer' : 'default';
+  });
+  canvas.addEventListener('mouseleave', () => { hover = null; hoverBoard = false; });
+  canvas.addEventListener('click', (e) => {
+    const [x, y] = toCanvas(e);
+    const who = agentAt(x, y);
+    if (!who && onBoard(x, y)) return onBoardClick?.();
+    selected = who;
+    onSelect?.(selected);
+  });
 
 
   return {

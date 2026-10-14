@@ -1,0 +1,5 @@
+{
+  "name": "tienda-ejemplo",
+  "private": true,
+  "scripts": { "test": "node --test" }
+}

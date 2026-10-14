@@ -2,6 +2,7 @@
 // dev-team-office: la oficina en la terminal + la API de integración.
 
 import os from 'node:os';
+import path from 'node:path';
 import { startServer, DEFAULT_PORT, DEFAULT_HOST, VERSION, defaultSocketPath } from '../server/server.js';
 
 const HELP = `dev-team-office ${VERSION}: tu agente de código como un equipo de desarrollo, en la terminal.
@@ -26,6 +27,8 @@ Opciones:
   --host <ip>       Interfaz (por defecto ${DEFAULT_HOST}, o $DEV_TEAM_OFFICE_HOST)
   --socket <ruta>   Socket Unix de la API (por defecto ~/.dev-team-office/office.sock)
   --no-socket       No abrir el socket Unix
+  --project <dir>   Proyecto con .devteam/ para ofrecer en el diálogo de encargos (repetible).
+                    También: "projects" en ~/.dev-team-office/config.json
   --color <modo>    truecolor | 256 (se detecta solo)
   -v, --version     Versión
   -h, --help        Esta ayuda
@@ -45,9 +48,11 @@ function parseArgs(argv) {
     else if (a.startsWith('--')) {
       const [k, inline] = a.slice(2).split('=', 2);
       const next = argv[i + 1];
-      if (inline !== undefined) args[k] = inline;
-      else if (next !== undefined && !next.startsWith('--')) { args[k] = next; i++; }
-      else args[k] = true;
+      let v = true;
+      if (inline !== undefined) v = inline;
+      else if (next !== undefined && !next.startsWith('--')) { v = next; i++; }
+      if (k === 'project') (args.projects ||= []).push(path.resolve(String(v)));
+      else args[k] = v;
     } else args._.push(a);
   }
   return args;
@@ -98,7 +103,7 @@ async function cmdOpen() {
   const notes = [];
   let server;
   try {
-    server = await startServer({ port, host, socket, log: (m) => notes.push(m) });
+    server = await startServer({ port, host, socket, log: (m) => notes.push(m), projects: args.projects });
   } catch (err) {
     if (err.code !== 'EADDRINUSE') throw err;
     const other = await runningOffice();
@@ -119,7 +124,7 @@ async function cmdWatch(url, notice) {
 
 async function cmdServe() {
   try {
-    const server = await startServer({ port, host, socket, log: console.log });
+    const server = await startServer({ port, host, socket, log: console.log, projects: args.projects });
     const stop = async () => { await server.close(); process.exit(0); };
     process.on('SIGINT', stop);
     process.on('SIGTERM', stop);

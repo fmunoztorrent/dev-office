@@ -1,0 +1,25 @@
+{
+  "name": "Feature con TDD",
+  "description": "Arquitecto → QA en rojo → backend → QA en verde → review. La oficina corre cada etapa con su agente y su modelo.",
+  "strategy": "office",
+  "stages": [
+    {
+      "id": "diseno", "name": "Diseño técnico", "role": "tl", "phase": "arquitectura",
+      "prompt": "Diseña cómo resolver: {{task}}\nEscribe el plan en docs/plan.md: archivos, endpoints y casos de prueba."
+    },
+    {
+      "id": "red", "name": "Tests en rojo", "role": "qa", "phase": "red", "needs": ["diseno"],
+      "check": { "run": "npm test", "expect": "fail" }
+    },
+    { "id": "impl", "name": "Implementación", "role": "backend", "phase": "implementa", "needs": ["red"] },
+    {
+      "id": "green", "name": "Tests en verde", "role": "qa", "phase": "green", "needs": ["impl"],
+      "check": { "run": "npm test", "expect": "pass" },
+      "onFail": { "goto": "impl", "max": 2 }
+    },
+    {
+      "id": "review", "name": "Code review", "role": "tl", "phase": "review", "needs": ["green"],
+      "harness": "claude-code", "agent": "code-reviewer", "model": "opus"
+    }
+  ]
+}

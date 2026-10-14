@@ -2,6 +2,7 @@
 // Lo usan `npm start` (sin interfaz) y el ejecutable `dev-team-office` (con la oficina en la terminal).
 
 import http from 'node:http';
+import { EventEmitter } from 'node:events';
 import net from 'node:net';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -10,7 +11,9 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { Office } from './office.js';
 import { runDemo, demoScript, piDemoScript } from './demo.js';
-import { TaskHub } from './tasks.js';
+import { TaskHub, loadConfig } from './tasks.js';
+import { PipelineHub } from './pipeline.js';
+import { readOfficeSettings, writeOfficeSettings, readProjectSettings, writeTeam, checkPipeline, writePipeline, deletePipeline, PIPELINE_TEMPLATE, HARNESS_LIST } from './settings.js';
 
 export const VERSION = '0.3.0';
 export const DEFAULT_PORT = 4317;
@@ -33,11 +36,25 @@ class HttpError extends Error {
  * Arranca la oficina. Rechaza con code EADDRINUSE si el puerto ya está ocupado.
  * @returns {Promise<{office, url, socket, command, handleMessage, close}>}
  */
-export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, config } = {}) {
+export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, config, projects = [] } = {}) {
   const office = new Office();
+  config = { ...(config ?? loadConfig()) };
+  config.projects = [...(config.projects || []), ...projects]; // proyectos que el diálogo ofrece de entrada
   const hub = new TaskHub(office, { config, officeUrl: `http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${port}` });
+  const pipelines = new PipelineHub(office, hub, { config });
   const startedAt = Date.now();
-  const fullState = () => ({ ...office.snapshot(), ...hub.snapshot() });
+  const appearance = () => config.appearance || {};
+  const bus = new EventEmitter(); // cambios de ajustes que ven las interfaces (p. ej. la apariencia)
+  const fullState = () => ({ ...office.snapshot(), ...hub.snapshot(), pipelines: pipelines.snapshot().runs, appearance: appearance() });
+  // Guardar en ⚙ Ajustes se aplica en caliente: proyectos, directorio por defecto y comandos.
+  const applyConfig = (next) => {
+    config = { ...next, projects: [...(next.projects || []), ...projects] };
+    hub.applyConfig(config);
+    pipelines.config = config;
+    bus.emit('appearance', appearance());
+  };
+  // Eventos que un hook/extensión manda desde una etapa cuya salida ya leemos: se descartan.
+  const fromStreamedStage = (p) => pipelines.isStreamed(p?.run);
   let stopDemo = null;
   let socketPath = null;
 
@@ -67,6 +84,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     switch (msg.type) {
       case 'event': {
         const source = String(msg.source || msg.payload?.source || conn?.agent || 'generic');
+        if (fromStreamedStage(msg.payload)) return { ok: true, accepted: 0, ids: [] };
         const events = office.ingest(source, msg.payload ?? {});
         return { ok: true, accepted: events.length, ids: events.map((e) => e.id) };
       }
@@ -82,6 +100,10 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         return hub.submit(msg);
       case 'task_cancel':
         return hub.cancel(msg.id);
+      case 'pipeline_start':
+        return pipelines.start(msg);
+      case 'pipeline_cancel':
+        return pipelines.cancel(msg.id);
       case 'chat':
       case 'poke': {
         const events = office.ingest('generic', { kind: msg.type, session: msg.session || 'office', text: msg.text, from: msg.from, role: msg.role });
@@ -111,8 +133,49 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const payload = JSON.parse((await readBody(req)) || '{}');
         const fromPath = decodeURIComponent(p.replace(/^\/(v1\/events|event)\/?/, ''));
         const source = fromPath || url.searchParams.get('source') || (!Array.isArray(payload) && payload.source) || 'generic';
-        const events = office.ingest(source, payload);
+        const list = (Array.isArray(payload) ? payload : [payload]).filter((e) => !fromStreamedStage(e));
+        const events = list.length ? office.ingest(source, Array.isArray(payload) ? list : list[0]) : [];
         return json(res, 200, { ok: true, accepted: events.length, ids: events.map((e) => e.id) });
+      }
+      // ⚙ Ajustes
+      if (req.method === 'GET' && p === '/v1/settings') {
+        return json(res, 200, { office: readOfficeSettings(), projects: pipelines.knownDirs(), harnesses: HARNESS_LIST, pipelineTemplate: PIPELINE_TEMPLATE });
+      }
+      if (req.method === 'PUT' && p === '/v1/settings') {
+        const out = writeOfficeSettings(JSON.parse((await readBody(req)) || '{}'));
+        if (out.ok) applyConfig(out.config);
+        return json(res, out.ok ? 200 : 400, out);
+      }
+      if (req.method === 'GET' && p === '/v1/settings/project') {
+        const dir = url.searchParams.get('dir');
+        if (!pipelines.knownDirs().includes(dir)) throw new HttpError(404, 'proyecto desconocido: agrégalo en ⚙ Ajustes › Oficina');
+        return json(res, 200, readProjectSettings(dir));
+      }
+      if (['PUT', 'POST', 'DELETE'].includes(req.method) && (p === '/v1/settings/team' || p === '/v1/settings/pipeline' || p === '/v1/settings/pipeline/check')) {
+        const body = JSON.parse((await readBody(req)) || '{}');
+        // Sólo se escribe en proyectos que la oficina conoce (no en cualquier ruta).
+        if (!pipelines.knownDirs().includes(body.dir)) throw new HttpError(404, 'proyecto desconocido: agrégalo en ⚙ Ajustes › Oficina');
+        let out;
+        if (p === '/v1/settings/team') out = writeTeam(body.dir, body.team);
+        else if (p === '/v1/settings/pipeline/check') out = checkPipeline(body.dir, body.id, body.pipeline);
+        else if (req.method === 'DELETE') out = deletePipeline(body.dir, body.id);
+        else out = writePipeline(body.dir, body.id, body.pipeline);
+        if (out.ok && p !== '/v1/settings/pipeline/check') pipelines.changed();
+        return json(res, out.ok || p === '/v1/settings/pipeline/check' ? 200 : 400, out);
+      }
+      if (req.method === 'GET' && p === '/v1/projects') return json(res, 200, { projects: pipelines.projects() });
+      if (req.method === 'GET' && p === '/v1/project') {
+        const project = pipelines.project(url.searchParams.get('dir'));
+        return project ? json(res, 200, project) : json(res, 404, { ok: false, error: 'el proyecto no existe' });
+      }
+      if (req.method === 'GET' && p === '/v1/pipelines') return json(res, 200, pipelines.snapshot());
+      if (req.method === 'POST' && p === '/v1/pipelines') {
+        const out = pipelines.start(JSON.parse((await readBody(req)) || '{}'));
+        return json(res, out.ok ? 200 : 400, out);
+      }
+      if (req.method === 'POST' && /^\/v1\/pipelines\/[^/]+\/cancel$/.test(p)) {
+        const out = pipelines.cancel(decodeURIComponent(p.split('/')[3]));
+        return json(res, out.ok ? 200 : 400, out);
       }
       if (req.method === 'GET' && p === '/v1/tasks') return json(res, 200, hub.snapshot());
       if (req.method === 'POST' && p === '/v1/tasks') {
@@ -127,8 +190,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       // imprime por stdout. Vacía no cambia nada; en Stop puede entregar una tarea en cola.
       if (req.method === 'POST' && p === '/v1/hooks/claude-code') {
         const payload = JSON.parse((await readBody(req)) || '{}');
-        office.ingest('claude-code', payload);
         const run = url.searchParams.get('run');
+        if (!pipelines.isStreamed(run)) office.ingest('claude-code', payload);
         if (run) hub.linkRun(run, payload.session_id);
         const task = payload.hook_event_name === 'Stop' && payload.session_id ? hub.takeForClaude(payload.session_id) : null;
         res.writeHead(200, { 'content-type': 'application/json' });
@@ -168,6 +231,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   office.on('event', (event, session) => broadcast({ type: 'event', event, session }));
   office.on('reset', () => broadcast({ type: 'snapshot', state: fullState() }));
   hub.on('change', (snap) => broadcast({ type: 'tasks', ...snap }));
+  pipelines.on('change', (snap) => broadcast({ type: 'pipelines', ...snap }));
+  bus.on('appearance', (a) => broadcast({ type: 'appearance', appearance: a }));
 
   wss.on('connection', (ws) => {
     const conn = ws.conn = { id: ++connSeq, agent: null, send: (m) => ws.readyState === 1 && ws.send(JSON.stringify(m)) };
@@ -179,7 +244,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       try { msg = JSON.parse(data); } catch { return ws.send(JSON.stringify({ type: 'error', error: 'invalid json' })); }
       const out = handleMessage(msg, conn);
       // `task` usa `id` para su propio id de tarea; el acuse va con `ref`.
-      const ref = msg?.type === 'task' ? msg.ref : msg?.id;
+      const ref = msg?.type === 'task' || msg?.type === 'pipeline_start' ? msg.ref : msg?.id;
       if (ref !== undefined) ws.send(JSON.stringify({ type: 'ack', id: ref, ...out }));
       else if (!out.ok) ws.send(JSON.stringify({ type: 'error', error: out.error }));
     });
@@ -227,6 +292,9 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   return {
     office,
     hub,
+    pipelines,
+    bus,
+    appearance,
     url: `http://${host}:${port}`,
     socket: socketPath,
     command,
@@ -234,6 +302,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     async close() {
       stopDemo?.();
       hub.stopAll();
+      pipelines.stopAll();
       for (const c of wss.clients) c.terminate();
       await Promise.all([tcp, unix].filter(Boolean).map((s) => new Promise((r) => s.close(r))));
       if (socketPath) fs.rmSync(socketPath, { force: true });
