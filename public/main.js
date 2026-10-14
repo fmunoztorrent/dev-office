@@ -1,0 +1,241 @@
+import { createGame, TEAM, phaseInfo } from './game.js';
+import { taskTargets, AGENT_NAME, TASK_STATUS } from './targets.js';
+
+const $ = (id) => document.getElementById(id);
+const STATUS_LABEL = { idle: 'libre', working: 'trabajando', thinking: 'pensando', blocked: 'bloqueado', waiting: 'esperando', done: 'listo', coffee: 'café', talking: 'hablando', red: 'en rojo' };
+const SESSION_LABEL = { active: 'en curso', waiting: 'esperándote', done: 'terminada', ended: 'cerrada' };
+const OFFICE_SESSION = 'office'; // chat y saludos, no es una sesión de agente
+
+const sessions = new Map();
+let focus = null;      // sesión fijada por el usuario (null = la más reciente)
+let selected = null;
+let ws;
+let tasks = { tasks: [], agents: [], launchers: [], defaultCwd: '' };
+
+const game = createGame($('office'), { onSelect: (id) => select(id) });
+
+// ---------------------------------------------------------------- socket
+
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/v1/ws`);
+  ws.onopen = () => setConn(true);
+  ws.onclose = () => { setConn(false); setTimeout(connect, 1500); };
+  ws.onmessage = (m) => {
+    const msg = JSON.parse(m.data);
+    if (msg.type === 'snapshot') { onSnapshot(msg.state); if (msg.state.tasks) onTasks(msg.state); }
+    if (msg.type === 'event') onEvent(msg.event, msg.session);
+    if (msg.type === 'tasks') onTasks(msg);
+    if (msg.type === 'ack' && msg.ok === false) alertTask(msg.error);
+  };
+}
+const send = (obj) => ws?.readyState === 1 && ws.send(JSON.stringify(obj));
+
+function setConn(on) {
+  $('conn').className = `conn ${on ? 'on' : 'off'}`;
+  $('conn').textContent = on ? 'en vivo' : 'desconectado';
+}
+
+function onSnapshot(state) {
+  game.reset();
+  sessions.clear();
+  for (const s of state.sessions) if (s.id !== OFFICE_SESSION) sessions.set(s.id, s);
+  $('log').innerHTML = '';
+  state.log.forEach(addLog);
+  if (focus && !sessions.has(focus)) focus = null;
+  renderSessions();
+  renderTeam();
+  renderDetail();
+}
+
+function onEvent(ev, session) {
+  if (session && session.id !== OFFICE_SESSION) sessions.set(session.id, session);
+  const current = currentSession();
+  // Los eventos de otras sesiones mueven al equipo igual, pero el tablero muestra la sesión enfocada.
+  game.handle(ev);
+  if (!current || ev.session === current.id) game.setBoard(currentSession());
+  addLog(ev);
+  renderSessions();
+  renderTeam();
+  if (session?.source === 'claude-code') renderTargets();
+  if (selected === ev.role) renderDetail();
+}
+
+// ---------------------------------------------------------------- UI
+
+function currentSession() {
+  if (focus && sessions.has(focus)) return sessions.get(focus);
+  return [...sessions.values()].sort((a, b) => b.lastAt - a.lastAt)[0] || null;
+}
+
+function renderSessions() {
+  const sel = $('session');
+  const list = [...sessions.values()].sort((a, b) => b.lastAt - a.lastAt);
+  sel.innerHTML = '';
+  sel.append(new Option('Más reciente', ''));
+  for (const s of list) sel.append(new Option(`${s.source} · ${s.id.slice(0, 8)}`, s.id));
+  sel.value = focus || '';
+
+  const s = currentSession();
+  game.setBoard(s);
+  $('task-title').textContent = s?.title || (s ? 'Sesión sin tarea todavía' : 'Esperando eventos de un agente…');
+  const todos = s?.todos || [];
+  const done = todos.filter((t) => t.status === 'completed').length;
+  $('progress-bar').style.width = todos.length ? `${(100 * done) / todos.length}%` : s?.status === 'done' ? '100%' : '0';
+  $('st-tools').textContent = s?.tools ?? 0;
+  $('st-errors').textContent = s?.errors ?? 0;
+  $('st-subs').textContent = s?.subagents?.filter((x) => x.open).length ?? 0;
+  $('st-status').textContent = s ? SESSION_LABEL[s.status] || s.status : '—';
+  renderFlow(s);
+}
+
+// Flujo por roles declarado por el agente: Tomás · Arquitectura → Andrés · RED → Diego · Implementa → …
+function renderFlow(s) {
+  const ol = $('flow');
+  const flow = s?.flow || [];
+  ol.hidden = !flow.length;
+  ol.innerHTML = '';
+  flow.slice(-12).forEach((step, i, arr) => {
+    const cfg = TEAM[step.role];
+    const ph = phaseInfo(step.phase);
+    const li = el('li', i === arr.length - 1 && s.turn ? 'now' : '', `${cfg?.name || step.role} · ${ph.label}`);
+    li.style.setProperty('--c', cfg?.shirt || '#888');
+    li.title = step.text || '';
+    ol.append(li);
+  });
+  ol.scrollLeft = ol.scrollWidth;
+}
+
+function renderTeam() {
+  const ul = $('team');
+  ul.innerHTML = '';
+  for (const [id, cfg] of Object.entries(TEAM)) {
+    const a = game.agents[id];
+    const li = document.createElement('li');
+    li.className = selected === id ? 'sel' : '';
+    li.onclick = () => select(id);
+    const dot = el('span', 'dot'); dot.style.background = cfg.shirt;
+    const who = el('div');
+    who.append(el('span', 'who', `${cfg.name} · ${cfg.title}`), el('span', 'what', a.text || 'Sin actividad'));
+    li.append(dot, who, el('span', `pill ${a.state}`, STATUS_LABEL[a.state] || a.state));
+    ul.append(li);
+  }
+}
+
+function addLog(ev) {
+  const ol = $('log');
+  const li = document.createElement('li');
+  const cfg = TEAM[ev.role];
+  const dot = el('span', 'dot'); dot.style.background = cfg?.shirt || '#888';
+  const who = ev.kind === 'chat' || ev.kind === 'poke' ? ev.from : cfg?.name || 'Oficina';
+  const body = el('span', ev.ok === false ? 'err' : '');
+  let text = ev.text || ev.kind;
+  if (ev.kind === 'phase') {
+    const ph = phaseInfo(ev.phase);
+    text = `${ph.icon} ${ph.label}${ev.text ? `: ${ev.text}` : ''}`;
+  }
+  if (ev.kind === 'phase_end') text = `termina su turno${ev.text ? `: ${ev.text}` : ''}`;
+  body.append(el('b', '', `${who}: `), document.createTextNode(text), el('span', 'src', `  ${ev.source}`));
+  li.append(el('time', '', new Date(ev.ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })), dot, body);
+  ol.prepend(li);
+  while (ol.children.length > 150) ol.lastChild.remove();
+}
+
+function select(id) {
+  selected = id;
+  game.select(id);
+  renderTeam();
+  renderDetail();
+}
+
+function renderDetail() {
+  const box = $('detail');
+  if (!selected) { box.hidden = true; return; }
+  const cfg = TEAM[selected], a = game.agents[selected];
+  box.hidden = false;
+  $('detail-name').textContent = cfg.name;
+  const subs = a.badges.size ? ` · ${a.badges.size} subagente(s) asignado(s)` : '';
+  $('detail-role').textContent = `${cfg.title} — ${STATUS_LABEL[a.state] || a.state}${subs}`;
+  const ul = $('detail-history');
+  ul.innerHTML = '';
+  if (!a.history.length) ul.append(el('li', 'muted', 'Todavía no ha hecho nada en esta sesión.'));
+  for (const h of a.history) ul.append(el('li', '', `${new Date(h.ts).toLocaleTimeString('es')} — ${h.text}`));
+}
+
+// ---------------------------------------------------------------- tareas para los agentes
+
+function onTasks(snap) {
+  tasks = snap;
+  renderTargets();
+  renderTasks();
+}
+
+function renderTargets() {
+  const sel = $('task-target');
+  const prev = sel.value;
+  const targets = taskTargets(tasks, sessions.values());
+  sel.innerHTML = '';
+  targets.forEach((t, i) => sel.append(new Option(t.label, String(i))));
+  if (!targets.length) sel.append(new Option('Nadie conectado y ningún CLI disponible', ''));
+  if (prev && Number(prev) < targets.length) sel.value = prev;
+  $('agents-count').textContent = tasks.agents.length ? `${tasks.agents.length} conectado(s)` : '';
+}
+
+function renderTasks() {
+  const ul = $('tasks');
+  ul.innerHTML = '';
+  for (const t of tasks.tasks.slice(-6).reverse()) {
+    const [icon, label] = TASK_STATUS[t.status] || ['·', t.status];
+    const li = document.createElement('li');
+    li.append(el('span', `st-${t.status}`, icon), el('span', '', `${AGENT_NAME[t.agent] || t.agent}${t.mode === 'launch' ? ' (nuevo)' : ''}: ${t.text}`));
+    if (['running', 'queued', 'sent'].includes(t.status)) {
+      const b = el('button', '', '✕');
+      b.title = 'Cancelar';
+      b.onclick = () => send({ type: 'task_cancel', id: t.id });
+      li.append(b);
+    } else li.append(el('span', `st-${t.status}`, label));
+    const sub = t.status === 'running' && t.output?.length ? t.output.at(-1) : ['failed', 'queued'].includes(t.status) ? t.detail : '';
+    if (sub) li.append(el('span', 'sub', sub));
+    ul.append(li);
+  }
+}
+
+function alertTask(error) {
+  const ul = $('tasks');
+  const li = el('li', '', '');
+  li.append(el('span', 'st-failed', '✖'), el('span', 'st-failed', `No se pudo: ${error}`));
+  ul.prepend(li);
+}
+
+$('task-form').onsubmit = (e) => {
+  e.preventDefault();
+  const t = taskTargets(tasks, sessions.values())[Number($('task-target').value)];
+  const text = $('task-text').value.trim();
+  if (!t || !text) return;
+  send({ type: 'task', text, agent: t.agent, session: t.session, mode: t.mode, from: 'Web', ref: Date.now() });
+  $('task-text').value = '';
+};
+$('task-text').onkeydown = (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) $('task-form').requestSubmit(); };
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+$('session').onchange = (e) => { focus = e.target.value || null; renderSessions(); };
+$('chat').onsubmit = (e) => {
+  e.preventDefault();
+  const text = $('chat-text').value.trim();
+  if (!text) return;
+  send({ type: 'chat', text, role: selected || undefined });
+  $('chat-text').value = '';
+};
+$('poke').onclick = () => selected && send({ type: 'poke', role: selected });
+$('demo').onclick = () => send({ type: 'command', action: 'demo' });
+$('demo-pi').onclick = () => send({ type: 'command', action: 'demo-pi' });
+$('reset').onclick = () => send({ type: 'command', action: 'reset' });
+setInterval(renderTeam, 2000); // los estados caducan en el cliente (vuelven a "libre")
+
+connect();

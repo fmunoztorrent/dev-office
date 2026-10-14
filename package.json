@@ -1,0 +1,38 @@
+{
+  "name": "dev-team-office",
+  "version": "0.3.0",
+  "description": "Oficina pixel-art en vivo: un equipo de desarrollo que representa las subtareas de un agente de código (Claude Code, OpenCode, Pi...) recibiendo eventos por WebSocket.",
+  "type": "module",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "office": "node bin/dev-team-office.js",
+    "dev": "node --watch server/index.js",
+    "demo": "node scripts/demo.js",
+    "send": "node scripts/send.js",
+    "test": "node --test",
+    "build": "deno compile --no-check --allow-net --allow-read --allow-write --allow-env --allow-sys --allow-run --include public --output dist/dev-team-office bin/dev-team-office.js",
+    "build:mac-x64": "deno compile --no-check --target x86_64-apple-darwin --allow-net --allow-read --allow-write --allow-env --allow-sys --allow-run --include public --output dist/dev-team-office-x64 bin/dev-team-office.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "bin": {
+    "dev-team-office": "bin/dev-team-office.js"
+  },
+  "files": [
+    "bin",
+    "server",
+    "tui",
+    "public",
+    "integrations",
+    "docs"
+  ],
+  "os": [
+    "darwin",
+    "linux"
+  ]
+}
