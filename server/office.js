@@ -159,6 +159,10 @@ export class Office extends EventEmitter {
       case 'session_end': return { ...ev, role: 'manager', text: 'Sesión cerrada' };
       case 'chat': return { ...ev, role, from: clip(r.from || 'Tú', 30), text: clip(r.text, 200) };
       case 'stage_end': return role ? { ...ev, role, ok: r.ok !== false, text: clip(r.text, 160) } : null;
+      // El agente dice qué subagente es qué rol (al arrancar un pipeline): no se dibuja, se aprende.
+      case 'agent_roles':
+        if (r.roles && typeof r.roles === 'object') this.setAgentRoles(s.id, Object.fromEntries(Object.entries(r.roles).filter(([, v]) => ROLE_IDS.includes(v)).slice(0, 40)));
+        return null;
       case 'dispatch': return { ...ev, role: 'po', from: clip(r.from || 'Tú', 30), agent: clip(r.agent, 30), mode: r.mode === 'launch' ? 'launch' : 'session', text: clip(r.text, 200) };
       case 'poke': return role ? { ...ev, role, from: clip(r.from || 'Tú', 30), text: '👋' } : null;
       default: return null;

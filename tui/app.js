@@ -21,6 +21,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       selected: null, chat: null, status: null, log: [], session: null, sessions, connection: { ok: false, label: 'conectando…' }, endpoints,
       tasks: { tasks: [], agents: [], launchers: [], defaultCwd: '' },
       pipelines: [],
+      projects: [], // los que anuncian los agentes conectados (con sus pipelines)
       brief: null, // el diálogo de la pizarra mientras está abierto
       settings: null, // ⚙ Ajustes mientras está abierto
     };
@@ -50,7 +51,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       },
       onStatus(st) { model.connection = st; },
       onTasks(snap) { model.tasks = snap; },
-      onPipelines(runs) { model.pipelines = runs || []; },
+      onPipelines(runs, projects) { model.pipelines = runs || []; if (projects) model.projects = projects; },
       onAppearance(a) { applyAppearance(a); },
       onError(err) { flash(`No se pudo: ${err}`, 6000); },
     });
@@ -74,12 +75,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
 
     // ---- diálogo "Nuevo encargo" (t, o clic en la pizarra) ----
     function openBrief() {
-      const b = model.brief = { field: 'task', sel: { project: 0, pipeline: 0, strategy: 0, target: 0 }, text: '', projects: [], loading: true, error: '' };
-      fetch(`${feed.http}/v1/projects`).then((r) => r.json()).then(({ projects = [] }) => {
-        b.projects = projects;
-        b.loading = false;
-        b.sel = { ...b.sel, project: defaultProject(projects, sessions.values()) };
-      }).catch(() => { b.loading = false; b.error = 'No pude leer los proyectos'; });
+      model.brief = { field: 'task', sel: { project: defaultProject(model.projects, sessions.values()), pipeline: 0, target: 0 }, text: '', error: '' };
     }
 
     function openSettings() {
@@ -89,7 +85,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
 
     function briefKey(k) {
       const b = model.brief;
-      const opts = briefOptions({ projects: b.projects, tasks: model.tasks, sessions: sessions.values() }, b.sel);
+      const opts = briefOptions({ projects: model.projects, tasks: model.tasks, sessions: sessions.values() }, b.sel);
       const fields = briefFields(opts);
       const i = Math.max(0, fields.indexOf(b.field));
       if (!fields.includes(b.field)) b.field = 'task';
@@ -97,7 +93,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       if (k === '\t' || k === 'down') { b.field = fields[(i + 1) % fields.length]; return; }
       if (k === 'shift-tab' || k === 'up') { b.field = fields[(i - 1 + fields.length) % fields.length]; return; }
       if (k === 'left' || k === 'right') {
-        if (b.field !== 'task') b.sel = briefCycle(b.sel, b.field, k === 'right' ? 1 : -1, { projects: b.projects, opts });
+        if (b.field !== 'task') b.sel = briefCycle(b.sel, b.field, k === 'right' ? 1 : -1, { projects: model.projects, opts });
         b.error = '';
         return;
       }

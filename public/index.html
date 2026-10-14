@@ -91,7 +91,6 @@
         <label class="b-field"><span>Proyecto</span><select id="b-project"></select></label>
         <label class="b-field"><span>Pipeline</span><select id="b-pipeline"></select></label>
         <p id="b-desc" class="b-desc"></p>
-        <div id="b-strategy-row" class="b-field"><span>Orquesta</span><div id="b-strategy" class="segmented" role="radiogroup"></div></div>
         <label id="b-target-row" class="b-field"><span>Para</span><select id="b-target"></select></label>
         <label class="note"><span>Tarea</span><textarea id="b-text" rows="3" maxlength="4000" placeholder="¿Qué necesitas que haga el equipo?"></textarea></label>
         <div id="b-stages" class="b-stages"></div>
@@ -112,15 +111,11 @@
         <button type="button" class="brief-x" id="settings-close" aria-label="Cerrar">✕</button>
       </header>
       <nav class="tabs" role="tablist">
-        <button type="button" role="tab" data-tab="office" aria-selected="true">Oficina</button>
-        <button type="button" role="tab" data-tab="project" aria-selected="false">Proyecto</button>
-        <button type="button" role="tab" data-tab="pipelines" aria-selected="false">Pipelines</button>
+        <button type="button" role="tab" data-tab="agents" aria-selected="true">Agentes</button>
         <button type="button" role="tab" data-tab="look" aria-selected="false">Personajes</button>
       </nav>
       <div class="brief-body">
-        <section data-panel="office" class="s-panel"></section>
-        <section data-panel="project" class="s-panel" hidden></section>
-        <section data-panel="pipelines" class="s-panel" hidden></section>
+        <section data-panel="agents" class="s-panel"></section>
         <section data-panel="look" class="s-panel" hidden></section>
         <p id="s-msg" class="b-problem" role="status"></p>
       </div>

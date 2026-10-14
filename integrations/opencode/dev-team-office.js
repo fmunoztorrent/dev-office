@@ -1,70 +1,183 @@
-// Plugin de OpenCode → Dev Team Office.
-// Cópialo a .opencode/plugin/ (proyecto) o ~/.config/opencode/plugin/ (global).
+// Plugin de OpenCode → Dev Team Office. OpenCode es el BACKEND: aquí se ejecuta todo; la oficina
+// sólo envía pedidos y dibuja lo que pasa.
+//
+// Instalación: `dev-team-office install opencode` (copia este plugin a ~/.config/opencode/plugin/
+// y la librería común a ~/.dev-team-office/lib/devteam.mjs).
 //
 // - Reporta eventos de la sesión a la oficina (HTTP).
-// - Recibe tareas enviadas desde la oficina (WebSocket) y las manda a la sesión con el SDK
-//   (`client.session.prompt`); si no hay sesión conocida, las escribe en el prompt del TUI.
+// - Se registra por WebSocket y anuncia los pipelines de su proyecto (.devteam/).
+// - task:     la manda a la sesión con el SDK (`client.session.prompt`) o al prompt del TUI.
+// - pipeline: lo ejecuta DENTRO de la sesión, etapa por etapa, con el modelo y el agente de cada
+//             etapa (`client.session.prompt` con `model`/`agent`). Gates y bucles: devteam.mjs.
+// - launch:   la oficina le pide una sesión nueva: si es de OpenCode la crea en este servidor; si
+//             es de otro agente lanza su CLI.
+
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const URL_BASE = process.env.DEV_TEAM_OFFICE_URL || 'http://127.0.0.1:4317';
 const WS_URL = URL_BASE.replace(/^http/, 'ws') + '/v1/ws';
+const STAGE_MARK = '[Dev Team Office · etapa'; // así empiezan los prompts de etapa (no son tareas nuevas)
 
+async function loadLib() {
+  let here = null;
+  try { here = path.dirname(fileURLToPath(import.meta.url)); } catch { /* sin import.meta.url */ }
+  const candidates = [
+    process.env.DEV_TEAM_OFFICE_LIB,
+    path.join(os.homedir(), '.dev-team-office', 'lib', 'devteam.mjs'),
+    here && path.join(here, '..', 'common', 'devteam.mjs'),
+  ];
+  for (const c of candidates) if (c && fs.existsSync(c)) return import(pathToFileURL(c).href);
+  return null;
+}
+
+// En orden: los eventos cuentan una historia (fase → herramientas → fin).
+let chain = Promise.resolve();
 function send(event) {
-  fetch(`${URL_BASE}/v1/events/opencode`, {
+  chain = chain.then(() => fetch(`${URL_BASE}/v1/events/opencode`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    // `run`: si este OpenCode es una etapa lanzada por la oficina, ya lee su salida y descarta esto.
-    body: JSON.stringify({ ...event, run: process.env.DEV_TEAM_OFFICE_RUN }),
+    body: JSON.stringify(event),
     signal: AbortSignal.timeout(1500),
-  }).catch(() => {}); // la oficina es opcional: nunca rompe al agente
+  })).catch(() => {}); // la oficina es opcional: nunca rompe al agente
 }
+
+const errText = (err) => String(err?.data?.message || err?.message || err);
+/** El SDK devuelve { data, error } (o el valor directo, según la versión). */
+const unwrap = (res) => {
+  if (res?.error) throw new Error(errText(res.error));
+  return res?.data ?? res;
+};
 
 export const DevTeamOffice = async ({ client, directory }) => {
   const cwd = directory;
+  let lib = null;
   let lastSession = null;
   let ws = null;
+  let run = null;        // pipeline en curso
+  let runSession = null; // sesión de OpenCode donde corre
 
-  const register = () => ws?.readyState === 1 &&
-    ws.send(JSON.stringify({ type: 'register', agent: 'opencode', session: lastSession, cwd, pid: process.pid }));
+  const wsSend = (m) => ws?.readyState === 1 && ws.send(JSON.stringify(m));
+  const register = () => wsSend({
+    type: 'register', agent: 'opencode', session: lastSession, cwd, pid: process.pid,
+    can: lib ? ['task', 'pipeline', 'launch'] : ['task'], project: lib ? lib.catalogEntry(lib.loadProject(cwd)) : null,
+  });
   const seen = (session) => {
     if (!session || session === lastSession) return;
     lastSession = session;
     register();
   };
-  const ack = (id, status, error) => ws?.readyState === 1 && ws.send(JSON.stringify({ type: 'task_update', id, status, error }));
+  const ack = (id, status, error, detail) => wsSend({ type: 'task_update', id, status, error, detail });
+  const toast = (message) => client.tui.showToast({ body: { message, variant: 'info' } }).catch(() => {});
 
   async function toTui(text) {
     await client.tui.appendPrompt({ body: { text } });
     await client.tui.submitPrompt();
   }
 
+  async function newSession(title) {
+    const s = unwrap(await client.session.create({ body: { title: String(title).slice(0, 60) } }));
+    seen(s.id);
+    return s.id;
+  }
+
   function runTask(msg) {
-    client.tui.showToast({ body: { message: 'Tarea desde Dev Team Office', variant: 'info' } }).catch(() => {});
+    toast('Tarea desde Dev Team Office');
     const id = msg.session || lastSession;
     if (!id) {
-      toTui(msg.text).then(() => ack(msg.id, 'accepted'), (err) => ack(msg.id, 'failed', String(err?.message || err)));
+      toTui(msg.text).then(() => ack(msg.id, 'accepted'), (err) => ack(msg.id, 'failed', errText(err)));
       return;
     }
     ack(msg.id, 'accepted');
     client.session.prompt({ path: { id }, body: { parts: [{ type: 'text', text: msg.text }] } })
-      .then(() => ack(msg.id, 'done'))
-      .catch((err) => toTui(msg.text).catch(() => ack(msg.id, 'failed', String(err?.message || err))));
+      .then((res) => { unwrap(res); ack(msg.id, 'done'); })
+      .catch((err) => toTui(msg.text).catch(() => ack(msg.id, 'failed', errText(err))));
   }
 
-  // Sólo con OpenCode interactivo: un `opencode run` lanzado por la oficina termina solo.
-  if (!process.env.DEV_TEAM_OFFICE_RUN && typeof WebSocket !== 'undefined') {
-    const connect = () => {
-      ws = new WebSocket(WS_URL);
-      ws.onopen = register;
-      ws.onmessage = (m) => {
-        let msg;
-        try { msg = JSON.parse(String(m.data)); } catch { return; }
-        if (msg.type === 'task') runTask(msg);
-      };
-      ws.onclose = () => { ws = null; setTimeout(connect, 3000)?.unref?.(); };
-      ws.onerror = () => {};
-    };
-    connect();
+  // ---- pipelines dentro de la sesión ----
+
+  /** "proveedor/modelo" → { providerID, modelID }. Sin proveedor, lo busca entre los configurados. */
+  async function modelRef(spec) {
+    const [providerID, ...rest] = String(spec).split('/');
+    if (rest.length) return { providerID, modelID: rest.join('/') };
+    const cfg = unwrap(await client.config.providers().catch(() => null)) || {};
+    for (const p of cfg.providers || []) if (p.models && spec in p.models) return { providerID: p.id, modelID: spec };
+    return null;
   }
+
+  async function startPipeline(msg) {
+    const update = (status) => wsSend({ type: 'pipeline_update', id: msg.id, ...status });
+    if (!lib) return update({ status: 'failed', detail: 'falta la librería devteam.mjs: corre `dev-team-office install opencode`' });
+    if (run) return update({ status: 'failed', detail: 'este OpenCode ya está corriendo otro pipeline' });
+    const project = lib.loadProject(cwd);
+    const pipeline = project.pipelines.find((p) => p.id === msg.pipeline);
+    if (!pipeline) return update({ status: 'failed', detail: `no hay un pipeline "${msg.pipeline}" en ${project.dir}/.devteam/` });
+
+    runSession = msg.session && msg.session === lastSession ? msg.session : lastSession || await newSession(`Pipeline ${pipeline.name}`);
+    const report = (e) => send({ session: runSession, cwd, ...e });
+    const me = run = new lib.PipelineRun({ id: msg.id, project, pipeline, task: msg.task, report, onStatus: update });
+    toast(`Pipeline «${pipeline.name}» desde Dev Team Office`);
+    let step = run.start();
+    while (step.action === 'prompt' && run === me) {
+      const body = { parts: [{ type: 'text', text: step.prompt }] };
+      if (step.stage.native && step.stage.harness === 'opencode') body.agent = step.stage.agent;
+      if (step.stage.model) {
+        const model = await modelRef(step.stage.model);
+        if (!model) { step = run.fail(`OpenCode no conoce el modelo ${step.stage.model} (usa proveedor/modelo)`); continue; }
+        body.model = model;
+      }
+      try {
+        const res = unwrap(await client.session.prompt({ path: { id: runSession }, body }));
+        if (run !== me) break; // cancelado mientras corría
+        step = await run.advance(lib.textOf(res) || lib.textOf(res?.info));
+      } catch (err) {
+        if (run !== me) break;
+        step = run.fail(`OpenCode: ${errText(err)}`);
+      }
+    }
+    if (run === me) run = null;
+  }
+
+  function cancelPipeline(id) {
+    if (!run || run.id !== id) return;
+    run.cancel();
+    run = null;
+    client.session.abort({ path: { id: runSession } }).catch(() => {});
+  }
+
+  async function launch(msg) {
+    if (msg.harness === 'opencode') {
+      const id = await newSession(msg.task);
+      ack(msg.id, 'accepted', undefined, 'sesión nueva en este OpenCode');
+      unwrap(await client.session.prompt({ path: { id }, body: { parts: [{ type: 'text', text: msg.task }] } }));
+      return ack(msg.id, 'done');
+    }
+    const r = lib?.launchAgent({ harness: msg.harness, task: msg.task, cwd: msg.cwd, env: { DEV_TEAM_OFFICE_URL: URL_BASE } }) || { ok: false, error: 'falta la librería devteam.mjs' };
+    if (!r.ok) return ack(msg.id, 'failed', r.error);
+    ack(msg.id, 'accepted', undefined, `sesión nueva lanzada por OpenCode (pid ${r.pid})`);
+    r.child.on('exit', (code) => ack(msg.id, code === 0 ? 'done' : 'failed', `salió con código ${code}`));
+  }
+
+  // ---- conexión con la oficina ----
+  // No en sesiones lanzadas por otro agente (`opencode run`): terminan solas.
+  const connect = () => {
+    ws = new WebSocket(WS_URL);
+    ws.onopen = register;
+    ws.onmessage = (m) => {
+      let msg;
+      try { msg = JSON.parse(String(m.data)); } catch { return; }
+      if (msg.type === 'task') runTask(msg);
+      else if (msg.type === 'pipeline') startPipeline(msg).catch((err) => wsSend({ type: 'pipeline_update', id: msg.id, status: 'failed', detail: errText(err) }));
+      else if (msg.type === 'pipeline_cancel') cancelPipeline(msg.id);
+      else if (msg.type === 'launch') launch(msg).catch((err) => ack(msg.id, 'failed', errText(err)));
+    };
+    ws.onclose = () => { ws = null; setTimeout(connect, 3000)?.unref?.(); };
+    ws.onerror = () => {};
+  };
+  lib = await loadLib().catch(() => null);
+  if (!process.env.DEV_TEAM_OFFICE_LAUNCHED && typeof WebSocket !== 'undefined') connect();
 
   return {
     'tool.execute.before': async (input, output) => {
@@ -81,19 +194,20 @@ export const DevTeamOffice = async ({ client, directory }) => {
       if (event.type.startsWith('session.')) seen(session);
       switch (event.type) {
         case 'session.created': return send({ session, cwd, kind: 'session_start' });
-        case 'session.idle': return send({ session, cwd, kind: 'done' });
+        // con un pipeline en curso cada etapa termina un turno: el "listo" lo da el pipeline
+        case 'session.idle': return run && session === runSession ? undefined : send({ session, cwd, kind: 'done' });
         case 'session.error': return send({ session, cwd, kind: 'error', text: p.error?.data?.message || p.error?.name });
         case 'session.compacted': return send({ session, cwd, kind: 'compact' });
         case 'permission.updated':
         case 'permission.asked': return send({ session, cwd, kind: 'waiting', text: p.title || 'OpenCode pide permiso' });
-        case 'todo.updated': return send({ session, cwd, kind: 'todos', todos: p.todos });
+        case 'todo.updated': return run && session === runSession ? undefined : send({ session, cwd, kind: 'todos', todos: p.todos });
       }
     },
-    // Mensaje del usuario → nueva tarea para el equipo.
+    // Mensaje del usuario → nueva tarea para el equipo (los prompts de etapa no lo son).
     'chat.message': async (input, output) => {
       seen(input.sessionID);
       const text = output?.parts?.filter((x) => x.type === 'text').map((x) => x.text).join(' ');
-      if (text) send({ session: input.sessionID, cwd, kind: 'task', text });
+      if (text && !text.startsWith(STAGE_MARK)) send({ session: input.sessionID, cwd, kind: 'task', text });
     },
   };
 };

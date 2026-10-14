@@ -38,30 +38,29 @@ Las rutas antiguas (`POST /event/<source>`, `GET /api/state`, `/ws`) siguen func
 
 ## Pipelines y proyectos
 
+La oficina es el frontend: los proyectos y pipelines son los que anuncian los agentes, y el pipeline lo ejecuta la sesión de agente elegida.
+
 | Método | Ruta | Cuerpo | Respuesta |
 |---|---|---|---|
-| `GET` | `/v1/projects` | | Proyectos conocidos con sus pipelines y agentes |
-| `GET` | `/v1/project?dir=` | | Un proyecto |
-| `GET` | `/v1/pipelines` | | `{ runs }`: estado de cada ejecución y de sus etapas |
-| `POST` | `/v1/pipelines` | `{ dir, pipeline, task, strategy?: "office" \| "agent", target? }` | `{ ok, run }` |
+| `GET` | `/v1/projects` | | `{ projects }`: por directorio, con sus pipelines y las sesiones (`hosts`) que pueden correr cada uno |
+| `POST` | `/v1/agents/announce` | `{ agent, session, cwd, project }` | `{ ok }`. Lo usa el hook de Claude Code; Pi y OpenCode anuncian al registrarse por WebSocket |
+| `GET` | `/v1/pipelines` | | `{ runs, projects }`: estado de cada ejecución y de sus etapas |
+| `POST` | `/v1/pipelines` | `{ pipeline, task, session?, agent? }` | `{ ok, run }` |
 | `POST` | `/v1/pipelines/<id>/cancel` | | `{ ok }` |
+| `POST` | `/v1/pipelines/<id>/update` | `{ status, detail?, stages? }` (lo envía el agente) | `{ ok }` |
 
-Formato y estrategias: [pipelines.md](pipelines.md).
+Formato y protocolo con los agentes: [pipelines.md](pipelines.md).
 
 ## ⚙ Ajustes
 
 | Método | Ruta | Cuerpo |
 |---|---|---|
-| `GET` | `/v1/settings` | Responde `{ office: { projects, cwd, launchers, appearance }, projects, harnesses, pipelineTemplate }` |
-| `PUT` | `/v1/settings` | `{ projects?, cwd?, launchers?: { agente: [...] \| null }, appearance?: { rol: {...} \| null } }` |
-| `GET` | `/v1/settings/project?dir=` | Responde el equipo, los agentes de cada harness y los pipelines en crudo |
-| `PUT` | `/v1/settings/team` | `{ dir, team }` |
-| `POST` | `/v1/settings/pipeline/check` | `{ dir, id, pipeline }`: valida sin guardar |
-| `PUT` / `DELETE` | `/v1/settings/pipeline` | `{ dir, id, pipeline }` / `{ dir, id }` |
+| `GET` | `/v1/settings` | Responde `{ office: { file, appearance } }` |
+| `PUT` | `/v1/settings` | `{ appearance: { rol: { name?, title?, shirt?, pants?, hair?, skin?, long?, beard?, glasses? } \| null } }` |
 
-- **Validación:** todo se valida antes de escribir. Si hay un error, la respuesta es `400 { error }` y no se toca ningún archivo.
-- **Dónde se puede escribir:** sólo en proyectos que la oficina conoce.
-- **Apariencia en vivo:** al cambiar la apariencia, el servidor difunde `{ type: "appearance", appearance }` y todos los visores la aplican al momento.
+- **Validación:** todo se valida antes de escribir. Si hay un error, la respuesta es `400 { error }` y no se toca el archivo.
+- **Apariencia en vivo:** al cambiarla, el servidor difunde `{ type: "appearance", appearance }` y todos los visores la aplican al momento.
+- La configuración de los agentes (equipo, modelos, pipelines) vive en cada proyecto (`.devteam/`) y la oficina no la escribe.
 
 ## Tareas para los agentes
 
@@ -69,42 +68,35 @@ La oficina también funciona al revés: puedes mandarle una tarea al agente.
 
 | Método | Ruta | Cuerpo | Respuesta |
 |---|---|---|---|
-| `GET` | `/v1/tasks` | | `{ tasks, agents, launchers, defaultCwd }` |
+| `GET` | `/v1/tasks` | | `{ tasks, agents, launchers, defaultCwd }` (`launchers[].available`: hay un agente conectado que puede lanzar) |
 | `POST` | `/v1/tasks` | `{ text, agent, session?, mode?: "session" \| "launch", cwd? }` | `{ ok, task }` o `{ ok: false, error }` |
 | `POST` | `/v1/tasks/<id>/cancel` | | `{ ok }` |
-| `POST` | `/v1/hooks/claude-code` | JSON del hook | Lo que el hook debe escribir en stdout (casi siempre vacío) |
+| `POST` | `/v1/hooks/claude-code` | JSON del hook | Lo que la oficina tiene para esa sesión: `{ task?: { id, text }, pipeline?: { id, pipeline, task }, cancel?: [id] }`. Qué hacer con eso lo decide el hook ([`hook.mjs`](../integrations/claude-code/hook.mjs)) |
 
 `agent` es `pi`, `opencode` o `claude-code`. Cómo llega la tarea en cada caso:
 
 | `mode` | Pi / OpenCode | Claude Code |
 |---|---|---|
 | `session` (por defecto) | Inmediata a la sesión conectada. Pi la recibe con `pi.sendUserMessage` (como follow-up si está ocupado) y OpenCode con `client.session.prompt` | En cola. Cuando Claude termina su turno, el hook `Stop` responde `{"decision":"block","reason":"<tarea>"}` y Claude sigue con ella. Si la sesión está esperando tu mensaje, la entrega ocurre al terminar el siguiente turno |
-| `launch` | `opencode run "<tarea>"` / `pi -p "<tarea>"` en `cwd` | `claude -p "<tarea>" --permission-mode acceptEdits` en `cwd` |
+| `launch` | La oficina se lo pide a un agente conectado que sepa lanzar (`can: ["launch"]`), que corre `opencode run "<tarea>"` / `pi -p "<tarea>"` en `cwd` | Igual, con `claude -p "<tarea>" --permission-mode acceptEdits` |
 
-Estados de una tarea: `queued` → `sent` → `running` → `done`, `failed` o `cancelled`. Las ejecuciones lanzadas guardan sus últimas líneas de salida en `output`.
-
-Los comandos de lanzamiento y el directorio por defecto se cambian en `~/.dev-team-office/config.json`. La tarea se pasa como un único argumento (`{task}`) sin shell, así que su texto nunca se interpreta como comando:
-
-```json
-{
-  "cwd": "~/Workspace/mi-proyecto",
-  "launchers": {
-    "claude-code": ["claude", "-p", "{task}", "--permission-mode", "auto"],
-    "pi": ["pi", "-p", "{task}"]
-  }
-}
-```
+Estados de una tarea: `queued` → `sent` → `running` → `done`, `failed` o `cancelled`. La tarea se pasa como un único argumento, sin shell, así que su texto nunca se interpreta como comando.
 
 ### Protocolo para agentes (plugins y extensiones)
 
 Un agente que quiere recibir tareas abre `ws://127.0.0.1:4317/v1/ws` y se registra:
 
 ```jsonc
-→ { "type": "register", "agent": "pi", "session": "pi-1234", "cwd": "/ruta", "pid": 1234 }
+→ { "type": "register", "agent": "pi", "session": "pi-1234", "cwd": "/ruta", "pid": 1234,
+    "can": ["task", "pipeline", "launch"], "project": { "dir", "name", "pipelines": [...] } }
    // se puede repetir cuando cambia de sesión
 ← { "type": "task", "id": "t3", "text": "Agrega paginación", "session": "pi-1234" }
 → { "type": "task_update", "id": "t3", "status": "accepted" }
    // también done | failed (con error)
+← { "type": "launch", "id": "t4", "harness": "claude-code", "task": "…", "cwd": "/ruta" }
+← { "type": "pipeline", "id": "p1", "session": "pi-1234", "pipeline": "feature-tdd", "task": "…" }
+→ { "type": "pipeline_update", "id": "p1", "status": "running", "stages": [...] }
+← { "type": "pipeline_cancel", "id": "p1" }
 ```
 
 Una conexión registrada no recibe la difusión de eventos de la oficina, sólo sus tareas. Desde un visor, `{ "type": "task", text, agent, session?, mode?, cwd?, ref? }` crea una tarea; con `ref`, el servidor responde con un `ack`.

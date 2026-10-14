@@ -1,73 +1,175 @@
-// Extensión de Pi (pi-coding-agent) → Dev Team Office.
-// Cópiala a ~/.pi/agent/extensions/ (global) o a la carpeta de extensiones del proyecto.
+// Extensión de Pi (pi-coding-agent) → Dev Team Office. Pi es el BACKEND: aquí se ejecuta todo;
+// la oficina sólo envía pedidos y dibuja lo que pasa.
 //
-// - Reporta prompts, herramientas y fin del agente a la oficina (HTTP).
-// - Recibe tareas enviadas desde la oficina (WebSocket) y se las pasa a Pi como mensaje del
-//   usuario: al instante si Pi está libre, o como follow-up si está trabajando.
-// Las fases por rol (arquitecto → QA RED → backend…) las reporta el skill `dev-team-office`.
+// Instalación: `dev-team-office install pi` (copia esta extensión a ~/.pi/agent/extensions/ y la
+// librería común a ~/.dev-team-office/lib/devteam.mjs).
+//
+// - Reporta prompts, herramientas y fin del agente a la oficina.
+// - Se registra por WebSocket y anuncia los pipelines de su proyecto (.devteam/).
+// - task:     la tarea llega como mensaje del usuario (follow-up si Pi está ocupado).
+// - pipeline: ejecuta el pipeline DENTRO de esta sesión, etapa por etapa: cambia de modelo con
+//             setModel, manda el prompt de la etapa, espera a que Pi termine (agent_settled),
+//             corre el gate y sigue. Los bucles y gates los decide devteam.mjs.
+// - launch:   la oficina le pide a esta Pi que arranque una sesión nueva de un agente.
 
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const URL_BASE = process.env.DEV_TEAM_OFFICE_URL || 'http://127.0.0.1:4317';
 const WS_URL = URL_BASE.replace(/^http/, 'ws') + '/v1/ws';
+const STAGE_MARK = '[Dev Team Office · etapa'; // así empiezan los prompts de etapa (no son tareas nuevas)
 
+async function loadLib(): Promise<any> {
+  const candidates = [process.env.DEV_TEAM_OFFICE_LIB, path.join(os.homedir(), '.dev-team-office', 'lib', 'devteam.mjs')];
+  for (const c of candidates) if (c && fs.existsSync(c)) return import(pathToFileURL(c).href);
+  return null;
+}
+
+// En orden: los eventos cuentan una historia (fase → herramientas → fin).
+let chain: Promise<unknown> = Promise.resolve();
 function send(event: Record<string, unknown>) {
-  fetch(`${URL_BASE}/v1/events/pi`, {
+  chain = chain.then(() => fetch(`${URL_BASE}/v1/events/pi`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    // `run`: si esta Pi es una etapa lanzada por la oficina, ya lee su salida y descarta esto.
-    body: JSON.stringify({ ...event, run: process.env.DEV_TEAM_OFFICE_RUN }),
+    body: JSON.stringify(event),
     signal: AbortSignal.timeout(1500),
-  }).catch(() => {});
+  })).catch(() => {}); // la oficina es opcional: nunca rompe a Pi
 }
 
 export default function (pi: ExtensionAPI) {
-  // Los comandos que lanza Pi heredan esta variable: así el script del skill usa la misma sesión.
   const session = (process.env.DEV_TEAM_OFFICE_SESSION ||= `pi-${process.pid}`);
   const cwd = process.cwd();
-  let ctx: any = null; // último contexto visto, para saber si Pi está ocupado
+  const report = (e: Record<string, unknown>) => send({ session, cwd, ...e });
+  let ctx: any = null;     // último contexto visto (isIdle, modelRegistry, model)
+  let lib: any = null;
+  let run: any = null;     // pipeline en curso en esta sesión
+  let waiting = false;     // esperando que la etapa actual termine
+  let lastText = '';       // última respuesta de Pi (el resumen de la etapa)
+  let originalModel: any = null;
 
-  pi.on('session_start', async (_e: any, c: any) => { ctx = c; send({ session, cwd, kind: 'session_start' }); });
+  pi.on('session_start', async (_e: any, c: any) => { ctx = c; report({ kind: 'session_start' }); register(); });
   pi.on('before_agent_start', async (event: any, c: any) => {
     ctx = c;
-    if (event.messageType === 'user' && event.prompt) send({ session, cwd, kind: 'task', text: event.prompt });
+    // un prompt de etapa no es una tarea nueva: la fase ya la anunció el pipeline
+    if (event.messageType === 'user' && event.prompt && !String(event.prompt).startsWith(STAGE_MARK)) report({ kind: 'task', text: event.prompt });
   });
-  pi.on('turn_start', async (_e: any, c: any) => { ctx = c; send({ session, cwd, kind: 'thinking' }); });
+  pi.on('turn_start', async (_e: any, c: any) => { ctx = c; report({ kind: 'thinking' }); });
   pi.on('tool_call', async (event: any, c: any) => {
     ctx = c;
-    send({ session, cwd, kind: 'tool_start', tool: event.toolName, toolUseId: event.toolCallId, input: event.input });
+    report({ kind: 'tool_start', tool: event.toolName, toolUseId: event.toolCallId, input: event.input });
   });
   pi.on('tool_result', async (event: any) =>
-    send({ session, cwd, kind: 'tool_end', tool: event.toolName, toolUseId: event.toolCallId, input: event.input, ok: !event.isError }));
-  pi.on('session_compact', async () => send({ session, cwd, kind: 'compact' }));
-  pi.on('agent_end', async (_e: any, c: any) => { ctx = c; send({ session, cwd, kind: 'done' }); });
-  pi.on('session_shutdown', async () => { closed = true; ws?.close(); send({ session, cwd, kind: 'session_end' }); });
+    report({ kind: 'tool_end', tool: event.toolName, toolUseId: event.toolCallId, input: event.input, ok: !event.isError }));
+  pi.on('message_end', async (event: any) => {
+    if (event.message?.role !== 'assistant' || !lib) return;
+    const t = lib.textOf(event.message);
+    if (t) lastText = t;
+  });
+  pi.on('session_compact', async () => report({ kind: 'compact' }));
+  // con un pipeline en curso cada etapa termina un turno: el "listo" lo da el pipeline al final
+  pi.on('agent_end', async (_e: any, c: any) => { ctx = c; if (!run) report({ kind: 'done' }); });
+  pi.on('agent_settled', async (event: any, c: any) => {
+    ctx = c;
+    if (!run || !waiting) return;
+    waiting = false;
+    if (event.aborted) { run.cancel('cancelado en Pi'); return finish(); }
+    await apply(await run.advance(lastText));
+  });
+  pi.on('session_shutdown', async () => { closed = true; ws?.close(); report({ kind: 'session_end' }); });
 
-  // ---- tareas desde la oficina ----
-  // Sólo en sesiones interactivas: un `pi -p` lanzado por la oficina termina solo.
+  // ---- pipelines dentro de la sesión ----
+
+  async function useModel(spec: string, thinking?: string) {
+    const reg = ctx?.modelRegistry;
+    if (!reg) return false;
+    const [provider, ...rest] = String(spec).split('/');
+    let model = rest.length ? reg.find(provider, rest.join('/')) : undefined;
+    if (!model) {
+      const all = reg.getAvailable?.() || reg.getAll?.() || [];
+      model = all.find((m: any) => m.id === spec || `${m.provider}/${m.id}` === spec) || all.find((m: any) => String(m.id).includes(spec));
+    }
+    if (!model) return false;
+    originalModel ??= ctx.model || null;
+    const ok = await pi.setModel(model);
+    if (ok && thinking) pi.setThinkingLevel(thinking as any);
+    return ok;
+  }
+
+  async function apply(step: any): Promise<void> {
+    if (step.action !== 'prompt') return finish();
+    if (step.stage.model) {
+      if (!(await useModel(step.stage.model, step.stage.thinking))) return apply(run.fail(`Pi no tiene disponible el modelo ${step.stage.model}`));
+    } else if (originalModel) {
+      await pi.setModel(originalModel); // sin modelo propio: el de la sesión
+    }
+    lastText = '';
+    waiting = true;
+    if (ctx?.isIdle?.() ?? true) pi.sendUserMessage(step.prompt);
+    else pi.sendUserMessage(step.prompt, { deliverAs: 'followUp' });
+  }
+
+  function finish() {
+    waiting = false;
+    run = null;
+    if (originalModel) pi.setModel(originalModel).catch(() => {}); // vuelve al modelo con el que estaba la sesión
+    originalModel = null;
+  }
+
+  async function startPipeline(msg: any) {
+    const update = (status: any) => wsSend({ type: 'pipeline_update', id: msg.id, ...status });
+    if (!lib) return update({ status: 'failed', detail: 'falta la librería devteam.mjs: corre `dev-team-office install pi`' });
+    if (run) return update({ status: 'failed', detail: 'esta sesión de Pi ya está corriendo otro pipeline' });
+    const project = lib.loadProject(cwd);
+    const pipeline = project.pipelines.find((p: any) => p.id === msg.pipeline);
+    if (!pipeline) return update({ status: 'failed', detail: `no hay un pipeline "${msg.pipeline}" en ${project.dir}/.devteam/` });
+    run = new lib.PipelineRun({ id: msg.id, project, pipeline, task: msg.task, report, onStatus: update });
+    await apply(run.start());
+  }
+
+  // ---- conexión con la oficina ----
+  // Sólo en sesiones interactivas: un `pi -p` lanzado por otra Pi termina solo.
   let ws: WebSocket | null = null;
   let closed = false;
-  if (process.env.DEV_TEAM_OFFICE_RUN || typeof WebSocket === 'undefined') return;
+  const wsSend = (m: unknown) => ws?.readyState === 1 && ws.send(JSON.stringify(m));
+  function register() {
+    const project = lib ? lib.catalogEntry(lib.loadProject(cwd)) : null;
+    wsSend({ type: 'register', agent: 'pi', session, cwd, pid: process.pid, can: lib ? ['task', 'pipeline', 'launch'] : ['task'], project });
+  }
+  if (!process.stdin.isTTY || process.env.DEV_TEAM_OFFICE_LAUNCHED || typeof WebSocket === 'undefined') return;
 
   const connect = () => {
     if (closed) return;
     ws = new WebSocket(WS_URL);
-    ws.onopen = () => ws?.send(JSON.stringify({ type: 'register', agent: 'pi', session, cwd, pid: process.pid }));
+    ws.onopen = register;
     ws.onmessage = (m) => {
       let msg: any;
       try { msg = JSON.parse(String(m.data)); } catch { return; }
-      if (msg.type !== 'task') return;
-      try {
-        const idle = ctx?.isIdle?.() ?? true;
-        if (idle) pi.sendUserMessage(msg.text);
-        else pi.sendUserMessage(msg.text, { deliverAs: 'followUp' });
-        ws?.send(JSON.stringify({ type: 'task_update', id: msg.id, status: 'accepted' }));
-      } catch (err: any) {
-        ws?.send(JSON.stringify({ type: 'task_update', id: msg.id, status: 'failed', error: String(err?.message || err) }));
+      if (msg.type === 'task') {
+        try {
+          if (ctx?.isIdle?.() ?? true) pi.sendUserMessage(msg.text);
+          else pi.sendUserMessage(msg.text, { deliverAs: 'followUp' });
+          wsSend({ type: 'task_update', id: msg.id, status: 'accepted' });
+        } catch (err: any) {
+          wsSend({ type: 'task_update', id: msg.id, status: 'failed', error: String(err?.message || err) });
+        }
+      } else if (msg.type === 'pipeline') {
+        startPipeline(msg).catch((err) => wsSend({ type: 'pipeline_update', id: msg.id, status: 'failed', detail: String(err?.message || err) }));
+      } else if (msg.type === 'pipeline_cancel' && run?.id === msg.id) {
+        run.cancel();
+        ctx?.abort?.();
+        finish();
+      } else if (msg.type === 'launch') {
+        const r = lib?.launchAgent({ harness: msg.harness, task: msg.task, cwd: msg.cwd, env: { DEV_TEAM_OFFICE_URL: URL_BASE } }) || { ok: false, error: 'falta la librería devteam.mjs' };
+        if (!r.ok) { wsSend({ type: 'task_update', id: msg.id, status: 'failed', error: r.error }); return; }
+        wsSend({ type: 'task_update', id: msg.id, status: 'accepted', detail: `sesión nueva lanzada por Pi (pid ${r.pid})` });
+        r.child.on('exit', (code: number) => wsSend({ type: 'task_update', id: msg.id, status: code === 0 ? 'done' : 'failed', error: `salió con código ${code}` }));
       }
     };
     ws.onclose = () => { ws = null; if (!closed) (setTimeout(connect, 3000) as any).unref?.(); };
     ws.onerror = () => {}; // onclose reintenta; la oficina es opcional
   };
-  connect();
+  loadLib().then((l) => { lib = l; }).catch(() => {}).finally(connect);
 }

@@ -476,7 +476,7 @@ function drawPanel(scr, L, sim, model) {
       if (r > maxR) break;
       const [icon, tone] = { running: ['▶', 'accent'], done: ['✔', 'ok'], failed: ['✖', 'err'], cancelled: ['⊘', 'muted'] }[run.status] || ['·', 'muted'];
       scr.text(x + 1, r, icon, C[tone], C.panelBg);
-      T(`${run.pipeline.name} · ${run.project.name}${run.strategy === 'agent' ? ' (orquesta el agente)' : ''}`, C.text, x + 3, inner - 2);
+      T(`${run.pipeline.name} · ${run.project.name} · ${AGENT_NAME[run.agent] || run.agent}`, C.text, x + 3, inner - 2);
       r++;
       let c = x + 3;
       for (const st of run.stages) {
@@ -583,12 +583,12 @@ export function boardAtCell(L, col, row) {
 const CB = Object.fromEntries(Object.entries({
   cork: '#b9895a', corkDot: '#8f6640', paper: '#fdfcf6', note: '#ffe08a', pin: '#ef476f', gate: '#9b5d1d', err: '#c1121f', shadow: '#0a0b14', soft: '#6c757d',
 }).map(([k, v]) => [k, hex(v)]));
-const STRATEGY_HINT = { office: 'un proceso por etapa, con su agente y su modelo', agent: 'le mando el pipeline al orquestador' };
 
 /** El diálogo de la pizarra: un corcho con una hoja clavada, como en la vista web. */
 function drawBrief(scr, L, model) {
   const b = model.brief;
-  const opts = briefOptions({ projects: b.projects, tasks: model.tasks, sessions: model.sessions?.values?.() || [] }, b.sel);
+  const projects = model.projects || [];
+  const opts = briefOptions({ projects, tasks: model.tasks, sessions: model.sessions?.values?.() || [] }, b.sel);
   const fields = briefFields(opts);
   const w = Math.min(L.cols - 2, 88);
   const iw = w - 8; // ancho útil dentro de la hoja
@@ -611,15 +611,10 @@ function drawBrief(scr, L, model) {
   });
   rows.push(text('┄'.repeat(iw), CB.soft));
   const project = opts.project;
-  rows.push(field('project', 'Proyecto', b.loading ? 'cargando…' : project ? projectLabel(project) : 'ninguno conocido'));
+  rows.push(field('project', 'Proyecto', project ? projectLabel(project) : 'ningún agente anunció uno'));
   rows.push(field('pipeline', 'Pipeline', opts.pipelines[b.sel.pipeline]?.label));
-  const desc = opts.pipeline?.description || (project && !project.hasConfig ? 'Este proyecto no tiene .devteam/: sólo tareas directas.' : '');
+  const desc = opts.pipeline?.description || (!project ? 'Los pipelines los anuncia cada agente al conectarse (los lee de .devteam/).' : !project.hasConfig ? 'Este proyecto no tiene .devteam/: sólo tareas directas.' : '');
   for (const line of wrap(desc, iw - labelW - 3, 2)) rows.push((row, col) => scr.text(col + labelW + 3, row, line, CB.soft, CB.paper));
-  if (fields.includes('strategy')) {
-    const st = opts.strategies.find((x) => x.id === opts.strategy);
-    rows.push(field('strategy', 'Orquesta', st?.label));
-    rows.push((row, col) => scr.text(col + labelW + 3, row, fit(STRATEGY_HINT[opts.strategy], iw - labelW - 3), CB.soft, CB.paper));
-  }
   if (fields.includes('target')) rows.push(field('target', 'Para', opts.target?.label || 'nadie disponible'));
   // la tarea, en una nota amarilla
   const focusTask = b.field === 'task';
@@ -639,7 +634,7 @@ function drawBrief(scr, L, model) {
   const room = L.rows - 4 - rows.length - fixedBelow - 2;
   if (stages.length && room > 2) {
     rows.push(text('', C.ink));
-    rows.push(text(opts.strategy === 'agent' ? 'Etapas (las delega el orquestador)' : 'Etapas (una por agente)', CB.soft));
+    rows.push(text('Etapas (las ejecuta el agente en su sesión)', CB.soft));
     const withGates = room - 1 >= stages.length + stages.filter((s) => s.check).length;
     let left = room - 1;
     for (const [i, st] of stages.entries()) {
@@ -649,7 +644,7 @@ function drawBrief(scr, L, model) {
         let c = col + scr.text(col, row, `${String(i + 1).padStart(2)} `, CB.soft, CB.paper);
         c += scr.text(c, row, '■ ', hex(TEAM[st.role]?.shirt || '#888888'), CB.paper);
         const who = `${TEAM[st.role]?.name || st.role} · ${phaseInfo(st.phase).label} — ${st.name}`;
-        const how = [AGENT_NAME[st.harness] || st.harness, st.agent, st.model].filter(Boolean).join(' · ');
+        const how = [st.agent, st.model].filter(Boolean).join(' · ');
         const howW = Math.min(strWidth(how), Math.floor(iw * 0.45));
         c += scr.text(c, row, fit(who, col + iw - c - howW - 2), C.ink, CB.paper);
         scr.text(col + iw - howW, row, fit(how, howW), CB.soft, CB.paper);

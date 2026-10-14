@@ -2,8 +2,8 @@
 // dev-team-office: la oficina en la terminal + la API de integración.
 
 import os from 'node:os';
-import path from 'node:path';
 import { startServer, DEFAULT_PORT, DEFAULT_HOST, VERSION, defaultSocketPath } from '../server/server.js';
+import { install } from './install.js';
 
 const HELP = `dev-team-office ${VERSION}: tu agente de código como un equipo de desarrollo, en la terminal.
 
@@ -18,6 +18,9 @@ Uso:
                                   Envía una tarea al agente: a su sesión abierta, o lanza una
                                   ejecución nueva con --launch. Sin --agent, muestra a quién se puede.
   dev-team-office tasks           Lista las tareas enviadas y su estado.
+  dev-team-office install [pi|opencode|claude]
+                                  Instala la integración de cada agente (por defecto, todas).
+                                  Los agentes son el backend: ejecutan las tareas y los pipelines.
   dev-team-office send <kind> [--text …] [--role …] [--phase …] [--tool …] [--file …]
                                   [--command …] [--source …] [--session …]
                                   Envía un evento (task, phase, tool_start, chat, poke, done…).
@@ -27,8 +30,6 @@ Opciones:
   --host <ip>       Interfaz (por defecto ${DEFAULT_HOST}, o $DEV_TEAM_OFFICE_HOST)
   --socket <ruta>   Socket Unix de la API (por defecto ~/.dev-team-office/office.sock)
   --no-socket       No abrir el socket Unix
-  --project <dir>   Proyecto con .devteam/ para ofrecer en el diálogo de encargos (repetible).
-                    También: "projects" en ~/.dev-team-office/config.json
   --color <modo>    truecolor | 256 (se detecta solo)
   -v, --version     Versión
   -h, --help        Esta ayuda
@@ -51,8 +52,7 @@ function parseArgs(argv) {
       let v = true;
       if (inline !== undefined) v = inline;
       else if (next !== undefined && !next.startsWith('--')) { v = next; i++; }
-      if (k === 'project') (args.projects ||= []).push(path.resolve(String(v)));
-      else args[k] = v;
+      args[k] = v;
     } else args._.push(a);
   }
   return args;
@@ -106,7 +106,7 @@ async function cmdOpen() {
   const notes = [];
   let server;
   try {
-    server = await startServer({ port, host, socket, log: (m) => notes.push(m), projects: args.projects });
+    server = await startServer({ port, host, socket, log: (m) => notes.push(m) });
   } catch (err) {
     if (err.code !== 'EADDRINUSE') throw err;
     const other = await runningOffice();
@@ -127,7 +127,7 @@ async function cmdWatch(url, notice) {
 
 async function cmdServe() {
   try {
-    const server = await startServer({ port, host, socket, log: console.log, projects: args.projects });
+    const server = await startServer({ port, host, socket, log: console.log });
     const stop = async () => { await server.close(); process.exit(0); };
     process.on('SIGINT', stop);
     process.on('SIGTERM', stop);
@@ -197,12 +197,18 @@ async function cmdTasks() {
   if (!snap.tasks.length) console.log('(sin tareas)');
 }
 
+async function cmdInstall() {
+  const out = install(args._.slice(1));
+  if (!out.ok) fail(out.error);
+  for (const l of out.lines) console.log(l);
+}
+
 // ---------------------------------------------------------------- main
 
 if (args.help) { console.log(HELP); process.exit(0); }
 if (args.version) { console.log(VERSION); process.exit(0); }
 
-const commands = { open: cmdOpen, serve: cmdServe, watch: () => cmdWatch(args._[1]), status: cmdStatus, demo: cmdDemo, send: cmdSend, task: cmdTask, tasks: cmdTasks, help: () => console.log(HELP) };
+const commands = { open: cmdOpen, serve: cmdServe, watch: () => cmdWatch(args._[1]), status: cmdStatus, demo: cmdDemo, send: cmdSend, task: cmdTask, tasks: cmdTasks, install: cmdInstall, help: () => console.log(HELP) };
 const cmd = commands[args._[0] || 'open'];
 if (!cmd) fail(`Comando desconocido: ${args._[0]}\n\n${HELP}`);
 cmd().catch((err) => fail(err.stack || err.message));

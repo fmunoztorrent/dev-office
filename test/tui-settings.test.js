@@ -30,8 +30,8 @@ test('desde la terminal: ⚙ → Personajes → renombrar a Tomás → ctrl+s gu
     const time = new Date().toLocaleTimeString('es', { hour12: false });
     const gear = cols - time.length - 5 + 1; // columna del ⚙ (0-based) → 1-based en el clic
     type(`\x1b[<0;${gear + 1};1M`);
-    await until(() => stdout.out.includes('⚙ Ajustes') && stdout.out.includes('Comandos para lanzar agentes'));
-    type('\x1b[C'); type('\x1b[C'); // pestañas: Oficina → Proyecto → Personajes
+    await until(() => stdout.out.includes('⚙ Ajustes') && stdout.out.includes('Sesiones conectadas'));
+    type('\x1b[C'); // pestañas: Agentes → Personajes
     await until(() => stdout.out.includes('Pelo largo'));
     type('\x1b[B'); // Personaje (Tomás por defecto)
     type('\x1b[B'); // Nombre

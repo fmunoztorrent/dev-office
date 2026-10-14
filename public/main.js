@@ -15,6 +15,7 @@ let selected = null;
 let ws;
 let tasks = { tasks: [], agents: [], launchers: [], defaultCwd: '' };
 let runs = [];
+let projects = []; // los que anuncian los agentes conectados (con sus pipelines)
 
 const game = createGame($('office'), { onSelect: (id) => select(id), onBoardClick: () => openBrief() });
 
@@ -27,8 +28,8 @@ function connect() {
   ws.onclose = () => { setConn(false); setTimeout(connect, 1500); };
   ws.onmessage = (m) => {
     const msg = JSON.parse(m.data);
-    if (msg.type === 'snapshot') { onSnapshot(msg.state); if (msg.state.tasks) onTasks(msg.state); onRuns(msg.state.pipelines || []); }
-    if (msg.type === 'pipelines') onRuns(msg.runs);
+    if (msg.type === 'snapshot') { onSnapshot(msg.state); if (msg.state.tasks) onTasks(msg.state); onRuns(msg.state.pipelines || []); onProjects(msg.state.projects); }
+    if (msg.type === 'pipelines') { onRuns(msg.runs); onProjects(msg.projects); }
     if (msg.type === 'snapshot' || msg.type === 'appearance') { applyAppearance((msg.state || msg).appearance || {}); renderTeam(); if (selected) renderDetail(); }
     if (msg.type === 'event') onEvent(msg.event, msg.session);
     if (msg.type === 'tasks') onTasks(msg);
@@ -222,7 +223,7 @@ function onRuns(list) {
       b.onclick = () => send({ type: 'pipeline_cancel', id: r.id });
       head.append(b);
     } else head.append(el('span', `st-${r.status === 'done' ? 'done' : 'failed'}`, RUN_LABEL[r.status] || r.status));
-    li.append(head, el('div', 'sub', `${r.strategy === 'agent' ? 'Orquesta el agente' : 'Orquesta la oficina'}: ${r.task}`));
+    li.append(head, el('div', 'sub', `Lo ejecuta ${AGENT_NAME[r.agent] || r.agent}: ${r.task}`));
     const stages = el('div', 'r-stages');
     for (const st of r.stages) {
       const chip = el('span', `r-stage ${st.status}`, `${STAGE_ICON[st.status] || '·'} ${TEAM[st.role]?.name || st.role} · ${phaseInfo(st.phase).label}${st.attempts > 1 ? ` ×${st.attempts}` : ''}`);
@@ -238,18 +239,17 @@ function onRuns(list) {
 
 // ---------------------------------------------------------------- diálogo "Nuevo encargo"
 
-const brief = { projects: [], sel: { project: 0, pipeline: 0, strategy: 0, target: 0 }, opts: null };
+const brief = { sel: { project: 0, pipeline: 0, target: 0 }, opts: null };
 
-async function openBrief() {
+function onProjects(list) {
+  projects = list || [];
+  if ($('brief').open) renderBrief();
+}
+
+function openBrief() {
   const dlg = $('brief');
   if (!dlg.open) dlg.showModal();
-  $('b-problem').textContent = 'Cargando proyectos…';
-  try {
-    brief.projects = (await fetch('/v1/projects').then((r) => r.json())).projects || [];
-  } catch {
-    brief.projects = [];
-  }
-  brief.sel = { project: defaultProject(brief.projects, sessions.values()), pipeline: 0, strategy: 0, target: 0 };
+  brief.sel = { project: defaultProject(projects, sessions.values()), pipeline: 0, target: 0 };
   renderBrief();
   $('b-text').focus();
 }
@@ -261,36 +261,25 @@ function fillSelect(select, items, index, label = (x) => x.label) {
 }
 
 function renderBrief() {
-  const o = brief.opts = briefOptions({ projects: brief.projects, tasks, sessions: sessions.values() }, brief.sel);
-  fillSelect($('b-project'), [...brief.projects, { other: true }], brief.sel.project, (p) => (p.other ? '➕ Otro directorio…' : projectLabel(p)));
+  const o = brief.opts = briefOptions({ projects, tasks, sessions: sessions.values() }, brief.sel);
+  fillSelect($('b-project'), projects.length ? projects : [{ label: 'Ningún agente anunció un proyecto' }], brief.sel.project, (p) => p.label || projectLabel(p));
+  $('b-project').disabled = !projects.length;
   fillSelect($('b-pipeline'), o.pipelines, brief.sel.pipeline);
-  $('b-desc').textContent = o.pipeline ? o.pipeline.description : o.project && !o.project.hasConfig ? 'Este proyecto no tiene .devteam/: sólo tareas directas.' : '';
-
-  $('b-strategy-row').hidden = !o.pipeline;
-  const seg = $('b-strategy');
-  seg.innerHTML = '';
-  o.strategies.forEach((st, i) => {
-    const b = el('button', '', st.label);
-    b.type = 'button';
-    b.setAttribute('role', 'radio');
-    b.setAttribute('aria-checked', String(st.id === o.strategy));
-    b.onclick = () => { brief.sel.strategy = i; brief.sel.target = 0; renderBrief(); };
-    seg.append(b);
-  });
-
-  $('b-target-row').hidden = !(!o.pipeline || o.strategy === 'agent');
+  $('b-desc').textContent = o.pipeline ? o.pipeline.description
+    : !projects.length ? 'Los pipelines los anuncia cada agente al conectarse (los lee de .devteam/ en su proyecto).'
+      : o.project && !o.project.hasConfig ? 'Este proyecto no tiene .devteam/: sólo tareas directas.' : '';
   fillSelect($('b-target'), o.targets.length ? o.targets : [{ label: 'Nadie disponible' }], brief.sel.target);
 
   const box = $('b-stages');
   box.innerHTML = '';
   if (o.stages.length) {
-    box.append(el('h3', '', o.strategy === 'agent' ? 'Etapas (las delega el orquestador)' : 'Etapas (una por agente)'));
+    box.append(el('h3', '', 'Etapas (las ejecuta el agente en su sesión)'));
     o.stages.forEach((st, i) => {
       const card = el('div', 'b-stage');
       card.style.setProperty('--c', TEAM[st.role]?.shirt || '#888');
       card.append(el('span', 'n', String(i + 1)), el('span', 'who', `${TEAM[st.role]?.name || st.role} · ${phaseInfo(st.phase).label} — ${st.name}`));
-      const how = [AGENT_NAME[st.harness] || st.harness, st.agent, st.model].filter(Boolean).join(' · ');
-      card.append(el('span', 'how', `${how}${st.needs.length ? `  ← ${st.needs.join(', ')}` : ''}`));
+      const how = [st.agent, st.model].filter(Boolean).join(' · ');
+      if (how || st.needs.length) card.append(el('span', 'how', `${how}${st.needs.length ? `  ← ${st.needs.join(', ')}` : ''}`));
       if (st.check) card.append(el('span', 'gate', `⚙ ${st.check.run} debe ${st.check.expect === 'pass' ? 'pasar' : 'fallar'}${st.onFail ? ` · si no, vuelve a ${st.onFail.goto} (×${st.onFail.max})` : ''}`));
       box.append(card);
     });
@@ -301,21 +290,12 @@ function renderBrief() {
   $('brief-go').disabled = !!problem;
 }
 
-$('b-project').onchange = async (e) => {
-  let index = Number(e.target.value);
-  if (index === brief.projects.length) { // "Otro directorio…"
-    const dir = prompt('Ruta absoluta del proyecto (la carpeta que tiene .devteam/):');
-    const project = dir && await fetch(`/v1/project?dir=${encodeURIComponent(dir.trim())}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-    if (project) { brief.projects.push(project); index = brief.projects.length - 1; } else { index = brief.sel.project; if (dir) $('b-problem').textContent = `No encuentro ${dir}`; }
-  }
-  brief.sel = { project: index, pipeline: 0, strategy: 0, target: 0 };
+$('b-project').onchange = (e) => {
+  brief.sel = { project: Number(e.target.value), pipeline: 0, target: 0 };
   renderBrief();
 };
 $('b-pipeline').onchange = (e) => {
-  brief.sel.pipeline = Number(e.target.value);
-  const p = brief.opts.pipelines[brief.sel.pipeline];
-  brief.sel.strategy = p?.strategy === 'agent' ? 1 : 0;
-  brief.sel.target = 0;
+  brief.sel = { ...brief.sel, pipeline: Number(e.target.value), target: 0 };
   renderBrief();
 };
 $('b-target').onchange = (e) => { brief.sel.target = Number(e.target.value); renderBrief(); };
@@ -324,7 +304,7 @@ $('b-text').onkeydown = (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKe
 $('brief-close').onclick = $('brief-cancel').onclick = () => $('brief').close();
 $('open-brief').onclick = () => openBrief();
 
-// ⚙ Ajustes: lo que se guarda se aplica en caliente (proyectos, comandos, equipo, pipelines).
+// ⚙ Ajustes: la apariencia de los personajes (de la oficina) y lo que anuncian los agentes.
 const settings = createSettings();
 $('open-settings').onclick = () => settings.open();
 $('brief-form').onsubmit = (e) => {

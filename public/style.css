@@ -219,24 +219,17 @@ select {
 .s-mini { font: 13px "Space Grotesk", sans-serif; background: #fff; color: var(--ink); border: 0; box-shadow: 0 0 0 2px var(--ink); padding: 5px 10px; cursor: pointer; white-space: nowrap; }
 .s-mini:hover { background: #ffd166; }
 .s-mini.danger:hover { background: #ffd0d6; }
-.s-cmd { display: grid; grid-template-columns: 110px 1fr auto auto; gap: 8px; align-items: center; }
-.s-cmd > span:first-child, .s-grid .s-role { font: 18px/1 "VT323", monospace; color: #6c757d; }
-.s-ok { color: #2a9d8f; font-size: 13px; } .s-bad { color: #c1121f; font-size: 13px; }
-.s-grid { display: grid; grid-template-columns: minmax(150px, 1.3fr) 1fr 1.1fr 1.4fr; gap: 6px 8px; align-items: center; }
-.s-grid .head { font-size: 12px; color: #6c757d; }
-.s-grid .s-role { display: flex; gap: 6px; align-items: center; color: var(--ink); font-size: 18px; }
-.s-grid .s-role i { width: 12px; height: 12px; background: var(--c); box-shadow: 0 0 0 2px var(--ink); flex: none; }
-.s-json { font: 13px/1.45 ui-monospace, Menlo, monospace !important; min-height: 260px; background: #fff !important; resize: vertical; }
+.s-project { background: #fff; box-shadow: 0 0 0 2px var(--ink); padding: 6px 10px; display: grid; gap: 4px; }
+.s-project p { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.s-project summary { font-size: 17px !important; }
+.s-stages { margin: 4px 0; padding-left: 22px; display: grid; gap: 3px; font-size: 13px; }
+.s-stages li::marker { color: var(--c); }
+.s-stages b { color: var(--ink); }
+.s-json { font: 13px/1.45 ui-monospace, Menlo, monospace !important; background: #fff !important; margin: 0; padding: 6px 8px; box-shadow: 0 0 0 2px var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
 .s-issues { margin: 0; padding-left: 18px; font-size: 13px; color: #9b5d1d; }
 .s-issues.ok { color: #2a9d8f; list-style: none; padding-left: 0; }
 .brief details summary { cursor: pointer; font: 18px "VT323", monospace; color: #6c757d; }
 .brief-foot #s-file { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 50%; }
-@media (max-width: 700px) {
-  .s-grid { grid-template-columns: 1fr 1fr; }
-  .s-grid .head { display: none; }
-  .s-cmd { grid-template-columns: 1fr auto auto; }
-  .s-cmd > span:first-child { grid-column: 1 / -1; }
-}
 
 .s-looks { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 10px; }
 .s-look { display: grid; grid-template-columns: 64px 1fr; gap: 6px 10px; padding: 8px; background: #fff; box-shadow: 0 0 0 2px var(--ink); }

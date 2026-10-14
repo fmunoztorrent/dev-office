@@ -5,8 +5,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.sh",
-            "timeout": 5
+            "command": "node /ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.mjs",
+            "timeout": 10
           }
         ]
       }
@@ -16,8 +16,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.sh",
-            "timeout": 5
+            "command": "node /ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.mjs",
+            "timeout": 10
           }
         ]
       }
@@ -28,8 +28,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.sh",
-            "timeout": 5
+            "command": "node /ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.mjs",
+            "timeout": 10
           }
         ]
       }
@@ -40,8 +40,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.sh",
-            "timeout": 5
+            "command": "node /ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.mjs",
+            "timeout": 10
           }
         ]
       }
@@ -52,8 +52,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.sh",
-            "timeout": 5
+            "command": "node /ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.mjs",
+            "timeout": 10
           }
         ]
       }
@@ -63,8 +63,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.sh",
-            "timeout": 5
+            "command": "node /ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.mjs",
+            "timeout": 10
           }
         ]
       }
@@ -74,8 +74,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.sh",
-            "timeout": 5
+            "command": "node /ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.mjs",
+            "timeout": 10
           }
         ]
       }
@@ -85,8 +85,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.sh",
-            "timeout": 5
+            "command": "node /ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.mjs",
+            "timeout": 10
           }
         ]
       }
@@ -96,8 +96,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.sh",
-            "timeout": 5
+            "command": "node /ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.mjs",
+            "timeout": 10
           }
         ]
       }
@@ -107,8 +107,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.sh",
-            "timeout": 5
+            "command": "node /ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.mjs",
+            "timeout": 3600
           }
         ]
       }
@@ -118,8 +118,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.sh",
-            "timeout": 5
+            "command": "node /ABSOLUTE/PATH/TO/dev-team-office/integrations/claude-code/hook.mjs",
+            "timeout": 10
           }
         ]
       }

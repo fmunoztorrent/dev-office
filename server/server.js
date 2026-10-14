@@ -13,7 +13,7 @@ import { Office } from './office.js';
 import { runDemo, demoScript, piDemoScript } from './demo.js';
 import { TaskHub, loadConfig } from './tasks.js';
 import { PipelineHub } from './pipeline.js';
-import { readOfficeSettings, writeOfficeSettings, readProjectSettings, writeTeam, checkPipeline, writePipeline, deletePipeline, PIPELINE_TEMPLATE, HARNESS_LIST } from './settings.js';
+import { readOfficeSettings, writeOfficeSettings } from './settings.js';
 
 export const VERSION = '0.3.0';
 export const DEFAULT_PORT = 4317;
@@ -36,25 +36,18 @@ class HttpError extends Error {
  * Arranca la oficina. Rechaza con code EADDRINUSE si el puerto ya está ocupado.
  * @returns {Promise<{office, url, socket, command, handleMessage, close}>}
  */
-export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, config, projects = [] } = {}) {
+export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, config } = {}) {
   const office = new Office();
-  config = { ...(config ?? loadConfig()) };
-  config.projects = [...(config.projects || []), ...projects]; // proyectos que el diálogo ofrece de entrada
-  const hub = new TaskHub(office, { config, officeUrl: `http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${port}` });
-  const pipelines = new PipelineHub(office, hub, { config });
+  config = { ...(config ?? loadConfig()) }; // preferencias del frontend (apariencia)
+  const hub = new TaskHub(office, { officeUrl: `http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${port}` });
+  const pipelines = new PipelineHub(office, hub);
   const startedAt = Date.now();
   const appearance = () => config.appearance || {};
   const bus = new EventEmitter(); // cambios de ajustes que ven las interfaces (p. ej. la apariencia)
-  const fullState = () => ({ ...office.snapshot(), ...hub.snapshot(), pipelines: pipelines.snapshot().runs, appearance: appearance() });
-  // Guardar en ⚙ Ajustes se aplica en caliente: proyectos, directorio por defecto y comandos.
-  const applyConfig = (next) => {
-    config = { ...next, projects: [...(next.projects || []), ...projects] };
-    hub.applyConfig(config);
-    pipelines.config = config;
-    bus.emit('appearance', appearance());
+  const fullState = () => {
+    const p = pipelines.snapshot();
+    return { ...office.snapshot(), ...hub.snapshot(), pipelines: p.runs, projects: p.projects, appearance: appearance() };
   };
-  // Eventos que un hook/extensión manda desde una etapa cuya salida ya leemos: se descartan.
-  const fromStreamedStage = (p) => pipelines.isStreamed(p?.run);
   let stopDemo = null;
   let socketPath = null;
 
@@ -84,7 +77,6 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     switch (msg.type) {
       case 'event': {
         const source = String(msg.source || msg.payload?.source || conn?.agent || 'generic');
-        if (fromStreamedStage(msg.payload)) return { ok: true, accepted: 0, ids: [] };
         const events = office.ingest(source, msg.payload ?? {});
         return { ok: true, accepted: events.length, ids: events.map((e) => e.id) };
       }
@@ -104,6 +96,9 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         return pipelines.start(msg);
       case 'pipeline_cancel':
         return pipelines.cancel(msg.id);
+      // El agente informa cómo va el pipeline que está ejecutando.
+      case 'pipeline_update':
+        return pipelines.update(msg.id, msg);
       case 'chat':
       case 'poke': {
         const events = office.ingest('generic', { kind: msg.type, session: msg.session || 'office', text: msg.text, from: msg.from, role: msg.role });
@@ -133,48 +128,30 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const payload = JSON.parse((await readBody(req)) || '{}');
         const fromPath = decodeURIComponent(p.replace(/^\/(v1\/events|event)\/?/, ''));
         const source = fromPath || url.searchParams.get('source') || (!Array.isArray(payload) && payload.source) || 'generic';
-        const list = (Array.isArray(payload) ? payload : [payload]).filter((e) => !fromStreamedStage(e));
-        const events = list.length ? office.ingest(source, Array.isArray(payload) ? list : list[0]) : [];
+        const events = office.ingest(source, payload);
         return json(res, 200, { ok: true, accepted: events.length, ids: events.map((e) => e.id) });
       }
-      // ⚙ Ajustes
-      if (req.method === 'GET' && p === '/v1/settings') {
-        return json(res, 200, { office: readOfficeSettings(), projects: pipelines.knownDirs(), harnesses: HARNESS_LIST, pipelineTemplate: PIPELINE_TEMPLATE });
-      }
+      // ⚙ Ajustes: sólo lo que es de la oficina (la apariencia de los personajes)
+      if (req.method === 'GET' && p === '/v1/settings') return json(res, 200, { office: readOfficeSettings() });
       if (req.method === 'PUT' && p === '/v1/settings') {
         const out = writeOfficeSettings(JSON.parse((await readBody(req)) || '{}'));
-        if (out.ok) applyConfig(out.config);
+        if (out.ok) { config = out.config; bus.emit('appearance', appearance()); }
         return json(res, out.ok ? 200 : 400, out);
       }
-      if (req.method === 'GET' && p === '/v1/settings/project') {
-        const dir = url.searchParams.get('dir');
-        if (!pipelines.knownDirs().includes(dir)) throw new HttpError(404, 'proyecto desconocido: agrégalo en ⚙ Ajustes › Oficina');
-        return json(res, 200, readProjectSettings(dir));
-      }
-      if (['PUT', 'POST', 'DELETE'].includes(req.method) && (p === '/v1/settings/team' || p === '/v1/settings/pipeline' || p === '/v1/settings/pipeline/check')) {
-        const body = JSON.parse((await readBody(req)) || '{}');
-        // Sólo se escribe en proyectos que la oficina conoce (no en cualquier ruta).
-        if (!pipelines.knownDirs().includes(body.dir)) throw new HttpError(404, 'proyecto desconocido: agrégalo en ⚙ Ajustes › Oficina');
-        let out;
-        if (p === '/v1/settings/team') out = writeTeam(body.dir, body.team);
-        else if (p === '/v1/settings/pipeline/check') out = checkPipeline(body.dir, body.id, body.pipeline);
-        else if (req.method === 'DELETE') out = deletePipeline(body.dir, body.id);
-        else out = writePipeline(body.dir, body.id, body.pipeline);
-        if (out.ok && p !== '/v1/settings/pipeline/check') pipelines.changed();
-        return json(res, out.ok || p === '/v1/settings/pipeline/check' ? 200 : 400, out);
-      }
+      // Lo que anuncian los agentes: proyectos y pipelines que cada sesión puede correr.
       if (req.method === 'GET' && p === '/v1/projects') return json(res, 200, { projects: pipelines.projects() });
-      if (req.method === 'GET' && p === '/v1/project') {
-        const project = pipelines.project(url.searchParams.get('dir'));
-        return project ? json(res, 200, project) : json(res, 404, { ok: false, error: 'el proyecto no existe' });
+      if (req.method === 'POST' && p === '/v1/agents/announce') {
+        const out = pipelines.announce(JSON.parse((await readBody(req)) || '{}'));
+        return json(res, out.ok ? 200 : 400, out);
       }
       if (req.method === 'GET' && p === '/v1/pipelines') return json(res, 200, pipelines.snapshot());
       if (req.method === 'POST' && p === '/v1/pipelines') {
         const out = pipelines.start(JSON.parse((await readBody(req)) || '{}'));
         return json(res, out.ok ? 200 : 400, out);
       }
-      if (req.method === 'POST' && /^\/v1\/pipelines\/[^/]+\/cancel$/.test(p)) {
-        const out = pipelines.cancel(decodeURIComponent(p.split('/')[3]));
+      if (req.method === 'POST' && /^\/v1\/pipelines\/[^/]+\/(cancel|update)$/.test(p)) {
+        const [, , , id, action] = p.split('/');
+        const out = action === 'cancel' ? pipelines.cancel(decodeURIComponent(id)) : pipelines.update(decodeURIComponent(id), JSON.parse((await readBody(req)) || '{}'));
         return json(res, out.ok ? 200 : 400, out);
       }
       if (req.method === 'GET' && p === '/v1/tasks') return json(res, 200, hub.snapshot());
@@ -186,19 +163,26 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const out = hub.cancel(decodeURIComponent(p.split('/')[3]));
         return json(res, out.ok ? 200 : 400, out);
       }
-      // Hooks de Claude Code: además de registrar el evento, la respuesta es lo que el hook
-      // imprime por stdout. Vacía no cambia nada; en Stop puede entregar una tarea en cola.
+      // Hook de Claude Code (integrations/claude-code/hook.mjs): registra el evento y devuelve qué
+      // tiene la oficina para esa sesión. Qué hacer con eso lo decide el hook, del lado del agente.
+      //   { task?: { id, text }, pipeline?: { id, pipeline, task }, cancel?: [id] }
       if (req.method === 'POST' && p === '/v1/hooks/claude-code') {
         const payload = JSON.parse((await readBody(req)) || '{}');
-        const run = url.searchParams.get('run');
-        if (!pipelines.isStreamed(run)) office.ingest('claude-code', payload);
-        if (run) hub.linkRun(run, payload.session_id);
-        const task = payload.hook_event_name === 'Stop' && payload.session_id ? hub.takeForClaude(payload.session_id) : null;
-        res.writeHead(200, { 'content-type': 'application/json' });
-        return res.end(task ? JSON.stringify({
-          decision: 'block',
-          reason: `Nueva tarea enviada por el usuario desde Dev Team Office. Hazla ahora:\n\n${task.text}`,
-        }) : '');
+        // `devteam_stage`: ese Stop cierra una etapa de un pipeline, no el trabajo
+        if (!(payload.devteam_stage && payload.hook_event_name === 'Stop')) office.ingest('claude-code', payload);
+        const session = payload.session_id;
+        const out = {};
+        if (payload.hook_event_name === 'Stop' && session) {
+          const run = pipelines.takeForClaude(session);
+          if (run) out.pipeline = run;
+          else {
+            const task = hub.takeForClaude(session);
+            if (task) out.task = { id: task.id, text: task.text };
+          }
+        }
+        const cancel = session ? pipelines.cancelsFor(session) : [];
+        if (cancel.length) out.cancel = cancel;
+        return json(res, 200, out);
       }
       if (req.method === 'POST' && p === '/v1/messages') {
         const out = handleMessage(JSON.parse((await readBody(req)) || '{}'));
@@ -303,8 +287,6 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     handleMessage,
     async close() {
       stopDemo?.();
-      hub.stopAll();
-      pipelines.stopAll();
       for (const c of wss.clients) c.terminate();
       await Promise.all([tcp, unix].filter(Boolean).map((s) => new Promise((r) => s.close(r))));
       if (socketPath) fs.rmSync(socketPath, { force: true });

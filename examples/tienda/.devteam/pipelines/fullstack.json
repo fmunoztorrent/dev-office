@@ -1,15 +1,48 @@
 {
   "name": "Full-stack en paralelo",
-  "description": "Plan del Tech Lead; backend y frontend trabajan a la vez; QA verifica todo junto.",
-  "strategy": "office",
+  "description": "Plan del Tech Lead; luego API y UI (ambas sólo dependen del plan); QA verifica todo junto y, si falla, vuelve a la API.",
   "stages": [
-    { "id": "plan", "name": "Plan", "role": "tl", "phase": "arquitectura" },
-    { "id": "api", "name": "API", "role": "backend", "phase": "implementa", "needs": ["plan"] },
-    { "id": "ui", "name": "Interfaz", "role": "frontend", "phase": "implementa", "needs": ["plan"] },
     {
-      "id": "qa", "name": "Verificación", "role": "qa", "phase": "verifica", "needs": ["api", "ui"],
-      "check": { "run": "npm test", "expect": "pass" },
-      "onFail": { "goto": "api", "max": 1 }
+      "id": "plan",
+      "name": "Plan",
+      "role": "tl",
+      "phase": "arquitectura"
+    },
+    {
+      "id": "api",
+      "name": "API",
+      "role": "backend",
+      "phase": "implementa",
+      "needs": [
+        "plan"
+      ]
+    },
+    {
+      "id": "ui",
+      "name": "Interfaz",
+      "role": "frontend",
+      "phase": "implementa",
+      "needs": [
+        "plan"
+      ]
+    },
+    {
+      "id": "qa",
+      "name": "Verificación",
+      "role": "qa",
+      "phase": "verifica",
+      "needs": [
+        "api",
+        "ui"
+      ],
+      "check": {
+        "run": "npm test",
+        "expect": "pass"
+      },
+      "onFail": {
+        "goto": "api",
+        "max": 1
+      }
     }
   ]
 }

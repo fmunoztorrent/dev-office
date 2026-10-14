@@ -1,12 +1,63 @@
 {
   "name": "Feature con subagentes de Pi",
-  "description": "Pi orquesta: delega cada etapa en sus subagentes (extensión subagent), cada uno con el modelo de su archivo en .pi/agents/.",
-  "strategy": "agent",
-  "orchestrator": { "harness": "pi" },
+  "description": "Cada etapa la delega Pi en un subagente de .pi/agents/ (extensión subagent), con el modelo de su archivo; Pi orquesta con el modelo de la sesión (\"model\": false). Los gates los corre la integración.",
   "stages": [
-    { "id": "diseno", "name": "Diseño técnico", "role": "tl", "phase": "arquitectura", "agent": "architect" },
-    { "id": "red", "name": "Tests en rojo", "role": "qa", "phase": "red", "agent": "tester", "needs": ["diseno"], "check": { "run": "npm test", "expect": "fail" } },
-    { "id": "impl", "name": "Implementación", "role": "backend", "phase": "implementa", "agent": "backend-dev", "needs": ["red"] },
-    { "id": "green", "name": "Tests en verde", "role": "qa", "phase": "green", "agent": "tester", "needs": ["impl"], "check": { "run": "npm test", "expect": "pass" }, "onFail": { "goto": "impl", "max": 2 } }
+    {
+      "id": "diseno",
+      "name": "Diseño técnico",
+      "role": "tl",
+      "phase": "arquitectura",
+      "agent": "architect",
+      "prompt": "Delega esta etapa en el subagente «architect» con la herramienta subagent. Tarea: {{task}}. Pídele el plan en docs/plan.md.",
+      "model": false
+    },
+    {
+      "id": "red",
+      "name": "Tests en rojo",
+      "role": "qa",
+      "phase": "red",
+      "agent": "tester",
+      "needs": [
+        "diseno"
+      ],
+      "prompt": "Delega en el subagente «tester» con la herramienta subagent: escribir los tests de {{task}} según docs/plan.md, que todavía deben fallar.",
+      "check": {
+        "run": "npm test",
+        "expect": "fail"
+      },
+      "model": false
+    },
+    {
+      "id": "impl",
+      "name": "Implementación",
+      "role": "backend",
+      "phase": "implementa",
+      "agent": "backend-dev",
+      "needs": [
+        "red"
+      ],
+      "prompt": "Delega en el subagente «backend-dev» con la herramienta subagent: implementar {{task}} hasta que pasen los tests.\n{{failure}}",
+      "model": false
+    },
+    {
+      "id": "green",
+      "name": "Tests en verde",
+      "role": "qa",
+      "phase": "green",
+      "agent": "tester",
+      "needs": [
+        "impl"
+      ],
+      "prompt": "Delega en el subagente «tester» con la herramienta subagent: correr la suite completa y reportar el conteo.",
+      "check": {
+        "run": "npm test",
+        "expect": "pass"
+      },
+      "onFail": {
+        "goto": "impl",
+        "max": 2
+      },
+      "model": false
+    }
   ]
 }

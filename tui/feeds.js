@@ -8,7 +8,7 @@ export function localFeed(server) {
   const onEvent = (ev, session) => h?.onEvent(ev, session);
   const onReset = () => h?.onSnapshot(server.office.snapshot());
   const onTasks = (snap) => h?.onTasks(snap);
-  const onPipelines = (snap) => h?.onPipelines(snap.runs);
+  const onPipelines = (snap) => h?.onPipelines(snap.runs, snap.projects);
   const onAppearance = (a) => h?.onAppearance?.(a);
   return {
     http: server.url,
@@ -17,7 +17,8 @@ export function localFeed(server) {
       h.onStatus({ ok: true, label: 'en vivo' });
       h.onSnapshot(server.office.snapshot());
       h.onTasks(server.hub.snapshot());
-      h.onPipelines(server.pipelines.snapshot().runs);
+      const p = server.pipelines.snapshot();
+      h.onPipelines(p.runs, p.projects);
       h.onAppearance?.(server.appearance());
       server.bus.on('appearance', onAppearance);
       server.office.on('event', onEvent);
@@ -45,9 +46,9 @@ export function remoteFeed(wsUrl) {
     ws.on('message', (data) => {
       let msg;
       try { msg = JSON.parse(data); } catch { return; }
-      if (msg.type === 'snapshot') { h.onSnapshot(msg.state); if (msg.state.tasks) h.onTasks(msg.state); h.onPipelines(msg.state.pipelines || []); h.onAppearance?.(msg.state.appearance || {}); }
+      if (msg.type === 'snapshot') { h.onSnapshot(msg.state); if (msg.state.tasks) h.onTasks(msg.state); h.onPipelines(msg.state.pipelines || [], msg.state.projects || []); h.onAppearance?.(msg.state.appearance || {}); }
       if (msg.type === 'appearance') h.onAppearance?.(msg.appearance);
-      if (msg.type === 'pipelines') h.onPipelines(msg.runs);
+      if (msg.type === 'pipelines') h.onPipelines(msg.runs, msg.projects);
       if (msg.type === 'event') h.onEvent(msg.event, msg.session);
       if (msg.type === 'tasks') h.onTasks(msg);
       if (msg.type === 'ack' && msg.ok === false) h.onError?.(msg.error);
