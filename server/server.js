@@ -287,6 +287,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   }
 
   log(`Dev Team Office ${VERSION} en http://${host}:${port}`);
+  // Desde el navegador: en un equipo local, localhost y 127.0.0.1 son la misma oficina.
+  if (LOOPBACK.has(host)) log(`  Ábrela en el navegador: http://127.0.0.1:${port}  ·  http://localhost:${port}`);
   log(`  API: POST /v1/events/<source> · GET /v1/state · WS /v1/ws${socketPath ? `  ·  socket: ${socketPath}` : ''}`);
 
   return {

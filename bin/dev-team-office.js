@@ -100,6 +100,9 @@ async function openTui(feedFactory, endpoints, notice) {
 }
 
 async function cmdOpen() {
+  // Sin terminal interactiva (un script, un proceso en segundo plano, un terminal sin TTY) la
+  // oficina no puede dibujarse en la terminal, pero sí debe seguir viva para el navegador.
+  if (!process.stdout.isTTY || !process.stdin.isTTY) return cmdServe();
   const notes = [];
   let server;
   try {
