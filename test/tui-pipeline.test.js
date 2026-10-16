@@ -1,3 +1,4 @@
+import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -27,7 +28,7 @@ test('desde la terminal: clic en la pizarra → elegir el pipeline del agente �
     name: 'Corto', stages: [{ id: 'plan', role: 'tl', phase: 'arquitectura' }, { id: 'api', role: 'backend', needs: ['plan'] }],
   }));
 
-  const server = await startServer({ port: 0, socket: null, db: ':memory:' });
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
   const agent = startFakeAgent({ url: server.url, dir, session: 'pi-tui' }); // como la extensión de Pi
   await agent.ready;
   await until(() => server.pipelines.projects().length);

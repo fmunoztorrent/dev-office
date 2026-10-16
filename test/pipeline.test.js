@@ -1,5 +1,6 @@
 // La oficina como RELAY de pipelines: los agentes anuncian lo que pueden correr, la oficina se lo
 // pide a la sesión elegida y dibuja lo que el agente reporta. No lanza procesos ni corre gates.
+import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -19,7 +20,7 @@ const call = (base, method, p, body) => fetch(base + p, { method, headers: { 'co
   .then(async (r) => ({ status: r.status, body: await r.json() }));
 
 async function withServer(fn) {
-  const server = await startServer({ port: 0, socket: null, db: ':memory:' });
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
   try { await fn(server, server.url); } finally { await server.close(); }
 }
 

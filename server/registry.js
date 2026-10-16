@@ -14,13 +14,18 @@ import { EventEmitter } from 'node:events';
 import path from 'node:path';
 import { clip } from './roles.js';
 import { detectHarness, invocation, HARNESSES, which } from '../integrations/common/devteam.mjs';
+import { t as tr } from '../public/i18n.js';
+import { MAIN_OFFICE } from './store.js';
 
 const DETECT_TTL = 4000;
 const AGENT_NAME = { 'claude-code': 'Claude Code', opencode: 'OpenCode', pi: 'Pi' };
 const inside = (dir, root) => !!dir && !!root && (dir === root || dir.startsWith(`${root}${path.sep}`));
 
 export class AgentRegistry extends EventEmitter {
-  /** @param getAgents () => los agentes registrados ([{ id, name, path, harness, bin?, args? }]) */
+  /**
+   * @param getAgents () => los agentes registrados ([{ id, name, path, harness, office, bin?, args? }])
+   * @param office    las oficinas (server/company.js)
+   */
   constructor({ getAgents, hub, pipelines, office }) {
     super();
     this.getAgents = getAgents;
@@ -51,16 +56,21 @@ export class AgentRegistry extends EventEmitter {
     return [...live, ...hooked];
   }
 
-  /** Lo que ofrece el diálogo de la pizarra: cada agente con las entradas de su harness. */
-  targets() {
+  #sessionOffice(s) { return this.office?.officeOfSession?.(s.session) || this.office?.officeForPath?.(s.cwd) || MAIN_OFFICE; }
+
+  /**
+   * Lo que ofrece el diálogo de la pizarra: cada agente con las entradas de su harness.
+   * @param office sólo los de esa oficina (sin oficina: todos)
+   */
+  targets(office) {
     const sessions = this.#sessions();
     const used = new Set();
-    const describe = ({ id, name, dir, harness, registered, own }) => {
+    const describe = ({ id, name, dir, harness, registered, own, office: where }) => {
       const info = this.#detect(dir);
-      const mine = own.map((s) => ({ session: s.session, agent: s.agent, live: s.live, label: `${AGENT_NAME[s.agent] || s.agent} · ${s.live ? 'sesión abierta' : 'Claude, al terminar su turno'}` }));
+      const mine = own.map((s) => ({ session: s.session, agent: s.agent, live: s.live, label: `${AGENT_NAME[s.agent] || s.agent} · ${tr(s.live ? 'targets.openSession' : 'targets.claudeTurn')}` }));
       const harnessOk = (e) => e.harnesses.includes(harness) || own.some((s) => e.harnesses.includes(s.agent));
       return {
-        id, name, path: dir, harness, registered, exists: info.exists,
+        id, name, path: dir, harness, registered, exists: info.exists, office: where,
         available: !!which(harness === 'claude-code' && process.env.DEV_TEAM_OFFICE_CLAUDE_BIN || HARNESSES[harness]?.bin),
         kinds: info.kinds, roles: info.roles,
         entries: info.entries.filter(harnessOk).map((e) => ({ ...e, harnesses: undefined })),
@@ -71,12 +81,15 @@ export class AgentRegistry extends EventEmitter {
     for (const a of this.#agents()) {
       const own = sessions.filter((s) => inside(s.cwd, a.path) && (s.agent === a.harness || !a.harness));
       own.forEach((s) => used.add(s.session));
-      out.push({ ...describe({ id: a.id, name: a.name, dir: a.path, harness: a.harness, registered: true, own }), bin: a.bin || null, args: a.args || null });
+      if (office && (a.office || MAIN_OFFICE) !== office) continue;
+      out.push({ ...describe({ id: a.id, name: a.name, dir: a.path, harness: a.harness, registered: true, own, office: a.office || MAIN_OFFICE }), bin: a.bin || null, args: a.args || null });
     }
     // sesiones abiertas fuera de las rutas registradas: también se les puede mandar un prompt
     for (const s of sessions) {
       if (used.has(s.session) || !s.cwd) continue;
-      out.push(describe({ id: `session:${s.session}`, name: path.basename(s.cwd), dir: s.cwd, harness: s.agent, registered: false, own: [s] }));
+      const where = this.#sessionOffice(s);
+      if (office && where !== office) continue;
+      out.push(describe({ id: `session:${s.session}`, name: path.basename(s.cwd), dir: s.cwd, harness: s.agent, registered: false, own: [s], office: where }));
     }
     return out;
   }
@@ -89,28 +102,28 @@ export class AgentRegistry extends EventEmitter {
    */
   run({ target, entry = 'prompt', text, session, from } = {}) {
     text = String(text ?? '').trim();
-    if (!text) return { ok: false, error: 'el prompt está vacío' };
+    if (!text) return { ok: false, error: tr('err.promptEmpty') };
     const t = this.targets().find((x) => x.id === target);
-    if (!t) return { ok: false, error: 'ese agente no está registrado ni conectado' };
+    if (!t) return { ok: false, error: tr('err.targetUnknown') };
     const e = t.entries.find((x) => x.id === entry);
-    if (!e) return { ok: false, error: `el harness de ${t.name} no tiene la entrada "${entry}"` };
+    if (!e) return { ok: false, error: tr('err.noEntry', { name: t.name, entry }) };
     const s = session === null ? null : t.sessions.find((x) => x.session === session) || (session === undefined ? t.sessions.find((x) => x.live) : null);
-    if (session && !s) return { ok: false, error: 'esa sesión ya no está abierta' };
+    if (session && !s) return { ok: false, error: tr('err.sessionGone') };
     if (s) this.office?.setAgentRoles(s.session, t.roles); // qué subagente del harness es qué personaje
 
     // pipeline de .devteam/: lo ejecuta una sesión abierta, dentro de sí misma
     if (e.devteam) {
-      if (!s) return { ok: false, error: `«${e.label}» lo corre una sesión abierta: abre ${AGENT_NAME[t.harness] || t.harness} en ${t.path} con su integración` };
+      if (!s) return { ok: false, error: tr('err.needsSession', { label: e.label, agent: AGENT_NAME[t.harness] || t.harness, path: t.path }) };
       return this.pipelines.start({ session: s.session, agent: s.agent, pipeline: e.devteam, task: text, from, meta: { agentId: t.registered ? t.id : null, entry: e.id } });
     }
     const inv = invocation(e, text);
     const title = clip(`${e.id === 'prompt' ? '' : `${e.label}: `}${text}`, 300);
     const meta = { agentId: t.registered ? t.id : null, entry: e.id };
-    if (s) return this.hub.submit({ text: inv.text, title, agent: s.agent, session: s.session, command: inv.command, args: inv.args, from, meta });
-    if (!t.registered) return { ok: false, error: 'esa sesión ya no está abierta' };
-    if (!t.exists) return { ok: false, error: `no existe ${t.path}` };
+    if (s) return this.hub.submit({ text: inv.text, title, agent: s.agent, session: s.session, command: inv.command, args: inv.args, from, meta, office: t.office });
+    if (!t.registered) return { ok: false, error: tr('err.sessionGone') };
+    if (!t.exists) return { ok: false, error: tr('err.noPath', { path: t.path }) };
     const a = this.#agents().find((x) => x.id === t.id);
-    return this.hub.submit({ text: inv.text, title, agent: t.harness, mode: 'launch', cwd: t.path, command: inv.command, args: inv.args, launch: { bin: a?.bin, args: a?.args }, from, meta });
+    return this.hub.submit({ text: inv.text, title, agent: t.harness, mode: 'launch', cwd: t.path, command: inv.command, args: inv.args, launch: { bin: a?.bin, args: a?.args }, from, meta, office: t.office });
   }
 
   // varios cambios seguidos (una sesión que se registra mueve tareas y pipelines) → un solo aviso

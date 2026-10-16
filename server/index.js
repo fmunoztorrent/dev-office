@@ -1,5 +1,6 @@
 // `npm start`: la oficina sin interfaz de terminal (API + vista web en el navegador).
 import { startServer, DEFAULT_PORT, DEFAULT_HOST } from './server.js';
+import { t } from '../public/i18n.js';
 
 const port = Number(process.env.PORT) || DEFAULT_PORT;
 const host = process.env.HOST || DEFAULT_HOST;
@@ -11,8 +12,8 @@ try {
   process.on('SIGTERM', stop);
 } catch (err) {
   if (err.code === 'EADDRINUSE') {
-    console.error(`El puerto ${port} ya está en uso (¿otra instancia de la oficina corriendo?).`);
-    console.error('Ciérrala, o usa otro puerto:  PORT=4318 npm start');
+    console.error(t('cli.portBusy', { port }));
+    console.error('PORT=4318 npm start');
   } else {
     console.error(err.message);
   }

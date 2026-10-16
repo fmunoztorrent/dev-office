@@ -1,4 +1,5 @@
 // ⚙ Ajustes: la apariencia de los personajes, guardada en la base SQLite de la oficina.
+import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import WebSocket from 'ws';
@@ -8,7 +9,7 @@ const call = (base, method, p, body, headers = {}) => fetch(base + p, { method, 
   .then(async (r) => ({ status: r.status, body: await r.json() }));
 
 test('⚙ Personajes: se validan, se guardan y se aplican en caliente', async () => {
-  const server = await startServer({ port: 0, socket: null, db: ':memory:' });
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
   const ws = new WebSocket(server.url.replace('http', 'ws') + '/v1/ws');
   const live = [];
   ws.on('message', (d) => { const m = JSON.parse(d); if (m.type === 'appearance') live.push(m.appearance); });

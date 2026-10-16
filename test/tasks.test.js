@@ -1,3 +1,4 @@
+import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import WebSocket from 'ws';
@@ -11,7 +12,7 @@ const until = async (fn, ms = 3000) => {
 };
 
 async function withServer(config, fn) {
-  const server = await startServer({ port: 0, socket: null, db: ':memory:', ...config });
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false, ...config });
   try { await fn(server, server.url); } finally { await server.close(); }
 }
 

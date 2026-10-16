@@ -3,7 +3,9 @@
 //   { session, kind, tool?, input?, text?, ok?, todos?, agentType?, agentId?, toolUseId?, role?, cwd? }
 //
 // kind: session_start | task | thinking | tool_start | tool_end | subagent_start | subagent_end
-//       | todos | waiting | error | compact | done | session_end | chat
+//       | todos | waiting | error | compact | done | session_end | chat | pane_open | pane_close | pane_state
+
+import { t } from '../public/i18n.js';
 
 function isError(resp) {
   if (!resp || typeof resp !== 'object') return false;
@@ -24,7 +26,7 @@ function fromClaudeCode(p) {
       return { ...b, kind: 'tool_end', tool: p.tool_name, input: p.tool_input, toolUseId: p.tool_use_id, ok: false, text: p.error };
     case 'Notification':
     case 'PermissionRequest':
-      return { ...b, kind: 'waiting', text: p.message || (p.tool_name ? `Permiso para ${p.tool_name}` : undefined) };
+      return { ...b, kind: 'waiting', text: p.message || (p.tool_name ? t('events.permission', { tool: p.tool_name }) : undefined) };
     case 'SubagentStart': return { ...b, kind: 'subagent_start', agentType: p.agent_type, agentId: p.agent_id };
     case 'SubagentStop': return { ...b, kind: 'subagent_end', agentType: p.agent_type, agentId: p.agent_id };
     case 'PreCompact': return { ...b, kind: 'compact' };

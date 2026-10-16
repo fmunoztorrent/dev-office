@@ -1,3 +1,4 @@
+import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -14,7 +15,7 @@ function fakeTerminal(cols = 160, rows = 46) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 test('desde la TUI: t + texto + Enter manda el prompt a la sesión de Pi conectada', async () => {
-  const server = await startServer({ port: 0, socket: null, db: ':memory:' });
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
   const agent = new WebSocket(server.url.replace('http', 'ws') + '/v1/ws');
   const received = [];
   agent.on('message', (d) => { const m = JSON.parse(d); if (m.type === 'task') received.push(m); });

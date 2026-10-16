@@ -80,3 +80,20 @@ node $O phase tl aprueba
 node $O phase po acepta "Cumple los criterios"
 node $O done "Cancelación de pedidos lista"
 ```
+
+## Actividades en otros panes (herdr)
+
+Si trabajas dentro de herdr (`HERDR_ENV=1`; normalmente porque la oficina te abrió en un pane), puedes
+abrir **otro pane** para una actividad que conviene ver aparte: los tests en modo watch, un servidor
+de desarrollo, un build largo u otro agente con su propio prompt. Usa `dev-team-office pane`: abre el
+pane junto al tuyo (sin quitarle el foco al usuario) y se lo cuenta a la oficina, que se lo encarga
+a alguien del equipo mientras siga abierto.
+
+```bash
+dev-team-office pane --role qa --title "tests en watch" -- npm test -- --watch
+dev-team-office pane --role frontend -- npm run dev
+dev-team-office pane --agent claude --role tl --title "review" -- "Revisa el diff actual y reporta sólo lo accionable"
+```
+
+Imprime el pane (`{"pane":"w1:p4",…}`); léelo con `herdr pane read <pane> --source recent-unwrapped`.
+Ciérralo con `herdr pane close <pane>` cuando ya no lo necesites. Fuera de herdr, no lo uses.

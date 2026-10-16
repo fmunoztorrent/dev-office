@@ -29,13 +29,19 @@ async function loadLib(): Promise<any> {
   return null;
 }
 
+// La oficina (equipo) a la que pertenece esta sesión, si la abrió la oficina, y su pane de herdr.
+const WHERE: Record<string, string> = {
+  ...(process.env.DEV_TEAM_OFFICE_OFFICE ? { office: process.env.DEV_TEAM_OFFICE_OFFICE } : {}),
+  ...(process.env.HERDR_PANE_ID ? { pane: process.env.HERDR_PANE_ID } : {}),
+};
+
 // En orden: los eventos cuentan una historia (fase → herramientas → fin).
 let chain: Promise<unknown> = Promise.resolve();
 function send(event: Record<string, unknown>) {
   chain = chain.then(() => fetch(`${URL_BASE}/v1/events/pi`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(event),
+    body: JSON.stringify({ ...WHERE, ...event }),
     signal: AbortSignal.timeout(1500),
   })).catch(() => {}); // la oficina es opcional: nunca rompe a Pi
 }
@@ -137,7 +143,7 @@ export default function (pi: ExtensionAPI) {
   const wsSend = (m: unknown) => ws?.readyState === 1 && ws.send(JSON.stringify(m));
   function register() {
     const project = lib ? lib.catalogEntry(lib.loadProject(cwd)) : null;
-    wsSend({ type: 'register', agent: 'pi', session, cwd, pid: process.pid, can: lib ? ['task', 'pipeline'] : ['task'], project });
+    wsSend({ type: 'register', agent: 'pi', session, cwd, pid: process.pid, can: lib ? ['task', 'pipeline'] : ['task'], project, ...WHERE });
   }
   if (!process.stdin.isTTY || process.env.DEV_TEAM_OFFICE_LAUNCHED || typeof WebSocket === 'undefined') return;
 

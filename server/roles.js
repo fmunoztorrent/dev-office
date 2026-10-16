@@ -1,5 +1,7 @@
 // Decide qué miembro del equipo representa cada acción del agente.
 
+import { t } from '../public/i18n.js';
+
 export const ROLE_IDS = ['po', 'analyst', 'manager', 'tl', 'qa', 'backend', 'frontend', 'designer'];
 
 // Nombres alternativos que un agente puede usar al declarar un rol.
@@ -131,26 +133,26 @@ const clip = (s, n = 90) => {
 const base = (p) => String(p).split(/[\\/]/).filter(Boolean).pop() || p;
 
 export function describe(tool = '', input = {}) {
-  const t = tool.toLowerCase();
+  const tl = tool.toLowerCase();
   const f = filePathOf(input);
-  switch (t) {
-    case 'read': return `Leyendo ${base(f)}`;
-    case 'write': return `Creando ${base(f)}`;
-    case 'edit': case 'multiedit': case 'patch': case 'notebookedit': return `Editando ${base(f)}`;
+  switch (tl) {
+    case 'read': return t('events.read', { file: base(f) });
+    case 'write': return t('events.write', { file: base(f) });
+    case 'edit': case 'multiedit': case 'patch': case 'notebookedit': return t('events.edit', { file: base(f) });
     case 'bash': case 'shell': case 'exec': return clip(`$ ${input.command || input.cmd || ''}`, 70);
-    case 'grep': return clip(`Buscando "${input.pattern || ''}"`);
-    case 'glob': case 'list': case 'ls': return clip(`Revisando ${input.pattern || input.path || 'archivos'}`);
-    case 'websearch': return clip(`Investigando: ${input.query || ''}`);
+    case 'grep': return clip(t('events.grep', { pattern: input.pattern || '' }));
+    case 'glob': case 'list': case 'ls': return clip(t('events.glob', { pattern: input.pattern || input.path || t('events.files') }));
+    case 'websearch': return clip(t('events.websearch', { query: input.query || '' }));
     case 'webfetch': {
-      try { return `Leyendo ${new URL(input.url).host}`; } catch { return 'Leyendo una web'; }
+      try { return t('events.webfetch', { host: new URL(input.url).host }); } catch { return t('events.web'); }
     }
-    case 'askuserquestion': case 'question': return 'Le pregunta algo al usuario';
-    case 'exitplanmode': return 'Presenta el plan';
-    case 'enterplanmode': return 'Planificando';
-    case 'skill': return clip(`Usando skill ${input.skill || ''}`);
+    case 'askuserquestion': case 'question': return t('events.ask');
+    case 'exitplanmode': return t('events.plan');
+    case 'enterplanmode': return t('events.planning');
+    case 'skill': return clip(t('events.skill', { skill: input.skill || '' }));
     default:
-      if (t.startsWith('mcp__')) return clip(`Usando ${tool.split('__').slice(1).join(' › ')}`);
-      return clip(f ? `${tool} ${base(f)}` : tool || 'Trabajando');
+      if (tl.startsWith('mcp__')) return clip(t('events.mcp', { tool: tool.split('__').slice(1).join(' › ') }));
+      return clip(f ? `${tool} ${base(f)}` : tool || t('events.working'));
   }
 }
 

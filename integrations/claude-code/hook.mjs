@@ -28,6 +28,13 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const SOCK = process.env.DEV_TEAM_OFFICE_SOCKET || path.join(os.homedir(), '.dev-team-office', 'office.sock');
 const URL_BASE = process.env.DEV_TEAM_OFFICE_URL || 'http://127.0.0.1:4317';
 const RUNS = path.join(os.homedir(), '.dev-team-office', 'claude-runs');
+// La oficina (equipo) de esta sesión, si la abrió la oficina, y su pane de herdr: así la oficina
+// sabe a qué equipo pertenece y qué pane la tiene.
+const WHERE = {
+  ...(process.env.DEV_TEAM_OFFICE_OFFICE ? { devteam_office: process.env.DEV_TEAM_OFFICE_OFFICE } : {}),
+  ...(process.env.HERDR_PANE_ID ? { herdr_pane: process.env.HERDR_PANE_ID } : {}),
+};
+const OFFICE_OF = { ...(WHERE.devteam_office ? { office: WHERE.devteam_office } : {}), ...(WHERE.herdr_pane ? { pane: WHERE.herdr_pane } : {}) };
 
 async function loadLib() {
   const candidates = [process.env.DEV_TEAM_OFFICE_LIB, path.join(here, '..', 'common', 'devteam.mjs'), path.join(os.homedir(), '.dev-team-office', 'lib', 'devteam.mjs')];
@@ -80,19 +87,19 @@ async function main() {
   const stateFile = path.join(RUNS, `${String(session).replace(/[^\w-]/g, '_')}.json`);
   // con un pipeline en curso, el Stop cierra una etapa: no es "listo"
   const stage = event === 'Stop' && fs.existsSync(stateFile);
-  const directive = (await post('/v1/hooks/claude-code', { ...input, session_id: session, ...(stage ? { devteam_stage: true } : {}) })) || {};
+  const directive = (await post('/v1/hooks/claude-code', { ...input, ...WHERE, session_id: session, ...(stage ? { devteam_stage: true } : {}) })) || {};
   if (child) return;
 
   const lib = await loadLib();
   if (!lib) return;
   if (event === 'SessionStart' || event === 'UserPromptSubmit') {
     const project = lib.loadProject(input.cwd);
-    if (project.hasConfig) await post('/v1/agents/announce', { agent: 'claude-code', session, cwd: input.cwd, project: lib.catalogEntry(project) });
+    if (project.hasConfig) await post('/v1/agents/announce', { agent: 'claude-code', session, cwd: input.cwd, project: lib.catalogEntry(project), ...OFFICE_OF });
     return;
   }
   if (event !== 'Stop') return;
 
-  const report = (e) => post('/v1/events/generic', { source: 'claude-code', session, cwd: input.cwd, ...e });
+  const report = (e) => post('/v1/events/generic', { source: 'claude-code', session, cwd: input.cwd, ...OFFICE_OF, ...e });
   const onStatus = (st) => post(`/v1/pipelines/${encodeURIComponent(st.id)}/update`, st);
   const save = (run) => { fs.mkdirSync(RUNS, { recursive: true, mode: 0o700 }); fs.writeFileSync(stateFile, JSON.stringify(run.toJSON()), { mode: 0o600 }); };
   const clear = () => fs.rmSync(stateFile, { force: true });

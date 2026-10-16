@@ -6,6 +6,9 @@
 // completa) más las sesiones abiertas, y lo que ofrece cada uno lo trae su propio harness.
 
 import { AGENT_NAME } from './targets.js';
+import { t } from './i18n.js';
+
+const tr = t; // targetLabel usa `t` para el agente
 
 const base = (p) => (p ? String(p).split('/').filter(Boolean).pop() || p : '');
 const tilde = (p) => String(p || '').replace(/^\/Users\/[^/]+/, '~');
@@ -27,7 +30,7 @@ export function briefOptions({ targets = [] }, sel) {
   const entry = entries[sel.entry] || entries[0] || null;
   const sessions = [
     ...(target?.sessions || []),
-    ...(target?.registered ? [{ session: null, live: false, label: `Sesión nueva de ${AGENT_NAME[target.harness] || target.harness} en ${base(target.path)}` }] : []),
+    ...(target?.registered ? [{ session: null, live: false, label: t('brief.newSession', { agent: AGENT_NAME[target.harness] || target.harness, dir: base(target.path) }) }] : []),
   ];
   let index = sel.session ?? -1;
   if (index < 0 || index >= sessions.length) {
@@ -40,12 +43,12 @@ export function briefOptions({ targets = [] }, sel) {
 
 /** Qué falta para poder enviar (o null si está listo). */
 export function briefProblem(opts, text) {
-  if (!opts.target) return 'Registra un agente en ⚙ › Agentes (su ruta completa), o abre uno con su integración';
-  if (!String(text || '').trim()) return 'Escribe el prompt';
-  if (!opts.target.exists && !opts.session?.session) return `No existe ${tilde(opts.target.path)}`;
-  if (opts.entry?.issues?.some((i) => /ciclo|no existe|no tiene etapas|mismo id|rol desconocido/.test(i))) return `El pipeline tiene errores: ${opts.entry.issues[0]}`;
-  if (opts.entry?.needsSession && !opts.session?.session) return `«${opts.entry.label}» lo corre una sesión abierta: abre ${AGENT_NAME[opts.target.harness] || opts.target.harness} en ${tilde(opts.target.path)}`;
-  if (opts.session && opts.session.session === null && !opts.target.available) return `No encuentro ${AGENT_NAME[opts.target.harness] || opts.target.harness} instalado (su CLI no está en el PATH)`;
+  if (!opts.target) return t('brief.pRegister');
+  if (!String(text || '').trim()) return t('brief.pWrite');
+  if (!opts.target.exists && !opts.session?.session) return t('brief.pNoPath', { path: tilde(opts.target.path) });
+  if (opts.entry?.issues?.some((i) => /ciclo|no existe|no tiene etapas|mismo id|rol desconocido|cycle|does not exist|no stages|same id|unknown role/.test(i))) return t('brief.pIssues', { issue: opts.entry.issues[0] });
+  if (opts.entry?.needsSession && !opts.session?.session) return t('brief.pNeedsSession', { label: opts.entry.label, agent: AGENT_NAME[opts.target.harness] || opts.target.harness, path: tilde(opts.target.path) });
+  if (opts.session && opts.session.session === null && !opts.target.available) return t('brief.pNotInstalled', { agent: AGENT_NAME[opts.target.harness] || opts.target.harness });
   return null;
 }
 
@@ -55,7 +58,7 @@ export function briefMessage(opts, text, from) {
 }
 
 export const targetLabel = (t) => (t
-  ? `${t.name} · ${AGENT_NAME[t.harness] || t.harness}${t.kinds?.length ? ` · ${t.kinds.join(' + ')}` : ''}${t.sessions?.some((s) => s.live) ? ' · ● abierta' : ''}${t.registered ? '' : ' (sin registrar)'} — ${tilde(t.path)}`
+  ? `${t.name} · ${AGENT_NAME[t.harness] || t.harness}${t.kinds?.length ? ` · ${t.kinds.join(' + ')}` : ''}${t.sessions?.some((s) => s.live) ? ` · ${tr('brief.open')}` : ''}${t.registered ? '' : ` ${tr('brief.unregistered')}`} — ${tilde(t.path)}`
   : '');
 
 /** Campos del diálogo, en orden (la terminal navega por ellos). */

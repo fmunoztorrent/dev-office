@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { adapt } from './adapters.js';
 import { ROLE_IDS, roleForTool, roleForText, describe, clip, normRole, normPhase } from './roles.js';
+import { t } from '../public/i18n.js';
 
 const LOG_MAX = 300;
 const SESSIONS_MAX = 30;
@@ -69,13 +70,13 @@ export class Office extends EventEmitter {
   #enrich(r) {
     const s = this.#session(r.session, r.source, r.cwd);
     const tool = typeof r.tool === 'string' ? r.tool : '';
-    const t = tool.toLowerCase();
+    const tl = tool.toLowerCase();
     const input = r.input && typeof r.input === 'object' ? r.input : {};
     const ev = { id: ++this.seq, ts: Date.now(), source: r.source, session: s.id, kind: r.kind, tool, ok: r.ok !== false };
 
     if (r.kind === 'tool_start' || r.kind === 'tool_end') {
       const start = r.kind === 'tool_start';
-      if (t === 'task' || t === 'agent' || t === 'subagent' || t === 'subagent_run' || t === 'subagent_continue') {
+      if (tl === 'task' || tl === 'agent' || tl === 'subagent' || tl === 'subagent_run' || tl === 'subagent_continue') {
         // `subagent` es la herramienta de la extensión de subagentes de Pi: { agent, task } | { tasks } | { chain };
         // `subagent_run` la de gentle-pi: { agent, task, label }
         const many = input.tasks || input.chain;
@@ -85,31 +86,31 @@ export class Office extends EventEmitter {
           ? this.#startSub(s, ev, { desc, agentType, toolUseId: r.toolUseId })
           : this.#endSub(s, ev, { toolUseId: r.toolUseId, desc: input.description });
       }
-      if (t === 'todowrite') {
+      if (tl === 'todowrite') {
         if (!start) return null;
         s.todos = normTodos(input.todos);
-        return { ...ev, kind: 'todos', role: 'manager', text: 'Actualiza el tablero' };
+        return { ...ev, kind: 'todos', role: 'manager', text: t('events.updateBoard') };
       }
-      if (t === 'taskcreate') {
+      if (tl === 'taskcreate') {
         if (!start) return null;
         s.todos.push({ id: String(s.todos.length + 1), content: clip(input.subject || input.description, 120), status: 'pending' });
-        return { ...ev, kind: 'todos', role: 'manager', text: clip(`Nueva tarjeta: ${input.subject || ''}`) };
+        return { ...ev, kind: 'todos', role: 'manager', text: clip(t('events.newCard', { text: input.subject || '' })) };
       }
-      if (t === 'taskupdate') {
+      if (tl === 'taskupdate') {
         if (!start) return null;
         const todo = s.todos.find((x) => x.id === String(input.taskId));
         if (todo) {
           if (TODO_STATUS.has(input.status)) todo.status = input.status;
           if (input.subject) todo.content = clip(input.subject, 120);
         }
-        return { ...ev, kind: 'todos', role: 'manager', text: 'Mueve una tarjeta' };
+        return { ...ev, kind: 'todos', role: 'manager', text: t('events.moveCard') };
       }
       if (OFFICE_CLI.test(String(input.command || ''))) return null;
       // Si el agente declaró quién está de turno, ese rol hace el trabajo; si no, se deduce de la herramienta.
       ev.role = normRole(r.role) || s.turn || roleForTool(tool, input);
       if (s.turn && ev.role === s.turn) ev.phase = s.phase;
       ev.text = clip(r.text && start ? r.text : describe(tool, input), 90);
-      if (!start && !ev.ok) ev.text = clip(`Falló: ${ev.text}${r.text ? ` — ${r.text}` : ''}`, 120);
+      if (!start && !ev.ok) ev.text = clip(t('events.failed', { text: ev.text, detail: r.text ? ` — ${r.text}` : '' }), 120);
       return ev;
     }
 
@@ -145,27 +146,38 @@ export class Office extends EventEmitter {
         return { ...ev, role: role || 'po', text: clip(r.text, 200) };
       case 'todos':
         s.todos = normTodos(r.todos);
-        return { ...ev, role: 'manager', text: 'Actualiza el tablero' };
-      case 'thinking': return { ...ev, role: role || s.turn || 'tl', text: clip(r.text || 'Pensando…') };
-      case 'waiting': return { ...ev, role: 'manager', text: clip(r.text || 'El agente espera tu aprobación', 140) };
-      case 'error': return { ...ev, ok: false, role: role || 'tl', text: clip(r.text || 'Algo salió mal', 140) };
-      case 'compact': return { ...ev, role: 'manager', text: 'Ordena las notas (compacta el contexto)' };
+        return { ...ev, role: 'manager', text: t('events.updateBoard') };
+      case 'thinking': return { ...ev, role: role || s.turn || 'tl', text: clip(r.text || t('events.thinking')) };
+      case 'waiting': return { ...ev, role: 'manager', text: clip(r.text || t('events.waiting'), 140) };
+      case 'error': return { ...ev, ok: false, role: role || 'tl', text: clip(r.text || t('events.error'), 140) };
+      case 'compact': return { ...ev, role: 'manager', text: t('events.compact') };
       case 'done':
         // El skill y la extensión de Pi pueden anunciar el final a la vez.
         if (s.status === 'done' && ev.ts - (s.doneAt || 0) < 15_000) return null;
         s.doneAt = ev.ts;
         s.turn = s.phase = null;
-        return { ...ev, role: 'manager', text: clip(r.text || '¡Tarea terminada!') };
-      case 'session_start': return { ...ev, role: 'manager', text: 'Nueva sesión de trabajo' };
-      case 'session_end': return { ...ev, role: 'manager', text: 'Sesión cerrada' };
-      case 'chat': return { ...ev, role, from: clip(r.from || 'Tú', 30), text: clip(r.text, 200) };
+        return { ...ev, role: 'manager', text: clip(r.text || t('events.done')) };
+      case 'session_start': return { ...ev, role: 'manager', text: t('events.sessionStart') };
+      case 'session_end': return { ...ev, role: 'manager', text: t('events.sessionEnd') };
+      case 'chat': return { ...ev, role, from: clip(r.from || t('events.you'), 30), text: clip(r.text, 200) };
       case 'stage_end': return role ? { ...ev, role, ok: r.ok !== false, text: clip(r.text, 160) } : null;
       // El agente dice qué subagente es qué rol (al arrancar un pipeline): no se dibuja, se aprende.
       case 'agent_roles':
         if (r.roles && typeof r.roles === 'object') this.setAgentRoles(s.id, Object.fromEntries(Object.entries(r.roles).filter(([, v]) => ROLE_IDS.includes(v)).slice(0, 40)));
         return null;
-      case 'dispatch': return { ...ev, role: 'po', from: clip(r.from || 'Tú', 30), agent: clip(r.agent, 30), mode: r.mode === 'launch' ? 'launch' : 'session', text: clip(r.text, 200) };
-      case 'poke': return role ? { ...ev, role, from: clip(r.from || 'Tú', 30), text: '👋' } : null;
+      case 'dispatch': return { ...ev, role: 'po', from: clip(r.from || t('events.you'), 30), agent: clip(r.agent, 30), mode: r.mode === 'launch' ? 'launch' : 'session', text: clip(r.text, 200) };
+      case 'poke': return role ? { ...ev, role, from: clip(r.from || t('events.you'), 30), text: '👋' } : null;
+      // Los panes de herdr: el agente (o la oficina) abre una terminal para una actividad, y alguien
+      // del equipo se encarga mientras siga abierta.
+      case 'pane_open':
+      case 'pane_close':
+      case 'pane_state':
+        if (!r.pane) return null;
+        return {
+          ...ev, role: role || roleForText(r.text, r.agent) || 'tl', pane: clip(r.pane, 40), text: clip(r.text || r.pane, 120),
+          ...(r.kind === 'pane_state' ? { state: ['working', 'blocked', 'idle', 'done'].includes(r.state) ? r.state : 'idle' } : {}),
+          ...(r.agent ? { agent: clip(r.agent, 30) } : {}),
+        };
       default: return null;
     }
   }
@@ -184,7 +196,7 @@ export class Office extends EventEmitter {
     }
     const sub = {
       id: String(agentId || toolUseId || `sub-${ev.id}`), agentId, toolUseId, agentType: agentType || '',
-      desc: clip(desc || agentType || 'Subtarea', 120), startedAt: now, open: true,
+      desc: clip(desc || agentType || t('events.subtask'), 120), startedAt: now, open: true,
       role: role || s.agentRoles?.[String(agentType || '').toLowerCase()] || roleForText(desc, agentType),
     };
     s.subagents.push(sub);

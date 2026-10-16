@@ -21,12 +21,12 @@ El puerto se cambia con `--port` o `$DEV_TEAM_OFFICE_PORT`; el socket, con `--so
 
 | Método | Ruta | Cuerpo | Respuesta |
 |---|---|---|---|
-| `GET` | `/v1/health` | | `{ ok, name, version, pid, uptime, url, socket }` |
-| `GET` | `/v1/state` | | `{ sessions, roles, log }` |
+| `GET` | `/v1/health` | | `{ ok, name, version, pid, uptime, url, socket, lang, herdr }` |
+| `GET` | `/v1/state?office=<id>` | | El estado de una oficina (por defecto, la que se está mirando): `{ sessions, roles, log, tasks, pipelines, targets, appearance, weather, office, offices, prefs, herdr }` |
 | `POST` | `/v1/events/<source>` | Un evento o un array de eventos | `{ ok, accepted, ids }` |
 | `POST` | `/v1/events?source=<source>` | Igual que la anterior | Igual |
 | `POST` | `/v1/messages` | Un mensaje del protocolo WebSocket (`chat`, `poke`, `command`, `event`) | `{ ok, … }` |
-| `POST` | `/v1/commands` | `{ action: "demo" \| "demo-pi" \| "stop-demo" \| "reset", speed? }` | `{ ok }` |
+| `POST` | `/v1/commands` | `{ action: "demo" \| "demo-pi" \| "stop-demo" \| "reset", speed?, office? }` | `{ ok }` |
 | `GET` | `/v1/ws` | Upgrade a WebSocket | Ver abajo |
 
 `<source>` dice cómo interpretar el cuerpo:
@@ -35,6 +35,30 @@ El puerto se cambia con `--port` o `$DEV_TEAM_OFFICE_PORT`; el socket, con `--so
 - **Cualquier otro nombre** (`pi`, `opencode`, `mi-agente`…): el formato genérico, y el nombre aparece como origen en la bitácora.
 
 Las rutas antiguas (`POST /event/<source>`, `GET /api/state`, `/ws`) siguen funcionando.
+
+Un evento puede decir a qué **oficina** va (`office`, o `devteam_office` en el JSON de un hook de Claude Code) y en qué **pane de herdr** corre (`pane` o `herdr_pane`). Si no, va a la oficina de su sesión, a la del agente registrado cuya ruta contiene su `cwd`, o a la principal.
+
+## Oficinas (una empresa con varios equipos)
+
+| Método | Ruta | Cuerpo | Respuesta |
+|---|---|---|---|
+| `GET` | `/v1/offices` | | `{ ok, offices, view }`: cada una con `{ id, name, custom, timezone, ownTimezone, location, country, city, agents, sessions }`; `view`, la que se está mirando |
+| `POST` | `/v1/offices` | `{ name, timezone?, location? }` | `201 { ok, office }` |
+| `GET` | `/v1/offices/<id>` | | `{ ok, office }` |
+| `PUT` | `/v1/offices/<id>` | `{ name?, timezone?, location? }` (`null`: la de la empresa / la de la zona) | `{ ok, office }` |
+| `DELETE` | `/v1/offices/<id>` | | `{ ok }`; sus agentes pasan a la principal (`main`, que no se elimina) |
+
+`timezone` es una zona IANA (`Europe/Madrid`); de ella salen la hora, el país, la ciudad y el clima de la oficina. Los cambios se difunden como `{ type: "offices", offices }`.
+
+## herdr: panes
+
+| Método | Ruta | Cuerpo | Respuesta |
+|---|---|---|---|
+| `GET` | `/v1/panes` | | `{ ok, available, pane, workspace, panes }`: los panes que la oficina sigue (`{ pane, office, role, title, agent, kind, status, main? }`) |
+| `POST` | `/v1/panes` | `{ pane, parent?, role?, title?, command?, agent?, office?, cwd? }` | `{ ok, office, role }`. Un agente anuncia un pane que abrió para una actividad (lo hace `dev-team-office pane`); la oficina se lo asigna a alguien del equipo hasta que se cierra |
+| `POST` | `/v1/herdr/launch` | `{ cwd?, agent? }` | `{ ok, pane, agent }`: abre el agente en un pane nuevo (lo que hace la oficina al empezar) |
+
+Los panes llegan a la oficina como eventos `pane_open`, `pane_close` y `pane_state` (`{ pane, role, text, state? }`), y su estado a las interfaces como `{ type: "herdr", herdr }`.
 
 ## Agentes (el mantenedor) y prompts
 
@@ -93,11 +117,35 @@ Formato y protocolo con los agentes: [pipelines.md](pipelines.md).
 
 | Método | Ruta | Cuerpo |
 |---|---|---|
-| `GET` | `/v1/settings` | Responde `{ office: { file, appearance } }` (`file`: la base SQLite) |
-| `PUT` | `/v1/settings` | `{ appearance: { rol: { name?, title?, shirt?, pants?, hair?, skin?, long?, beard?, glasses? } \| null } }` |
+| `GET` | `/v1/settings?office=<id>` | Responde `{ office: { id, file, appearance, prefs }, offices, systemZone, herdr }` (`file`: la base SQLite; `appearance`: la de esa oficina) |
+| `PUT` | `/v1/settings` | `{ prefs?: { … }, appearance?: { rol: { name?, title?, shirt?, pants?, hair?, skin?, long?, beard?, glasses? } \| null }, office? }` |
 
-- **Validación:** todo se valida antes de escribir. Si hay un error, la respuesta es `400 { error }` y no se toca nada.
-- **En vivo:** al cambiar la apariencia el servidor difunde `{ type: "appearance", appearance }`, y al cambiar los agentes o las sesiones `{ type: "targets", targets }`.
+`prefs` (los ajustes generales, todos opcionales al cambiarlos):
+
+| Clave | Valores |
+|---|---|
+| `lang` | `en` (por defecto) o `es` |
+| `timezone` | zona IANA de la empresa, o `null` (la del sistema) |
+| `weather` | `true` / `false` (clima real o simulado) |
+| `herdr` | `{ launch: bool, direction: "right" \| "down", startAgent: "auto" \| "none" \| <id de agente> }` |
+| `log` | `{ life: bool }` (la vida de la oficina en la bitácora) |
+| `view` | `{ office: <id> }` (la oficina que se mira) |
+
+- **Validación:** todo se valida antes de escribir. Si hay un error, la respuesta es `400 { error }` (en el idioma del juego) y no se toca nada.
+- **En vivo:** al cambiar los ajustes el servidor difunde `{ type: "prefs", prefs }`; la apariencia, `{ type: "appearance", appearance, office }` a quienes miran esa oficina; los agentes o las sesiones, `{ type: "targets", targets }`.
+
+## El clima de afuera
+
+| Método | Ruta | Responde |
+|---|---|---|
+| `GET` | `/v1/weather` | `{ ok, enabled, weather }` |
+
+`weather` es `null` hasta la primera respuesta de Open-Meteo, o si está apagado (`DEV_TEAM_OFFICE_WEATHER=off`). Si no, es `{ kind, code, clouds, precip, wind, temp, sunrise, sunset, lat, lon, place, source }`:
+- `kind`: `clear`, `partly`, `cloudy`, `fog`, `drizzle`, `rain`, `snow` o `storm`.
+- `clouds` y `precip`: de 0 a 1.
+- `sunrise` y `sunset`: ms de época.
+
+`GET /v1/weather?office=<id>` da el de esa oficina. También llega en el snapshot (`state.weather`) y, cuando cambia, en `{ type: "weather", weather, office }`. La ubicación sale de la zona horaria de la oficina (las coordenadas de su ciudad); se cambia con la `location` de la oficina, o para todas con `DEV_TEAM_OFFICE_LOCATION`, con una ciudad o con `lat,lon`.
 
 ## Tareas para los agentes
 
@@ -115,7 +163,7 @@ La oficina también funciona al revés: puedes mandarle una tarea al agente.
 | `mode` | Pi / OpenCode | Claude Code |
 |---|---|---|
 | `session` (por defecto) | Inmediata a la sesión conectada. Pi la recibe con `pi.sendUserMessage` (como follow-up si está ocupado) y OpenCode con `client.session.prompt` | En cola. Cuando Claude termina su turno, el hook `Stop` responde `{"decision":"block","reason":"<tarea>"}` y Claude sigue con ella. Si la sesión está esperando tu mensaje, la entrega ocurre al terminar el siguiente turno |
-| `launch` | La oficina abre `opencode run "<tarea>"` / `pi -p "<tarea>"` en `cwd` | La oficina abre `claude -p "<tarea>" --permission-mode acceptEdits` en `cwd` |
+| `launch` | Dentro de herdr, el agente en un pane nuevo (interactivo) con la tarea como prompt. Fuera, la oficina abre `opencode run "<tarea>"` / `pi -p "<tarea>"` en `cwd` | Dentro de herdr, en un pane nuevo. Fuera, la oficina abre `claude -p "<tarea>" --permission-mode acceptEdits` en `cwd` |
 
 Estados de una tarea: `queued` → `sent` → `running` → `done`, `failed` o `cancelled`. La tarea se pasa como un único argumento, sin shell, así que su texto nunca se interpreta como comando.
 
@@ -180,14 +228,14 @@ Roles: `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`
 Al conectar, el servidor envía:
 
 ```jsonc
-{ "type": "hello", "name": "dev-team-office", "version": "0.3.0", … }
-{ "type": "snapshot", "state": { "sessions": [...], "roles": {...}, "log": [...] } }
+{ "type": "hello", "name": "dev-team-office", "version": "0.4.0", "lang": "en", … }
+{ "type": "snapshot", "state": { "sessions": [...], "roles": {...}, "log": [...], "office": {...}, "offices": [...], "prefs": {...}, … } }
 ```
 
-Luego, por cada evento:
+Cada visor mira **una oficina** (al conectar, la guardada en los ajustes) y recibe sólo lo de esa oficina. Luego, por cada evento:
 
 ```jsonc
-{ "type": "event", "event": { "id", "ts", "kind", "role", "text", "session", "source", "ok", "phase"?, "from"? }, "session": { …resumen… } }
+{ "type": "event", "event": { "id", "ts", "kind", "role", "text", "session", "source", "ok", "phase"?, "from"? }, "session": { …resumen… }, "office": "main" }
 ```
 
 Tras un `reset` llega un `snapshot` nuevo.
@@ -199,7 +247,11 @@ El cliente puede enviar:
 { "type": "chat", "text": "¡Buen trabajo!", "role": "qa", "from": "Fabián" }
 { "type": "poke", "role": "backend" }
 { "type": "command", "action": "demo" | "demo-pi" | "stop-demo" | "reset" }
+{ "type": "view", "office": "pagos" }              // mirar otra oficina: llega su snapshot (y queda guardada)
+{ "type": "prefs", "prefs": { "lang": "es" } }     // cambiar ajustes generales
 ```
+
+El chat, los saludos y los comandos van a la oficina que mira el visor.
 
 Si el mensaje trae `id`, el servidor responde `{ "type": "ack", "id", "ok", "accepted"? }`. Así un cliente puede confirmar que su evento entró.
 

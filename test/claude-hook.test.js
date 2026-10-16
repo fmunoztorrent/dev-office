@@ -1,6 +1,7 @@
 // El hook de Claude Code (integrations/claude-code/hook.mjs) de punta a punta: Claude Code es el
 // backend y ejecuta el pipeline en su sesión, encadenando etapas con el Stop hook; una etapa que
 // pide otro modelo corre como `claude -p --model` (aquí, uno de mentira).
+import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -48,7 +49,7 @@ const say = (ctx, text) => fs.appendFileSync(ctx.transcript, `${JSON.stringify({
 
 test('Claude Code ejecuta el pipeline en su sesión: Stop → siguiente etapa; otro modelo → claude -p', async () => {
   const ctx = setup();
-  const server = await startServer({ port: 0, socket: null, db: ':memory:' });
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
   const base = server.url;
   try {
     // al empezar, el hook anuncia el proyecto (y no imprime nada: sería contexto para Claude)
@@ -100,7 +101,7 @@ test('Claude Code ejecuta el pipeline en su sesión: Stop → siguiente etapa; o
 
 test('cancelar desde la oficina: el hook lo recoge en el siguiente Stop; y sin oficina nunca molesta', async () => {
   const ctx = setup();
-  const server = await startServer({ port: 0, socket: null, db: ':memory:' });
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
   const base = server.url;
   try {
     await hook(ctx, base, { hook_event_name: 'UserPromptSubmit', prompt: 'hola' });
@@ -126,7 +127,7 @@ test('cancelar desde la oficina: el hook lo recoge en el siguiente Stop; y sin o
 
 test('a una sesión de Claude ya abierta, el /task de Errementari le llega expandido en el Stop', async () => {
   const ctx = { ...setup(), project: errementariProject() };
-  const server = await startServer({ port: 0, socket: null, db: ':memory:' });
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
   const base = server.url;
   try {
     await hook(ctx, base, { hook_event_name: 'SessionStart', source: 'startup' }); // la sesión anuncia su ruta

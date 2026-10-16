@@ -361,9 +361,9 @@ export function expandClaudeCommand(dir, name, args = '') {
  */
 export function agentCommand(harness, inv, { bin, args } = {}) {
   const h = harnessId(harness);
-  if (!h) return { error: `no sé lanzar "${harness}"` };
+  if (!h) return { error: `no sé lanzar "${harness}"`, code: 'unknown', bin: harness };
   const exe = which(expandHome(bin || (h === 'claude-code' ? process.env.DEV_TEAM_OFFICE_CLAUDE_BIN : '') || HARNESSES[h].bin));
-  if (!exe) return { error: `no encuentro "${bin || HARNESSES[h].bin}" en el PATH` };
+  if (!exe) return { error: `no encuentro "${bin || HARNESSES[h].bin}" en el PATH`, code: 'missing', bin: bin || HARNESSES[h].bin };
   const extra = Array.isArray(args) ? args.map(String) : null;
   if (h === 'claude-code') return { exe, argv: ['-p', inv.text, ...(extra ?? ['--permission-mode', 'acceptEdits'])] };
   if (h === 'opencode') return { exe, argv: inv.command ? ['run', '--command', inv.command, ...(extra ?? []), inv.args] : ['run', ...(extra ?? []), inv.text] };

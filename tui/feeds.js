@@ -1,74 +1,129 @@
 // De dónde saca la interfaz de terminal los eventos: del servidor en el mismo proceso,
 // o de otra oficina por WebSocket (`dev-team-office watch`).
+//
+// La interfaz mira una oficina a la vez (la que se eligió, guardada en los ajustes): el feed sólo le
+// pasa lo de esa oficina, y send({ type: 'view', office }) la cambia.
 
 import WebSocket from 'ws';
 
 export function localFeed(server) {
   let h = null;
-  const onEvent = (ev, session) => h?.onEvent(ev, session);
-  const onReset = () => h?.onSnapshot(server.office.snapshot());
-  const onTasks = (snap) => h?.onTasks(snap);
-  const onPipelines = (snap) => h?.onPipelines(snap.runs);
-  const onTargets = (targets) => h?.onTargets?.(targets);
-  const onAppearance = (a) => h?.onAppearance?.(a);
+  let view = server.store.getPrefs().view.office;
+  const mine = (id) => id === view;
+  const onEvent = (id, ev, session) => { if (mine(id)) h?.onEvent(ev, session); };
+  const onReset = (id) => { if (mine(id)) h?.onSnapshot(server.fullState(view)); };
+  const onTasks = () => h?.onTasks(server.hub.snapshot(view));
+  const onPipelines = () => h?.onPipelines(server.pipelines.snapshot(view).runs);
+  const onTargets = () => h?.onTargets?.(server.registry.targets(view));
+  const onAppearance = (id, a) => { if (mine(id)) h?.onAppearance?.(a); };
+  const onWeather = (id, w) => { if (mine(id)) h?.onWeather?.(w); };
+  const onPrefs = (p) => h?.onPrefs?.(p);
+  const onOffices = (list) => h?.onOffices?.(list, server.company.info(view));
+  const onHerdr = (st) => h?.onHerdr?.(st);
+  const snapshot = () => {
+    const st = server.fullState(view);
+    h.onPrefs?.(st.prefs);
+    h.onOffices?.(st.offices, st.office);
+    h.onSnapshot(st);
+    h.onTasks(st);
+    h.onPipelines(st.pipelines);
+    h.onTargets?.(st.targets);
+    h.onAppearance?.(st.appearance);
+    h.onWeather?.(st.weather);
+    h.onHerdr?.(st.herdr);
+  };
   return {
     http: server.url,
+    get view() { return view; },
     start(handlers) {
       h = handlers;
-      h.onStatus({ ok: true, label: 'en vivo' });
-      h.onSnapshot(server.office.snapshot());
-      h.onTasks(server.hub.snapshot());
-      h.onPipelines(server.pipelines.snapshot().runs);
-      h.onTargets?.(server.registry.targets());
-      server.registry.on('change', onTargets);
-      h.onAppearance?.(server.appearance());
-      server.bus.on('appearance', onAppearance);
-      server.office.on('event', onEvent);
-      server.office.on('reset', onReset);
+      h.onStatus({ ok: true, key: 'conn.live' });
+      snapshot();
+      server.company.on('event', onEvent);
+      server.company.on('reset', onReset);
       server.hub.on('change', onTasks);
       server.pipelines.on('change', onPipelines);
+      server.registry.on('change', onTargets);
+      server.bus.on('appearance', onAppearance);
+      server.bus.on('weather', onWeather);
+      server.bus.on('prefs', onPrefs);
+      server.bus.on('offices', onOffices);
+      server.bus.on('herdr', onHerdr);
     },
-    send: (msg) => server.handleMessage(msg),
+    send(msg) {
+      if (msg?.type === 'view') {
+        const out = server.handleMessage(msg);
+        if (out.ok) { view = msg.office; snapshot(); }
+        return out;
+      }
+      return server.handleMessage({ office: view, ...msg });
+    },
     close() {
-      server.office.off('event', onEvent);
-      server.office.off('reset', onReset);
+      server.company.off('event', onEvent);
+      server.company.off('reset', onReset);
       server.hub.off('change', onTasks);
       server.pipelines.off('change', onPipelines);
       server.registry.off('change', onTargets);
       server.bus.off('appearance', onAppearance);
+      server.bus.off('weather', onWeather);
+      server.bus.off('prefs', onPrefs);
+      server.bus.off('offices', onOffices);
+      server.bus.off('herdr', onHerdr);
     },
   };
 }
 
 export function remoteFeed(wsUrl) {
-  let ws = null, h = null, closed = false, retry = null;
-  const label = new URL(wsUrl).host;
+  let ws = null, h = null, closed = false, retry = null, view = null;
+  const host = new URL(wsUrl).host;
   const connect = () => {
     ws = new WebSocket(wsUrl);
-    ws.on('open', () => h.onStatus({ ok: true, label: `conectado a ${label}` }));
+    ws.on('open', () => {
+      h.onStatus({ ok: true, key: 'conn.connectedTo', vars: { host } });
+      if (view) ws.send(JSON.stringify({ type: 'view', office: view })); // al reconectar, la misma oficina
+    });
     ws.on('message', (data) => {
       let msg;
       try { msg = JSON.parse(data); } catch { return; }
-      if (msg.type === 'snapshot') { h.onSnapshot(msg.state); if (msg.state.tasks) h.onTasks(msg.state); h.onPipelines(msg.state.pipelines || []); h.onTargets?.(msg.state.targets || []); h.onAppearance?.(msg.state.appearance || {}); }
+      if (msg.type === 'snapshot') {
+        const st = msg.state;
+        view = st.office?.id || view;
+        if (st.prefs) h.onPrefs?.(st.prefs);
+        h.onOffices?.(st.offices || [], st.office);
+        h.onSnapshot(st);
+        if (st.tasks) h.onTasks(st);
+        h.onPipelines(st.pipelines || []);
+        h.onTargets?.(st.targets || []);
+        h.onAppearance?.(st.appearance || {});
+        h.onWeather?.(st.weather || null);
+        h.onHerdr?.(st.herdr || null);
+      }
       if (msg.type === 'appearance') h.onAppearance?.(msg.appearance);
+      if (msg.type === 'weather') h.onWeather?.(msg.weather);
+      if (msg.type === 'prefs') h.onPrefs?.(msg.prefs);
+      if (msg.type === 'offices') h.onOffices?.(msg.offices, (msg.offices || []).find((o) => o.id === view));
+      if (msg.type === 'herdr') h.onHerdr?.(msg.herdr);
       if (msg.type === 'pipelines') h.onPipelines(msg.runs);
       if (msg.type === 'targets') h.onTargets?.(msg.targets);
       if (msg.type === 'event') h.onEvent(msg.event, msg.session);
       if (msg.type === 'tasks') h.onTasks(msg);
       if (msg.type === 'ack' && msg.ok === false) h.onError?.(msg.error);
+      if (msg.type === 'error') h.onError?.(msg.error);
     });
     ws.on('close', () => {
       if (closed) return;
-      h.onStatus({ ok: false, label: `sin conexión con ${label}, reintentando…` });
+      h.onStatus({ ok: false, key: 'conn.retrying', vars: { host } });
       retry = setTimeout(connect, 1500);
     });
     ws.on('error', () => {}); // 'close' llega después y reintenta
   };
   return {
     http: wsUrl.replace(/^ws/, 'http').replace(/\/v1\/ws$|\/ws$/, ''),
-    start(handlers) { h = handlers; h.onStatus({ ok: false, label: `conectando a ${label}…` }); connect(); },
+    get view() { return view; },
+    start(handlers) { h = handlers; h.onStatus({ ok: false, key: 'conn.connectingTo', vars: { host } }); connect(); },
     send(msg) {
-      if (ws?.readyState !== 1) return { ok: false, error: 'sin conexión' };
+      if (ws?.readyState !== 1) return { ok: false, error: 'offline' };
+      if (msg?.type === 'view') view = msg.office;
       // Con `ref` el servidor contesta un ack; si falla, llega por onError.
       ws.send(JSON.stringify(['task', 'pipeline_start', 'run'].includes(msg.type) ? { ...msg, ref: Date.now() } : msg));
       return { ok: true };

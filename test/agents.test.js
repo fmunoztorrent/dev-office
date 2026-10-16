@@ -1,5 +1,6 @@
 // El mantenedor de agentes por la API: registrar una ruta, ver lo que trae su harness y mandarle
 // un prompt que arranca SU pipeline (a la sesión abierta en esa ruta o a una sesión nueva).
+import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -22,7 +23,7 @@ const call = (base, method, p, body) => fetch(base + p, { method, headers: { 'co
   .then(async (r) => ({ status: r.status, body: await r.json() }));
 
 async function withServer(fn) {
-  const server = await startServer({ port: 0, socket: null, db: ':memory:' });
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
   try { await fn(server, server.url); } finally { await server.close(); }
 }
 

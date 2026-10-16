@@ -1,4 +1,5 @@
 // La base SQLite de la oficina (server/store.js): mantenedor de agentes, ajustes e historial.
+import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -76,7 +77,7 @@ test('en disco: permisos 0600, migraciones y lo que había en config.json', () =
     assert.equal(store.listAgents().length, 1);
     store.close();
     const db = new DatabaseSync(file);
-    assert.equal(db.prepare('PRAGMA user_version').get().user_version, 1);
+    assert.equal(db.prepare('PRAGMA user_version').get().user_version, 2);
     db.close();
     assert.ok(fs.existsSync(legacy)); // el config.json viejo no se borra
   } finally {

@@ -1,5 +1,6 @@
 // La parte del AGENTE (integrations/common/devteam.mjs): proyecto, pipelines y su ejecución
 // dentro de la sesión. La oficina no participa.
+import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

@@ -1,6 +1,6 @@
 {
   "name": "dev-team-office",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Oficina pixel-art en vivo: un equipo de desarrollo que representa las subtareas de un agente de código (Claude Code, OpenCode, Pi...) recibiendo eventos por WebSocket.",
   "type": "module",
   "main": "server/server.js",

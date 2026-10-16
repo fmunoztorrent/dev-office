@@ -1,9 +1,11 @@
+import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { startServer } from '../server/server.js';
 import { runTui } from '../tui/app.js';
 import { localFeed } from '../tui/feeds.js';
+import { computeLayout } from '../tui/view.js';
 import { TEAM, applyAppearance } from '../public/sim.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -14,7 +16,7 @@ const until = async (fn, ms = 6000) => {
 };
 
 test('desde la terminal: ⚙ → Personajes → renombrar a Tomás → ctrl+s guarda y se aplica', async () => {
-  const server = await startServer({ port: 0, socket: null, db: ':memory:' });
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
   const cols = 160, rows = 46;
   const stdin = Object.assign(new EventEmitter(), { isTTY: true, setRawMode() {}, setEncoding() {}, resume() {}, pause() {} });
   const stdout = Object.assign(new EventEmitter(), { columns: cols, rows, out: '', write(s) { this.out += s; return true; } });
@@ -22,11 +24,14 @@ test('desde la terminal: ⚙ → Personajes → renombrar a Tomás → ctrl+s gu
   const done = runTui({ feed: localFeed(server), stdin, stdout, colorMode: 'truecolor' });
   try {
     await sleep(150);
-    const time = new Date().toLocaleTimeString('es', { hour12: false });
-    const gear = cols - time.length - 5 + 1; // columna del ⚙ (0-based) → 1-based en el clic
-    type(`\x1b[<0;${gear + 1};1M`);
-    await until(() => stdout.out.includes('⚙ Ajustes') && stdout.out.includes('Agentes registrados'));
-    type('\x1b[C'); // pestañas: Agentes → Personajes
+    const { gearCell } = computeLayout(cols, rows); // el ⚙ va dentro de la escena, arriba a la derecha
+    type(`\x1b[<0;${gearCell.col + 2};${gearCell.row + 1}M`); // clics 1-based, en el centro de « ⚙ »
+    await until(() => stdout.out.includes('⚙ Ajustes') && stdout.out.includes('Idioma'));
+    type('\x1b[C'); // pestañas: General → Oficinas
+    await until(() => stdout.out.includes('Agregar oficina'));
+    type('\x1b[C'); // → Agentes
+    await until(() => stdout.out.includes('Agentes registrados'));
+    type('\x1b[C'); // → Personajes
     await until(() => stdout.out.includes('Pelo largo'));
     type('\x1b[B'); // Personaje (Tomás por defecto)
     type('\x1b[B'); // Nombre

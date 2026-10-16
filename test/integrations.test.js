@@ -1,6 +1,7 @@
 // La extensión de Pi y el plugin de OpenCode, de verdad, contra un Pi y un OpenCode de mentira
 // (sus APIs imitadas): se conectan a la oficina, anuncian su proyecto y ejecutan el pipeline en
 // su propia sesión, cambiando de modelo por etapa.
+import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -41,7 +42,7 @@ async function withEnv(vars, fn) {
 
 test('extensión de Pi: corre el pipeline en su sesión, con setModel por etapa, y vuelve a su modelo', { skip: !process.features?.typescript && 'Node sin soporte de TypeScript' }, async () => {
   const dir = tempProject();
-  const server = await startServer({ port: 0, socket: null, db: ':memory:' });
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
   const cwd = process.cwd();
   const isTTY = process.stdin.isTTY;
   process.chdir(dir);
@@ -111,7 +112,7 @@ test('extensión de Pi: corre el pipeline en su sesión, con setModel por etapa,
 
 test('plugin de OpenCode: corre el pipeline en su sesión con el modelo de cada etapa', async () => {
   const dir = tempProject();
-  const server = await startServer({ port: 0, socket: null, db: ':memory:' });
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
   const prompts = [];
   const commands = [];
   let n = 0;

@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { t } from '../public/i18n.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'integrations');
 const HOME = os.homedir();
@@ -24,11 +25,11 @@ const TARGETS = {
     const skill = path.join(HOME, '.agents', 'skills', 'dev-team-office');
     copy('pi/skills/dev-team-office/SKILL.md', path.join(skill, 'SKILL.md'));
     copy('pi/skills/dev-team-office/office-event.mjs', path.join(skill, 'office-event.mjs'));
-    return [`Pi: extensión en ${tilde(ext)} y skill en ${tilde(skill)}/`, '    Abre pi en tu proyecto: se conecta sola a la oficina.'];
+    return [t('install.pi', { ext: tilde(ext), skill: tilde(skill) }), t('install.piHint')];
   },
   opencode() {
     const plugin = copy('opencode/dev-team-office.js', path.join(HOME, '.config', 'opencode', 'plugin', 'dev-team-office.js'));
-    return [`OpenCode: plugin en ${tilde(plugin)}`, '    Abre opencode en tu proyecto: se conecta solo a la oficina.'];
+    return [t('install.opencode', { plugin: tilde(plugin) }), t('install.opencodeHint')];
   },
   claude() {
     const hook = copy('claude-code/hook.mjs', path.join(OFFICE_DIR, 'claude-code', 'hook.mjs'));
@@ -38,9 +39,9 @@ const TARGETS = {
     const snippet = path.join(OFFICE_DIR, 'claude-code', 'settings.json');
     fs.writeFileSync(snippet, `${JSON.stringify(settings, null, 2)}\n`);
     return [
-      `Claude Code: hook en ${tilde(hook)}`,
-      `    Falta un paso tuyo: copia la sección "hooks" de ${tilde(snippet)}`,
-      '    a ~/.claude/settings.json (o a .claude/settings.json del proyecto).',
+      t('install.claude', { hook: tilde(hook) }),
+      t('install.claudeStep', { snippet: tilde(snippet) }),
+      t('install.claudeWhere'),
     ];
   },
 };
@@ -49,9 +50,9 @@ const ALIASES = { 'claude-code': 'claude', open: 'opencode' };
 export function install(which = []) {
   const names = (which.length ? which : Object.keys(TARGETS)).map((n) => ALIASES[n] || n);
   const unknown = names.filter((n) => !TARGETS[n]);
-  if (unknown.length) return { ok: false, error: `no conozco: ${unknown.join(', ')} (usa pi, opencode o claude)` };
+  if (unknown.length) return { ok: false, error: t('install.unknown', { names: unknown.join(', ') }) };
   const lib = copy('common/devteam.mjs', path.join(OFFICE_DIR, 'lib', 'devteam.mjs'));
-  const lines = [`Librería común en ${tilde(lib)}`];
+  const lines = [t('install.lib', { path: tilde(lib) })];
   for (const n of names) lines.push(...TARGETS[n]());
   return { ok: true, lines };
 }

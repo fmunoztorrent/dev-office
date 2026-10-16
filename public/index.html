@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,96 +10,120 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <div class="app">
-    <main class="stage">
-      <div class="screen"><canvas id="office" width="960" height="600"></canvas></div>
-      <p class="hint">Haz clic en un personaje para ver qué subtareas ha hecho. Cada rol representa un tipo de trabajo del agente.</p>
-    </main>
+  <!-- Los textos van en inglés por defecto; main.js los pone en el idioma del juego (data-i18n*). -->
+  <main class="stage">
+    <div class="screen" id="screen">
+      <canvas id="office" width="960" height="600" data-i18n-aria="ui.canvas"></canvas>
 
-    <aside class="panel">
-      <header class="brand">
-        <h1>Dev Team Office</h1>
-        <span id="conn" class="conn off">desconectado</span>
-        <button id="open-settings" class="gear" type="button" title="Ajustes" aria-label="Ajustes">⚙</button>
-      </header>
-
-      <section class="card" id="task-card">
-        <div class="card-head">
-          <h2>Tarea</h2>
-          <select id="session" aria-label="Sesión"></select>
-        </div>
-        <p id="task-title" class="task-title">Esperando eventos de un agente…</p>
-        <div class="progress"><div id="progress-bar"></div></div>
-        <ol id="flow" class="flow" aria-label="Flujo por roles" hidden></ol>
-        <dl class="stats">
-          <div><dt>Acciones</dt><dd id="st-tools">0</dd></div>
-          <div><dt>Errores</dt><dd id="st-errors">0</dd></div>
-          <div><dt>Subagentes</dt><dd id="st-subs">0</dd></div>
-          <div><dt>Estado</dt><dd id="st-status">—</dd></div>
-        </dl>
-      </section>
-
-      <section class="card">
-        <div class="card-head">
-          <h2>Encargos</h2>
-          <span id="agents-count" class="muted"></span>
-        </div>
-        <button id="open-brief" class="btn wide">📋 Nuevo encargo</button>
-        <p class="muted tip">También haciendo clic en la pizarra de la oficina.</p>
-        <ul id="runs" class="runs"></ul>
-        <ul id="tasks" class="tasks"></ul>
-      </section>
-
-      <section class="card" id="detail" hidden>
-        <div class="card-head">
-          <h2 id="detail-name"></h2>
-          <button id="poke" class="btn small">👋 Saludar</button>
-        </div>
-        <p id="detail-role" class="muted"></p>
-        <ul id="detail-history" class="history"></ul>
-      </section>
-
-      <section class="card">
-        <h2>Equipo</h2>
-        <ul id="team" class="team"></ul>
-      </section>
-
-      <section class="card grow">
-        <h2>Bitácora</h2>
-        <ol id="log" class="log"></ol>
-      </section>
-
-      <form id="chat" class="chat">
-        <input id="chat-text" maxlength="200" placeholder="Mensaje al equipo…" autocomplete="off">
-        <button class="btn">Enviar</button>
-      </form>
-      <div class="controls">
-        <button id="demo" class="btn">▶ Demo</button>
-        <button id="demo-pi" class="btn">▶ Demo TDD (Pi)</button>
-        <button id="reset" class="btn ghost">⟲ Reiniciar</button>
+      <!-- HUD: todo va dentro de la pantalla del juego. Arriba a la izquierda, el selector de
+           oficina (sólo si la empresa tiene más de una), la conexión y el clima. -->
+      <div class="hud hud-tl">
+        <label class="office-pick" id="office-pick" hidden data-i18n-title="ui.officeKey">
+          <span aria-hidden="true">🏢</span>
+          <select id="office-select" data-i18n-aria="ui.office"></select>
+        </label>
+        <span id="conn" class="conn off">offline</span>
+        <span id="wx" class="wx" hidden></span>
       </div>
-    </aside>
-  </div>
+      <div class="hud hud-tr">
+        <button id="open-settings" class="hud-btn" type="button" data-i18n-title="ui.settingsKey" data-i18n-aria="ui.settings">
+          <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><rect x="7" y="0" width="2" height="3"/><rect x="7" y="13" width="2" height="3"/><rect x="0" y="7" width="3" height="2"/><rect x="13" y="7" width="3" height="2"/><rect x="2" y="2" width="3" height="3"/><rect x="11" y="2" width="3" height="3"/><rect x="2" y="11" width="3" height="3"/><rect x="11" y="11" width="3" height="3"/><path fill-rule="evenodd" d="M5 3h6v2h2v6h-2v2H5v-2H3V5h2zM6 6v4h4V6z"/></g></svg>
+        </button>
+        <button id="fullscreen" class="hud-btn" type="button" data-i18n-title="ui.fullscreenKey" data-i18n-aria="ui.fullscreen">
+          <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><rect x="1" y="1" width="5" height="2"/><rect x="1" y="1" width="2" height="5"/><rect x="10" y="1" width="5" height="2"/><rect x="13" y="1" width="2" height="5"/><rect x="1" y="13" width="5" height="2"/><rect x="1" y="10" width="2" height="5"/><rect x="10" y="13" width="5" height="2"/><rect x="13" y="10" width="2" height="5"/></g></svg>
+        </button>
+      </div>
+
+      <!-- La ficha del personaje seleccionado (como en Los Sims) -->
+      <aside id="sheet" class="sheet" hidden aria-labelledby="sheet-name">
+        <header class="sheet-head">
+          <canvas id="sheet-portrait" width="64" height="100" aria-hidden="true"></canvas>
+          <div class="sheet-who">
+            <h2 id="sheet-name"></h2>
+            <p id="sheet-role"></p>
+            <p id="sheet-mood" class="sheet-mood"></p>
+          </div>
+          <button id="sheet-close" class="sheet-x" type="button" data-i18n-aria="ui.sheetClose">✕</button>
+        </header>
+        <dl id="sheet-needs" class="needs"></dl>
+        <ul id="sheet-history" class="sheet-history"></ul>
+        <footer class="sheet-foot">
+          <button id="poke" class="pix-btn" type="button" data-i18n="ui.poke">👋 Say hi</button>
+          <button id="sheet-msg" class="pix-btn" type="button" data-i18n="ui.message">✉ Message</button>
+        </footer>
+      </aside>
+
+      <!-- La terminal: la actividad del equipo -->
+      <button id="open-term" class="hud-btn term-btn" type="button" data-i18n-title="ui.termKey" data-i18n-aria="ui.term" aria-expanded="false" aria-controls="term">
+        <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><path fill-rule="evenodd" d="M1 2h14v12H1zM2 5v8h12V5z"/><rect x="4" y="7" width="1" height="1"/><rect x="5" y="8" width="1" height="1"/><rect x="6" y="9" width="1" height="1"/><rect x="5" y="10" width="1" height="1"/><rect x="4" y="11" width="1" height="1"/><rect x="8" y="11" width="4" height="1"/></g></svg>
+        <span id="term-badge" class="badge" hidden></span>
+      </button>
+      <section id="term" class="term" hidden data-i18n-aria="ui.term">
+        <header class="term-head">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <nav class="term-tabs" role="tablist">
+            <button type="button" role="tab" data-tab="activity" aria-selected="true" data-i18n="ui.tabs.activity">activity</button>
+            <button type="button" role="tab" data-tab="team" aria-selected="false" data-i18n="ui.tabs.team">team</button>
+            <button type="button" role="tab" data-tab="work" aria-selected="false" data-i18n="ui.tabs.work">briefs</button>
+          </nav>
+          <button id="term-close" class="term-x" type="button" data-i18n-aria="ui.termClose">✕</button>
+        </header>
+        <div class="term-body">
+          <div data-panel="activity" class="t-panel">
+            <ol id="log" class="log" aria-live="polite"></ol>
+          </div>
+          <div data-panel="team" class="t-panel" hidden>
+            <ul id="team" class="team"></ul>
+          </div>
+          <div data-panel="work" class="t-panel" hidden>
+            <div class="t-row"><span class="t-k" data-i18n="ui.session">session</span><select id="session" data-i18n-aria="ui.sessionLabel"></select><span id="agents-count" class="t-dim"></span></div>
+            <p id="task-title" class="task-title" data-i18n="ui.waitingAgent">Waiting for events from an agent…</p>
+            <div class="progress"><div id="progress-bar"></div></div>
+            <ol id="flow" class="flow" data-i18n-aria="ui.flow" hidden></ol>
+            <dl class="stats">
+              <div><dt data-i18n="ui.stats.tools">actions</dt><dd id="st-tools">0</dd></div>
+              <div><dt data-i18n="ui.stats.errors">errors</dt><dd id="st-errors">0</dd></div>
+              <div><dt data-i18n="ui.stats.subs">subagents</dt><dd id="st-subs">0</dd></div>
+              <div><dt data-i18n="ui.stats.status">status</dt><dd id="st-status">—</dd></div>
+            </dl>
+            <div class="t-actions">
+              <button id="new-brief" class="pix-btn" type="button" data-i18n="ui.newBrief">📋 New brief</button>
+              <button id="demo" class="pix-btn" type="button" data-i18n="ui.demo">▶ Demo</button>
+              <button id="demo-pi" class="pix-btn" type="button" data-i18n="ui.demoTdd">▶ TDD demo</button>
+              <button id="reset" class="pix-btn ghost" type="button" data-i18n="ui.reset">⟲ Reset</button>
+            </div>
+            <ul id="runs" class="runs"></ul>
+            <ul id="tasks" class="tasks"></ul>
+          </div>
+        </div>
+        <form id="chat" class="term-prompt">
+          <label for="chat-text" id="prompt-label">team@office:~$</label>
+          <input id="chat-text" maxlength="200" autocomplete="off" spellcheck="false" data-i18n-ph="ui.chatPh">
+        </form>
+      </section>
+    </div>
+  </main>
+
   <dialog id="brief" class="brief" aria-labelledby="brief-title">
     <form id="brief-form" method="dialog">
       <header class="brief-head">
         <span class="pin" aria-hidden="true"></span>
-        <h2 id="brief-title">Nuevo encargo</h2>
-        <button type="button" class="brief-x" id="brief-close" aria-label="Cerrar">✕</button>
+        <h2 id="brief-title" data-i18n="brief.title">New brief</h2>
+        <button type="button" class="brief-x" id="brief-close" data-i18n-aria="settings.close">✕</button>
       </header>
       <div class="brief-body">
-        <label class="b-field"><span>Agente</span><select id="b-agent"></select></label>
-        <label class="b-field"><span>Pipeline</span><select id="b-pipeline"></select></label>
+        <label class="b-field"><span data-i18n="brief.agent">Agent</span><select id="b-agent"></select></label>
+        <label class="b-field"><span data-i18n="brief.pipeline">Pipeline</span><select id="b-pipeline"></select></label>
         <p id="b-desc" class="b-desc"></p>
-        <label class="b-field"><span>Sesión</span><select id="b-session"></select></label>
-        <label class="note"><span>Prompt</span><textarea id="b-text" rows="3" maxlength="4000" placeholder="¿Qué necesitas que haga el equipo?"></textarea></label>
+        <label class="b-field"><span data-i18n="brief.session">Session</span><select id="b-session"></select></label>
+        <label class="note"><span data-i18n="brief.prompt">Prompt</span><textarea id="b-text" rows="3" maxlength="4000" data-i18n-ph="brief.placeholder"></textarea></label>
         <div id="b-stages" class="b-stages"></div>
         <p id="b-problem" class="b-problem" role="status"></p>
       </div>
       <footer class="brief-foot">
-        <span class="muted">⌘↵ para enviar</span>
-        <button type="button" class="btn ghost" id="brief-cancel">Cancelar</button>
-        <button type="submit" class="btn" id="brief-go">▶ ¡A trabajar!</button>
+        <span class="muted" data-i18n="brief.send">⌘↵ to send</span>
+        <button type="button" class="btn ghost" id="brief-cancel" data-i18n="brief.cancelBtn">Cancel</button>
+        <button type="submit" class="btn" id="brief-go" data-i18n="brief.go">▶ Get to work!</button>
       </footer>
     </form>
   </dialog>
@@ -107,22 +131,26 @@
     <form id="settings-form" method="dialog">
       <header class="brief-head">
         <span class="pin" aria-hidden="true"></span>
-        <h2 id="settings-title">⚙ Ajustes</h2>
-        <button type="button" class="brief-x" id="settings-close" aria-label="Cerrar">✕</button>
+        <h2 id="settings-title" data-i18n="settings.title">⚙ Settings</h2>
+        <button type="button" class="brief-x" id="settings-close" data-i18n-aria="settings.close">✕</button>
       </header>
       <nav class="tabs" role="tablist">
-        <button type="button" role="tab" data-tab="agents" aria-selected="true">Agentes</button>
-        <button type="button" role="tab" data-tab="look" aria-selected="false">Personajes</button>
+        <button type="button" role="tab" data-tab="general" aria-selected="true" data-i18n="settings.tabs.general">General</button>
+        <button type="button" role="tab" data-tab="offices" aria-selected="false" data-i18n="settings.tabs.offices">Offices</button>
+        <button type="button" role="tab" data-tab="agents" aria-selected="false" data-i18n="settings.tabs.agents">Agents</button>
+        <button type="button" role="tab" data-tab="look" aria-selected="false" data-i18n="settings.tabs.look">Characters</button>
       </nav>
       <div class="brief-body">
-        <section data-panel="agents" class="s-panel"></section>
+        <section data-panel="general" class="s-panel"></section>
+        <section data-panel="offices" class="s-panel" hidden></section>
+        <section data-panel="agents" class="s-panel" hidden></section>
         <section data-panel="look" class="s-panel" hidden></section>
         <p id="s-msg" class="b-problem" role="status"></p>
       </div>
       <footer class="brief-foot">
         <span class="muted" id="s-file"></span>
-        <button type="button" class="btn ghost" id="settings-cancel">Cerrar</button>
-        <button type="button" class="btn" id="settings-save">Guardar</button>
+        <button type="button" class="btn ghost" id="settings-cancel" data-i18n="settings.close">Close</button>
+        <button type="button" class="btn" id="settings-save" data-i18n="settings.save">Save</button>
       </footer>
     </form>
   </dialog>
