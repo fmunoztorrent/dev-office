@@ -1,6 +1,6 @@
 // Render en canvas (navegador) de la simulación de sim.js.
 
-import { createSim, W, H, SPOT, STATUS_ICON, PHASE_COLOR, phaseInfo, rand, onBoard } from './sim.js';
+import { createSim, W, H, SPOT, PLANTS, STATUS_ICON, PHASE_COLOR, phaseInfo, rand, onBoard, UNICORN, DREAM_PALETTE, rainbowPixels } from './sim.js';
 export { TEAM, PHASES, phaseInfo } from './sim.js';
 
 const P = 3; // tamaño de un "pixel" del sprite
@@ -275,7 +275,7 @@ export function createGame(canvas, { onSelect, onBoardClick } = {}) {
     // máquina de café
     R(898, 128, 40, 30, '#3d405b'); R(902, 110, 32, 22, '#e07a5f'); R(912, 140, 12, 10, '#222'); R(914, 146, 8, 6, '#fff');
     // plantas
-    for (const [x, y] of [[20, 560], [930, 560], [640, 372]]) {
+    for (const [x, y] of PLANTS) {
       R(x - 10, y - 14, 20, 16, '#b5651d');
       R(x - 14, y - 34, 10, 20, '#2a9d8f'); R(x - 2, y - 42, 10, 28, '#3fb68b'); R(x + 6, y - 30, 10, 16, '#2a9d8f');
     }
@@ -285,6 +285,39 @@ export function createGame(canvas, { onSelect, onBoardClick } = {}) {
     R(SPOT.table.x - 20, SPOT.table.y - 8, 14, 10, '#fff'); R(SPOT.table.x + 12, SPOT.table.y - 4, 8, 8, '#e07a5f');
     // sofá
     R(300, 540, 120, 34, '#457b9d'); R(300, 528, 120, 16, '#3a6a88'); R(292, 532, 14, 42, '#3a6a88'); R(414, 532, 14, 42, '#3a6a88');
+  }
+
+  // Lo que imagina la diseñadora: una nube de pensamiento con un unicornio o un arcoíris.
+  const RAINBOW = rainbowPixels(9);
+  function drawDream(a, now) {
+    const d = a.dream;
+    if (!d || now > d.until) return;
+    const x = a.seated ? a.cfg.seat.x : a.x;
+    const head = (a.seated ? a.cfg.seat.y + 14 : a.y) - 21 * P;
+    const k = Math.min(1, (now - d.start) / 350, (d.until - now) / 400); // aparece y se desvanece
+    if (k <= 0) return;
+    ctx.globalAlpha = k;
+    const cx = Math.min(W - 52, x + 62), cy = head - 34 + Math.sin(now / 400) * 3;
+    // burbujitas desde la cabeza y la nube
+    const blob = (bx, by, r) => { ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI * 2); ctx.fill(); };
+    ctx.fillStyle = '#2b2d42';
+    blob(x + 12, head - 2, 4.5); blob(x + 24, head - 12, 6.5);
+    for (const [bx, by, r] of [[-28, 4, 18], [-10, -10, 20], [12, -12, 20], [30, 2, 18], [8, 10, 18], [-14, 12, 16]]) blob(cx + bx, cy + by, r + 2);
+    // cielo celeste para que el unicornio (blanco) se vea; el arcoíris va sobre una nube blanca
+    ctx.fillStyle = d.kind === 'unicorn' ? '#cfe2ff' : '#ffffff';
+    blob(x + 12, head - 2, 3); blob(x + 24, head - 12, 5);
+    for (const [bx, by, r] of [[-28, 4, 18], [-10, -10, 20], [12, -12, 20], [30, 2, 18], [8, 10, 18], [-14, 12, 16]]) blob(cx + bx, cy + by, r);
+    if (d.kind === 'unicorn') {
+      const U = 4; // un poco más grande que los personajes: es un sueño
+      const hop = Math.abs(Math.sin(now / 160)) * 3;
+      const ox = cx - (UNICORN[0].length * U) / 2, oy = cy - (UNICORN.length * U) / 2 - hop;
+      UNICORN.forEach((row, ry) => [...row].forEach((ch, rx) => { if (ch !== '.') R(ox + rx * U, oy + ry * U, U, U, DREAM_PALETTE[ch]); }));
+    } else {
+      const ox = cx, oy = cy + 12;
+      for (const [dx, dy, col] of RAINBOW) R(ox + dx * P, oy + dy * P, P, P, col);
+      for (const ex of [-9, 9]) { R(ox + ex * P - 7, oy - 2, 14, 6, '#e9ecf5'); R(ox + ex * P - 4, oy - 6, 8, 5, '#e9ecf5'); }
+    }
+    ctx.globalAlpha = 1;
   }
 
   function drawBubble(a, now) {
@@ -330,6 +363,8 @@ export function createGame(canvas, { onSelect, onBoardClick } = {}) {
       if (p.kind === 'code') { ctx.font = `16px ${FONT}`; ctx.fillStyle = p.color; ctx.fillText(p.ch, p.x, p.y); }
       else if (p.kind === 'bug') { ctx.font = '16px system-ui, "Apple Color Emoji", sans-serif'; ctx.fillText('🐞', p.x, p.y); }
       else if (p.kind === 'check') { ctx.font = `18px ${FONT}`; ctx.fillStyle = '#06d6a0'; ctx.fillText('✓', p.x, p.y); }
+      else if (p.kind === 'sparkle') { ctx.font = `18px ${FONT}`; ctx.fillStyle = p.color; ctx.fillText(p.ch, p.x, p.y); }
+      else if (p.kind === 'emote') { ctx.font = '18px system-ui, "Apple Color Emoji", sans-serif'; ctx.fillText(p.ch, p.x, p.y); }
       else R(p.x, p.y, p.kind === 'confetti' ? 4 + Math.sin(p.rot) * 2 : 3, p.kind === 'confetti' ? 6 : 3, p.color);
     }
     ctx.globalAlpha = 1;
@@ -366,6 +401,7 @@ export function createGame(canvas, { onSelect, onBoardClick } = {}) {
     items.push({ y: 242, fn: () => drawProps(now) });
     items.sort((p, q) => p.y - q.y).forEach((i) => i.fn());
     drawParticles();
+    for (const a of Object.values(agents)) drawDream(a, now);
     for (const a of Object.values(agents)) drawBubble(a, now);
     drawBanner(now);
     requestAnimationFrame(frame);

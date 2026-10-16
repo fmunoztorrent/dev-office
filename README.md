@@ -18,13 +18,22 @@ Una oficina en pixel art, al estilo AI Town, que muestra en vivo lo que hace un 
 Lo que se ve en la oficina:
 
 - **Pizarra kanban** en la pared con los todos del agente (por hacer / en curso / hecho) y una barra de progreso.
-- **Nuevo prompt:** la PO va a la pizarra a presentar la tarea y la analista se suma.
+- **Nuevo requerimiento:** la PO lo anuncia en el rincón de producto, se lo lleva al manager y él se lo reparte a quien corresponda según de qué trata (pantallas → frontend, endpoints → backend, bugs → QA, colores y logos → diseño; si no está claro, al Tech Lead).
 - **Subagente (`Task`/`Agent`):** el manager camina con una tarjeta hasta el escritorio de quien corresponde y le deja una carpeta mientras dure la subtarea.
 - **Uso de herramientas:** el personaje teclea, su monitor muestra código y saltan glifos. El rack de servidores parpadea cuando trabaja backend.
 - **Error:** el personaje se sacude con chispas rojas y el Tech Lead se acerca a ayudar.
 - **Permiso pendiente:** el manager levanta la mano y aparece un banner naranja.
 - **`Stop`:** confeti y todo el equipo celebra en la mesa de reuniones.
 - **Sin actividad:** de vez en cuando alguien va por café.
+
+Además, cada personaje tiene **vida propia**: necesidades que crecen con el tiempo (conversar, café, consultar, inspiración) y una personalidad que decide qué hace cuando nadie le pide nada:
+
+- **Sofía, Valentina y Camila** (PO, analista y diseñadora) son NPC del negocio: se sientan juntas y cotorrean, desde sus escritorios o juntándose en el café o el sofá. Comentan lo que pasa en la oficina (la tarea en curso, quién se peleó con un error, quién vio todo en verde) y a veces de la charla sale una idea que le llevan a Marco, que la manda al backlog.
+- **Camila** a veces salta e imagina **unicornios 🦄 o arcoíris 🌈**: aparecen en una nube de pensamiento, en pixel art, con destellos.
+- **Diego, Lucía y Andrés**, mientras trabajan, a veces se paran a **consultar a Tomás** (el TL), que les contesta y vuelven a lo suyo. No siempre: la duda se acumula mientras trabajan.
+- **Marco** hace rondas para preguntar cómo van.
+
+La simulación es la misma en la terminal y en el navegador ([`public/sim.js`](public/sim.js)), con reloj y azar inyectables para probarla en tiempo simulado ([`test/sim.test.js`](test/sim.test.js)).
 
 ## Instalación (macOS)
 

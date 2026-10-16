@@ -1,7 +1,7 @@
 // Dibuja la simulación (public/sim.js) en el framebuffer de terminal.
 // El mundo de 960×600 se escala a los píxeles disponibles; el texto va en celdas encima.
 
-import { W, H, TEAM, SPOT, BOARD, STATUS_ICON, PHASE_COLOR, phaseInfo } from '../public/sim.js';
+import { W, H, TEAM, SPOT, BOARD, PLANTS, STATUS_ICON, PHASE_COLOR, phaseInfo, UNICORN, DREAM_PALETTE, rainbowPixels } from '../public/sim.js';
 import { hex, mix, fit, wrap, strWidth } from './screen.js';
 import { AGENT_NAME, TASK_STATUS } from '../public/targets.js';
 import { briefOptions, briefFields, briefProblem, targetLabel } from '../public/brief.js';
@@ -54,6 +54,7 @@ export function drawFrame(scr, L, sim, model, now) {
   items.push({ y: 242, fn: () => drawProps(g, sim, now) });
   items.sort((p, q) => p.y - q.y).forEach((i) => i.fn());
   drawParticles(g, sim);
+  for (const a of Object.values(sim.agents)) drawDream(g, a, now);
   // Burbujas: las más nuevas se colocan primero; si chocan con otra, suben.
   const placed = [];
   const withBubble = Object.values(sim.agents).filter((a) => a.bubble).sort((a, b) => b.bubble.until - a.bubble.until);
@@ -240,7 +241,7 @@ function drawProps(g, sim, now) {
   }
   // café, plantas, mesa, sofá
   rect(898, 128, 40, 30, C.coffee); rect(902, 110, 32, 22, C.coffeeTop); rect(914, 140, 10, 10, C.white);
-  for (const [x, y] of [[20, 560], [930, 560], [640, 372]]) {
+  for (const [x, y] of PLANTS) {
     rect(x - 10, y - 14, 20, 16, C.pot);
     rect(x - 14, y - 34, 10, 20, C.leaf1); rect(x - 2, y - 42, 10, 28, C.leaf2); rect(x + 6, y - 30, 10, 16, C.leaf1);
   }
@@ -316,6 +317,30 @@ function drawPerson(g, a, sim, model, now) {
   }
 }
 
+// Lo que imagina la diseñadora: una nube con un unicornio o un arcoíris en pixel art (medios bloques).
+const RAINBOW_SMALL = rainbowPixels(6);
+function drawDream(g, a, now) {
+  const d = a.dream;
+  if (!d || now > d.until || now < d.start + 150) return;
+  const { scr, X, Y, L } = g;
+  const x = X(a.seated ? a.cfg.seat.x : a.x);
+  const head = a.seated ? Y(a.cfg.seat.y - 14) - 6 : Y(a.y) - 10;
+  const big = g.s >= 0.14;
+  const sprite = d.kind === 'unicorn' ? UNICORN : null;
+  const w = sprite ? sprite[0].length : 13, h = sprite ? sprite.length : 7;
+  const x0 = Math.min(L.ox + L.pw - w - 3, x + 4), y0 = Math.max(L.oy + 1, head - h - 4);
+  if (!big) { // terminal chica: el sueño como emoji, junto a la cabeza
+    const col = Math.min(L.ox + L.pw - 3, x + 2);
+    scr.text(col, Math.max(1, Math.floor(head / 2) - 2), d.kind === 'unicorn' ? '🦄' : '🌈', C.white, -1, L.ox + L.pw - col);
+    return;
+  }
+  const cloud = sprite ? hex('#cfe2ff') : C.white; // celeste: el unicornio es blanco
+  scr.rect(x0 - 1, y0 - 1, w + 2, h + 2, cloud); // la nube
+  scr.pset(x0 - 2, y0 + h - 1, cloud); scr.pset(x0 - 3, y0 + h + 1, cloud); // burbujitas hacia la cabeza
+  if (sprite) sprite.forEach((row, ry) => [...row].forEach((ch, rx) => { if (ch !== '.') scr.pset(x0 + rx, y0 + ry, hex(DREAM_PALETTE[ch])); }));
+  else for (const [dx, dy, col] of RAINBOW_SMALL) scr.pset(x0 + 6 + dx, y0 + 6 + dy, hex(col));
+}
+
 function drawBubble(g, a, placed) {
   const b = a.bubble;
   const { scr, L, X, Y } = g;
@@ -349,6 +374,8 @@ function drawParticles(g, sim) {
     if (p.kind === 'code') scr.text(x, Math.floor(y / 2), p.ch, hex(p.color), -1, L.ox + L.pw - x);
     else if (p.kind === 'check') scr.text(x, Math.floor(y / 2), '✓', C.ok, -1, L.ox + L.pw - x);
     else if (p.kind === 'bug') scr.text(x, Math.floor(y / 2), '🐞', C.white, -1, L.ox + L.pw - x);
+    else if (p.kind === 'sparkle') scr.text(x, Math.floor(y / 2), p.ch, hex(p.color), -1, L.ox + L.pw - x);
+    else if (p.kind === 'emote') scr.text(x, Math.floor(y / 2), p.ch, C.white, -1, L.ox + L.pw - x);
     else scr.pset(x, y, hex(p.color));
   }
 }
