@@ -6,11 +6,12 @@
 //
 // - Reporta prompts, herramientas y fin del agente a la oficina.
 // - Se registra por WebSocket y anuncia los pipelines de su proyecto (.devteam/).
-// - task:     la tarea llega como mensaje del usuario (follow-up si Pi está ocupado).
-// - pipeline: ejecuta el pipeline DENTRO de esta sesión, etapa por etapa: cambia de modelo con
-//             setModel, manda el prompt de la etapa, espera a que Pi termine (agent_settled),
-//             corre el gate y sigue. Los bucles y gates los decide devteam.mjs.
-// - launch:   la oficina le pide a esta Pi que arranque una sesión nueva de un agente.
+// - task:     la tarea llega como mensaje del usuario (follow-up si Pi está ocupado). Si es un
+//             comando (`/architect …`, un prompt de tu harness), Pi lo expande como si lo
+//             hubieras escrito.
+// - pipeline: ejecuta un pipeline de .devteam/ DENTRO de esta sesión, etapa por etapa: cambia de
+//             modelo con setModel, manda el prompt de la etapa, espera a que Pi termine
+//             (agent_settled), corre el gate y sigue. Los bucles y gates los decide devteam.mjs.
 
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import fs from 'node:fs';
@@ -130,13 +131,13 @@ export default function (pi: ExtensionAPI) {
   }
 
   // ---- conexión con la oficina ----
-  // Sólo en sesiones interactivas: un `pi -p` lanzado por otra Pi termina solo.
+  // Sólo en sesiones interactivas: un `pi -p` (p. ej. lanzado por la oficina) termina solo.
   let ws: WebSocket | null = null;
   let closed = false;
   const wsSend = (m: unknown) => ws?.readyState === 1 && ws.send(JSON.stringify(m));
   function register() {
     const project = lib ? lib.catalogEntry(lib.loadProject(cwd)) : null;
-    wsSend({ type: 'register', agent: 'pi', session, cwd, pid: process.pid, can: lib ? ['task', 'pipeline', 'launch'] : ['task'], project });
+    wsSend({ type: 'register', agent: 'pi', session, cwd, pid: process.pid, can: lib ? ['task', 'pipeline'] : ['task'], project });
   }
   if (!process.stdin.isTTY || process.env.DEV_TEAM_OFFICE_LAUNCHED || typeof WebSocket === 'undefined') return;
 
@@ -149,8 +150,10 @@ export default function (pi: ExtensionAPI) {
       try { msg = JSON.parse(String(m.data)); } catch { return; }
       if (msg.type === 'task') {
         try {
-          if (ctx?.isIdle?.() ?? true) pi.sendUserMessage(msg.text);
-          else pi.sendUserMessage(msg.text, { deliverAs: 'followUp' });
+          // `/comando …`: se expande como si lo hubieras escrito (prompts y comandos de tu harness)
+          const expandPromptTemplates = String(msg.text).startsWith('/');
+          if (ctx?.isIdle?.() ?? true) pi.sendUserMessage(msg.text, { expandPromptTemplates });
+          else pi.sendUserMessage(msg.text, { deliverAs: 'followUp', expandPromptTemplates });
           wsSend({ type: 'task_update', id: msg.id, status: 'accepted' });
         } catch (err: any) {
           wsSend({ type: 'task_update', id: msg.id, status: 'failed', error: String(err?.message || err) });
@@ -161,11 +164,6 @@ export default function (pi: ExtensionAPI) {
         run.cancel();
         ctx?.abort?.();
         finish();
-      } else if (msg.type === 'launch') {
-        const r = lib?.launchAgent({ harness: msg.harness, task: msg.task, cwd: msg.cwd, env: { DEV_TEAM_OFFICE_URL: URL_BASE } }) || { ok: false, error: 'falta la librería devteam.mjs' };
-        if (!r.ok) { wsSend({ type: 'task_update', id: msg.id, status: 'failed', error: r.error }); return; }
-        wsSend({ type: 'task_update', id: msg.id, status: 'accepted', detail: `sesión nueva lanzada por Pi (pid ${r.pid})` });
-        r.child.on('exit', (code: number) => wsSend({ type: 'task_update', id: msg.id, status: code === 0 ? 'done' : 'failed', error: `salió con código ${code}` }));
       }
     };
     ws.onclose = () => { ws = null; if (!closed) (setTimeout(connect, 3000) as any).unref?.(); };

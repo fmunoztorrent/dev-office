@@ -8,7 +8,7 @@ const args = process.argv.slice(2);
 const flag = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
 const prompt = args.at(-1);
 if (process.env.FAKE_CLAUDE_LOG) {
-  fs.appendFileSync(process.env.FAKE_CLAUDE_LOG, `${JSON.stringify({ args, prompt, model: flag('--model'), agent: flag('--agent'), alias: process.env.DEV_TEAM_OFFICE_SESSION_ALIAS })}\n`);
+  fs.appendFileSync(process.env.FAKE_CLAUDE_LOG, `${JSON.stringify({ args, prompt, model: flag('--model'), agent: flag('--agent'), alias: process.env.DEV_TEAM_OFFICE_SESSION_ALIAS, cwd: process.cwd(), launched: process.env.DEV_TEAM_OFFICE_LAUNCHED })}\n`);
 }
 if (process.env.FAKE_CLAUDE_FAIL) {
   process.stdout.write(JSON.stringify({ type: 'result', subtype: 'error_during_execution', is_error: true, result: 'algo salió mal' }));

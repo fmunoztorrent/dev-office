@@ -11,9 +11,11 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { Office } from './office.js';
 import { runDemo, demoScript, piDemoScript } from './demo.js';
-import { TaskHub, loadConfig } from './tasks.js';
+import { TaskHub } from './tasks.js';
 import { PipelineHub } from './pipeline.js';
-import { readOfficeSettings, writeOfficeSettings } from './settings.js';
+import { AgentRegistry } from './registry.js';
+import { openStore, dbFile } from './store.js';
+import { detectHarness } from '../integrations/common/devteam.mjs';
 
 export const VERSION = '0.3.0';
 export const DEFAULT_PORT = 4317;
@@ -28,25 +30,32 @@ export function defaultSocketPath() {
   return process.env.DEV_TEAM_OFFICE_SOCKET || path.join(os.homedir(), '.dev-team-office', 'office.sock');
 }
 
+// Una tarea pedida por la API no elige ejecutable ni argumentos: eso sólo lo define un agente
+// registrado (⚙ › Agentes), y se usa al mandarle un prompt (/v1/agents/:id/prompt).
+const publicTask = ({ launch, meta, ...task } = {}) => task;
+
 class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 
 /**
  * Arranca la oficina. Rechaza con code EADDRINUSE si el puerto ya está ocupado.
+ * @param db  la base SQLite: una ruta (por defecto ~/.dev-team-office/office.db), ':memory:' o un Store abierto
  * @returns {Promise<{office, url, socket, command, handleMessage, close}>}
  */
-export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, config } = {}) {
+export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db } = {}) {
   const office = new Office();
-  config = { ...(config ?? loadConfig()) }; // preferencias del frontend (apariencia)
-  const hub = new TaskHub(office, { officeUrl: `http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${port}` });
-  const pipelines = new PipelineHub(office, hub);
+  const ownStore = !db || typeof db === 'string';
+  const store = ownStore ? openStore(db || dbFile()) : db; // agentes registrados, ajustes e historial
+  const hub = new TaskHub(office, { officeUrl: `http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${port}`, store });
+  const pipelines = new PipelineHub(office, hub, { store });
+  const registry = new AgentRegistry({ getAgents: () => store.listAgents(), hub, pipelines, office });
   const startedAt = Date.now();
-  const appearance = () => config.appearance || {};
+  const appearance = () => store.getAppearance();
   const bus = new EventEmitter(); // cambios de ajustes que ven las interfaces (p. ej. la apariencia)
   const fullState = () => {
     const p = pipelines.snapshot();
-    return { ...office.snapshot(), ...hub.snapshot(), pipelines: p.runs, projects: p.projects, appearance: appearance() };
+    return { ...office.snapshot(), ...hub.snapshot(), pipelines: p.runs, projects: p.projects, targets: registry.targets(), appearance: appearance() };
   };
   let stopDemo = null;
   let socketPath = null;
@@ -89,9 +98,12 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       case 'task_update':
         return conn ? hub.update(conn.id, msg) : { ok: false, error: 'task_update sólo por WebSocket' };
       case 'task':
-        return hub.submit(msg);
+        return hub.submit(publicTask(msg));
       case 'task_cancel':
         return hub.cancel(msg.id);
+      // Un prompt para un agente, por una entrada de su harness (lo que manda la pizarra).
+      case 'run':
+        return registry.run(msg);
       case 'pipeline_start':
         return pipelines.start(msg);
       case 'pipeline_cancel':
@@ -131,12 +143,56 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const events = office.ingest(source, payload);
         return json(res, 200, { ok: true, accepted: events.length, ids: events.map((e) => e.id) });
       }
-      // ⚙ Ajustes: sólo lo que es de la oficina (la apariencia de los personajes)
-      if (req.method === 'GET' && p === '/v1/settings') return json(res, 200, { office: readOfficeSettings() });
+      // ⚙ Ajustes de la oficina: la apariencia de los personajes
+      if (req.method === 'GET' && p === '/v1/settings') return json(res, 200, { office: { file: store.file, appearance: appearance() } });
       if (req.method === 'PUT' && p === '/v1/settings') {
-        const out = writeOfficeSettings(JSON.parse((await readBody(req)) || '{}'));
-        if (out.ok) { config = out.config; bus.emit('appearance', appearance()); }
+        const out = store.setAppearance(JSON.parse((await readBody(req)) || '{}').appearance);
+        if (out.ok) bus.emit('appearance', appearance());
         return json(res, out.ok ? 200 : 400, out);
+      }
+      // El mantenedor de agentes: una ruta completa + el CLI que la atiende. Lo que trae su
+      // harness (pipelines, comandos) se detecta; el prompt arranca ESE pipeline.
+      if (req.method === 'GET' && p === '/v1/agents') return json(res, 200, { agents: registry.targets() });
+      if (req.method === 'POST' && p === '/v1/agents') {
+        const out = store.createAgent(JSON.parse((await readBody(req)) || '{}'));
+        if (out.ok) { registry.changed(); out.agent = registry.target(out.agent.id); }
+        return json(res, out.ok ? 201 : 400, out);
+      }
+      if (req.method === 'POST' && p === '/v1/agents/detect') {
+        const dir = String(JSON.parse((await readBody(req)) || '{}').path || '').trim().replace(/^~(?=$|\/)/, os.homedir());
+        if (!path.isAbsolute(dir)) return json(res, 400, { ok: false, error: 'usa la ruta completa' });
+        const info = detectHarness(dir);
+        return json(res, 200, { ok: true, exists: info.exists, name: info.name, harnesses: info.harnesses, kinds: info.kinds, entries: info.entries.map((e) => ({ id: e.id, label: e.label, harnesses: e.harnesses })) });
+      }
+      let m;
+      if ((m = p.match(/^\/v1\/agents\/([^/]+)$/)) && m[1] !== 'announce' && m[1] !== 'detect') {
+        const id = decodeURIComponent(m[1]);
+        if (req.method === 'GET') {
+          const t = registry.target(id);
+          return t ? json(res, 200, { ok: true, agent: t, prompts: store.listPrompts({ agentId: id, limit: 20 }) }) : json(res, 404, { ok: false, error: 'agente desconocido' });
+        }
+        if (req.method === 'PUT' || req.method === 'PATCH') {
+          const out = store.updateAgent(id, JSON.parse((await readBody(req)) || '{}'));
+          if (out.ok) { registry.changed(); out.agent = registry.target(id); }
+          return json(res, out.ok ? 200 : out.status || 400, out);
+        }
+        if (req.method === 'DELETE') {
+          const out = store.deleteAgent(id);
+          if (out.ok) registry.changed();
+          return json(res, out.ok ? 200 : out.status || 400, out);
+        }
+      }
+      // Mandarle un prompt: { text, entry?: la entrada de su harness, session?: id | null (sesión nueva) }
+      if (req.method === 'POST' && (m = p.match(/^\/v1\/agents\/([^/]+)\/prompt$/))) {
+        const out = registry.run({ ...JSON.parse((await readBody(req)) || '{}'), target: decodeURIComponent(m[1]) });
+        return json(res, out.ok ? 200 : 400, out);
+      }
+      if (req.method === 'POST' && p === '/v1/run') {
+        const out = registry.run(JSON.parse((await readBody(req)) || '{}'));
+        return json(res, out.ok ? 200 : 400, out);
+      }
+      if (req.method === 'GET' && p === '/v1/prompts') {
+        return json(res, 200, { prompts: store.listPrompts({ agentId: url.searchParams.get('agent') || undefined, limit: url.searchParams.get('limit') || 50 }) });
       }
       // Lo que anuncian los agentes: proyectos y pipelines que cada sesión puede correr.
       if (req.method === 'GET' && p === '/v1/projects') return json(res, 200, { projects: pipelines.projects() });
@@ -156,7 +212,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       }
       if (req.method === 'GET' && p === '/v1/tasks') return json(res, 200, hub.snapshot());
       if (req.method === 'POST' && p === '/v1/tasks') {
-        const out = hub.submit(JSON.parse((await readBody(req)) || '{}'));
+        const out = hub.submit(publicTask(JSON.parse((await readBody(req)) || '{}')));
         return json(res, out.ok ? 200 : 400, out);
       }
       if (req.method === 'POST' && /^\/v1\/tasks\/[^/]+\/cancel$/.test(p)) {
@@ -177,7 +233,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
           if (run) out.pipeline = run;
           else {
             const task = hub.takeForClaude(session);
-            if (task) out.task = { id: task.id, text: task.text };
+            if (task) out.task = { id: task.id, text: task.text, ...(task.command ? { command: task.command, args: task.args } : {}) };
           }
         }
         const cancel = session ? pipelines.cancelsFor(session) : [];
@@ -216,6 +272,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   office.on('reset', () => broadcast({ type: 'snapshot', state: fullState() }));
   hub.on('change', (snap) => broadcast({ type: 'tasks', ...snap }));
   pipelines.on('change', (snap) => broadcast({ type: 'pipelines', ...snap }));
+  registry.on('change', (targets) => broadcast({ type: 'targets', targets }));
   bus.on('appearance', (a) => broadcast({ type: 'appearance', appearance: a }));
 
   wss.on('connection', (ws) => {
@@ -228,7 +285,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       try { msg = JSON.parse(data); } catch { return ws.send(JSON.stringify({ type: 'error', error: 'invalid json' })); }
       const out = handleMessage(msg, conn);
       // `task` usa `id` para su propio id de tarea; el acuse va con `ref`.
-      const ref = msg?.type === 'task' || msg?.type === 'pipeline_start' ? msg.ref : msg?.id;
+      const ref = ['task', 'pipeline_start', 'run'].includes(msg?.type) ? msg.ref : msg?.id;
       if (ref !== undefined) ws.send(JSON.stringify({ type: 'ack', id: ref, ...out }));
       else if (!out.ok) ws.send(JSON.stringify({ type: 'error', error: out.error }));
     });
@@ -279,17 +336,21 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     office,
     hub,
     pipelines,
+    registry,
     bus,
     appearance,
     url: `http://${host}:${port}`,
     socket: socketPath,
     command,
     handleMessage,
+    store,
     async close() {
       stopDemo?.();
+      hub.stopAll();
       for (const c of wss.clients) c.terminate();
       await Promise.all([tcp, unix].filter(Boolean).map((s) => new Promise((r) => s.close(r))));
       if (socketPath) fs.rmSync(socketPath, { force: true });
+      if (ownStore) store.close();
     },
   };
 }

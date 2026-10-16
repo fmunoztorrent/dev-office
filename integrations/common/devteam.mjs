@@ -1,15 +1,17 @@
 // Dev Team Office: la parte que corre del lado del AGENTE (el backend).
 //
 // La usan la extensión de Pi, el hook de Claude Code y el plugin de OpenCode. La oficina es
-// sólo un frontend: no lanza procesos, no corre gates y no lee .devteam/. Todo eso pasa aquí,
-// dentro del agente:
+// sólo un frontend: no orquesta ni corre gates. Los pipelines pasan aquí, dentro del agente; la
+// oficina sólo usa detectHarness() para mostrar qué trae cada agente registrado y agentCommand()
+// para abrirle una sesión nueva:
 //
 //   loadProject(dir)        lee <proyecto>/.devteam/ y los agentes de cada harness
 //   catalogEntry(project)   lo que el agente le anuncia a la oficina (sus pipelines)
 //   PipelineRun             ejecuta un pipeline etapa por etapa DENTRO de la sesión del agente:
 //                           arma el prompt de cada etapa, corre su gate, aplica los bucles y
 //                           reporta todo a la oficina como eventos
-//   runGate / claudeChild / launchAgent / lastAssistantText / officeClient
+//   detectHarness(dir)      el harness engineering de un proyecto y por dónde se arranca su pipeline
+//   runGate / claudeChild / agentCommand / lastAssistantText / officeClient
 //
 // Sin dependencias: Node ≥ 18 o Bun. Este archivo se copia junto a cada integración.
 
@@ -212,6 +214,160 @@ export function catalogEntry(project) {
       stages: p.stages.map((s) => ({ id: s.id, name: s.name, role: s.role, phase: s.phase, harness: s.harness, agent: s.agent, model: s.model, needs: s.needs, check: s.check, onFail: s.onFail })),
     })),
   };
+}
+
+// ------------------------------------------------------------------ el "harness engineering" de un proyecto
+//
+// Cada proyecto trae su propia forma de trabajar: un orquestador con subagentes, comandos que
+// arrancan su pipeline, prompts... Aquí se detecta qué trae y por dónde se entra, para que un
+// prompt enviado desde la oficina arranque ESE pipeline (no uno inventado por la oficina).
+
+/** Rol de los subagentes de los harness conocidos (Errementari, gentle-pi / gentle-ai). */
+export const SUBAGENT_ROLES = {
+  pipeline: 'manager', spec: 'analyst', architect: 'tl', qa: 'qa', backend: 'backend', frontend: 'frontend', explore: 'analyst',
+  researcher: 'analyst', 'sdd-init': 'manager', 'sdd-onboard': 'manager', 'sdd-status': 'manager', 'sdd-explore': 'analyst',
+  'sdd-research': 'analyst', 'sdd-proposal': 'po', 'sdd-spec': 'analyst', 'sdd-design': 'tl', 'sdd-tasks': 'manager',
+  'sdd-apply': 'backend', 'sdd-remediate': 'backend', 'sdd-verify': 'qa', 'sdd-archive': 'manager', 'gentle-ai-explore': 'analyst',
+  'gentle-ai-worker': 'backend', 'gentle-ai-verify': 'qa', 'review-risk': 'tl', 'review-readability': 'tl', 'review-reliability': 'tl',
+  'review-resilience': 'tl', 'jd-judge-a': 'tl', 'jd-judge-b': 'tl', 'jd-fix-agent': 'backend',
+};
+export const roleOfAgent = (name) => { const k = String(name || '').toLowerCase(); return SUBAGENT_ROLES[k] || normRole(k) || null; };
+
+// Errementari (https://github.com/fmunoztorrent/errementari): el agente `pipeline` clasifica el
+// pedido y lo pasa por spec → architect → qa → backend/frontend → qa → close. Se entra con /task.
+const ERREMENTARI_FLOWS = [
+  ['auto', '', 'Clasifica el pedido (feature, bugfix, debug, chore o pregunta) y corre su pipeline', null],
+  ['feature', 'feature: ', 'SPDD + SDD + BDD + TDD en 7 pasos', [
+    ['analyst', 'analiza', 'SPDD Analysis + REASONS Canvas + spec + BDD', 'spec'], ['tl', 'arquitectura', 'Valida el Canvas y los escenarios', 'architect'],
+    ['qa', 'red', 'Tests que fallan (RED)', 'qa'], ['backend', 'implementa', 'SPDD Generate: código desde el Canvas', 'backend'],
+    ['qa', 'green', 'Suite + typecheck + lint + mutation (GREEN)', 'qa'], ['tl', 'refactor', 'Refactor + spdd-sync', null],
+    ['manager', 'release', 'Close: merge a dev, PR, learnings', 'pipeline']]],
+  ['bugfix', 'bug: ', 'TDD + SPDD en 6 pasos', [
+    ['analyst', 'analiza', 'Triage + SPDD Analysis + Canvas', 'spec'], ['qa', 'red', 'Reproduce el bug con un test (RED)', 'qa'],
+    ['tl', 'arquitectura', 'Architect (si el fix cambia la estructura)', 'architect'], ['backend', 'fix', 'SPDD Generate + fix', 'backend'],
+    ['qa', 'verifica', 'Verify + spdd-sync', 'qa'], ['manager', 'release', 'Close', 'pipeline']]],
+  ['chore', 'chore: ', 'Scope → execute → verify → close (SPDD si toca código)', [
+    ['manager', 'planifica', 'Scope', 'pipeline'], ['backend', 'implementa', 'Execute', 'backend'], ['qa', 'verifica', 'Verify', 'qa'], ['manager', 'release', 'Close', 'pipeline']]],
+  ['debug', 'debug: ', 'Triage → reproduce → análisis → reporte (sólo lectura)', [
+    ['analyst', 'analiza', 'Triage', 'spec'], ['qa', 'red', 'Reproduce', 'qa'], ['tl', 'analiza', 'Análisis', 'architect'], ['manager', 'planifica', 'Reporte', 'pipeline']]],
+];
+
+function readCommands(dir, harness, scope) {
+  let files = [];
+  try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.md')).sort(); } catch { return []; }
+  return files.map((f) => {
+    let description = '';
+    try { description = parseAgentFile(fs.readFileSync(path.join(dir, f), 'utf8'), f).description; } catch { /* ilegible */ }
+    const name = path.basename(f, '.md');
+    return { id: `${harness}:/${name}`, label: `/${name}${scope === 'user' ? ' (global)' : ''}`, description: clip(description, 200), harnesses: [harness], command: name };
+  });
+}
+
+function readJsonc(file) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\s*\/\/.*$/gm, '')); } catch { return null; }
+}
+
+/**
+ * Qué harness engineering tiene un directorio y por dónde se arranca su pipeline.
+ * entries: [{ id, label, description, harnesses, command?, prefix?, devteam?, stages?, issues?, source }]
+ *   - "Prompt directo": lo recibe el agente por defecto del harness (que puede auto-clasificar)
+ *   - Errementari: /task y sus flujos (feature, bugfix, chore, debug)
+ *   - comandos de Claude Code (.claude/commands), de OpenCode (opencode.json, .opencode/command)
+ *     y prompts de Pi (.pi/prompts, ~/.pi/agent/prompts)
+ *   - pipelines de Dev Team Office (.devteam/pipelines): los corre una sesión abierta
+ */
+export function detectHarness(dir) {
+  const root = path.resolve(expandHome(dir || process.cwd()));
+  const has = (...p) => fs.existsSync(path.join(root, ...p));
+  const harnesses = [];
+  if (has('.claude') || has('CLAUDE.md')) harnesses.push('claude-code');
+  if (has('opencode.json') || has('opencode.jsonc') || has('.opencode')) harnesses.push('opencode');
+  if (has('.pi')) harnesses.push('pi');
+  const kinds = [];
+  const entries = [{ id: 'prompt', label: 'Prompt directo', description: 'El prompt tal cual: lo recibe el agente por defecto del harness.', harnesses: ['claude-code', 'opencode', 'pi'], source: 'agente' }];
+  const covered = new Set();
+
+  // Errementari: su manifiesto, o (instalaciones anteriores) su pipeline + el agente orquestador
+  const manifest = readJsonc(path.join(root, '.errementari.json'))
+    || (has('.opencode', 'pipeline', 'start.md') && (has('.opencode', 'agents', 'pipeline.md') || has('.claude', 'agents', 'pipeline.md')) ? {} : null);
+  if (manifest) {
+    const source = `Errementari ${manifest.version || ''}`.trim();
+    kinds.push(source);
+    for (const [id, prefix, description, stages] of ERREMENTARI_FLOWS) {
+      entries.push({
+        id: `errementari:${id}`, label: id === 'auto' ? 'Errementari · /task (clasifica solo)' : `Errementari · ${id}`, description,
+        harnesses: ['claude-code', 'opencode'], command: 'task', prefix, source,
+        stages: stages ? stages.map(([role, phase, name, agent]) => ({ role, phase, name, agent })) : null,
+      });
+    }
+    covered.add('claude-code:/task').add('opencode:/task');
+  }
+
+  const opencode = readJsonc(path.join(root, 'opencode.json')) || readJsonc(path.join(root, 'opencode.jsonc')) || {};
+  const commands = [
+    ...readCommands(path.join(root, '.claude', 'commands'), 'claude-code', 'project'),
+    ...readCommands(path.join(os.homedir(), '.claude', 'commands'), 'claude-code', 'user'),
+    ...Object.entries(opencode.command || {}).map(([name, c]) => ({ id: `opencode:/${name}`, label: `/${name}`, description: clip(c?.description, 200), harnesses: ['opencode'], command: name })),
+    ...readCommands(path.join(root, '.opencode', 'command'), 'opencode', 'project'),
+    ...readCommands(path.join(root, '.opencode', 'commands'), 'opencode', 'project'),
+    ...readCommands(path.join(root, '.pi', 'prompts'), 'pi', 'project'),
+    ...readCommands(path.join(os.homedir(), '.pi', 'agent', 'prompts'), 'pi', 'user'),
+  ];
+  for (const c of commands) if (!covered.has(c.id)) { covered.add(c.id); entries.push({ ...c, source: 'comando' }); }
+
+  const project = loadProject(root);
+  if (project.hasConfig) kinds.push('Dev Team Office');
+  for (const p of project.pipelines) {
+    entries.push({
+      id: `devteam:${p.id}`, label: `Pipeline · ${p.name}`, description: p.description, harnesses: ['claude-code', 'opencode', 'pi'],
+      devteam: p.id, needsSession: true, issues: p.issues, source: '.devteam',
+      stages: p.stages.map((s) => ({ role: s.role, phase: s.phase, name: s.name, agent: s.agent, model: s.model, check: s.check })),
+    });
+  }
+
+  // qué subagente es qué rol (para que el personaje correcto se mueva cuando el orquestador delega)
+  const roles = {};
+  for (const list of Object.values(project.agents)) for (const a of list) { const r = roleOfAgent(a.name); if (r) roles[a.name.toLowerCase()] = r; }
+  if (opencode.default_agent && roleOfAgent(opencode.default_agent)) roles[opencode.default_agent.toLowerCase()] = roleOfAgent(opencode.default_agent);
+
+  return { dir: root, name: project.team.name || path.basename(root), exists: fs.existsSync(root), harnesses, kinds, entries, roles, defaultAgent: opencode.default_agent || null };
+}
+
+/** El texto (o comando) que arranca una entrada del harness con la tarea del usuario. */
+export function invocation(entry, text) {
+  text = String(text ?? '').trim();
+  if (!entry?.command) return { text };
+  const args = `${entry.prefix || ''}${text}`;
+  return { text: `/${entry.command} ${args}`, command: entry.command, args };
+}
+
+/**
+ * Un comando de Claude Code expandido, para dárselo a una sesión que ya está abierta (el hook
+ * Stop no puede ejecutar un slash command: le pasa su texto a Claude).
+ */
+export function expandClaudeCommand(dir, name, args = '') {
+  for (const base of [path.join(dir || '', '.claude', 'commands'), path.join(os.homedir(), '.claude', 'commands')]) {
+    let text;
+    try { text = fs.readFileSync(path.join(base, `${String(name).replace(/[^\w:.-]/g, '')}.md`), 'utf8'); } catch { continue; }
+    const body = parseAgentFile(text).prompt;
+    return /\$ARGUMENTS/.test(body) ? body.replaceAll('$ARGUMENTS', args) : `${body}\n\n${args}`.trim();
+  }
+  return null;
+}
+
+/**
+ * Ejecutable y argumentos para una sesión nueva de un agente, sin shell (la tarea va como un
+ * único argumento). opts: { bin, args } del agente registrado.
+ */
+export function agentCommand(harness, inv, { bin, args } = {}) {
+  const h = harnessId(harness);
+  if (!h) return { error: `no sé lanzar "${harness}"` };
+  const exe = which(expandHome(bin || (h === 'claude-code' ? process.env.DEV_TEAM_OFFICE_CLAUDE_BIN : '') || HARNESSES[h].bin));
+  if (!exe) return { error: `no encuentro "${bin || HARNESSES[h].bin}" en el PATH` };
+  const extra = Array.isArray(args) ? args.map(String) : null;
+  if (h === 'claude-code') return { exe, argv: ['-p', inv.text, ...(extra ?? ['--permission-mode', 'acceptEdits'])] };
+  if (h === 'opencode') return { exe, argv: inv.command ? ['run', '--command', inv.command, ...(extra ?? []), inv.args] : ['run', ...(extra ?? []), inv.text] };
+  return { exe, argv: ['-p', ...(extra ?? []), inv.text] };
 }
 
 // ------------------------------------------------------------------ ejecución dentro de la sesión
@@ -472,26 +628,6 @@ export function claudeChild({ prompt, model, agent, cwd, env = {}, bin, args }) 
       resolve({ ok: code === 0, output: code === 0 ? result : clip(`${result}\n${tail.join('')}`, 2000) });
     });
   });
-}
-
-/** Lanza una sesión nueva de un agente (cuando la oficina se lo pide a este agente). */
-export function launchAgent({ harness, task, cwd, env = {} }) {
-  const cmd = { pi: ['pi', '-p', task], 'claude-code': ['claude', '-p', task, '--permission-mode', 'acceptEdits'], opencode: ['opencode', 'run', task] }[harnessId(harness)];
-  if (!cmd) return { ok: false, error: `no sé lanzar "${harness}"` };
-  const exe = which(cmd[0]);
-  if (!exe) return { ok: false, error: `no encuentro "${cmd[0]}" en el PATH` };
-  if (cwd && !fs.statSync(cwd, { throwIfNoEntry: false })?.isDirectory()) return { ok: false, error: `no existe el directorio ${cwd}` };
-  try {
-    // la sesión nueva es otra sesión (no hereda la identidad de quien la lanza); reporta sus
-    // eventos pero no se registra para recibir pedidos (DEV_TEAM_OFFICE_LAUNCHED)
-    const childEnv = { ...process.env, ...env, DEV_TEAM_OFFICE_LAUNCHED: '1' };
-    for (const k of ['DEV_TEAM_OFFICE_SESSION', 'DEV_TEAM_OFFICE_SESSION_ALIAS']) if (!(k in env)) delete childEnv[k];
-    const child = spawn(exe, cmd.slice(1), { cwd: cwd || process.cwd(), env: childEnv, stdio: 'ignore', detached: true });
-    child.unref(); // la sesión nueva sigue aunque este agente se cierre
-    return { ok: true, pid: child.pid, child };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
 }
 
 /** Envía en orden: los eventos de la oficina cuentan una historia (fase → herramientas → fin). */

@@ -19,7 +19,7 @@ const call = (base, method, p, body) => fetch(base + p, { method, headers: { 'co
   .then(async (r) => ({ status: r.status, body: await r.json() }));
 
 async function withServer(fn) {
-  const server = await startServer({ port: 0, socket: null, config: {} });
+  const server = await startServer({ port: 0, socket: null, db: ':memory:' });
   try { await fn(server, server.url); } finally { await server.close(); }
 }
 

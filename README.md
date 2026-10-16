@@ -31,7 +31,7 @@ Lo que se ve en la oficina:
 Elige una de estas dos formas:
 
 ```bash
-# A) Con Node ≥ 20: deja el comando `dev-team-office` en tu PATH
+# A) Con Node ≥ 22.13 (trae SQLite): deja el comando `dev-team-office` en tu PATH
 npm install
 npm link
 
@@ -63,6 +63,9 @@ dev-team-office send phase --role qa --phase red --text "2 tests fallan"
 dev-team-office task "Agrega paginación" --agent pi    # tarea para el agente
 dev-team-office tasks                                  # estado de las tareas
 dev-team-office install                                # integra Pi, OpenCode y Claude Code
+dev-team-office agents add ~/Workspace/Errementari --agent claude   # registra un agente
+dev-team-office agents                                 # los agentes y los pipelines de su harness
+dev-team-office prompt errementari-claude-code "el SSE no reconecta" --pipeline errementari:bugfix
 ```
 
 Si ya hay una oficina corriendo, `dev-team-office` se conecta a ella en vez de fallar. Puedes tener varias terminales mirando la misma.
@@ -73,18 +76,43 @@ Si ya hay una oficina corriendo, `dev-team-office` se conecta a ella en vez de f
 
 La misma oficina se puede ver en el navegador en `http://127.0.0.1:4317`.
 
+## Agentes: cada uno con su harness engineering
+
+Un **agente** es una ruta completa más el CLI que la atiende (Claude Code, OpenCode o Pi). Se registra en **⚙ › Agentes** (o con `dev-team-office agents add`) y se guarda en la base SQLite de la oficina. Lo que trae esa ruta es del agente: su orquestador, sus subagentes, sus comandos, sus pipelines. La oficina lo **detecta** y, al mandarle un prompt, arranca **ese** pipeline:
+
+| Lo que trae la ruta | Pipelines que ofrece | Cómo se arranca |
+|---|---|---|
+| [Errementari](https://github.com/fmunoztorrent/errementari) (`.errementari.json`) | `/task` (clasifica solo), feature, bugfix, chore, debug | `/task <prompt>` (`/task bug: …`, `/task chore: …`): el agente `pipeline` lo pasa por spec → architect → qa → backend/frontend → qa → close |
+| Comandos de Claude Code (`.claude/commands/*.md`) | `/<comando>` | `claude -p "/<comando> <prompt>"` |
+| Comandos de OpenCode (`opencode.json`, `.opencode/command/`) | `/<comando>` | `opencode run --command <comando> "<prompt>"` |
+| Prompts de Pi (`.pi/prompts`, `~/.pi/agent/prompts`, p. ej. los de gentle-pi) | `/<prompt>` | `pi -p "/<prompt> <prompt>"` |
+| Pipelines de Dev Team Office (`.devteam/pipelines`) | `Pipeline · <nombre>` | Los corre una sesión abierta, dentro de sí misma ([docs/pipelines.md](docs/pipelines.md)) |
+| Cualquier ruta | Prompt directo | El prompt tal cual, para el agente por defecto del harness |
+
+**A dónde va el prompt:**
+
+- **Sesión abierta en esa ruta.**
+  - Pi y OpenCode lo reciben al instante: Pi expande el `/comando` y OpenCode lo corre con `session.command`.
+  - Claude Code lo recibe en su hook `Stop`, con el comando expandido.
+- **Sesión nueva.** La oficina abre el CLI del agente en su ruta, sin shell y con el prompt como un único argumento. Los hooks y plugins del agente reportan todo a la oficina.
+
+Cuando el orquestador delega, el personaje que se mueve es el de ese subagente:
+
+- **Errementari:** spec → analista, architect → Tech Lead, qa → QA, backend → backend, pipeline → manager.
+- **gentle-pi:** `subagent_run`, con sdd-* y review-*.
+
 ## Encargos: haz clic en la pizarra
 
 Al hacer clic en la pizarra de la oficina, en la terminal o en la web (en la terminal también con `t`), se abre el diálogo **Nuevo encargo**. Ahí eliges:
 
-- **Proyecto:** los que anuncian los agentes conectados.
-- **Pipeline**, o *tarea directa*.
-- **Para:** la sesión de agente que lo va a hacer (o, para una tarea directa, una sesión nueva).
-- **La tarea**, en una nota adhesiva.
+- **Agente:** los registrados y las sesiones abiertas.
+- **Pipeline:** las entradas que trae su harness (ver arriba).
+- **Sesión:** una abierta en esa ruta, o una nueva.
+- **El prompt**, en una nota adhesiva.
 
-Antes de enviar, el diálogo muestra las etapas: qué personaje hace cada una, con qué agente y modelo, y qué gate tiene.
+Antes de enviar, el diálogo muestra las etapas del pipeline y qué personaje hace cada una. Con **✉ Enviar prompt** en ⚙ › Agentes se abre con ese agente ya elegido.
 
-Un **pipeline** se define en el proyecto (`.devteam/pipelines/*.json`) junto a la configuración de cada harness: los agentes de `.pi/agents`, `.claude/agents` y `.opencode/agents`, un modelo por rol o etapa, dependencias, gates (`npm test` debe fallar en RED y pasar en GREEN) y bucles si fallan. El agente lo ejecuta **dentro de su sesión**, etapa por etapa:
+Los pipelines de `.devteam/pipelines/*.json` los corre la sesión del agente, etapa por etapa:
 
 | Agente | Cómo corre las etapas |
 |---|---|
@@ -92,7 +120,7 @@ Un **pipeline** se define en el proyecto (`.devteam/pipelines/*.json`) junto a l
 | **OpenCode** | Un `session.prompt` por etapa, con el modelo y el agente de la etapa |
 | **Claude Code** | El hook `Stop` encadena las etapas en la sesión. Una etapa que pide **otro** modelo corre como `claude -p --model …` (un hook no puede cambiar el modelo de la sesión) |
 
-Formato completo en [docs/pipelines.md](docs/pipelines.md) y un ejemplo en [`examples/tienda`](examples/tienda): abre Pi, OpenCode o Claude Code en esa carpeta y sus pipelines aparecen en el diálogo.
+Formato completo en [docs/pipelines.md](docs/pipelines.md) y un ejemplo en [`examples/tienda`](examples/tienda).
 
 ### Tareas directas
 
@@ -101,9 +129,9 @@ Formato completo en [docs/pipelines.md](docs/pipelines.md) y un ejemplo en [`exa
 | **Pi** con sesión abierta | Al instante. La extensión llama `pi.sendUserMessage()`, y si Pi está ocupado queda como follow-up |
 | **OpenCode** con sesión abierta | Al instante. El plugin la envía con `client.session.prompt()`; sin sesión conocida, la escribe en el prompt del TUI |
 | **Claude Code** (sesión existente) | En cola. La entrega su hook `Stop` cuando Claude termina el turno en curso, y Claude sigue con ella. Claude Code no permite inyectar mensajes en una sesión interactiva desde fuera: si la sesión está esperando tu mensaje, la tarea llega al terminar el siguiente turno |
-| **Sesión nueva** de Claude, OpenCode o Pi | La oficina se lo pide a un agente conectado (Pi u OpenCode), que lanza `claude -p`, `opencode run` o `pi -p` en el directorio del proyecto. Sus hooks o plugins reportan el trabajo como en cualquier sesión |
+| **Sesión nueva** de un agente registrado | La oficina abre `claude -p`, `opencode run` o `pi -p` en su ruta. Sus hooks o plugins reportan el trabajo como en cualquier sesión |
 
-`claude -p` lanzado así usa `--permission-mode acceptEdits`: edita archivos sin preguntar y deniega lo demás que necesite permiso.
+`claude -p` lanzado así usa `--permission-mode acceptEdits` (edita archivos sin preguntar y deniega lo demás que necesite permiso), salvo que el agente tenga sus propios argumentos en ⚙ › Agentes › Avanzado.
 
 Desde la CLI: `dev-team-office task "Agrega paginación" --agent pi` para una tarea directa. Sin argumentos muestra a quién se le puede enviar.
 
@@ -111,12 +139,20 @@ Desde la CLI: `dev-team-office task "Agrega paginación" --agent pi` para una ta
 
 El engranaje del panel (web) o de la cabecera (terminal, también con `c`):
 
-| Pestaña | Qué hay | Dónde se guarda |
-|---|---|---|
-| Agentes | Las sesiones conectadas, sus proyectos y sus pipelines, tal como los anuncian (sólo lectura) | En cada proyecto: `.devteam/` |
-| Personajes | Nombre, cargo, colores (camisa, pantalón, pelo, piel), pelo largo, barba y lentes de cada personaje | `~/.dev-team-office/config.json` |
+| Pestaña | Qué hay |
+|---|---|
+| Agentes | El mantenedor: agregar (ruta completa + CLI; detecta su harness al escribirla), editar, eliminar y ✉ enviarle un prompt. También las sesiones abiertas sin registrar |
+| Personajes | Nombre, cargo, colores (camisa, pantalón, pelo, piel), pelo largo, barba y lentes de cada personaje |
 
-La oficina sólo guarda lo suyo (la apariencia). Se valida antes de escribir, se aplica en caliente y un sitio web ajeno no puede cambiar nada.
+Todo se guarda en una base **SQLite**: `~/.dev-team-office/office.db`, o la ruta de `DEV_TEAM_OFFICE_DB`. Usa `node:sqlite`, así que no hay dependencias nativas, y el archivo tiene permisos `0600`. Tiene tres tablas:
+
+- `agents`: los agentes registrados;
+- `settings`: la apariencia;
+- `prompts`: el historial de lo que les mandaste y cómo terminó.
+
+Si existía un `~/.dev-team-office/config.json` de versiones anteriores, se importa la primera vez.
+
+Todo se valida antes de escribir, se aplica en caliente y un sitio web ajeno no puede cambiar nada.
 
 ## API de integración
 
@@ -169,9 +205,10 @@ server/server.js        API HTTP + WebSocket en TCP y socket Unix
 server/adapters.js      payload nativo → formato genérico
 server/office.js        estado: sesiones, todos, subagentes, turnos, bitácora
 server/roles.js         qué personaje representa cada herramienta/archivo/comando
-server/tasks.js         tareas hacia los agentes: registro, cola y entrega (las sesiones nuevas las lanza un agente)
+server/tasks.js         tareas hacia los agentes: registro, cola, entrega y sesiones nuevas de un agente registrado
 server/pipeline.js      pipelines: relay entre la pizarra y la sesión de agente que los ejecuta
-server/settings.js      ⚙ Ajustes de la oficina (la apariencia de los personajes)
+server/store.js         la base SQLite: agentes registrados, ajustes e historial de prompts
+server/registry.js      los agentes (registrados + sesiones abiertas), lo que trae su harness y a dónde va un prompt
 server/demo.js          sesiones simuladas (Claude Code y flujo TDD de Pi)
 public/sim.js           la simulación (personajes, rutas, reacciones); la comparten terminal y navegador
 public/targets.js       a quién se le puede mandar una tarea (terminal y navegador)

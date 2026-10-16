@@ -4,6 +4,8 @@
 import os from 'node:os';
 import { startServer, DEFAULT_PORT, DEFAULT_HOST, VERSION, defaultSocketPath } from '../server/server.js';
 import { install } from './install.js';
+import { openStore } from '../server/store.js';
+import { detectHarness } from '../integrations/common/devteam.mjs';
 
 const HELP = `dev-team-office ${VERSION}: tu agente de código como un equipo de desarrollo, en la terminal.
 
@@ -18,6 +20,13 @@ Uso:
                                   Envía una tarea al agente: a su sesión abierta, o lanza una
                                   ejecución nueva con --launch. Sin --agent, muestra a quién se puede.
   dev-team-office tasks           Lista las tareas enviadas y su estado.
+  dev-team-office agents          El mantenedor de agentes: los registrados y lo que trae su harness.
+  dev-team-office agents add <ruta completa> --agent claude|opencode|pi [--name <nombre>]
+  dev-team-office agents rm <id>
+  dev-team-office prompt <id> "<texto>" [--pipeline <entrada>] [--new]
+                                  Le manda un prompt a un agente registrado por una entrada de su
+                                  harness (p. ej. --pipeline errementari:feature). Va a su sesión
+                                  abierta, o a una sesión nueva en su ruta (--new la fuerza).
   dev-team-office install [pi|opencode|claude]
                                   Instala la integración de cada agente (por defecto, todas).
                                   Los agentes son el backend: ejecutan las tareas y los pipelines.
@@ -70,10 +79,10 @@ function fail(msg) {
   process.exit(1);
 }
 
-async function api(path, body) {
+async function api(path, body, method = body === undefined ? 'GET' : 'POST') {
   try {
-    const res = await fetch(`${base}${path}`, body === undefined ? { signal: AbortSignal.timeout(2000) } : {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(2000),
+    const res = await fetch(`${base}${path}`, method === 'GET' ? { signal: AbortSignal.timeout(2000) } : {
+      method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}), signal: AbortSignal.timeout(2000),
     });
     return await res.json();
   } catch {
@@ -197,6 +206,57 @@ async function cmdTasks() {
   if (!snap.tasks.length) console.log('(sin tareas)');
 }
 
+// El mantenedor de agentes: por la API si hay una oficina corriendo (así la ven al instante las
+// interfaces abiertas), si no directo en la base SQLite.
+async function cmdAgents() {
+  const [, sub, ...rest] = args._;
+  const office = await runningOffice();
+  const harness = args.agent === 'claude' ? 'claude-code' : args.agent;
+  if (sub === 'add') {
+    const body = { path: rest.join(' '), harness, name: typeof args.name === 'string' ? args.name : undefined };
+    let out;
+    if (office) out = await api('/v1/agents', body);
+    else { const store = openStore(); out = store.createAgent(body); store.close(); }
+    if (!out?.ok) fail(`No se pudo: ${out?.error || 'sin respuesta'}`);
+    console.log(`Registrado: ${out.agent.id}  (${tilde(out.agent.path)})`);
+    return;
+  }
+  if (sub === 'rm' || sub === 'remove' || sub === 'delete') {
+    let out;
+    if (office) out = await api(`/v1/agents/${encodeURIComponent(rest[0] || '')}`, undefined, 'DELETE');
+    else { const store = openStore(); out = store.deleteAgent(rest[0]); store.close(); }
+    if (!out?.ok) fail(`No se pudo: ${out?.error || 'sin respuesta'}`);
+    console.log(`Eliminado: ${rest[0]} (su carpeta no se toca)`);
+    return;
+  }
+  if (sub) fail(`Subcomando desconocido: agents ${sub} (usa add o rm)`);
+  let agents;
+  if (office) agents = ((await api('/v1/agents'))?.agents || []).filter((a) => a.registered);
+  else {
+    const store = openStore();
+    agents = store.listAgents().map((a) => { const d = detectHarness(a.path); return { ...a, kinds: d.kinds, sessions: [], entries: d.entries.filter((e) => e.harnesses.includes(a.harness)) }; });
+    store.close();
+  }
+  if (!agents.length) console.log('(ningún agente registrado)  →  dev-team-office agents add <ruta completa> --agent claude|opencode|pi');
+  for (const a of agents) {
+    console.log(`${a.id}\n  ${a.harness} · ${tilde(a.path)}${a.kinds.length ? ` · ${a.kinds.join(' + ')}` : ''}${a.sessions.some((x) => x.live) ? ' · ● sesión abierta' : ''}`);
+    console.log(`  --pipeline ${a.entries.map((e) => e.id).join(' | ')}`);
+  }
+}
+
+async function cmdPrompt() {
+  const [, id, ...rest] = args._;
+  const text = rest.join(' ').trim();
+  if (!id || !text) fail('Uso: dev-team-office prompt <id> "<texto>" [--pipeline <entrada>] [--new]   (los id: dev-team-office agents)');
+  if (!(await runningOffice())) fail(`No hay ninguna oficina en ${base}. Ábrela con: dev-team-office`);
+  const out = await api(`/v1/agents/${encodeURIComponent(id)}/prompt`, {
+    text, entry: typeof args.pipeline === 'string' ? args.pipeline : 'prompt', session: args.new ? null : undefined, from: 'CLI',
+  });
+  if (!out?.ok) fail(`No se pudo: ${out?.error || 'sin respuesta'}`);
+  const t = out.task || out.run;
+  console.log(`${t.id}: ${t.status}${t.detail ? ` (${t.detail})` : ''}`);
+}
+
 async function cmdInstall() {
   const out = install(args._.slice(1));
   if (!out.ok) fail(out.error);
@@ -208,7 +268,7 @@ async function cmdInstall() {
 if (args.help) { console.log(HELP); process.exit(0); }
 if (args.version) { console.log(VERSION); process.exit(0); }
 
-const commands = { open: cmdOpen, serve: cmdServe, watch: () => cmdWatch(args._[1]), status: cmdStatus, demo: cmdDemo, send: cmdSend, task: cmdTask, tasks: cmdTasks, install: cmdInstall, help: () => console.log(HELP) };
+const commands = { open: cmdOpen, serve: cmdServe, watch: () => cmdWatch(args._[1]), status: cmdStatus, demo: cmdDemo, send: cmdSend, task: cmdTask, tasks: cmdTasks, install: cmdInstall, agents: cmdAgents, prompt: cmdPrompt, help: () => console.log(HELP) };
 const cmd = commands[args._[0] || 'open'];
 if (!cmd) fail(`Comando desconocido: ${args._[0]}\n\n${HELP}`);
 cmd().catch((err) => fail(err.stack || err.message));

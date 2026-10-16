@@ -16,7 +16,7 @@ import * as lib from '../../integrations/common/devteam.mjs';
 const FILES = { tl: 'docs/plan.md', qa: 'tests/feature.test.js', backend: 'src/server/feature.js', frontend: 'src/components/Feature.tsx', designer: 'design/feature.fig', po: 'docs/historia.md', analyst: 'docs/analisis.md', manager: 'docs/plan-de-trabajo.md' };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export function startFakeAgent({ url, dir, agent = 'pi', session = `${agent}-fake`, delay = 0, gates = 'fake', can = ['task', 'pipeline', 'launch'] }) {
+export function startFakeAgent({ url, dir, agent = 'pi', session = `${agent}-fake`, delay = 0, gates = 'fake', can = ['task', 'pipeline'] }) {
   const project = lib.loadProject(dir);
   const ws = new WebSocket(`${url.replace(/^http/, 'ws')}/v1/ws`);
   const received = [];
@@ -56,11 +56,10 @@ export function startFakeAgent({ url, dir, agent = 'pi', session = `${agent}-fak
   ws.on('open', () => wsSend({ type: 'register', agent, session, cwd: project.dir, pid: process.pid, can, project: lib.catalogEntry(project) }));
   ws.on('message', (d) => {
     const msg = JSON.parse(d);
-    if (['task', 'pipeline', 'pipeline_cancel', 'launch'].includes(msg.type)) received.push(msg);
+    if (['task', 'pipeline', 'pipeline_cancel'].includes(msg.type)) received.push(msg);
     if (msg.type === 'task') wsSend({ type: 'task_update', id: msg.id, status: 'accepted' });
     if (msg.type === 'pipeline') runPipeline(msg);
     if (msg.type === 'pipeline_cancel') runs.get(msg.id)?.cancel();
-    if (msg.type === 'launch') wsSend({ type: 'task_update', id: msg.id, status: 'accepted', detail: 'sesión nueva (de mentira)' });
   });
   ws.on('error', () => {});
   return {

@@ -41,7 +41,7 @@ async function withEnv(vars, fn) {
 
 test('extensión de Pi: corre el pipeline en su sesión, con setModel por etapa, y vuelve a su modelo', { skip: !process.features?.typescript && 'Node sin soporte de TypeScript' }, async () => {
   const dir = tempProject();
-  const server = await startServer({ port: 0, socket: null, config: {} });
+  const server = await startServer({ port: 0, socket: null, db: ':memory:' });
   const cwd = process.cwd();
   const isTTY = process.stdin.isTTY;
   process.chdir(dir);
@@ -82,7 +82,7 @@ test('extensión de Pi: corre el pipeline en su sesión, con setModel por etapa,
       await fire('session_start');
       const project = await until(() => server.pipelines.projects().find((p) => p.name === 'Integrado'));
       assert.deepEqual(project.pipelines[0].hosts, [{ agent: 'pi', session: 'pi-int', live: true }]);
-      assert.deepEqual(server.hub.snapshot().agents[0].can, ['task', 'pipeline', 'launch']);
+      assert.deepEqual(server.hub.snapshot().agents[0].can, ['task', 'pipeline']);
 
       const { run } = await call(server.url, 'POST', '/v1/pipelines', { pipeline: 'tdd', task: 'Cupones' });
       const done = await until(() => server.pipelines.snapshot().runs.find((r) => r.id === run.id && r.status === 'done'));
@@ -111,12 +111,14 @@ test('extensión de Pi: corre el pipeline en su sesión, con setModel por etapa,
 
 test('plugin de OpenCode: corre el pipeline en su sesión con el modelo de cada etapa', async () => {
   const dir = tempProject();
-  const server = await startServer({ port: 0, socket: null, config: {} });
+  const server = await startServer({ port: 0, socket: null, db: ':memory:' });
   const prompts = [];
+  const commands = [];
   let n = 0;
   const client = {
     session: {
       create: async () => ({ data: { id: 'ses_nueva' } }),
+      command: async ({ path: p, body }) => { commands.push({ id: p.id, body }); return { data: { info: {}, parts: [] } }; },
       prompt: async ({ path: p, body }) => {
         prompts.push({ id: p.id, body });
         return { data: { info: { role: 'assistant' }, parts: [{ type: 'text', text: `hecho ${++n}` }] } };
@@ -143,6 +145,11 @@ test('plugin de OpenCode: corre el pipeline en su sesión con el modelo de cada 
       // mientras corre el pipeline, el fin de cada turno no es "listo"
       await hooks['chat.message']({ sessionID: 'ses_1' }, { parts: [{ type: 'text', text: prompts[0].body.parts[0].text }] });
       assert.equal(server.office.sessionSummary('ses_1').title, 'TDD: Cupones');
+
+      // un comando de su harness (el /task de Errementari) se ejecuta como comando de OpenCode
+      await call(server.url, 'POST', '/v1/tasks', { agent: 'opencode', session: 'ses_1', text: '/task bug: x', command: 'task', args: 'bug: x' });
+      await until(() => commands.length);
+      assert.deepEqual(commands[0], { id: 'ses_1', body: { command: 'task', arguments: 'bug: x' } });
     });
   } finally {
     await server.close();

@@ -1,7 +1,7 @@
 import { createGame, TEAM, phaseInfo } from './game.js';
 import { applyAppearance } from './sim.js';
 import { AGENT_NAME, TASK_STATUS } from './targets.js';
-import { briefOptions, briefProblem, briefMessage, defaultProject, projectLabel } from './brief.js';
+import { briefOptions, briefProblem, briefMessage, defaultTarget, targetLabel } from './brief.js';
 import { createSettings } from './settings-ui.js';
 
 const $ = (id) => document.getElementById(id);
@@ -15,7 +15,7 @@ let selected = null;
 let ws;
 let tasks = { tasks: [], agents: [], launchers: [], defaultCwd: '' };
 let runs = [];
-let projects = []; // los que anuncian los agentes conectados (con sus pipelines)
+let targets = []; // agentes registrados (⚙ › Agentes) y sesiones abiertas, con lo que trae su harness
 
 const game = createGame($('office'), { onSelect: (id) => select(id), onBoardClick: () => openBrief() });
 
@@ -28,8 +28,9 @@ function connect() {
   ws.onclose = () => { setConn(false); setTimeout(connect, 1500); };
   ws.onmessage = (m) => {
     const msg = JSON.parse(m.data);
-    if (msg.type === 'snapshot') { onSnapshot(msg.state); if (msg.state.tasks) onTasks(msg.state); onRuns(msg.state.pipelines || []); onProjects(msg.state.projects); }
-    if (msg.type === 'pipelines') { onRuns(msg.runs); onProjects(msg.projects); }
+    if (msg.type === 'snapshot') { onSnapshot(msg.state); if (msg.state.tasks) onTasks(msg.state); onRuns(msg.state.pipelines || []); onTargets(msg.state.targets); }
+    if (msg.type === 'pipelines') onRuns(msg.runs);
+    if (msg.type === 'targets') onTargets(msg.targets);
     if (msg.type === 'snapshot' || msg.type === 'appearance') { applyAppearance((msg.state || msg).appearance || {}); renderTeam(); if (selected) renderDetail(); }
     if (msg.type === 'event') onEvent(msg.event, msg.session);
     if (msg.type === 'tasks') onTasks(msg);
@@ -239,17 +240,20 @@ function onRuns(list) {
 
 // ---------------------------------------------------------------- diálogo "Nuevo encargo"
 
-const brief = { sel: { project: 0, pipeline: 0, target: 0 }, opts: null };
+const brief = { sel: { target: 0, entry: 0, session: -1 }, opts: null };
 
-function onProjects(list) {
-  projects = list || [];
+function onTargets(list) {
+  targets = list || [];
   if ($('brief').open) renderBrief();
+  settings.refresh?.();
 }
 
-function openBrief() {
+/** @param agentId abre el diálogo con ese agente elegido (desde ⚙ › Agentes) */
+function openBrief(agentId) {
   const dlg = $('brief');
   if (!dlg.open) dlg.showModal();
-  brief.sel = { project: defaultProject(projects, sessions.values()), pipeline: 0, target: 0 };
+  const i = agentId ? targets.findIndex((t) => t.id === agentId) : -1;
+  brief.sel = { target: i >= 0 ? i : defaultTarget(targets, sessions.values()), entry: 0, session: -1 };
   renderBrief();
   $('b-text').focus();
 }
@@ -261,51 +265,44 @@ function fillSelect(select, items, index, label = (x) => x.label) {
 }
 
 function renderBrief() {
-  const o = brief.opts = briefOptions({ projects, tasks, sessions: sessions.values() }, brief.sel);
-  fillSelect($('b-project'), projects.length ? projects : [{ label: 'Ningún agente anunció un proyecto' }], brief.sel.project, (p) => p.label || projectLabel(p));
-  $('b-project').disabled = !projects.length;
-  fillSelect($('b-pipeline'), o.pipelines, brief.sel.pipeline);
-  $('b-desc').textContent = o.pipeline ? o.pipeline.description
-    : !projects.length ? 'Los pipelines los anuncia cada agente al conectarse (los lee de .devteam/ en su proyecto).'
-      : o.project && !o.project.hasConfig ? 'Este proyecto no tiene .devteam/: sólo tareas directas.' : '';
-  fillSelect($('b-target'), o.targets.length ? o.targets : [{ label: 'Nadie disponible' }], brief.sel.target);
+  const o = brief.opts = briefOptions({ targets }, brief.sel);
+  fillSelect($('b-agent'), targets.length ? targets : [{ label: 'Ningún agente: regístralo en ⚙ › Agentes' }], brief.sel.target, (t) => t.label || targetLabel(t));
+  $('b-agent').disabled = !targets.length;
+  fillSelect($('b-pipeline'), o.entries.length ? o.entries : [{ label: '—' }], Math.max(0, o.entries.indexOf(o.entry)));
+  $('b-desc').textContent = o.entry ? [o.entry.description, o.entry.source && o.entry.source !== 'agente' ? `(${o.entry.source})` : ''].filter(Boolean).join(' ')
+    : 'Registra un agente con su ruta completa en ⚙ › Agentes: el prompt arranca el pipeline de su harness.';
+  fillSelect($('b-session'), o.sessions.length ? o.sessions : [{ label: '—' }], o.sessionIndex);
 
   const box = $('b-stages');
   box.innerHTML = '';
   if (o.stages.length) {
-    box.append(el('h3', '', 'Etapas (las ejecuta el agente en su sesión)'));
+    box.append(el('h3', '', `Etapas (las corre ${o.entry.devteam ? 'la sesión del agente' : 'el harness del agente'})`));
     o.stages.forEach((st, i) => {
       const card = el('div', 'b-stage');
       card.style.setProperty('--c', TEAM[st.role]?.shirt || '#888');
       card.append(el('span', 'n', String(i + 1)), el('span', 'who', `${TEAM[st.role]?.name || st.role} · ${phaseInfo(st.phase).label} — ${st.name}`));
       const how = [st.agent, st.model].filter(Boolean).join(' · ');
-      if (how || st.needs.length) card.append(el('span', 'how', `${how}${st.needs.length ? `  ← ${st.needs.join(', ')}` : ''}`));
-      if (st.check) card.append(el('span', 'gate', `⚙ ${st.check.run} debe ${st.check.expect === 'pass' ? 'pasar' : 'fallar'}${st.onFail ? ` · si no, vuelve a ${st.onFail.goto} (×${st.onFail.max})` : ''}`));
+      if (how || st.needs?.length) card.append(el('span', 'how', `${how}${st.needs?.length ? `  ← ${st.needs.join(', ')}` : ''}`));
+      if (st.check) card.append(el('span', 'gate', `⚙ ${st.check.run} debe ${st.check.expect === 'pass' ? 'pasar' : 'fallar'}`));
       box.append(card);
     });
-    if (o.pipeline.issues?.length) box.append(el('p', 'b-problem', o.pipeline.issues.join(' · ')));
+    if (o.entry.issues?.length) box.append(el('p', 'b-problem', o.entry.issues.join(' · ')));
   }
   const problem = briefProblem(o, $('b-text').value);
-  $('b-problem').textContent = problem && $('b-text').value.trim() ? problem : '';
+  $('b-problem').textContent = problem && ($('b-text').value.trim() || !o.target) ? problem : '';
   $('brief-go').disabled = !!problem;
 }
 
-$('b-project').onchange = (e) => {
-  brief.sel = { project: Number(e.target.value), pipeline: 0, target: 0 };
-  renderBrief();
-};
-$('b-pipeline').onchange = (e) => {
-  brief.sel = { ...brief.sel, pipeline: Number(e.target.value), target: 0 };
-  renderBrief();
-};
-$('b-target').onchange = (e) => { brief.sel.target = Number(e.target.value); renderBrief(); };
+$('b-agent').onchange = (e) => { brief.sel = { target: Number(e.target.value), entry: 0, session: -1 }; renderBrief(); };
+$('b-pipeline').onchange = (e) => { brief.sel = { ...brief.sel, entry: Number(e.target.value) }; renderBrief(); };
+$('b-session').onchange = (e) => { brief.sel = { ...brief.sel, session: Number(e.target.value) }; renderBrief(); };
 $('b-text').oninput = () => renderBrief();
 $('b-text').onkeydown = (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) $('brief-form').requestSubmit(); };
 $('brief-close').onclick = $('brief-cancel').onclick = () => $('brief').close();
 $('open-brief').onclick = () => openBrief();
 
-// ⚙ Ajustes: la apariencia de los personajes (de la oficina) y lo que anuncian los agentes.
-const settings = createSettings();
+// ⚙ Ajustes: el mantenedor de agentes y la apariencia de los personajes.
+const settings = createSettings({ getTargets: () => targets, onPrompt: (id) => { $('settings').close(); openBrief(id); } });
 $('open-settings').onclick = () => settings.open();
 $('brief-form').onsubmit = (e) => {
   e.preventDefault();

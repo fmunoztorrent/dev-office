@@ -61,6 +61,13 @@ const AGENT_TYPES = {
   'statusline-setup': 'frontend', designer: 'designer', frontend: 'frontend', backend: 'backend',
   research: 'analyst', analyst: 'analyst', po: 'po', 'product-owner': 'po', manager: 'manager',
   qa: 'qa', tester: 'qa', 'test-runner': 'qa', 'test-writer': 'qa', e2e: 'qa',
+  // subagentes de harness conocidos: Errementari y gentle-pi / gentle-ai
+  pipeline: 'manager', spec: 'analyst', architect: 'tl', researcher: 'analyst',
+  'sdd-init': 'manager', 'sdd-onboard': 'manager', 'sdd-status': 'manager', 'sdd-explore': 'analyst', 'sdd-research': 'analyst',
+  'sdd-proposal': 'po', 'sdd-spec': 'analyst', 'sdd-design': 'tl', 'sdd-tasks': 'manager', 'sdd-apply': 'backend',
+  'sdd-remediate': 'backend', 'sdd-verify': 'qa', 'sdd-archive': 'manager', 'gentle-ai-explore': 'analyst',
+  'gentle-ai-worker': 'backend', 'gentle-ai-verify': 'qa', 'review-risk': 'tl', 'review-readability': 'tl',
+  'review-reliability': 'tl', 'review-resilience': 'tl', 'jd-judge-a': 'tl', 'jd-judge-b': 'tl', 'jd-fix-agent': 'backend',
 };
 
 const TEXT_RULES = [

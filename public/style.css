@@ -219,6 +219,15 @@ select {
 .s-mini { font: 13px "Space Grotesk", sans-serif; background: #fff; color: var(--ink); border: 0; box-shadow: 0 0 0 2px var(--ink); padding: 5px 10px; cursor: pointer; white-space: nowrap; }
 .s-mini:hover { background: #ffd166; }
 .s-mini.danger:hover { background: #ffd0d6; }
+.s-agents { display: grid; gap: 8px; }
+.s-agent { background: #fff; box-shadow: 0 0 0 2px var(--ink); padding: 8px 10px; display: grid; gap: 5px; }
+.s-agent-head { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; font-size: 14px; }
+.s-tag { font-size: 12px; padding: 1px 6px; background: var(--ink); color: #ffd166; }
+.s-tag.kind { background: #2a9d8f; color: #fff; }
+.s-entries { display: flex; flex-wrap: wrap; gap: 4px; }
+.s-entries span { font-size: 12px; padding: 1px 6px; box-shadow: 0 0 0 1px #c9b48a; background: #fdfcf6; }
+.s-form { display: grid; gap: 8px; }
+.s-ok { color: #2a9d8f; font-size: 13px; } .s-bad { color: #c1121f; font-size: 13px; }
 .s-project { background: #fff; box-shadow: 0 0 0 2px var(--ink); padding: 6px 10px; display: grid; gap: 4px; }
 .s-project p { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
 .s-project summary { font-size: 17px !important; }

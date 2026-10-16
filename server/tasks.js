@@ -4,36 +4,38 @@
 // - A una sesión abierta: Pi y OpenCode se conectan a la oficina (WebSocket, `register`) y
 //   reciben la tarea al instante. Claude Code no tiene un canal así: la tarea queda en cola y
 //   la entrega su hook `Stop` cuando Claude termina el turno en curso.
-// - Una sesión nueva: la oficina se la pide a un agente conectado que sepa lanzar (`can:
-//   ['launch']`); ese agente arranca el CLI (`pi -p`, `claude -p`, `opencode run`). La
-//   oficina no lanza procesos.
+// - Una sesión nueva de un agente registrado (⚙ › Agentes, con su ruta): la oficina abre su CLI
+//   en esa ruta (`claude -p`, `opencode run`, `pi -p`) con el prompt o el comando que arranca el
+//   pipeline de su harness. No orquesta nada: el pipeline lo corre el harness; la oficina dibuja
+//   lo que reportan sus hooks o plugins.
 
 import { EventEmitter } from 'node:events';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { clip } from './roles.js';
 import { sanitizeProject } from './pipeline.js';
+import { agentCommand, HARNESSES, which } from '../integrations/common/devteam.mjs';
 
 export const AGENT_LABEL = { 'claude-code': 'Claude Code', opencode: 'OpenCode', pi: 'Pi' };
 const HARNESS_IDS = ['claude-code', 'opencode', 'pi'];
 const TASKS_MAX = 50;
 const TEXT_MAX = 4000;
-
-/** ~/.dev-team-office/config.json: preferencias del frontend (p. ej. la apariencia de los personajes). */
-export const configFile = () => process.env.DEV_TEAM_OFFICE_CONFIG || path.join(os.homedir(), '.dev-team-office', 'config.json');
-export function loadConfig(file = configFile()) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return {}; }
-}
+const OUTPUT_LINES = 40;
 
 export class TaskHub extends EventEmitter {
-  constructor(office, { cwd = process.cwd(), officeUrl } = {}) {
+  /** @param store la base (server/store.js): cada tarea queda en el historial de prompts */
+  constructor(office, { cwd = process.cwd(), officeUrl, store } = {}) {
     super();
     this.office = office;
+    this.store = store;
+    this.boot = Date.now().toString(36); // los ids de tarea se reinician con la oficina; en la base no
     this.officeUrl = officeUrl;
     this.defaultCwd = cwd;
     this.conns = new Map(); // agentes conectados por WebSocket
     this.tasks = new Map();
+    this.children = new Map(); // sesiones lanzadas por la oficina, por id de tarea
     this.seq = 0;
   }
 
@@ -41,7 +43,7 @@ export class TaskHub extends EventEmitter {
 
   /**
    * Un plugin/extensión se presenta (y se vuelve a presentar cuando cambia de sesión).
-   * info: { agent, session, cwd, pid, can: ['task','pipeline','launch'], project: { dir, name, pipelines } }
+   * info: { agent, session, cwd, pid, can: ['task','pipeline'], project: { dir, name, pipelines } }
    */
   register(conn, info = {}) {
     const agent = String(info.agent || 'agente').slice(0, 30);
@@ -82,16 +84,16 @@ export class TaskHub extends EventEmitter {
     return live.sort((a, b) => b.connectedAt - a.connectedAt)[0] || null;
   }
 
-  /** Quién puede lanzar una sesión nueva: un agente conectado con `can: ['launch']` (mejor si es del mismo tipo). */
-  #launcherFor(agent) {
-    const able = [...this.conns.values()].filter((c) => c.can.includes('launch')).sort((a, b) => b.connectedAt - a.connectedAt);
-    return able.find((c) => c.agent === agent) || able[0] || null;
-  }
-
   // ---------------------------------------------------------------- tareas
 
-  /** @param title texto corto para la oficina (el tablero); por defecto, el propio texto */
-  submit({ text, title, agent, session, mode, cwd, from } = {}) {
+  /**
+   * @param title   texto corto para la oficina (el tablero); por defecto, el propio texto
+   * @param command, args  si la tarea es un comando del harness (`/task …`): el agente lo ejecuta
+   *                como comando (OpenCode) o lo expande (Pi, Claude); `text` es "/comando args"
+   * @param launch  { bin, args } del agente registrado, para una sesión nueva (mode: 'launch')
+   * @param meta    { agentId, entry } para el historial: qué agente registrado y por qué entrada
+   */
+  submit({ text, title, agent, session, mode, cwd, from, command, args, launch, meta } = {}) {
     text = String(text ?? '').trim();
     if (!text) return { ok: false, error: 'la tarea está vacía' };
     if (text.length > TEXT_MAX) return { ok: false, error: `la tarea supera ${TEXT_MAX} caracteres` };
@@ -102,19 +104,20 @@ export class TaskHub extends EventEmitter {
 
     const task = {
       id: `t${++this.seq}`, text, title: clip(title || text, 300), agent, session, mode: mode === 'launch' ? 'launch' : 'session',
-      cwd: null, status: 'new', detail: '', from: clip(from || 'Oficina', 30), createdAt: Date.now(), updatedAt: Date.now(),
+      command: command ? clip(command, 60) : null, args: command ? String(args ?? '').slice(0, TEXT_MAX) : null,
+      cwd: null, status: 'new', detail: '', output: [], from: clip(from || 'Oficina', 30), createdAt: Date.now(), updatedAt: Date.now(),
+      agentId: meta?.agentId || null, entry: meta?.entry || null,
     };
 
     if (task.mode === 'launch') {
-      if (!HARNESS_IDS.includes(agent)) return { ok: false, error: `no sé pedir que se lance "${agent}"` };
-      const launcher = this.#launcherFor(agent);
-      if (!launcher) return { ok: false, error: 'no hay ningún agente conectado que pueda lanzar sesiones nuevas (abre Pi u OpenCode con su integración)' };
-      task.cwd = clip(cwd || this.defaultCwd, 300);
-      task.connId = launcher.id;
+      if (!HARNESS_IDS.includes(agent)) return { ok: false, error: `no sé lanzar "${agent}"` };
+      task.cwd = path.resolve(String(cwd || this.defaultCwd).replace(/^~(?=$|\/)/, os.homedir()));
+      if (!fs.statSync(task.cwd, { throwIfNoEntry: false })?.isDirectory()) return { ok: false, error: `no existe el directorio ${task.cwd}` };
+      const cmd = agentCommand(agent, { text, command: task.command, args: task.args }, launch || {});
+      if (cmd.error) return { ok: false, error: cmd.error };
       this.#add(task);
       this.#dispatchEvent(task);
-      this.#set(task, 'sent', `pedida a ${AGENT_LABEL[launcher.agent] || launcher.agent}`);
-      launcher.send({ type: 'launch', id: task.id, harness: agent, task: text, cwd: task.cwd });
+      this.#launch(task, cmd);
       return { ok: true, task: this.#public(task) };
     }
 
@@ -130,11 +133,50 @@ export class TaskHub extends EventEmitter {
     return { ok: true, task: this.#public(task) };
   }
 
+  // Una sesión nueva del agente, en su directorio. La tarea va como un único argumento, sin shell.
+  #launch(task, { exe, argv }) {
+    const env = { ...process.env, DEV_TEAM_OFFICE_LAUNCHED: '1', ...(this.officeUrl ? { DEV_TEAM_OFFICE_URL: this.officeUrl } : {}) };
+    delete env.DEV_TEAM_OFFICE_SESSION_ALIAS;
+    // la extensión de Pi adopta este id de sesión: así la tarea sabe qué sesión la está haciendo
+    if (task.agent === 'pi') { env.DEV_TEAM_OFFICE_SESSION = `pi-${task.id}`; task.session = env.DEV_TEAM_OFFICE_SESSION; } else delete env.DEV_TEAM_OFFICE_SESSION;
+    let child;
+    try {
+      child = spawn(exe, argv, { cwd: task.cwd, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+    } catch (err) {
+      this.#set(task, 'failed', err.message);
+      return;
+    }
+    this.children.set(task.id, child);
+    this.#set(task, 'running', `${path.basename(exe)} en ${task.cwd.replace(os.homedir(), '~')}`);
+    const collect = (chunk) => {
+      for (const line of chunk.toString('utf8').split(/\r?\n/)) {
+        if (!line.trim()) continue;
+        task.output.push(clip(line, 300));
+        if (task.output.length > OUTPUT_LINES) task.output.shift();
+      }
+      this.#changed();
+    };
+    child.stdout.on('data', collect);
+    child.stderr.on('data', collect);
+    child.on('error', (err) => this.#set(task, 'failed', err.message));
+    child.on('close', (code, signal) => {
+      this.children.delete(task.id);
+      if (task.status === 'cancelled') return this.#changed();
+      if (code === 0) this.#set(task, 'done', 'terminada');
+      else this.#set(task, 'failed', signal ? `cortada (${signal})` : `salió con código ${code}${task.output.length ? `: ${task.output.at(-1)}` : ''}`);
+    });
+  }
+
+  /** Corta las sesiones lanzadas por la oficina (al cerrarla). */
+  stopAll() {
+    for (const child of this.children.values()) { try { process.kill(-child.pid, 'SIGTERM'); } catch { /* ya terminó */ } }
+  }
+
   #deliver(task, conn) {
     task.connId = conn.id;
     task.session ||= conn.session;
     this.#set(task, 'sent', `enviada a ${AGENT_LABEL[conn.agent] || conn.agent}`);
-    conn.send({ type: 'task', id: task.id, text: task.text, session: task.session });
+    conn.send({ type: 'task', id: task.id, text: task.text, session: task.session, ...(task.command ? { command: task.command, args: task.args } : {}) });
   }
 
   /** Respuesta del agente: accepted | done | failed | rejected. */
@@ -142,8 +184,8 @@ export class TaskHub extends EventEmitter {
     const t = this.tasks.get(String(id));
     if (!t || (t.connId !== undefined && t.connId !== connId)) return { ok: false, error: 'tarea desconocida' };
     if (status === 'accepted') {
-      this.#set(t, 'running', clip(detail, 200) || (t.mode === 'launch' ? 'sesión nueva en marcha' : 'el agente la está haciendo'));
-      if (t.mode === 'session') this.#startedEvent(t);
+      this.#set(t, 'running', clip(detail, 200) || 'el agente la está haciendo');
+      this.#startedEvent(t);
     } else if (status === 'done') this.#set(t, 'done', 'terminada');
     else if (status === 'failed' || status === 'rejected') {
       this.#set(t, 'failed', clip(error || 'el agente no pudo con la tarea', 200));
@@ -165,6 +207,12 @@ export class TaskHub extends EventEmitter {
     const t = this.tasks.get(String(id));
     if (!t) return { ok: false, error: 'tarea desconocida' };
     if (['queued', 'sent'].includes(t.status)) { this.#set(t, 'cancelled', 'cancelada'); return { ok: true }; }
+    const child = this.children.get(t.id);
+    if (child) {
+      this.#set(t, 'cancelled', 'cancelada');
+      try { process.kill(-child.pid, 'SIGTERM'); } catch { /* ya terminó */ }
+      return { ok: true };
+    }
     return { ok: false, error: `no se puede cancelar una tarea ${t.status}: ya la tiene el agente` };
   }
 
@@ -182,7 +230,14 @@ export class TaskHub extends EventEmitter {
     task.status = status;
     task.detail = detail || '';
     task.updatedAt = Date.now();
+    this.#save(task);
     this.#changed();
+  }
+
+  #save(t) {
+    try {
+      this.store?.savePrompt({ id: `${this.boot}-${t.id}`, agentId: t.agentId, agent: t.agent, entry: t.entry, text: t.title, session: t.session, mode: t.mode, cwd: t.cwd, status: t.status, detail: t.detail });
+    } catch { /* el historial no puede romper el envío */ }
   }
 
   #changed() { this.emit('change', this.snapshot()); }
@@ -201,16 +256,18 @@ export class TaskHub extends EventEmitter {
   }
 
   #public(t) {
-    return { id: t.id, text: t.title, agent: t.agent, session: t.session, mode: t.mode, cwd: t.cwd, status: t.status, detail: t.detail, from: t.from, createdAt: t.createdAt, updatedAt: t.updatedAt };
+    return {
+      id: t.id, text: t.title, agent: t.agent, agentId: t.agentId, entry: t.entry, session: t.session, mode: t.mode, cwd: t.cwd, command: t.command, status: t.status, detail: t.detail,
+      output: t.mode === 'launch' ? t.output.slice(-12) : undefined, from: t.from, createdAt: t.createdAt, updatedAt: t.updatedAt,
+    };
   }
 
   snapshot() {
-    const canLaunch = [...this.conns.values()].some((c) => c.can.includes('launch'));
     return {
       tasks: [...this.tasks.values()].slice(-20).map((t) => this.#public(t)),
       agents: [...this.conns.values()].map((c) => ({ id: c.id, agent: c.agent, session: c.session, cwd: c.cwd, pid: c.pid, can: c.can, project: c.project?.name || null, connectedAt: c.connectedAt })),
-      // Sesiones nuevas: las lanza un agente conectado; la oficina sólo dice si hay quién.
-      launchers: HARNESS_IDS.map((agent) => ({ agent, available: canLaunch })),
+      // Sesiones nuevas: la oficina abre el CLI del agente (si está instalado).
+      launchers: HARNESS_IDS.map((agent) => ({ agent, available: !!which(agent === 'claude-code' && process.env.DEV_TEAM_OFFICE_CLAUDE_BIN || HARNESSES[agent].bin) })),
       defaultCwd: this.defaultCwd,
     };
   }

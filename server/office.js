@@ -75,11 +75,12 @@ export class Office extends EventEmitter {
 
     if (r.kind === 'tool_start' || r.kind === 'tool_end') {
       const start = r.kind === 'tool_start';
-      if (t === 'task' || t === 'agent' || t === 'subagent') {
-        // `subagent` es la herramienta de la extensión de subagentes de Pi: { agent, task } | { tasks } | { chain }
+      if (t === 'task' || t === 'agent' || t === 'subagent' || t === 'subagent_run' || t === 'subagent_continue') {
+        // `subagent` es la herramienta de la extensión de subagentes de Pi: { agent, task } | { tasks } | { chain };
+        // `subagent_run` la de gentle-pi: { agent, task, label }
         const many = input.tasks || input.chain;
         const agentType = input.subagent_type || input.agent || (Array.isArray(many) ? many[0]?.agent : undefined);
-        const desc = input.description || (Array.isArray(many) ? many.map((x) => x.agent).join(' → ') : input.task || input.prompt);
+        const desc = input.description || input.label || (Array.isArray(many) ? many.map((x) => x.agent).join(' → ') : input.task || input.prompt);
         return start
           ? this.#startSub(s, ev, { desc, agentType, toolUseId: r.toolUseId })
           : this.#endSub(s, ev, { toolUseId: r.toolUseId, desc: input.description });

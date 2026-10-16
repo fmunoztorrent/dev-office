@@ -11,7 +11,7 @@ const until = async (fn, ms = 3000) => {
 };
 
 async function withServer(config, fn) {
-  const server = await startServer({ port: 0, socket: null, config });
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', ...config });
   try { await fn(server, server.url); } finally { await server.close(); }
 }
 
@@ -56,27 +56,19 @@ test('Claude Code: la tarea espera en cola y la oficina se la da al hook en el S
   assert.deepEqual(await hook({ hook_event_name: 'Stop' }), {}); // ya no queda nada en cola
 }));
 
-test('una sesión nueva la lanza un agente conectado, no la oficina', () => withServer({}, async (server, base) => {
-  // nadie que sepa lanzar: la oficina no lanza procesos
-  let res = await (await post(base, '/v1/tasks', { agent: 'claude-code', mode: 'launch', text: 'x' })).json();
-  assert.equal(res.ok, false);
-  assert.match(res.error, /no hay ningún agente conectado que pueda lanzar/);
-  assert.deepEqual(server.hub.snapshot().launchers.map((l) => l.available), [false, false, false]);
-
-  const ws = new WebSocket(base.replace('http', 'ws') + '/v1/ws');
-  const got = [];
-  ws.on('message', (d) => { const m = JSON.parse(d); if (m.type === 'launch') got.push(m); });
-  await new Promise((r) => ws.on('open', r));
-  ws.send(JSON.stringify({ type: 'register', agent: 'pi', session: 'pi-1', cwd: '/proj', can: ['task', 'launch'] }));
-  await until(() => server.hub.snapshot().launchers[0].available);
-
-  res = await (await post(base, '/v1/tasks', { agent: 'claude-code', mode: 'launch', text: 'Arregla el login', cwd: '/proj/web' })).json();
+test('una sesión nueva: la oficina abre el CLI del agente (sin shell) y se puede cancelar', () => withServer({}, async (server, base) => {
+  let res = await (await post(base, '/v1/tasks', { agent: 'pi', mode: 'launch', text: 'x', cwd: '/no/existe' })).json();
+  assert.match(res.error, /no existe el directorio/);
+  res = await (await post(base, '/v1/tasks', { agent: 'emacs', mode: 'launch', text: 'x' })).json();
+  assert.match(res.error, /no sé lanzar/);
+  // un "pi" que tarda: la oficina lo lanza y lo corta al cancelar
+  const bin = (await import('node:fs')).mkdtempSync((await import('node:path')).join((await import('node:os')).tmpdir(), 'dto-bin-'));
+  const slow = `${bin}/pi`;
+  (await import('node:fs')).writeFileSync(slow, '#!/bin/sh\necho trabajando\nsleep 30\n', { mode: 0o755 });
+  res = server.hub.submit({ agent: 'pi', mode: 'launch', text: 'Algo largo', cwd: bin, launch: { bin: slow } });
   assert.equal(res.ok, true, res.error);
-  const msg = await until(() => got[0]);
-  assert.deepEqual(msg, { type: 'launch', id: res.task.id, harness: 'claude-code', task: 'Arregla el login', cwd: '/proj/web' });
-  ws.send(JSON.stringify({ type: 'task_update', id: msg.id, status: 'accepted', detail: 'sesión nueva lanzada por Pi (pid 42)' }));
-  await until(() => server.hub.snapshot().tasks[0].status === 'running');
-  ws.send(JSON.stringify({ type: 'task_update', id: msg.id, status: 'done' }));
-  await until(() => server.hub.snapshot().tasks[0].status === 'done');
-  ws.close();
+  await until(() => server.hub.snapshot().tasks[0].output?.includes('trabajando'));
+  assert.equal(server.hub.snapshot().tasks[0].session, `pi-${res.task.id}`); // la extensión de Pi adopta este id
+  assert.equal((await (await post(base, `/v1/tasks/${res.task.id}/cancel`, {})).json()).ok, true);
+  await until(() => server.hub.snapshot().tasks[0].status === 'cancelled');
 }));

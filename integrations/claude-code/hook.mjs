@@ -12,7 +12,8 @@
 //   siguiente. Si hay que seguir, imprime {"decision":"block","reason":"<prompt de la etapa>"}
 //   y Claude continúa en la misma sesión. Una etapa que pide un modelo distinto al de la sesión corre como
 //   `claude -p --model …` (los hooks no pueden cambiar el modelo de la sesión) y su resultado
-//   vuelve al pipeline. También entrega tareas y pipelines que la oficina tenga en cola.
+//   vuelve al pipeline. También entrega tareas y pipelines que la oficina tenga en cola; una tarea
+//   que es un comando de tu harness (/task de Errementari…) llega expandida.
 //
 // Nunca rompe a Claude: ante cualquier error no imprime nada y sale con 0. stdout sólo lleva la
 // decisión de Stop (en UserPromptSubmit/SessionStart el texto en stdout se volvería contexto).
@@ -131,7 +132,11 @@ async function main() {
   } else if (run) {
     clear(); // terminó o falló: Claude se detiene normalmente
   } else if (directive.task) {
-    process.stdout.write(JSON.stringify({ decision: 'block', reason: `Nueva tarea enviada por el usuario desde Dev Team Office. Hazla ahora:\n\n${directive.task.text}` }));
+    // un comando de tu harness (p. ej. /task de Errementari): el Stop no puede ejecutarlo, así que
+    // le pasa a Claude su contenido expandido, como si lo hubieras escrito
+    const { command, args, text } = directive.task;
+    const body = (command && lib.expandClaudeCommand(input.cwd, command, args ?? '')) || text;
+    process.stdout.write(JSON.stringify({ decision: 'block', reason: `Nueva tarea enviada por el usuario desde Dev Team Office${command ? ` (/${command})` : ''}. Hazla ahora:\n\n${body}` }));
   }
 }
 

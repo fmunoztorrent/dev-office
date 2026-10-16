@@ -1,5 +1,7 @@
 # Pipelines: encargos con varias etapas
 
+> **¿Tu proyecto ya trae su pipeline?** Si usas un harness como [Errementari](https://github.com/fmunoztorrent/errementari) (`/task` → spec → architect → qa → backend → qa → close), comandos de Claude/OpenCode o prompts de Pi, no necesitas nada de esto: registra la ruta en ⚙ › Agentes y el prompt arranca el pipeline de tu harness (ver el README, «Agentes»). Este documento es para definir pipelines propios en `.devteam/`.
+
 Al hacer clic en la pizarra de la oficina se abre el diálogo **Nuevo encargo**. Desde ahí se manda una tarea directa a un agente, o se arranca un **pipeline**: una tarea que pasa por varias etapas, cada una en manos de un personaje del equipo, con su propio agente y su propio modelo. Lo que hace el agente por dentro se ve en el juego.
 
 En la terminal el diálogo se abre con un clic en la pizarra o con `t`. Se usa con `tab` o `↑↓` para cambiar de campo, `◂▸` para cambiar la opción y `Enter` para enviar.

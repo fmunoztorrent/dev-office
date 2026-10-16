@@ -1,6 +1,6 @@
 // ⚙ Ajustes en la terminal: un formulario sobre el corcho, con las mismas pestañas que la web.
-//   Agentes      lo que anuncian los agentes conectados: sesiones, proyectos y pipelines (sólo
-//                lectura: se configuran en el agente, en <proyecto>/.devteam/)
+//   Agentes      el mantenedor: agregar (ruta completa + CLI), eliminar y mandarle un prompt;
+//                se ve lo que trae el harness de cada uno (se guarda en la base SQLite)
 //   Personajes   nombre, cargo, colores y rasgos de cada personaje (con vista previa)
 // Teclas: ↑↓/tab campo · ◂▸ cambia · escribir edita · Enter acción · ctrl+s guardar · esc cerrar
 
@@ -21,8 +21,10 @@ const cycle = (list, current, delta) => {
   return list[((i < 0 ? 0 : i) + delta + list.length) % list.length];
 };
 
-export function createSettings({ http, onSaved }) {
-  const s = { tab: 'agents', focus: 0, msg: '', msgOk: false, loading: true, data: null, state: null, looks: null, role: 'tl' };
+const HARNESS_IDS = ['claude-code', 'opencode', 'pi'];
+
+export function createSettings({ http, onSaved, onPrompt }) {
+  const s = { tab: 'agents', focus: 0, msg: '', msgOk: false, loading: true, data: null, targets: [], form: { path: '', harness: 'claude-code', name: '' }, looks: null, role: 'tl' };
 
   async function api(method, path, body) {
     try {
@@ -33,12 +35,31 @@ export function createSettings({ http, onSaved }) {
   }
   const say = (msg, ok = false) => { s.msg = msg; s.msgOk = ok; };
 
+  async function loadAgents() {
+    const r = await api('GET', '/v1/agents');
+    if (r.ok) s.targets = r.agents;
+  }
+
+  async function addAgent() {
+    const r = await api('POST', '/v1/agents', s.form);
+    if (!r.ok) return say(r.error);
+    say(`Listo: «${r.agent.name}» ya aparece en la pizarra.`, true);
+    s.form = { path: '', harness: 'claude-code', name: '' };
+    await loadAgents();
+  }
+
+  async function removeAgent(t) {
+    const r = await api('DELETE', `/v1/agents/${encodeURIComponent(t.id)}`);
+    if (!r.ok) return say(r.error);
+    say(`«${t.name}» eliminado (su carpeta no se toca).`, true);
+    await loadAgents();
+  }
+
   async function load() {
-    const [r, state] = await Promise.all([api('GET', '/v1/settings'), api('GET', '/v1/state')]);
+    const [r] = await Promise.all([api('GET', '/v1/settings'), loadAgents()]);
     s.loading = false;
     if (!r.ok) return say(r.error);
     s.data = r;
-    s.state = state.ok ? state : { agents: [], projects: [] };
     s.looks = Object.fromEntries(ROLES.map((role) => [role, Object.fromEntries(APPEARANCE_KEYS.map((k) => [k, TEAM[role][k]]))]));
   }
 
@@ -49,23 +70,26 @@ export function createSettings({ http, onSaved }) {
     if (s.loading) return [...f, { type: 'info', text: 'Cargando…' }];
     if (!s.data) return f;
     if (s.tab === 'agents') {
-      const { agents = [], projects = [] } = s.state;
-      f.push({ type: 'info', text: 'La oficina es el frontend: los agentes ejecutan tareas y pipelines.' });
-      f.push({ type: 'heading', text: 'Sesiones conectadas' });
-      if (!agents.length) f.push({ type: 'info', text: '  Ninguna: abre Pi u OpenCode con su integración (dev-team-office install).' });
-      for (const a of agents) f.push({ type: 'info', text: `  ${HARNESS_NAME[a.agent] || a.agent} · ${tilde(a.cwd)} · ${(a.can || []).join(', ')}`, color: C.ink });
-      f.push({ type: 'heading', text: 'Proyectos y pipelines' });
-      if (!projects.length) f.push({ type: 'info', text: '  Ningún agente anunció un proyecto todavía.' });
-      for (const p of projects) {
-        f.push({ type: 'info', text: `  ${p.name} · ${tilde(p.dir)}`, color: C.ink });
-        if (!p.pipelines.length) f.push({ type: 'info', text: '    sin .devteam/pipelines' });
-        for (const pl of p.pipelines) {
-          const who = pl.hosts.map((h) => HARNESS_NAME[h.agent] || h.agent).join(', ');
-          f.push({ type: 'info', text: `    ${pl.issues.length ? '⚠' : '✓'} ${pl.name} · ${pl.stages.length} etapas · ${who}`, color: pl.issues.length ? C.warn : C.ok });
-          for (const issue of pl.issues.slice(0, 2)) f.push({ type: 'info', text: `      ${issue}`, color: C.warn });
-        }
+      const registered = s.targets.filter((t) => t.registered);
+      const loose = s.targets.filter((t) => !t.registered);
+      f.push({ type: 'heading', text: 'Agentes registrados (el prompt arranca el pipeline de su harness)' });
+      if (!registered.length) f.push({ type: 'info', text: '  Ninguno todavía: agrega uno abajo con su ruta completa.' });
+      for (const t of registered) {
+        const flags = [t.sessions.some((x) => x.live) && '● abierta', !t.exists && '✗ no existe', t.exists && !t.available && '✗ CLI no instalado'].filter(Boolean).join(' ');
+        f.push({ type: 'info', text: `  ${t.name} · ${HARNESS_NAME[t.harness]}${t.kinds.length ? ` · ${t.kinds.join(' + ')}` : ''} ${flags}`, color: C.ink });
+        f.push({ type: 'info', text: `    ${tilde(t.path)} · ${t.entries.map((e) => e.label).join(', ')}` });
+        f.push({ type: 'action', label: '', value: () => `✉ Prompt a ${t.name}`, run: () => onPrompt?.(t.id) });
+        f.push({ type: 'action', label: '', value: () => `✕ Eliminar ${t.name}`, run: () => removeAgent(t) });
       }
-      f.push({ type: 'info', text: 'Se configuran en el proyecto: .devteam/team.json y .devteam/pipelines/*.json.' });
+      f.push({ type: 'heading', text: 'Agregar agente' });
+      f.push({ type: 'text', label: 'Ruta', value: () => s.form.path, placeholder: '/ruta/completa/al/proyecto', edit: (v) => { s.form.path = v; } });
+      f.push({ type: 'select', label: 'Agente', value: () => HARNESS_NAME[s.form.harness], cycle: (d) => { s.form.harness = cycle(HARNESS_IDS, s.form.harness, d); } });
+      f.push({ type: 'text', label: 'Nombre', value: () => s.form.name, placeholder: '(el de la carpeta)', edit: (v) => { s.form.name = v.slice(0, 40); } });
+      f.push({ type: 'action', label: '', value: () => '＋ Agregar', run: () => addAgent() });
+      if (loose.length) {
+        f.push({ type: 'heading', text: 'Sesiones abiertas sin registrar' });
+        for (const t of loose) f.push({ type: 'info', text: `  ${HARNESS_NAME[t.harness] || t.harness} · ${tilde(t.path)}${t.kinds.length ? ` · ${t.kinds.join(' + ')}` : ''}` });
+      }
     } else if (s.tab === 'look') {
       const look = s.looks[s.role];
       f.push({ type: 'select', label: 'Personaje', value: () => `${look.name} (${s.role})`, cycle: (d) => { s.role = cycle(ROLES, s.role, d); } });
@@ -93,7 +117,7 @@ export function createSettings({ http, onSaved }) {
 
   async function save() {
     if (!s.data) return;
-    if (s.tab !== 'look') return say('Lo de los agentes se configura en su proyecto (.devteam/).');
+    if (s.tab === 'agents') return addAgent();
     const appearance = {};
     for (const role of ROLES) {
       const changed = Object.fromEntries(APPEARANCE_KEYS.filter((k) => s.looks[role][k] !== DEFAULT_TEAM[role][k]).map((k) => [k, s.looks[role][k]]));

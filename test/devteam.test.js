@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as lib from '../integrations/common/devteam.mjs';
+import { errementariProject } from './fixtures/harness.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const EXAMPLE = path.join(here, '..', 'examples', 'tienda');
@@ -171,25 +172,43 @@ test('claudeChild: etapa con otro modelo como `claude -p --model`, sin el prefij
   }
 });
 
-test('launchAgent: la tarea viaja como un solo argumento, sin shell, y la sesión nueva es otra', async () => {
-  const bin = tmp();
-  const out = path.join(bin, 'out.json');
-  fs.writeFileSync(path.join(bin, 'pi'), `#!/usr/bin/env node\nrequire('fs').writeFileSync(${JSON.stringify(out)}, JSON.stringify({ argv: process.argv.slice(2), launched: process.env.DEV_TEAM_OFFICE_LAUNCHED, session: process.env.DEV_TEAM_OFFICE_SESSION || null }));\n`, { mode: 0o755 });
-  const PATH = process.env.PATH;
-  process.env.PATH = `${bin}${path.delimiter}${PATH}`;
-  process.env.DEV_TEAM_OFFICE_SESSION = 'pi-padre';
-  try {
-    const evil = 'hola"; touch /tmp/pwned-dto; echo "$(whoami)';
-    const r = lib.launchAgent({ harness: 'pi', task: evil, cwd: bin });
-    assert.equal(r.ok, true, r.error);
-    const code = await new Promise((res) => r.child.on('exit', res));
-    assert.equal(code, 0);
-    assert.deepEqual(JSON.parse(fs.readFileSync(out, 'utf8')), { argv: ['-p', evil], launched: '1', session: null });
-    assert.equal(fs.existsSync('/tmp/pwned-dto'), false);
-    assert.match(lib.launchAgent({ harness: 'pi', task: 'x', cwd: '/no/existe' }).error, /no existe/);
-    assert.match(lib.launchAgent({ harness: 'emacs', task: 'x' }).error, /no sé lanzar/);
-  } finally {
-    process.env.PATH = PATH;
-    delete process.env.DEV_TEAM_OFFICE_SESSION;
-  }
+test('detectHarness: el pipeline que trae el harness del proyecto (Errementari, comandos, .devteam)', () => {
+  const dir = errementariProject();
+  const d = lib.detectHarness(dir);
+  assert.deepEqual(d.kinds, ['Errementari 2.1.0', 'Dev Team Office']);
+  assert.deepEqual(d.harnesses, ['claude-code', 'opencode']);
+  const ids = d.entries.map((e) => e.id);
+  for (const id of ['prompt', 'errementari:auto', 'errementari:feature', 'errementari:bugfix', 'errementari:chore', 'errementari:debug', 'claude-code:/release', 'devteam:mini']) assert.ok(ids.includes(id), id);
+  assert.ok(!ids.includes('claude-code:/task') && !ids.includes('opencode:/task')); // /task ya es la entrada de Errementari
+  const feature = d.entries.find((e) => e.id === 'errementari:feature');
+  assert.deepEqual(feature.stages.map((s) => `${s.role}:${s.phase}`), ['analyst:analiza', 'tl:arquitectura', 'qa:red', 'backend:implementa', 'qa:green', 'tl:refactor', 'manager:release']);
+  assert.equal(d.entries.find((e) => e.id === 'devteam:mini').needsSession, true);
+  // qué subagente es qué personaje
+  assert.deepEqual([d.roles.pipeline, d.roles.spec, d.roles.architect, d.roles.qa], ['manager', 'analyst', 'tl', 'qa']);
+  // una carpeta sin harness: sólo el prompt directo
+  assert.deepEqual(lib.detectHarness(tmp()).entries.filter((e) => !e.id.startsWith('pi:')).map((e) => e.id), ['prompt']);
+});
+
+test('invocation y expandClaudeCommand: cómo se arranca cada entrada', () => {
+  const dir = errementariProject();
+  const { entries } = lib.detectHarness(dir);
+  const by = (id) => entries.find((e) => e.id === id);
+  assert.deepEqual(lib.invocation(by('prompt'), ' Agrega login '), { text: 'Agrega login' });
+  assert.deepEqual(lib.invocation(by('errementari:bugfix'), 'el SSE no reconecta'), { text: '/task bug: el SSE no reconecta', command: 'task', args: 'bug: el SSE no reconecta' });
+  assert.deepEqual(lib.invocation(by('errementari:auto'), 'Agrega login'), { text: '/task Agrega login', command: 'task', args: 'Agrega login' });
+  // a una sesión de Claude ya abierta se le pasa el comando expandido
+  assert.equal(lib.expandClaudeCommand(dir, 'task', 'bug: x'), 'Classify and run the corresponding pipeline for:\n\nbug: x');
+  assert.equal(lib.expandClaudeCommand(dir, 'no-existe', 'x'), null);
+});
+
+test('agentCommand: una sesión nueva sin shell y con la tarea como un solo argumento', () => {
+  const evil = 'hola"; touch /tmp/pwned-dto; echo "$(whoami)';
+  const node = process.execPath;
+  assert.deepEqual(lib.agentCommand('claude', { text: `/task ${evil}` }, { bin: node }), { exe: node, argv: ['-p', `/task ${evil}`, '--permission-mode', 'acceptEdits'] });
+  assert.deepEqual(lib.agentCommand('opencode', { text: '/task x', command: 'task', args: 'bug: x' }, { bin: node }).argv, ['run', '--command', 'task', 'bug: x']);
+  assert.deepEqual(lib.agentCommand('opencode', { text: 'hola' }, { bin: node }).argv, ['run', 'hola']);
+  assert.deepEqual(lib.agentCommand('pi', { text: '/architect algo' }, { bin: node, args: ['--model', 'x'] }).argv, ['-p', '--model', 'x', '/architect algo']);
+  assert.deepEqual(lib.agentCommand('claude-code', { text: 'x' }, { bin: node, args: ['--permission-mode', 'auto'] }).argv, ['-p', 'x', '--permission-mode', 'auto']);
+  assert.match(lib.agentCommand('emacs', { text: 'x' }).error, /no sé lanzar/);
+  assert.match(lib.agentCommand('pi', { text: 'x' }, { bin: 'no-existe-este-comando-xyz' }).error, /no encuentro/);
 });

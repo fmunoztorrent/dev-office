@@ -13,8 +13,8 @@ function fakeTerminal(cols = 160, rows = 46) {
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-test('desde la TUI: t + texto + Enter manda la tarea a la sesión de Pi conectada', async () => {
-  const server = await startServer({ port: 0, socket: null, config: {} });
+test('desde la TUI: t + texto + Enter manda el prompt a la sesión de Pi conectada', async () => {
+  const server = await startServer({ port: 0, socket: null, db: ':memory:' });
   const agent = new WebSocket(server.url.replace('http', 'ws') + '/v1/ws');
   const received = [];
   agent.on('message', (d) => { const m = JSON.parse(d); if (m.type === 'task') received.push(m); });
@@ -25,18 +25,21 @@ test('desde la TUI: t + texto + Enter manda la tarea a la sesión de Pi conectad
   const term = fakeTerminal();
   const done = runTui({ feed: localFeed(server), stdin: term.stdin, stdout: term.stdout, colorMode: 'truecolor' });
   await sleep(120);
-  term.type('t');
-  term.type('Agrega paginación al listado');
-  await sleep(120);
-  assert.match(term.stdout.out, /Pi · tienda · sesión abierta/); // destino visible en pantalla
-  term.type('\r');
-  await sleep(150);
-  assert.equal(received.length, 1);
-  assert.equal(received[0].text, 'Agrega paginación al listado');
-  assert.equal(received[0].session, 'pi-9');
-
-  term.type('q');
-  await done;
-  agent.close();
-  await server.close();
+  try {
+    term.type('t');
+    term.type('Agrega paginación al listado');
+    await sleep(120);
+    assert.match(term.stdout.out, /tienda · Pi · ● abierta/); // el agente de destino, visible en pantalla
+    term.type('\r');
+    await sleep(150);
+    assert.equal(received.length, 1);
+    assert.equal(received[0].text, 'Agrega paginación al listado');
+    assert.equal(received[0].session, 'pi-9');
+  } finally {
+    term.type('\x1b'); // cierra el diálogo si quedó abierto
+    term.type('q');
+    await done;
+    agent.close();
+    await server.close();
+  }
 });

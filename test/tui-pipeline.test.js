@@ -20,14 +20,14 @@ const until = async (fn, ms = 8000) => {
   throw new Error('timeout');
 };
 
-test('desde la terminal: clic en la pizarra → elegir pipeline → lo ejecuta la sesión de Pi', async () => {
+test('desde la terminal: clic en la pizarra → elegir el pipeline del agente → lo ejecuta su sesión de Pi', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dto-tui-'));
   fs.cpSync(path.join(here, '..', 'examples', 'tienda'), dir, { recursive: true });
   fs.writeFileSync(path.join(dir, '.devteam', 'pipelines', 'a-corto.json'), JSON.stringify({
     name: 'Corto', stages: [{ id: 'plan', role: 'tl', phase: 'arquitectura' }, { id: 'api', role: 'backend', needs: ['plan'] }],
   }));
 
-  const server = await startServer({ port: 0, socket: null, config: {} });
+  const server = await startServer({ port: 0, socket: null, db: ':memory:' });
   const agent = startFakeAgent({ url: server.url, dir, session: 'pi-tui' }); // como la extensión de Pi
   await agent.ready;
   await until(() => server.pipelines.projects().length);
@@ -42,16 +42,20 @@ test('desde la terminal: clic en la pizarra → elegir pipeline → lo ejecuta l
     const col = L.ox + Math.round((BOARD.x + BOARD.w / 2) * L.s) + 1;
     const row = Math.floor((L.oy + Math.round((BOARD.y + BOARD.h / 2) * L.s)) / 2) + 1;
     type(`\x1b[<0;${col};${row}M`); // clic en la pizarra
-    await until(() => stdout.out.includes('Nuevo encargo') && stdout.out.includes('Tienda (ejemplo)'));
-    type('\x1b[A'); // ↑ a «Para» (los campos son Proyecto, Pipeline, Para, Tarea)
+    await until(() => stdout.out.includes('Nuevo encargo') && stdout.out.includes('● abierta'));
+    // campos: Agente, Pipeline, Sesión, Prompt (el foco empieza en el prompt)
+    type('\x1b[A'); // ↑ a «Sesión»
     type('\x1b[A'); // ↑ a «Pipeline»
-    type('\x1b[C'); // ▸ primer pipeline: "Corto"
+    const target = server.registry.targets().find((t) => t.sessions.some((x) => x.session === 'pi-tui'));
+    const steps = target.entries.findIndex((e) => e.id === 'devteam:a-corto');
+    for (let i = 0; i < steps; i++) type('\x1b[C'); // ▸ hasta el pipeline "Corto"
     await sleep(80);
     type('Endpoint de cupones');
     await sleep(120);
-    assert.match(stdout.out, /Etapas \(las ejecuta el agente en su sesión\)/);
+    assert.match(stdout.out, /Pipeline · Corto/);
+    assert.match(stdout.out, /Etapas \(las corre la sesión del agente\)/);
     assert.match(stdout.out, /Diego · Implementa — api/);
-    assert.match(stdout.out, /Pi · dto-tui-\w+ · sesión abierta/); // va a la sesión que lo anunció
+    assert.match(stdout.out, /Pi · sesión abierta/); // va a la sesión abierta en esa ruta
     type('\r');
     const run = await until(() => server.pipelines.snapshot().runs.find((r) => r.status === 'done'));
     assert.equal(run.pipeline.name, 'Corto');

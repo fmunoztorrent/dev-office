@@ -40,10 +40,11 @@ export function sanitizeProject(p, cwd) {
 }
 
 export class PipelineHub extends EventEmitter {
-  constructor(office, tasks) {
+  constructor(office, tasks, { store } = {}) {
     super();
     this.office = office;
     this.tasks = tasks;
+    this.store = store; // historial de prompts (server/store.js)
     this.runs = new Map();
     this.announced = new Map(); // sesiones de Claude Code (sin conexión permanente)
     this.seq = 0;
@@ -87,7 +88,7 @@ export class PipelineHub extends EventEmitter {
   }
 
   /** Pide a una sesión de agente que corra un pipeline. */
-  start({ session, agent, pipeline, task, from } = {}) {
+  start({ session, agent, pipeline, task, from, meta } = {}) {
     task = String(task ?? '').trim();
     if (!task) return { ok: false, error: 'la tarea está vacía' };
     if (task.length > 4000) return { ok: false, error: 'la tarea supera 4000 caracteres' };
@@ -103,6 +104,7 @@ export class PipelineHub extends EventEmitter {
       task, from: clip(from || 'Oficina', 30), agent: host.agent, session: host.session,
       status: host.live ? 'sent' : 'queued', detail: host.live ? 'enviado al agente' : 'se entrega cuando Claude termine su turno',
       stages: pl.stages.map((s) => ({ ...s, status: 'pending', attempts: 0 })), startedAt: Date.now(), endedAt: null, cancelRequested: false,
+      agentId: meta?.agentId || null, entry: meta?.entry || `devteam:${pl.id}`,
     };
     this.runs.set(run.id, run);
     if (this.runs.size > 30) {
@@ -114,7 +116,7 @@ export class PipelineHub extends EventEmitter {
       text: `Pipeline «${pl.name}» para ${AGENT_NAME[host.agent] || host.agent}: ${task}`,
     });
     if (host.live) this.tasks.sendToSession(host.session, { type: 'pipeline', id: run.id, session: host.session, pipeline: pl.id, task });
-    this.changed();
+    this.changed(run);
     return { ok: true, run: this.#public(run) };
   }
 
@@ -124,7 +126,7 @@ export class PipelineHub extends EventEmitter {
     if (!run) return null;
     run.status = 'sent';
     run.detail = 'Claude lo tomó al terminar su turno';
-    this.changed();
+    this.changed(run);
     return { id: run.id, pipeline: run.pipeline.id, task: run.task };
   }
 
@@ -146,7 +148,7 @@ export class PipelineHub extends EventEmitter {
       if (Number.isInteger(s.attempts)) st.attempts = s.attempts;
     }
     if (['done', 'failed', 'cancelled'].includes(run.status)) run.endedAt ??= Date.now();
-    this.changed();
+    this.changed(run);
     return { ok: true };
   }
 
@@ -162,7 +164,7 @@ export class PipelineHub extends EventEmitter {
       run.cancelRequested = true; // Claude: lo recoge su hook en el siguiente evento
       run.detail = 'cancelando…';
     }
-    this.changed();
+    this.changed(run);
     return { ok: true };
   }
 
@@ -174,6 +176,15 @@ export class PipelineHub extends EventEmitter {
     };
   }
 
-  changed() { this.emit('change', this.snapshot()); }
+  #save(r) {
+    try {
+      this.store?.savePrompt({ id: `${this.tasks.boot}-${r.id}`, agentId: r.agentId, agent: r.agent, entry: r.entry, text: `${r.pipeline.name}: ${r.task}`, session: r.session, mode: 'pipeline', cwd: r.project.dir, status: r.status, detail: r.detail });
+    } catch { /* el historial no puede romper el pipeline */ }
+  }
+
+  changed(run) {
+    if (run) this.#save(run);
+    this.emit('change', this.snapshot());
+  }
   snapshot() { return { runs: [...this.runs.values()].slice(-10).map((r) => this.#public(r)), projects: this.projects() }; }
 }

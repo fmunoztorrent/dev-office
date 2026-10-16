@@ -36,9 +36,47 @@ El puerto se cambia con `--port` o `$DEV_TEAM_OFFICE_PORT`; el socket, con `--so
 
 Las rutas antiguas (`POST /event/<source>`, `GET /api/state`, `/ws`) siguen funcionando.
 
-## Pipelines y proyectos
+## Agentes (el mantenedor) y prompts
 
-La oficina es el frontend: los proyectos y pipelines son los que anuncian los agentes, y el pipeline lo ejecuta la sesión de agente elegida.
+Un agente es una ruta completa + el CLI que la atiende (`claude-code`, `opencode` o `pi`). Se guarda en la base SQLite de la oficina (`~/.dev-team-office/office.db`). Lo que trae su ruta (Errementari, comandos, prompts, `.devteam/`) se detecta en cada consulta: son sus `entries`, las entradas por las que un prompt arranca el pipeline de su harness.
+
+| Método | Ruta | Cuerpo | Respuesta |
+|---|---|---|---|
+| `GET` | `/v1/agents` | | `{ agents }`: los registrados y las sesiones abiertas sin registrar (`registered: false`) |
+| `POST` | `/v1/agents/detect` | `{ path }` | `{ exists, name, harnesses, kinds, entries }`: lo que hay en esa ruta, sin guardar nada |
+| `POST` | `/v1/agents` | `{ path, harness, name?, bin?, args? }` | `201 { ok, agent }` |
+| `GET` | `/v1/agents/<id>` | | `{ agent, prompts }`: con su historial |
+| `PUT` | `/v1/agents/<id>` | lo que cambie: `{ path?, harness?, name?, bin?, args? }` | `{ ok, agent }` |
+| `DELETE` | `/v1/agents/<id>` | | `{ ok }` (su carpeta no se toca) |
+| `POST` | `/v1/agents/<id>/prompt` | `{ text, entry?, session? }` | `{ ok, task }` o `{ ok, run }` |
+| `POST` | `/v1/run` | `{ target, entry?, text, session? }` | Igual, para cualquier agente de `/v1/agents` (también una sesión sin registrar: `session:<id>`) |
+| `GET` | `/v1/prompts?agent=<id>&limit=` | | `{ prompts }`: el historial |
+
+Cada agente de `/v1/agents` trae:
+
+```jsonc
+{
+  "id": "errementari-claude-code", "name": "Errementari", "path": "/Users/yo/Workspace/Errementari", "harness": "claude-code",
+  "registered": true, "exists": true, "available": true,          // available: su CLI está en el PATH
+  "kinds": ["Errementari 2.1.0"],                                  // qué harness engineering detectó
+  "entries": [                                                     // por dónde se arranca su pipeline
+    { "id": "prompt", "label": "Prompt directo" },
+    { "id": "errementari:bugfix", "label": "Errementari · bugfix", "command": "task", "prefix": "bug: ",
+      "stages": [{ "role": "analyst", "phase": "analiza", "name": "Triage + SPDD Analysis + Canvas", "agent": "spec" }, …] },
+    { "id": "devteam:feature-tdd", "label": "Pipeline · Feature con TDD", "needsSession": true, "stages": [...] }
+  ],
+  "sessions": [{ "session": "pi-1234", "agent": "pi", "live": true, "label": "Pi · sesión abierta" }],
+  "roles": { "spec": "analyst", "architect": "tl", "qa": "qa", "pipeline": "manager" }
+}
+```
+
+`session` en un prompt: el id de una sesión abierta en esa ruta, `null` para forzar una sesión nueva, u omitido (la abierta si hay; si no, una nueva). Una entrada `devteam:*` necesita una sesión abierta. Por WebSocket: `{ "type": "run", target, entry, text, session?, ref? }`.
+
+`bin` y `args` (el ejecutable y sus argumentos para las sesiones nuevas) sólo se definen en el agente registrado: `POST /v1/tasks` no los acepta.
+
+## Pipelines de `.devteam/`
+
+La oficina es el frontend: los pipelines de `.devteam/` los corre la sesión del agente, dentro de sí misma.
 
 | Método | Ruta | Cuerpo | Respuesta |
 |---|---|---|---|
@@ -55,12 +93,11 @@ Formato y protocolo con los agentes: [pipelines.md](pipelines.md).
 
 | Método | Ruta | Cuerpo |
 |---|---|---|
-| `GET` | `/v1/settings` | Responde `{ office: { file, appearance } }` |
+| `GET` | `/v1/settings` | Responde `{ office: { file, appearance } }` (`file`: la base SQLite) |
 | `PUT` | `/v1/settings` | `{ appearance: { rol: { name?, title?, shirt?, pants?, hair?, skin?, long?, beard?, glasses? } \| null } }` |
 
-- **Validación:** todo se valida antes de escribir. Si hay un error, la respuesta es `400 { error }` y no se toca el archivo.
-- **Apariencia en vivo:** al cambiarla, el servidor difunde `{ type: "appearance", appearance }` y todos los visores la aplican al momento.
-- La configuración de los agentes (equipo, modelos, pipelines) vive en cada proyecto (`.devteam/`) y la oficina no la escribe.
+- **Validación:** todo se valida antes de escribir. Si hay un error, la respuesta es `400 { error }` y no se toca nada.
+- **En vivo:** al cambiar la apariencia el servidor difunde `{ type: "appearance", appearance }`, y al cambiar los agentes o las sesiones `{ type: "targets", targets }`.
 
 ## Tareas para los agentes
 
@@ -78,7 +115,7 @@ La oficina también funciona al revés: puedes mandarle una tarea al agente.
 | `mode` | Pi / OpenCode | Claude Code |
 |---|---|---|
 | `session` (por defecto) | Inmediata a la sesión conectada. Pi la recibe con `pi.sendUserMessage` (como follow-up si está ocupado) y OpenCode con `client.session.prompt` | En cola. Cuando Claude termina su turno, el hook `Stop` responde `{"decision":"block","reason":"<tarea>"}` y Claude sigue con ella. Si la sesión está esperando tu mensaje, la entrega ocurre al terminar el siguiente turno |
-| `launch` | La oficina se lo pide a un agente conectado que sepa lanzar (`can: ["launch"]`), que corre `opencode run "<tarea>"` / `pi -p "<tarea>"` en `cwd` | Igual, con `claude -p "<tarea>" --permission-mode acceptEdits` |
+| `launch` | La oficina abre `opencode run "<tarea>"` / `pi -p "<tarea>"` en `cwd` | La oficina abre `claude -p "<tarea>" --permission-mode acceptEdits` en `cwd` |
 
 Estados de una tarea: `queued` → `sent` → `running` → `done`, `failed` o `cancelled`. La tarea se pasa como un único argumento, sin shell, así que su texto nunca se interpreta como comando.
 
@@ -88,12 +125,13 @@ Un agente que quiere recibir tareas abre `ws://127.0.0.1:4317/v1/ws` y se regist
 
 ```jsonc
 → { "type": "register", "agent": "pi", "session": "pi-1234", "cwd": "/ruta", "pid": 1234,
-    "can": ["task", "pipeline", "launch"], "project": { "dir", "name", "pipelines": [...] } }
+    "can": ["task", "pipeline"], "project": { "dir", "name", "pipelines": [...] } }
    // se puede repetir cuando cambia de sesión
 ← { "type": "task", "id": "t3", "text": "Agrega paginación", "session": "pi-1234" }
 → { "type": "task_update", "id": "t3", "status": "accepted" }
    // también done | failed (con error)
-← { "type": "launch", "id": "t4", "harness": "claude-code", "task": "…", "cwd": "/ruta" }
+← { "type": "task", "id": "t4", "text": "/task bug: …", "command": "task", "args": "bug: …" }
+   // un comando del harness: Pi lo expande, OpenCode lo corre con session.command
 ← { "type": "pipeline", "id": "p1", "session": "pi-1234", "pipeline": "feature-tdd", "task": "…" }
 → { "type": "pipeline_update", "id": "p1", "status": "running", "stages": [...] }
 ← { "type": "pipeline_cancel", "id": "p1" }

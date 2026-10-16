@@ -4,7 +4,7 @@
 import { W, H, TEAM, SPOT, BOARD, STATUS_ICON, PHASE_COLOR, phaseInfo } from '../public/sim.js';
 import { hex, mix, fit, wrap, strWidth } from './screen.js';
 import { AGENT_NAME, TASK_STATUS } from '../public/targets.js';
-import { briefOptions, briefFields, briefProblem, projectLabel } from '../public/brief.js';
+import { briefOptions, briefFields, briefProblem, targetLabel } from '../public/brief.js';
 
 const C = Object.fromEntries(Object.entries({
   appBg: '#12141f', panelBg: '#1a1d2c', headerBg: '#2b2f47', text: '#e8e9f1', muted: '#9095b0', accent: '#ffd166',
@@ -587,9 +587,7 @@ const CB = Object.fromEntries(Object.entries({
 /** El diálogo de la pizarra: un corcho con una hoja clavada, como en la vista web. */
 function drawBrief(scr, L, model) {
   const b = model.brief;
-  const projects = model.projects || [];
-  const opts = briefOptions({ projects, tasks: model.tasks, sessions: model.sessions?.values?.() || [] }, b.sel);
-  const fields = briefFields(opts);
+  const opts = briefOptions({ targets: model.targets || [] }, b.sel);
   const w = Math.min(L.cols - 2, 88);
   const iw = w - 8; // ancho útil dentro de la hoja
   const labelW = 10;
@@ -610,18 +608,18 @@ function drawBrief(scr, L, model) {
     scr.text(col + iw - strWidth(x), row, x, CB.soft, CB.paper);
   });
   rows.push(text('┄'.repeat(iw), CB.soft));
-  const project = opts.project;
-  rows.push(field('project', 'Proyecto', project ? projectLabel(project) : 'ningún agente anunció uno'));
-  rows.push(field('pipeline', 'Pipeline', opts.pipelines[b.sel.pipeline]?.label));
-  const desc = opts.pipeline?.description || (!project ? 'Los pipelines los anuncia cada agente al conectarse (los lee de .devteam/).' : !project.hasConfig ? 'Este proyecto no tiene .devteam/: sólo tareas directas.' : '');
+  rows.push(field('target', 'Agente', opts.target ? targetLabel(opts.target) : 'ninguno: regístralo en ⚙ › Agentes'));
+  rows.push(field('entry', 'Pipeline', opts.entry?.label));
+  const desc = opts.entry ? [opts.entry.description, opts.entry.source && opts.entry.source !== 'agente' ? `(${opts.entry.source})` : ''].filter(Boolean).join(' ')
+    : 'Registra un agente con su ruta completa (c › Agentes): el prompt arranca el pipeline de su harness.';
   for (const line of wrap(desc, iw - labelW - 3, 2)) rows.push((row, col) => scr.text(col + labelW + 3, row, line, CB.soft, CB.paper));
-  if (fields.includes('target')) rows.push(field('target', 'Para', opts.target?.label || 'nadie disponible'));
+  rows.push(field('session', 'Sesión', opts.session?.label));
   // la tarea, en una nota amarilla
   const focusTask = b.field === 'task';
   const noteW = iw - labelW;
   const noteLines = b.text ? wrap(b.text, noteW - 3, 3) : [''];
   noteLines.forEach((line, i) => rows.push((row, col) => {
-    scr.text(col, row, i === 0 ? 'Tarea'.padEnd(labelW) : ' '.repeat(labelW), focusTask ? C.ink : CB.soft, CB.paper);
+    scr.text(col, row, i === 0 ? 'Prompt'.padEnd(labelW) : ' '.repeat(labelW), focusTask ? C.ink : CB.soft, CB.paper);
     scr.fill(col + labelW, row, noteW, CB.note);
     if (!b.text) scr.text(col + labelW + 1, row, fit('¿Qué necesitas que haga el equipo?', noteW - 3), CB.soft, CB.note);
     else scr.text(col + labelW + 1, row, line, C.ink, CB.note);
@@ -634,7 +632,7 @@ function drawBrief(scr, L, model) {
   const room = L.rows - 4 - rows.length - fixedBelow - 2;
   if (stages.length && room > 2) {
     rows.push(text('', C.ink));
-    rows.push(text('Etapas (las ejecuta el agente en su sesión)', CB.soft));
+    rows.push(text(`Etapas (las corre ${opts.entry?.devteam ? 'la sesión del agente' : 'el harness del agente'})`, CB.soft));
     const withGates = room - 1 >= stages.length + stages.filter((s) => s.check).length;
     let left = room - 1;
     for (const [i, st] of stages.entries()) {

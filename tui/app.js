@@ -3,7 +3,7 @@
 import { createSim, TEAM, applyAppearance } from '../public/sim.js';
 import { Screen, detectColorMode } from './screen.js';
 import { computeLayout, drawFrame, agentAtCell, boardAtCell } from './view.js';
-import { briefOptions, briefFields, briefCycle, briefProblem, briefMessage, defaultProject } from '../public/brief.js';
+import { briefOptions, briefFields, briefCycle, briefProblem, briefMessage, defaultTarget } from '../public/brief.js';
 import { createSettings } from './settings.js';
 
 const ENTER = '\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1006h'; // pantalla alternativa, sin cursor, ratón SGR
@@ -21,7 +21,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       selected: null, chat: null, status: null, log: [], session: null, sessions, connection: { ok: false, label: 'conectando…' }, endpoints,
       tasks: { tasks: [], agents: [], launchers: [], defaultCwd: '' },
       pipelines: [],
-      projects: [], // los que anuncian los agentes conectados (con sus pipelines)
+      targets: [], // agentes registrados (⚙ › Agentes) y sesiones abiertas, con lo que trae su harness
       brief: null, // el diálogo de la pizarra mientras está abierto
       settings: null, // ⚙ Ajustes mientras está abierto
     };
@@ -51,7 +51,8 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       },
       onStatus(st) { model.connection = st; },
       onTasks(snap) { model.tasks = snap; },
-      onPipelines(runs, projects) { model.pipelines = runs || []; if (projects) model.projects = projects; },
+      onPipelines(runs) { model.pipelines = runs || []; },
+      onTargets(targets) { model.targets = targets || []; },
       onAppearance(a) { applyAppearance(a); },
       onError(err) { flash(`No se pudo: ${err}`, 6000); },
     });
@@ -74,18 +75,20 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
     }
 
     // ---- diálogo "Nuevo encargo" (t, o clic en la pizarra) ----
-    function openBrief() {
-      model.brief = { field: 'task', sel: { project: defaultProject(model.projects, sessions.values()), pipeline: 0, target: 0 }, text: '', error: '' };
+    /** @param agentId abre el diálogo con ese agente elegido (desde ⚙ › Agentes) */
+    function openBrief(agentId) {
+      const i = agentId ? model.targets.findIndex((t) => t.id === agentId) : -1;
+      model.brief = { field: 'task', sel: { target: i >= 0 ? i : defaultTarget(model.targets, sessions.values()), entry: 0, session: -1 }, text: '', error: '' };
     }
 
     function openSettings() {
       model.brief = null;
-      model.settings = createSettings({ http: feed.http });
+      model.settings = createSettings({ http: feed.http, onPrompt: (id) => { model.settings = null; openBrief(id); } });
     }
 
     function briefKey(k) {
       const b = model.brief;
-      const opts = briefOptions({ projects: model.projects, tasks: model.tasks, sessions: sessions.values() }, b.sel);
+      const opts = briefOptions({ targets: model.targets }, b.sel);
       const fields = briefFields(opts);
       const i = Math.max(0, fields.indexOf(b.field));
       if (!fields.includes(b.field)) b.field = 'task';
@@ -93,7 +96,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       if (k === '\t' || k === 'down') { b.field = fields[(i + 1) % fields.length]; return; }
       if (k === 'shift-tab' || k === 'up') { b.field = fields[(i - 1 + fields.length) % fields.length]; return; }
       if (k === 'left' || k === 'right') {
-        if (b.field !== 'task') b.sel = briefCycle(b.sel, b.field, k === 'right' ? 1 : -1, { projects: model.projects, opts });
+        if (b.field !== 'task') b.sel = briefCycle(b.sel, b.field, k === 'right' ? 1 : -1, { targets: model.targets, opts });
         b.error = '';
         return;
       }
@@ -101,7 +104,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
         const problem = briefProblem(opts, b.text);
         if (problem) { b.error = problem; return; }
         model.brief = null;
-        send(briefMessage(opts, b.text, 'Terminal'), opts.pipeline ? `Pipeline «${opts.pipeline.name}» en marcha` : `Tarea enviada · ${opts.target.label}`);
+        send(briefMessage(opts, b.text, 'Terminal'), `${opts.entry?.label || 'Prompt'} → ${opts.target.name}${opts.session?.session ? '' : ' (sesión nueva)'}`);
         return;
       }
       if (k === '\x7f' || k === '\b') b.text = [...b.text].slice(0, -1).join('');

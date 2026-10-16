@@ -9,6 +9,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { startServer } from '../server/server.js';
+import { errementariProject } from './fixtures/harness.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const HOOK = path.join(here, '..', 'integrations', 'claude-code', 'hook.mjs');
@@ -47,7 +48,7 @@ const say = (ctx, text) => fs.appendFileSync(ctx.transcript, `${JSON.stringify({
 
 test('Claude Code ejecuta el pipeline en su sesión: Stop → siguiente etapa; otro modelo → claude -p', async () => {
   const ctx = setup();
-  const server = await startServer({ port: 0, socket: null, config: {} });
+  const server = await startServer({ port: 0, socket: null, db: ':memory:' });
   const base = server.url;
   try {
     // al empezar, el hook anuncia el proyecto (y no imprime nada: sería contexto para Claude)
@@ -99,7 +100,7 @@ test('Claude Code ejecuta el pipeline en su sesión: Stop → siguiente etapa; o
 
 test('cancelar desde la oficina: el hook lo recoge en el siguiente Stop; y sin oficina nunca molesta', async () => {
   const ctx = setup();
-  const server = await startServer({ port: 0, socket: null, config: {} });
+  const server = await startServer({ port: 0, socket: null, db: ':memory:' });
   const base = server.url;
   try {
     await hook(ctx, base, { hook_event_name: 'UserPromptSubmit', prompt: 'hola' });
@@ -121,4 +122,22 @@ test('cancelar desde la oficina: el hook lo recoge en el siguiente Stop; y sin o
   }
   // oficina apagada: sale 0 y no imprime nada
   assert.deepEqual(await hook(ctx, 'http://127.0.0.1:9', { hook_event_name: 'Stop' }), { code: 0, out: '' });
+});
+
+test('a una sesión de Claude ya abierta, el /task de Errementari le llega expandido en el Stop', async () => {
+  const ctx = { ...setup(), project: errementariProject() };
+  const server = await startServer({ port: 0, socket: null, db: ':memory:' });
+  const base = server.url;
+  try {
+    await hook(ctx, base, { hook_event_name: 'SessionStart', source: 'startup' }); // la sesión anuncia su ruta
+    const { agent } = await call(base, 'POST', '/v1/agents', { path: ctx.project, harness: 'claude-code' });
+    const r = await call(base, 'POST', `/v1/agents/${agent.id}/prompt`, { entry: 'errementari:feature', text: 'Login con Google', session: 'c1' });
+    assert.equal(r.task.status, 'queued', r.error);
+    const out = JSON.parse((await hook(ctx, base, { hook_event_name: 'Stop' })).out);
+    assert.equal(out.decision, 'block');
+    assert.match(out.reason, /\(\/task\)/);
+    assert.match(out.reason, /Classify and run the corresponding pipeline for:\n\nfeature: Login con Google/);
+  } finally {
+    await server.close();
+  }
 });

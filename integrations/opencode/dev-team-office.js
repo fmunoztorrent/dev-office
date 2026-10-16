@@ -6,11 +6,10 @@
 //
 // - Reporta eventos de la sesión a la oficina (HTTP).
 // - Se registra por WebSocket y anuncia los pipelines de su proyecto (.devteam/).
-// - task:     la manda a la sesión con el SDK (`client.session.prompt`) o al prompt del TUI.
-// - pipeline: lo ejecuta DENTRO de la sesión, etapa por etapa, con el modelo y el agente de cada
-//             etapa (`client.session.prompt` con `model`/`agent`). Gates y bucles: devteam.mjs.
-// - launch:   la oficina le pide una sesión nueva: si es de OpenCode la crea en este servidor; si
-//             es de otro agente lanza su CLI.
+// - task:     la manda a la sesión con el SDK (`client.session.prompt`, o `client.session.command`
+//             si es un comando de tu harness, como `/task` de Errementari) o al prompt del TUI.
+// - pipeline: ejecuta un pipeline de .devteam/ DENTRO de la sesión, etapa por etapa, con el modelo
+//             y el agente de cada etapa (`client.session.prompt`). Gates y bucles: devteam.mjs.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -62,7 +61,7 @@ export const DevTeamOffice = async ({ client, directory }) => {
   const wsSend = (m) => ws?.readyState === 1 && ws.send(JSON.stringify(m));
   const register = () => wsSend({
     type: 'register', agent: 'opencode', session: lastSession, cwd, pid: process.pid,
-    can: lib ? ['task', 'pipeline', 'launch'] : ['task'], project: lib ? lib.catalogEntry(lib.loadProject(cwd)) : null,
+    can: lib ? ['task', 'pipeline'] : ['task'], project: lib ? lib.catalogEntry(lib.loadProject(cwd)) : null,
   });
   const seen = (session) => {
     if (!session || session === lastSession) return;
@@ -91,7 +90,10 @@ export const DevTeamOffice = async ({ client, directory }) => {
       return;
     }
     ack(msg.id, 'accepted');
-    client.session.prompt({ path: { id }, body: { parts: [{ type: 'text', text: msg.text }] } })
+    const sent = msg.command
+      ? client.session.command({ path: { id }, body: { command: msg.command, arguments: msg.args ?? '' } })
+      : client.session.prompt({ path: { id }, body: { parts: [{ type: 'text', text: msg.text }] } });
+    sent
       .then((res) => { unwrap(res); ack(msg.id, 'done'); })
       .catch((err) => toTui(msg.text).catch(() => ack(msg.id, 'failed', errText(err))));
   }
@@ -147,21 +149,8 @@ export const DevTeamOffice = async ({ client, directory }) => {
     client.session.abort({ path: { id: runSession } }).catch(() => {});
   }
 
-  async function launch(msg) {
-    if (msg.harness === 'opencode') {
-      const id = await newSession(msg.task);
-      ack(msg.id, 'accepted', undefined, 'sesión nueva en este OpenCode');
-      unwrap(await client.session.prompt({ path: { id }, body: { parts: [{ type: 'text', text: msg.task }] } }));
-      return ack(msg.id, 'done');
-    }
-    const r = lib?.launchAgent({ harness: msg.harness, task: msg.task, cwd: msg.cwd, env: { DEV_TEAM_OFFICE_URL: URL_BASE } }) || { ok: false, error: 'falta la librería devteam.mjs' };
-    if (!r.ok) return ack(msg.id, 'failed', r.error);
-    ack(msg.id, 'accepted', undefined, `sesión nueva lanzada por OpenCode (pid ${r.pid})`);
-    r.child.on('exit', (code) => ack(msg.id, code === 0 ? 'done' : 'failed', `salió con código ${code}`));
-  }
-
   // ---- conexión con la oficina ----
-  // No en sesiones lanzadas por otro agente (`opencode run`): terminan solas.
+  // No en sesiones lanzadas por la oficina (`opencode run`): terminan solas.
   const connect = () => {
     ws = new WebSocket(WS_URL);
     ws.onopen = register;
@@ -171,7 +160,6 @@ export const DevTeamOffice = async ({ client, directory }) => {
       if (msg.type === 'task') runTask(msg);
       else if (msg.type === 'pipeline') startPipeline(msg).catch((err) => wsSend({ type: 'pipeline_update', id: msg.id, status: 'failed', detail: errText(err) }));
       else if (msg.type === 'pipeline_cancel') cancelPipeline(msg.id);
-      else if (msg.type === 'launch') launch(msg).catch((err) => ack(msg.id, 'failed', errText(err)));
     };
     ws.onclose = () => { ws = null; setTimeout(connect, 3000)?.unref?.(); };
     ws.onerror = () => {};
