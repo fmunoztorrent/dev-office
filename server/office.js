@@ -151,11 +151,18 @@ export class Office extends EventEmitter {
       case 'waiting': return { ...ev, role: 'manager', text: clip(r.text || t('events.waiting'), 140) };
       case 'error': return { ...ev, ok: false, role: role || 'tl', text: clip(r.text || t('events.error'), 140) };
       case 'compact': return { ...ev, role: 'manager', text: t('events.compact') };
+      // Fin de turno tranquilo: suelta el turno declarado sin festejar nada (eso es `done`, el merge).
+      case 'turn_end': {
+        const was = s.turn;
+        s.turn = s.phase = null;
+        return { ...ev, role: role || was || 'manager', text: clip(r.text || t('events.turnEnd', { text: '' }), 140) };
+      }
       case 'done':
         // El skill y la extensión de Pi pueden anunciar el final a la vez.
         if (s.status === 'done' && ev.ts - (s.doneAt || 0) < 15_000) return null;
         s.doneAt = ev.ts;
         s.turn = s.phase = null;
+        s.todos = s.todos.map((t) => ({ ...t, status: 'completed' }));
         return { ...ev, role: 'manager', text: clip(r.text || t('events.done')) };
       case 'session_start': return { ...ev, role: 'manager', text: t('events.sessionStart') };
       case 'session_end': return { ...ev, role: 'manager', text: t('events.sessionEnd') };
@@ -225,7 +232,7 @@ export class Office extends EventEmitter {
 
     if (ev.role && this.roles[ev.role]) {
       const r = this.roles[ev.role];
-      r.status = ev.phase === 'red' ? 'red' : ev.kind === 'tool_end' && !ev.ok ? 'blocked' : ev.kind === 'waiting' ? 'waiting' : ev.kind === 'done' ? 'done' : 'working';
+      r.status = ev.phase === 'red' ? 'red' : ev.kind === 'tool_end' && !ev.ok ? 'blocked' : ev.kind === 'waiting' ? 'waiting' : ev.kind === 'done' ? 'done' : ev.kind === 'turn_end' ? 'idle' : 'working';
       r.text = ev.text;
       r.ts = ev.ts;
       r.actions++;

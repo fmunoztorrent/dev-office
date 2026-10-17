@@ -189,7 +189,7 @@ export const DevTeamOffice = async ({ client, directory }) => {
       switch (event.type) {
         case 'session.created': return send({ session, cwd, kind: 'session_start' });
         // con un pipeline en curso cada etapa termina un turno: el "listo" lo da el pipeline
-        case 'session.idle': return run && session === runSession ? undefined : send({ session, cwd, kind: 'done' });
+        case 'session.idle': return run && session === runSession ? undefined : send({ session, cwd, kind: 'turn_end' });
         case 'session.error': return send({ session, cwd, kind: 'error', text: p.error?.data?.message || p.error?.name });
         case 'session.compacted': return send({ session, cwd, kind: 'compact' });
         case 'permission.updated':

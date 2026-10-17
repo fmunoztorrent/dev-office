@@ -41,6 +41,11 @@ function fakeHerdr() {
     if (group === 'pane' && cmd === 'list') return ok({ type: 'pane_list', panes: [...panes.values()].map((p) => ({ ...p })) });
     if (group === 'pane' && cmd === 'rename') { panes.get(rest[0]).label = rest[1]; return ok(); }
     if (group === 'pane' && cmd === 'run') { panes.get(rest[0]).terminal_title_stripped = rest[1]; return ok(); }
+    if (group === 'pane' && cmd === 'process-info') {
+      const p = panes.get(opt(rest, '--pane'));
+      return ok({ type: 'pane_process_info', process_info: { pane_id: p.pane_id, foreground_processes: p.foreground_processes || [], shell_pid: 1 } });
+    }
+    if (group === 'pane' && cmd === 'close') { panes.delete(rest[0]); return ok(); }
     if (group === 'agent' && cmd === 'start') { const p = panes.get(opt(rest, '--pane')); Object.assign(p, { agent: opt(rest, '--kind'), agent_status: 'idle' }); return ok(); }
     // con un ejecutable propio, herdr reconoce al agente en el pane cuando arranca
     if (group === 'agent' && cmd === 'wait') { const p = panes.get(rest[0]); if (p) Object.assign(p, { agent: p.agent || 'claude', agent_status: 'idle' }); return ok(); }
@@ -101,6 +106,40 @@ test('herdr: los panes que se cierran, los cambios de estado y los panes que abr
   assert.equal(paneRole({ command: 'npm run dev' }), 'frontend');
   assert.equal(paneRole({ command: 'pytest -k pagos' }), 'qa');
   assert.equal(paneRole({ role: 'arquitecto' }), 'tl');
+});
+
+test('herdr: el pane de un comando se cierra solo cuando su proceso terminó', async () => {
+  const fake = fakeHerdr();
+  const herdr = new Herdr({ env: ENV, run: fake.run });
+  const closed = [];
+  herdr.on('close', (p) => closed.push(p.pane));
+  await herdr.poll();
+  const { pane } = await herdr.launchCommand({ command: 'npm test', cwd: '/x' });
+  // el proceso arrancó y sigue vivo: el pane no se cierra
+  fake.panes.get(pane).foreground_processes = [{ name: 'node' }];
+  await herdr.poll();
+  assert.deepEqual(closed, []);
+  assert.ok(herdr.status().panes.some((p) => p.pane === pane), 'sigue trackeado mientras corre');
+  // el proceso terminó (foreground vacío, el shell idle sigue vivo): se cierra el pane
+  fake.panes.get(pane).foreground_processes = [];
+  await herdr.poll();
+  assert.deepEqual(closed, [pane]);
+  assert.ok(!herdr.status().panes.some((p) => p.pane === pane), 'sale de los panes de la oficina');
+  assert.ok(!fake.panes.has(pane), 'se pidió cerrar el pane a herdr');
+});
+
+test('herdr: un watch con el proceso vivo nunca se auto-cierra', async () => {
+  const fake = fakeHerdr();
+  const herdr = new Herdr({ env: ENV, run: fake.run });
+  const closed = [];
+  herdr.on('close', (p) => closed.push(p.pane));
+  await herdr.poll();
+  const { pane } = await herdr.launchCommand({ command: 'npm test -- --watch', cwd: '/x' });
+  fake.panes.get(pane).foreground_processes = [{ name: 'node' }];
+  await herdr.poll();
+  await herdr.poll();
+  assert.deepEqual(closed, []);
+  assert.ok(herdr.status().panes.some((p) => p.pane === pane), 'un watch sigue siendo una actividad abierta');
 });
 
 test('la oficina dentro de herdr: el agente al abrir, las sesiones nuevas en panes y las actividades del agente', async () => {

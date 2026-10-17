@@ -77,7 +77,7 @@ export default function (pi: ExtensionAPI) {
   });
   pi.on('session_compact', async () => report({ kind: 'compact' }));
   // con un pipeline en curso cada etapa termina un turno: el "listo" lo da el pipeline al final
-  pi.on('agent_end', async (_e: any, c: any) => { ctx = c; if (!run) report({ kind: 'done' }); });
+  pi.on('agent_end', async (_e: any, c: any) => { ctx = c; if (!run) report({ kind: 'turn_end' }); });
   pi.on('agent_settled', async (event: any, c: any) => {
     ctx = c;
     if (!run || !waiting) return;

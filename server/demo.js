@@ -69,7 +69,7 @@ export function demoScript(session = `demo-${Math.random().toString(36).slice(2,
     [1300, post(stories)],
     [1300, pre('Bash', { command: `git commit -m "${t('demo.claude.commit')}"` })],
     [1600, todos(['completed', 'completed', 'completed', 'completed', 'completed'])],
-    [1500, { ...b, hook_event_name: 'Stop' }],
+    [1500, { ...b, hook_event_name: 'Stop', kind: 'done' }],
   ];
 }
 

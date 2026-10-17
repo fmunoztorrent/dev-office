@@ -3,7 +3,7 @@
 //   { session, kind, tool?, input?, text?, ok?, todos?, agentType?, agentId?, toolUseId?, role?, cwd? }
 //
 // kind: session_start | task | thinking | tool_start | tool_end | subagent_start | subagent_end
-//       | todos | waiting | error | compact | done | session_end | chat | pane_open | pane_close | pane_state
+//       | todos | waiting | error | compact | turn_end | done | session_end | chat | pane_open | pane_close | pane_state
 
 import { t } from '../public/i18n.js';
 
@@ -30,7 +30,7 @@ function fromClaudeCode(p) {
     case 'SubagentStart': return { ...b, kind: 'subagent_start', agentType: p.agent_type, agentId: p.agent_id };
     case 'SubagentStop': return { ...b, kind: 'subagent_end', agentType: p.agent_type, agentId: p.agent_id };
     case 'PreCompact': return { ...b, kind: 'compact' };
-    case 'Stop': return { ...b, kind: 'done' };
+    case 'Stop': return { ...b, kind: p.kind || 'turn_end' };
     case 'SessionEnd': return { ...b, kind: 'session_end', text: p.reason };
     default: return null;
   }

@@ -616,9 +616,9 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         if (!a) break;
         a.badges.delete(ev.subId);
         a.setState('done', 2500);
-        a.jumpUntil = now + 900;
         a.say(T('sim.subDone', { text: ev.text }));
-        emit(a.x, a.y - 60, 12, 'confetti');
+        // nota chica de subtarea terminada: el festejo grande queda para el 'done' (merge)
+        emit(a.x, a.y - 60, 1, 'check');
         break;
       case 'waiting':
         agents.manager.handUp = true;
@@ -665,6 +665,11 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         if (a) phase(a, ev, now);
         break;
       case 'phase_end':
+        turn = turnPhase = null;
+        if (a) a.say(ev.text || T('sim.turnEnd'), 2500);
+        break;
+      case 'turn_end':
+        // fin de turno, sin festejo: la misma calma que el cierre de fase.
         turn = turnPhase = null;
         if (a) a.say(ev.text || T('sim.turnEnd'), 2500);
         break;
@@ -763,7 +768,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         if (a.id !== 'manager') visit(agents.manager, a.id, T('sim.whatBlocks'), { stay: 2200 });
         break;
       case 'release':
-        celebrate(T('sim.release', { text: ev.text ? `: ${ev.text}` : '' }));
+        celebrate(T('sim.release', { text: ev.text ? `: ${ev.text}` : '' }), { icon: '🚀' });
         break;
       case 'visit': {
         const target = {
@@ -784,10 +789,10 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     }
   }
 
-  function celebrate(text) {
+  function celebrate(text, { icon = '🎉', tone = 'done' } = {}) {
     const now = simNow;
     celebrateUntil = now + 9000;
-    banner = { text: `🎉 ${text}`, tone: 'done', until: now + 6000 };
+    banner = { text: `${icon} ${text}`, tone, until: now + 6000 };
     emit(W / 2, -10, 160, 'confetti');
     Object.values(agents).forEach((a, i) => {
       a.badges.clear();

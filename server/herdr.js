@@ -89,6 +89,8 @@ export class Herdr extends EventEmitter {
   }
 
   runIn(pane, command) { return this.call(['pane', 'run', pane, command]); }
+  async processInfo(id) { return (await this.call(['pane', 'process-info', '--pane', id])).process_info ?? {}; }
+  closePane(id) { return this.call(['pane', 'close', id]); }
   async rename(pane, label) { try { await this.call(['pane', 'rename', pane, clip(label, 60)]); } catch { /* la etiqueta es un detalle */ } }
   prompt(target, text) { return this.call(['agent', 'prompt', target, text], 60_000); }
   async list() { return (await this.call(['pane', 'list', ...(this.workspace ? ['--workspace', this.workspace] : [])])).panes || []; }
@@ -175,6 +177,18 @@ export class Herdr extends EventEmitter {
       if (p.kind === 'command' && title && title !== p.title && !now.label) p.title = clip(title, 120);
       const status = STATUS.has(now.agent_status) ? now.agent_status : null;
       if (now.agent && status && status !== p.status) { const was = p.status; p.status = status; if (was || status !== 'idle') this.emit('state', p, status, was); }
+    }
+    // auto-close de panes de comando: cuando el proceso foreground terminó
+    for (const [id, p] of [...this.tracked]) {
+      if (p.kind !== 'command') continue;
+      const info = await this.processInfo(id).catch(() => null);
+      if (!info || !Array.isArray(info.foreground_processes)) continue;
+      if (info.foreground_processes.length > 0) { p.started = true; continue; }
+      if (p.started) {
+        await this.closePane(id).catch(() => {});
+        this.tracked.delete(id);
+        this.emit('close', p);
+      }
     }
     // panes que abrió un agente en la carpeta de un proyecto: la oficina los adopta
     for (const [id, p] of live) {
