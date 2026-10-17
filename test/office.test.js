@@ -122,3 +122,26 @@ test('la demo de Pi termina con todo el flujo registrado', () => {
   assert.equal(s.errors, 0);
   assert.ok(s.flow.some((f) => f.role === 'qa' && f.phase === 'red'));
 });
+
+// El `role:` que un agente declara en su frontmatter es la fuente AUTORITATIVA del personaje.
+// El nombre del agente es neutro (`power-sync` no describe ningún rol) para que el test no sea
+// vacuo: si la oficina dedujera el rol sólo del nombre, el caso sin mapa no daría `tl`.
+test('el rol declarado por el agente manda sobre la heurística del nombre y del texto', () => {
+  const rolDe = (map, task) => {
+    const o = new Office();
+    const pi = (e) => o.ingest('pi', { session: 'p', cwd: '/p', ...e });
+    pi({ kind: 'session_start' });
+    if (map) pi({ kind: 'agent_roles', roles: map }); // la extensión aprende el mapa al registrarse
+    pi({ kind: 'tool_start', tool: 'subagent_run', input: { agent: 'power-sync', task } });
+    return o.sessionSummary('p').subagents[0].role;
+  };
+
+  // 1) sin mapa aprendido, ni el nombre ni el texto identifican un rol: cae al fallback `tl`.
+  //    Este caso es el que hace no-vacuo el test: falla si alguien deduce `backend` del nombre.
+  assert.equal(rolDe(null, 'hacer una tarea'), 'tl');
+  // 2) el mapa aprendido del frontmatter resuelve el rol aunque el texto no diga nada.
+  assert.equal(rolDe({ 'power-sync': 'backend' }, 'hacer una tarea'), 'backend');
+  // 3) la declaración GANA sobre la heurística del texto: `crear endpoint de pagos` clasifica
+  //    como `backend`, pero el agente se declaró `designer` y ése es el personaje que aparece.
+  assert.equal(rolDe({ 'power-sync': 'designer' }, 'crear endpoint de pagos'), 'designer');
+});

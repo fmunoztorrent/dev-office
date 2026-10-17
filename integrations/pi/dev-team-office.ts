@@ -141,9 +141,27 @@ export default function (pi: ExtensionAPI) {
   let ws: WebSocket | null = null;
   let closed = false;
   const wsSend = (m: unknown) => ws?.readyState === 1 && ws.send(JSON.stringify(m));
+
+  // El harness declara qué subagente suyo es qué personaje (frontmatter `role`): se lo cuenta a la
+  // oficina al registrarse, así una sesión que sólo delega en local también cae en el personaje correcto.
+  // Va aparte del registro para no mezclar la sesión con el reporte de roles (y para poder verlo fallar).
+  function reportAgentRoles() {
+    try {
+      const detected = lib ? lib.detectHarness(cwd) : null;
+      const roles = detected?.roles;
+      if (roles && Object.keys(roles).length) report({ kind: 'agent_roles', roles });
+      // Una declaración rota no se tapa: la oficina no puede adivinar el personaje y el operador tiene que verlo.
+      for (const issue of detected?.roleIssues || []) console.warn(`[dev-team-office] ${issue}`);
+    } catch (err: any) {
+      // sin roles: la oficina usa su respaldo por texto; se avisa por consola pero nunca se rompe a Pi
+      console.warn(`[dev-team-office] no se pudieron leer los roles del harness: ${String(err?.message || err)}`);
+    }
+  }
+
   function register() {
     const project = lib ? lib.catalogEntry(lib.loadProject(cwd)) : null;
     wsSend({ type: 'register', agent: 'pi', session, cwd, pid: process.pid, can: lib ? ['task', 'pipeline'] : ['task'], project, ...WHERE });
+    reportAgentRoles();
   }
   if (!process.stdin.isTTY || process.env.DEV_TEAM_OFFICE_LAUNCHED || typeof WebSocket === 'undefined') return;
 

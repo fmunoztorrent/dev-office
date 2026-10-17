@@ -24,6 +24,9 @@ function tempProject() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dto-int-'));
   fs.mkdirSync(path.join(dir, '.devteam', 'pipelines'), { recursive: true });
   fs.writeFileSync(path.join(dir, '.devteam', 'team.json'), JSON.stringify({ name: 'Integrado', roles: { qa: { model: 'anthropic/claude-haiku-5-5' } } }));
+  // un agente de Pi que DECLARA su rol: el mecanismo es genérico (ningún nombre está cableado)
+  fs.mkdirSync(path.join(dir, '.pi', 'agents'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.pi', 'agents', 'custom-agent.md'), '---\nname: custom-agent\nrole: backend\n---\n\nEscribe el código.\n');
   fs.writeFileSync(path.join(dir, '.devteam', 'pipelines', 'tdd.json'), JSON.stringify({
     name: 'TDD', stages: [
       { id: 'red', role: 'qa', phase: 'red', check: { run: 'false', expect: 'fail' } },
@@ -101,6 +104,36 @@ test('extensión de Pi: corre el pipeline en su sesión, con setModel por etapa,
       // una tarea directa llega como mensaje del usuario
       await call(server.url, 'POST', '/v1/tasks', { agent: 'pi', text: 'Sube la cobertura' });
       await until(() => sent.some((m) => m.text === 'Sube la cobertura'));
+      await fire('session_shutdown');
+    });
+  } finally {
+    process.chdir(cwd);
+    process.stdin.isTTY = isTTY;
+    await server.close();
+  }
+});
+
+test('extensión de Pi: al registrarse le enseña a la oficina qué subagente suyo es qué personaje', { skip: !process.features?.typescript && 'Node sin soporte de TypeScript' }, async () => {
+  const dir = tempProject();
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
+  const cwd = process.cwd();
+  const isTTY = process.stdin.isTTY;
+  process.chdir(dir);
+  process.stdin.isTTY = true; // la extensión sólo se conecta en sesiones interactivas
+  const handlers = {};
+  const ctx = { isIdle: () => true, modelRegistry: { find: () => undefined } };
+  const fire = async (name, ev = {}) => { for (const h of handlers[name] || []) await h(ev, ctx); };
+  const pi = { on: (name, h) => { (handlers[name] ||= []).push(h); }, setModel: async () => true, setThinkingLevel: () => {}, sendUserMessage: () => {} };
+  try {
+    await withEnv({ DEV_TEAM_OFFICE_URL: server.url, DEV_TEAM_OFFICE_LIB: path.join(ROOT, 'integrations', 'common', 'devteam.mjs'), DEV_TEAM_OFFICE_SESSION: 'pi-roles' }, async () => {
+      // módulo fresco (query): la extensión fija su URL de la oficina al importarse
+      const mod = await import(pathToFileURL(path.join(ROOT, 'integrations', 'pi', 'dev-team-office.ts')).href + '?roles');
+      mod.default(pi);
+      await fire('session_start');
+      // el agente declara `role: backend` en su frontmatter: la oficina lo aprende al registrarse,
+      // sin esperar a que le manden una tarea (así un subagente local cae en el personaje correcto)
+      await until(() => server.office.sessionSummary('pi-roles')?.agentRoles?.['custom-agent'] === 'backend');
+      assert.equal(server.office.sessionSummary('pi-roles').agentRoles['custom-agent'], 'backend');
       await fire('session_shutdown');
     });
   } finally {

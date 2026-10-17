@@ -21,6 +21,70 @@ test('frontmatter de agentes (Pi, Claude, OpenCode)', () => {
   assert.equal(lib.parseAgentFile('sin frontmatter', '/x/revisor.md').name, 'revisor');
 });
 
+test('rol declarado en el frontmatter: el harness manda sobre las tablas heredadas', () => {
+  // el archivo de agente puede declarar su rol; sin rol declarado queda undefined
+  const conRol = lib.parseAgentFile('---\nname: custom-reviewer\nrole: qa\n---\nRevisa.\n', 'custom-reviewer.md');
+  const sinRol = lib.parseAgentFile('---\nname: custom-reviewer\n---\nRevisa.\n', 'custom-reviewer.md');
+  assert.equal(conRol.role, 'qa');
+  assert.equal(sinRol.role, undefined);
+
+  // el rol declarado gana sobre la tabla heredada
+  assert.equal(lib.roleOfAgent('custom-reviewer', 'qa'), 'qa');
+  assert.equal(lib.roleOfAgent('architect', 'designer'), 'designer'); // no 'tl'
+  // sin rol declarado se sigue usando la tabla heredada (segundo parámetro opcional)
+  assert.equal(lib.roleOfAgent('architect'), 'tl');
+  assert.equal(lib.roleOfAgent('custom-reviewer'), null);
+  // un rol declarado que no se puede normalizar devuelve null: no se reemplaza por la tabla
+  assert.equal(lib.roleOfAgent('architect', 'not-a-role'), null);
+  assert.equal(lib.roleOfAgent('power-sync', 'not-a-role'), null);
+  assert.equal(lib.roleOfAgent('custom-reviewer', 'not-a-role'), null);
+});
+
+test('roleOfAgent: un rol declarado gana, y uno que no se puede normalizar NO cae en la heurística', () => {
+  // declarado y normalizable: gana aunque el nombre no diga nada del rol
+  assert.equal(lib.roleOfAgent('power-sync', 'backend'), 'backend');
+  // declarado pero roto (mal escrito): null, sin adivinar por el nombre ni por las tablas
+  assert.equal(lib.roleOfAgent('power-sync', 'bakend'), null);
+  assert.equal(lib.roleOfAgent('backend', 'bakend'), null); // un nombre descriptivo tampoco lo rescata
+  // sin declaración: la heurística heredada sigue aplicando
+  assert.equal(lib.roleOfAgent('architect'), 'tl');
+  assert.equal(lib.roleOfAgent('power-sync'), null);
+});
+
+test('detectHarness: los roles declarados en los agentes llegan al mapa de roles', () => {
+  const dir = tmp();
+  fs.mkdirSync(path.join(dir, '.claude', 'agents'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'agents', 'custom-reviewer.md'), '---\nname: custom-reviewer\nrole: qa\n---\nRevisa.\n');
+  fs.writeFileSync(path.join(dir, '.claude', 'agents', 'architect.md'), '---\nname: architect\nrole: designer\n---\nDiseña.\n');
+  const { roles } = lib.detectHarness(dir);
+  assert.deepEqual([roles['custom-reviewer'], roles.architect], ['qa', 'designer']);
+});
+
+test('detectHarness: un rol declarado roto queda fuera del mapa y se reporta en roleIssues', () => {
+  // aísla el home: os.homedir() respeta $HOME, así no entran los agentes del usuario real
+  const previousHome = process.env.HOME;
+  process.env.HOME = tmp();
+  try {
+    const dir = tmp();
+    fs.mkdirSync(path.join(dir, '.claude', 'agents'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.claude', 'agents', 'power-sync.md'), '---\nname: power-sync\nrole: bakend\n---\nSincroniza.\n');
+    fs.writeFileSync(path.join(dir, '.claude', 'agents', 'signal-relay.md'), '---\nname: signal-relay\nrole: backend\n---\nRetransmite.\n');
+    const { roles, roleIssues } = lib.detectHarness(dir);
+    // el roto no se adivina: ni por su nombre ni por las tablas heredadas
+    assert.equal(roles['power-sync'], undefined);
+    // el hermano bien declarado sí entra, mapeado a su personaje
+    assert.equal(roles['signal-relay'], 'backend');
+    // y se reporta exactamente una vez, mencionando el valor declarado
+    assert.equal(roleIssues.length, 1);
+    assert.match(roleIssues[0], /bakend/);
+    // limpio: roleIssues siempre es un array, aunque no haya nada que reportar
+    assert.ok(Array.isArray(lib.detectHarness(tmp()).roleIssues));
+    assert.deepEqual(lib.detectHarness(tmp()).roleIssues, []);
+  } finally {
+    process.env.HOME = previousHome;
+  }
+});
+
 test('el proyecto de ejemplo: equipo, agentes de cada harness y pipelines resueltos', () => {
   const p = lib.loadProject(EXAMPLE);
   assert.equal(p.name, 'Tienda (ejemplo)');

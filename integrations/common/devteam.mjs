@@ -88,6 +88,8 @@ export function parseAgentFile(text, file = 'agent.md') {
     name: typeof meta.name === 'string' && meta.name ? meta.name : path.basename(file, '.md'),
     description: typeof meta.description === 'string' ? meta.description : '',
     model: typeof meta.model === 'string' && meta.model ? meta.model : undefined,
+    // rol declarado por el harness (opcional): gana sobre las tablas heredadas (SUBAGENT_ROLES)
+    role: typeof meta.role === 'string' && meta.role ? meta.role : undefined,
     tools,
     prompt: body.trim(),
     file,
@@ -231,7 +233,15 @@ export const SUBAGENT_ROLES = {
   'gentle-ai-worker': 'backend', 'gentle-ai-verify': 'qa', 'review-risk': 'tl', 'review-readability': 'tl', 'review-reliability': 'tl',
   'review-resilience': 'tl', 'jd-judge-a': 'tl', 'jd-judge-b': 'tl', 'jd-fix-agent': 'backend',
 };
-export const roleOfAgent = (name) => { const k = String(name || '').toLowerCase(); return SUBAGENT_ROLES[k] || normRole(k) || null; };
+// Precedencia: un rol declarado por el harness gana sobre las tablas heredadas; si viene declarado
+// pero no se puede normalizar, devuelve null y se reporta como issue (no se reemplaza en silencio
+// por una adivinanza); sin declaración, se usa la heurística heredada (SUBAGENT_ROLES + nombre).
+export const roleOfAgent = (name, declared) => {
+  const declares = declared !== undefined && declared !== null && String(declared).trim() !== '';
+  if (declares) return normRole(declared);
+  const k = String(name || '').toLowerCase();
+  return SUBAGENT_ROLES[k] || normRole(k) || null;
+};
 
 // Errementari (https://github.com/fmunoztorrent/errementari): el agente `pipeline` clasifica el
 // pedido y lo pasa por spec → architect → qa → backend/frontend → qa → close. Se entra con /task.
@@ -327,10 +337,19 @@ export function detectHarness(dir) {
 
   // qué subagente es qué rol (para que el personaje correcto se mueva cuando el orquestador delega)
   const roles = {};
-  for (const list of Object.values(project.agents)) for (const a of list) { const r = roleOfAgent(a.name); if (r) roles[a.name.toLowerCase()] = r; }
+  const roleIssues = [];
+  for (const list of Object.values(project.agents)) for (const a of list) {
+    const declared = a.role;
+    const r = roleOfAgent(a.name, declared);
+    if (r) { roles[a.name.toLowerCase()] = r; continue; }
+    // declaró un rol que no se puede normalizar: no se adivina, se reporta
+    if (declared !== undefined && declared !== null && String(declared).trim() !== '') {
+      roleIssues.push(`rol desconocido "${declared}" declarado por el agente "${a.name}" (usa ${ROLE_IDS.join(', ')})`);
+    }
+  }
   if (opencode.default_agent && roleOfAgent(opencode.default_agent)) roles[opencode.default_agent.toLowerCase()] = roleOfAgent(opencode.default_agent);
 
-  return { dir: root, name: project.team.name || path.basename(root), exists: fs.existsSync(root), harnesses, kinds, entries, roles, defaultAgent: opencode.default_agent || null };
+  return { dir: root, name: project.team.name || path.basename(root), exists: fs.existsSync(root), harnesses, kinds, entries, roles, roleIssues, defaultAgent: opencode.default_agent || null };
 }
 
 /** El texto (o comando) que arranca una entrada del harness con la tarea del usuario. */
