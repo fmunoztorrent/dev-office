@@ -2,3 +2,7 @@ node_modules/
 .DS_Store
 public/_debug/
 dist/
+# Local Pi runtime state
+.atl/
+# Local ODD work artifacts (machine-specific evidence, never published)
+odd/
