@@ -53,6 +53,14 @@ export function install(which = []) {
   if (unknown.length) return { ok: false, error: t('install.unknown', { names: unknown.join(', ') }) };
   const lib = copy('common/devteam.mjs', path.join(OFFICE_DIR, 'lib', 'devteam.mjs'));
   const lines = [t('install.lib', { path: tilde(lib) })];
+  // El skill de configuración es genérico (sirve a cualquier harness), pero es accesorio: si no se puede
+  // copiar, se avisa y se sigue, porque la librería ya está en disco y las integraciones aún se pueden dejar.
+  try {
+    const configSkill = copy('common/skills/dev-team-office-config/SKILL.md', path.join(HOME, '.agents', 'skills', 'dev-team-office-config', 'SKILL.md'));
+    lines.push(t('install.configSkill', { path: tilde(configSkill) }));
+  } catch (error) {
+    lines.push(t('install.configSkillFail', { error: error.message }));
+  }
   for (const n of names) lines.push(...TARGETS[n]());
   return { ok: true, lines };
 }
