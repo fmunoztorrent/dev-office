@@ -1,0 +1,11 @@
+{
+  "name": "Example Team",
+  "description": "Generic example team pack: tech lead (planner), backend, frontend, QA and analyst roles. No vendor, model, methodology or domain pinned — copy it and adapt it to your project.",
+  "roles": {
+    "tl": { "agent": "ex-architect", "description": "Plans the work before implementing" },
+    "backend": { "agent": "ex-backend", "description": "Implements backend features with TDD" },
+    "frontend": { "agent": "ex-frontend", "description": "Implements frontend features with TDD" },
+    "qa": { "agent": "ex-qa", "description": "Quality: TDD + BDD scenario validation" },
+    "analyst": { "agent": "ex-explorer", "description": "Read-only exploration and mapping" }
+  }
+}

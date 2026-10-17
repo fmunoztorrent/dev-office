@@ -5,8 +5,10 @@
 // herdr, el agente se abre en un pane nuevo y desde ahí orquesta su trabajo.
 
 import os from 'node:os';
+import path from 'node:path';
 import { startServer, DEFAULT_PORT, DEFAULT_HOST, VERSION, defaultSocketPath } from '../server/server.js';
 import { install } from './install.js';
+import { listTeams, installTeam } from './team.js';
 import { openStore } from '../server/store.js';
 import { detectHarness } from '../integrations/common/devteam.mjs';
 import { t, setLanguage, getLanguage } from '../public/i18n.js';
@@ -356,6 +358,33 @@ async function cmdInstall() {
   for (const l of out.lines) console.log(l);
 }
 
+// Los team packs que viajan con el paquete: se listan y se instalan en los agentes de un harness.
+async function cmdTeam() {
+  const [, sub, ...rest] = args._;
+  if (!sub || sub === 'list') {
+    const teams = listTeams(str(args.from));
+    if (!teams.length) { console.log(t('cli.teamNone')); return; }
+    console.log(t('cli.teams'));
+    for (const tm of teams) {
+      console.log(`${tm.name}${tm.description ? ` — ${tm.description}` : ''}`);
+      for (const [role, r] of Object.entries(tm.roles)) console.log(`  ${role.padEnd(10)} ${r.agent}`);
+    }
+    return;
+  }
+  if (sub === 'install') {
+    const team = rest[0];
+    const harness = str(args.agent);
+    if (!team || !harness) fail(t('cli.teamUsage'));
+    const p = str(args.project);
+    const project = args.project === true ? process.cwd() : p ? path.resolve(p) : undefined;
+    const out = installTeam({ team, harness, project, from: str(args.from) });
+    if (!out.ok) fail(out.error);
+    for (const l of out.lines) console.log(l);
+    return;
+  }
+  fail(t('cli.teamUsage'));
+}
+
 // ---------------------------------------------------------------- main
 
 const HELP = () => t('cli.help', { version: VERSION, port: DEFAULT_PORT, host: DEFAULT_HOST });
@@ -365,7 +394,7 @@ if (args.version) { console.log(VERSION); process.exit(0); }
 const commands = {
   open: () => cmdOpen({ game: !!args.game }), game: () => cmdOpen({ game: true }), serve: cmdServe, watch: () => cmdWatch(args._[1]), status: cmdStatus,
   demo: cmdDemo, send: cmdSend, task: cmdTask, tasks: cmdTasks, install: cmdInstall, agents: cmdAgents, offices: cmdOffices, config: cmdConfig,
-  pane: cmdPane, prompt: cmdPrompt, help: () => console.log(HELP()),
+  pane: cmdPane, prompt: cmdPrompt, team: cmdTeam, help: () => console.log(HELP()),
 };
 const cmd = commands[args._[0] || 'open'];
 if (!cmd) fail(`${t('cli.unknownCommand', { cmd: args._[0] })}\n\n${HELP()}`);
