@@ -10,6 +10,14 @@ import path from 'node:path';
 const REAL_HOME = process.env.HOME;
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'dto-install-'));
 process.env.HOME = HOME; // os.homedir() respeta $HOME (darwin/linux): aísla el install del home real
+
+// Aislamiento AFIRMADO, no supuesto: install.js congela `const HOME = os.homedir()` al importarse, así
+// que si esta igualdad no se cumple el test escribiría en el home REAL en silencio. Y es un contrato
+// acotado a plataforma: package.json declara "os": ["darwin", "linux"], los únicos motores donde
+// os.homedir() mira $HOME. A propósito NO se salta en plataformas no soportadas: un skip que pasa
+// callado es peor que este fallo, que es lo único que delata que el aislamiento no rige acá.
+assert.equal(os.homedir(), HOME, 'os.homedir() ignoró $HOME: el aislamiento del install no rige en esta plataforma');
+
 const { install } = await import('../bin/install.js');
 const { t } = await import('../public/i18n.js');
 

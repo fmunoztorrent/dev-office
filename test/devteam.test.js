@@ -85,6 +85,38 @@ test('detectHarness: un rol declarado roto queda fuera del mapa y se reporta en 
   }
 });
 
+test('hasDeclaredRole: sólo un valor real cuenta como rol declarado', () => {
+  assert.deepEqual([undefined, null, '', '   ', 'qa'].map(lib.hasDeclaredRole), [false, false, false, false, true]);
+});
+
+test('parseAgentFile: distingue rol ausente, en blanco y con valor', () => {
+  const role = (fm) => lib.parseAgentFile(`---\n${fm}\n---\nx\n`, 'power-sync.md').role;
+  // sin la clave: no hay declaración
+  assert.equal(role('name: power-sync'), undefined);
+  // clave presente pero vacía: un intento sin valor queda '' (no undefined)
+  assert.equal(role('name: power-sync\nrole:'), '');
+  assert.equal(role('name: power-sync\nrole: ""'), '');
+  // con valor: se devuelve tal cual
+  assert.equal(role('name: power-sync\nrole: qa'), 'qa');
+});
+
+test('detectHarness: un rol en blanco cae en la heurística y se reporta en roleIssues', () => {
+  const previousHome = process.env.HOME;
+  process.env.HOME = tmp();
+  try {
+    const dir = tmp();
+    fs.mkdirSync(path.join(dir, '.claude', 'agents'), { recursive: true });
+    // el rol en blanco no reemplaza la heurística: el nombre la resuelve, pero se reporta
+    fs.writeFileSync(path.join(dir, '.claude', 'agents', 'architect.md'), '---\nname: architect\nrole:\n---\nDiseña.\n');
+    const { roles, roleIssues } = lib.detectHarness(dir);
+    assert.equal(roles.architect, 'tl');
+    assert.equal(roleIssues.length, 1);
+    assert.match(roleIssues[0], /en blanco/);
+  } finally {
+    process.env.HOME = previousHome;
+  }
+});
+
 test('el proyecto de ejemplo: equipo, agentes de cada harness y pipelines resueltos', () => {
   const p = lib.loadProject(EXAMPLE);
   assert.equal(p.name, 'Tienda (ejemplo)');
