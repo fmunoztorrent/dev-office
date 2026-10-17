@@ -29,6 +29,8 @@ Eres el agente que... (system prompt)
 - Valores aceptados (los 8 roles del juego): `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`.
 - Si el campo falta o trae un valor desconocido, no se rompe nada: la oficina cae en su heurística (más abajo).
 
+Este documento es la **fuente canónica** del contrato: la lista de los 8 roles, los alias que acepta cada uno, la regla de precedencia y qué pasa con una declaración vacía o rota. El skill **Dev Team Office: conectar un harness** (`dev-team-office-config`, instalado con `dev-team-office install`) ejecuta el procedimiento paso a paso y apunta acá para el contrato completo. Si el contrato cambia, se actualiza acá y el skill sólo lo referencia: así no pueden derivar uno del otro.
+
 ### Alias que acepta `normRole`
 
 Además de los 8 valores, se aceptan alias en inglés y en español. El harness puede escribir cualquiera de estos y el valor se normaliza al rol:
@@ -175,7 +177,7 @@ console.log("PASS: mapa de roles leído desde " + dir);
 
 ### El caso concreto y verificado
 
-El caso real con nombres de un harness propio —el mapa de sus cinco agentes y la ingestión en la oficina— está en **[Caso real verificado](#caso-real-verificado)**, con el comando exacto y su salida.
+El caso real con nombres de un harness propio —el mapa de sus cinco agentes y la ingestión en la oficina— está en **[Caso real verificado](#caso-real-verificado)**, con el comando exacto y el ejemplo de una corrida exitosa.
 
 ### La precedencia, con un nombre neutro
 
@@ -296,22 +298,24 @@ Evidencia observada: `detectHarness` corrido sobre el repo de la oficina devuelv
 
 ### Comando de verificación (portable)
 
-Toma el repo de la oficina con `git rev-parse` y el directorio de agentes del harness desde un parámetro (con `$HOME` como default): no lee ninguna ruta absoluta propia de una máquina, y descubre los `.md` del directorio en vez de listarlos a mano, así que sirve para cualquier harness con cualquier cantidad de agentes. Ajustá `AGENTS_DIR` —o pasalo como primer argumento— al directorio de tu harness:
+Toma el repo de la oficina con `git rev-parse` y el directorio de agentes del harness como **parámetro obligatorio**: no trae ningún default, no nombra ningún harness y no lee ninguna ruta absoluta propia de una máquina. Descubre los `.md` del directorio en vez de listarlos a mano, así que sirve para cualquier harness con cualquier cantidad de agentes. Terminá la línea con el directorio de agentes de tu harness como argumento (el ejemplo de abajo usaría el scope de usuario de Pi):
+
+> **El directorio es obligatorio.** Sin argumento el comando no corre: imprime una línea de uso y sale con código distinto de cero.
 
 ```bash
-cd "$(git rev-parse --show-toplevel)" && AGENTS_DIR="${1:-$HOME/Workspace/falabella-pi-agents/agents}" node --input-type=module -e 'import assert from "node:assert/strict"; import fs from "node:fs"; import path from "node:path"; import { parseAgentFile, roleOfAgent } from "./integrations/common/devteam.mjs"; import { Office } from "./server/office.js"; const dir = process.env.AGENTS_DIR; const roles = {}; for (const f of fs.readdirSync(dir).filter((f) => f.endsWith(".md"))) { const a = parseAgentFile(fs.readFileSync(path.join(dir, f), "utf8"), f); const r = roleOfAgent(a.name, a.role); if (r) roles[a.name] = r; } assert.ok(Object.keys(roles).length > 0, "no se mapeó ningún rol: revisá el frontmatter role:"); const office = new Office(); for (const [agent, expected] of Object.entries(roles)) { const s = "s-" + agent; office.ingest("pi", { session: s, cwd: "/x", kind: "session_start" }); office.ingest("pi", { session: s, cwd: "/x", kind: "agent_roles", roles }); office.ingest("pi", { session: s, cwd: "/x", kind: "tool_start", tool: "subagent_run", input: { agent, task: "implementar" } }); assert.equal(office.sessionSummary(s).subagents[0].role, expected); } console.log("PASS: " + Object.keys(roles).length + " agentes declarados, ingestados en la oficina");'
+cd "$(git rev-parse --show-toplevel)" && node --input-type=module -e 'import assert from "node:assert/strict"; import fs from "node:fs"; import path from "node:path"; import { parseAgentFile, roleOfAgent } from "./integrations/common/devteam.mjs"; import { Office } from "./server/office.js"; const dir = process.argv[1]; if (!dir) { console.error("uso: pasá el directorio de agentes del harness como argumento"); process.exit(2); } const roles = {}; for (const f of fs.readdirSync(dir).filter((f) => f.endsWith(".md"))) { const a = parseAgentFile(fs.readFileSync(path.join(dir, f), "utf8"), f); const r = roleOfAgent(a.name, a.role); if (r) roles[a.name] = r; } assert.ok(Object.keys(roles).length > 0, "no se mapeó ningún rol: revisá el frontmatter role:"); const office = new Office(); for (const [agent, expected] of Object.entries(roles)) { const s = "s-" + agent; office.ingest("pi", { session: s, cwd: "/x", kind: "session_start" }); office.ingest("pi", { session: s, cwd: "/x", kind: "agent_roles", roles }); office.ingest("pi", { session: s, cwd: "/x", kind: "tool_start", tool: "subagent_run", input: { agent, task: "implementar" } }); assert.equal(office.sessionSummary(s).subagents[0].role, expected); } console.log("PASS: " + Object.keys(roles).length + " agentes declarados, ingestados en la oficina");' "$@"
 ```
 
 Éxito: imprime `PASS: N agentes declarados, ingestados en la oficina` y termina con exit 0. Prueba las dos puntas del contrato: que cada `.md` del directorio aporta su `role:` declarado al mapa, y que al inyectar ese mapa y lanzar un `subagent_run` con cada nombre, la oficina resuelve el rol declarado (no la heurística).
 
-### Transcript de esta máquina (no copiar)
+### Evidencia cruda y ejemplo de corrida
 
-Evidencia cruda capturada en la máquina donde se hizo la verificación original: el comando exacto que se ejecutó entonces y su salida. Contiene las rutas absolutas de esa máquina y los nombres `fb-*` de ese harness. Es sólo registro, no una instrucción: no la copies. Para reproducir el caso, usá el comando portable de arriba.
+El transcript crudo de la máquina donde se hizo la verificación original —el comando exacto que se ejecutó y su salida, con sus rutas absolutas— vive en el artefacto de trabajo [`odd/tasks/integracion-harness-falabella.md`](../odd/tasks/integracion-harness-falabella.md), bajo el encabezado **Evidencia cruda (transcript de esta máquina)**. Es registro, no instrucción: no la copies.
 
-```bash
-# hardcode-ok: transcript de evidencia capturado en la máquina de verificación; sus rutas absolutas son intencionales y quedan confinadas a este bloque.
-$ cd /Users/fmunozt/Workspace/dev-office && node --input-type=module -e 'import assert from "node:assert/strict"; import fs from "node:fs"; import path from "node:path"; import { parseAgentFile, roleOfAgent } from "./integrations/common/devteam.mjs"; import { Office } from "./server/office.js"; const dir = "/Users/fmunozt/Workspace/falabella-pi-agents/agents"; const names = ["fb-architect","fb-backend","fb-frontend","fb-qa","fb-explorer"]; const roles = {}; for (const n of names) { const a = parseAgentFile(fs.readFileSync(path.join(dir, n + ".md"), "utf8"), n + ".md"); roles[a.name] = roleOfAgent(a.name, a.role); } assert.deepEqual(roles, { "fb-architect": "tl", "fb-backend": "backend", "fb-frontend": "frontend", "fb-qa": "qa", "fb-explorer": "analyst" }); const office = new Office(); for (const [agent, expected] of [["fb-backend","backend"],["fb-frontend","frontend"],["fb-qa","qa"]]) { const s = "s-" + agent; office.ingest("pi", { session: s, cwd: "/x", kind: "session_start" }); office.ingest("pi", { session: s, cwd: "/x", kind: "agent_roles", roles }); office.ingest("pi", { session: s, cwd: "/x", kind: "tool_start", tool: "subagent_run", input: { agent, task: "implementar" } }); assert.equal(office.sessionSummary(s).subagents[0].role, expected); } console.log("PASS: discovery map + office ingestion (backend/frontend/qa)");'
-PASS: discovery map + office ingestion (backend/frontend/qa)
+Lo que se ve en una corrida exitosa, ya generalizado (con cualquier cantidad de agentes y roles cualesquiera):
+
+```text
+PASS: N agentes declarados, ingestados en la oficina
 ```
 
-Ese transcript prueba dos cosas de una: que el mapa leído del frontmatter es exactamente `{fb-architect → tl, fb-backend → backend, fb-frontend → frontend, fb-qa → qa, fb-explorer → analyst}`, y que al inyectar ese mapa y lanzar un `subagent_run` con cada nombre, la oficina le asigna a cada subagente su rol declarado (`backend`, `frontend`, `qa`).
+Cada `.md` del directorio aportó su `role:` declarado al mapa y, al inyectar ese mapa y lanzar un `subagent_run` con cada nombre, la oficina resolvió el rol declarado (no la heurística).

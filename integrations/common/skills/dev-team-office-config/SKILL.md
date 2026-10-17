@@ -35,10 +35,14 @@ role: backend
 ---
 ```
 
-**Éste es el punto:** el nombre del agente (`power-sync`) no le dice nada a la oficina. Con
-`role: backend` declarado, la oficina sabe que ese subagente es el personaje de Backend. Los nombres
-del harness **nunca** se hardcodean en la oficina; si algún nombre propio aparece en el código de la
-oficina, es un error.
+Los nombres del harness **nunca** se hardcodean en la oficina; si algún nombre propio aparece en el
+código de la oficina, es un error.
+
+La **guía canónica** *Conectar cualquier harness a la oficina* —en el repo de la oficina— es la
+fuente de verdad del contrato completo: la lista de alias que acepta cada rol, la precedencia
+detallada y qué pasa con una declaración vacía o rota. Este skill es el procedimiento operativo y no
+repite esa semántica, para que no puedan derivar: si el contrato cambia, se actualiza primero la guía
+y este skill sólo la referencia.
 
 ## El procedimiento
 
@@ -103,10 +107,9 @@ Corre el chequeo determinista de la sección **Verificación**.
 ## La regla de precedencia
 
 **Un `role:` declarado GANA sobre cualquier heurística.** Sin declaración, la oficina adivina por el
-texto de la tarea y por el **nombre** del agente, y si no acierta cae al default **`tl`**. Por eso un
-harness cuyos nombres ya describen su rol (`qa`, `backend`, `architect`…) puede verse bien **por
-accidente**: la heurística lo acierta. Declarar `role:` es lo que vuelve el mapeo **explícito,
-autoritativo e inmune a renombres**. Es lo más útil que te llevas de este documento.
+texto de la tarea y por el **nombre** del agente, y si no acierta cae al default **`tl`**. La guía
+canónica *Conectar cualquier harness a la oficina* explica por qué declarar es lo que vuelve el mapeo
+explícito, autoritativo e inmune a renombres.
 
 ## Verificación
 
