@@ -114,6 +114,37 @@ test('fase con rol desconocido, llamadas al script del skill y duplicados se ign
   assert.equal(o.sessionSummary('p').turn, null);
 });
 
+// El fin de turno de un agente NO es el festejo de "listo": ese queda reservado para el merge.
+// Un `Stop` de Claude Code (y el `agent_end` / `session.idle` de las extensiones) es `turn_end`:
+// el rol queda libre (`idle`) pero la sesión sigue viva y el turno declarado se suelta.
+test('el fin de turno emite turn_end, no done, y no cierra la sesión', () => {
+  const o = new Office();
+  o.ingest('pi', { session: 'sX', kind: 'phase', role: 'backend', phase: 'implement' });
+  assert.equal(o.sessionSummary('sX').turn, 'backend');
+  const [ev] = o.ingest('claude-code', { hook_event_name: 'Stop', session_id: 'sX', cwd: '/p' });
+  assert.equal(ev.kind, 'turn_end');
+  assert.equal(ev.role, 'backend');
+  assert.equal(o.roles.backend.status, 'idle');
+  const s = o.sessionSummary('sX');
+  assert.equal(s.status, 'active');
+  assert.equal(s.turn, null);
+  assert.equal(s.phase, null);
+});
+
+// El `done` es el merge: cierra la sesión y el tablero entero, no sólo lo que el agente
+// alcanzó a marcar. Una tarjeta en `in_progress` al llegar el merge no puede quedar colgada.
+test('el done marca todas las tarjetas del tablero como completed', () => {
+  const o = new Office();
+  const pi = (e) => o.ingest('pi', { session: 'p', ...e });
+  pi({ kind: 'todos', todos: [{ content: 'a', status: 'completed' }, { content: 'b', status: 'in_progress' }] });
+  assert.deepEqual(o.sessionSummary('p').todos.map((t) => t.status), ['completed', 'in_progress']);
+  pi({ kind: 'done' });
+  const s = o.sessionSummary('p');
+  assert.equal(s.status, 'done');
+  assert.equal(s.todos.length, 2);
+  assert.ok(s.todos.every((t) => t.status === 'completed'));
+});
+
 test('la demo de Pi termina con todo el flujo registrado', () => {
   const o = new Office();
   for (const [, p] of piDemoScript('pd')) o.ingest('pi', p);
@@ -121,4 +152,27 @@ test('la demo de Pi termina con todo el flujo registrado', () => {
   assert.equal(s.status, 'done');
   assert.equal(s.errors, 0);
   assert.ok(s.flow.some((f) => f.role === 'qa' && f.phase === 'red'));
+});
+
+// El `role:` que un agente declara en su frontmatter es la fuente AUTORITATIVA del personaje.
+// El nombre del agente es neutro (`power-sync` no describe ningún rol) para que el test no sea
+// vacuo: si la oficina dedujera el rol sólo del nombre, el caso sin mapa no daría `tl`.
+test('el rol declarado por el agente manda sobre la heurística del nombre y del texto', () => {
+  const rolDe = (map, task) => {
+    const o = new Office();
+    const pi = (e) => o.ingest('pi', { session: 'p', cwd: '/p', ...e });
+    pi({ kind: 'session_start' });
+    if (map) pi({ kind: 'agent_roles', roles: map }); // la extensión aprende el mapa al registrarse
+    pi({ kind: 'tool_start', tool: 'subagent_run', input: { agent: 'power-sync', task } });
+    return o.sessionSummary('p').subagents[0].role;
+  };
+
+  // 1) sin mapa aprendido, ni el nombre ni el texto identifican un rol: cae al fallback `tl`.
+  //    Este caso es el que hace no-vacuo el test: falla si alguien deduce `backend` del nombre.
+  assert.equal(rolDe(null, 'hacer una tarea'), 'tl');
+  // 2) el mapa aprendido del frontmatter resuelve el rol aunque el texto no diga nada.
+  assert.equal(rolDe({ 'power-sync': 'backend' }, 'hacer una tarea'), 'backend');
+  // 3) la declaración GANA sobre la heurística del texto: `crear endpoint de pagos` clasifica
+  //    como `backend`, pero el agente se declaró `designer` y ése es el personaje que aparece.
+  assert.equal(rolDe({ 'power-sync': 'designer' }, 'crear endpoint de pagos'), 'designer');
 });

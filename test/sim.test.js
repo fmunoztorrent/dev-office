@@ -278,6 +278,43 @@ test('lo que hace el harness se ve en la oficina: arquitectura → el TL va dond
   assert.ok(s2.journal.some((j) => j.kind === 'dream' && j.dream === 'pizza' && j.cause === 'terminaron la tarea'));
 });
 
+test('el fin de turno se dibuja tranquilo: sin festejo, sin confetti, el personaje dice su línea', () => {
+  const { sim, said, run } = office(13);
+  run(3);
+  sim.handle({ kind: 'turn_end', role: 'manager', text: 'x' });
+  assert.equal(sim.banner, null, 'sin banner de festejo');
+  assert.ok(!sim.particles.some((p) => p.kind === 'confetti'), 'sin partículas de confetti');
+  assert.ok(said.some((s) => s.who === 'manager' && s.text === 'x'), 'el manager dice el texto del evento');
+  // sin texto, cae en la línea tranquila del i18n (la misma del cierre de fase)
+  sim.handle({ kind: 'turn_end', role: 'manager' });
+  assert.ok(said.some((s) => s.who === 'manager' && s.text === '✔ Termino mi turno'));
+  assert.ok(!sim.particles.some((p) => p.kind === 'confetti'), 'sigue sin confetti');
+});
+
+test('el fin de un subagente no festeja: nota chica de subtarea, sin confetti y sin saltos', () => {
+  const { sim, said, run } = office(17);
+  run(3);
+  const analyst = sim.agents.analyst;
+  const jumpBefore = analyst.jumpUntil;
+  sim.handle({ kind: 'subagent_end', role: 'analyst', subId: 's', text: 'x' });
+  assert.ok(!sim.particles.some((p) => p.kind === 'confetti'), 'sin confetti: el festejo grande es del merge');
+  assert.ok(sim.particles.some((p) => p.kind === 'check'), 'una notita chica con ✔ (check)');
+  assert.equal(analyst.jumpUntil, jumpBefore, 'no salta: terminó una subtarea, no el cierre');
+  assert.ok(said.some((s) => s.who === 'analyst' && /✔/.test(s.text)), 'el diálogo conserva el ✔ de subtarea');
+});
+
+test('release y done festejan distinto: 🚀 el deploy real, 🎉 el merge', () => {
+  const { sim, run } = office(31);
+  run(3);
+  sim.handle({ kind: 'phase', role: 'manager', phase: 'release', text: 'v1.4.0' });
+  assert.ok(sim.banner.text.startsWith('🚀 Deploy'), `el deploy usa 🚀 Deploy: ${sim.banner.text}`);
+  assert.ok(!sim.banner.text.startsWith('🎉'), 'el deploy no usa el 🎉 del merge');
+  assert.ok(sim.particles.some((p) => p.kind === 'confetti'), 'el deploy festeja con confetti');
+  sim.handle({ kind: 'done', text: 'merge' });
+  assert.ok(sim.banner.text.startsWith('🎉'), `el merge usa 🎉: ${sim.banner.text}`);
+  assert.ok(sim.particles.some((p) => p.kind === 'confetti'), 'el merge festeja con confetti');
+});
+
 test('a quién le toca cada requerimiento', () => {
   assert.deepEqual(assignees('Arreglar el bug del login'), ['backend', 'qa']);
   assert.deepEqual(assignees('Cambiar la paleta y el logo'), ['designer']);

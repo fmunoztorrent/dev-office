@@ -24,6 +24,9 @@ function tempProject() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dto-int-'));
   fs.mkdirSync(path.join(dir, '.devteam', 'pipelines'), { recursive: true });
   fs.writeFileSync(path.join(dir, '.devteam', 'team.json'), JSON.stringify({ name: 'Integrado', roles: { qa: { model: 'anthropic/claude-haiku-5-5' } } }));
+  // un agente de Pi que DECLARA su rol: el mecanismo es genérico (ningún nombre está cableado)
+  fs.mkdirSync(path.join(dir, '.pi', 'agents'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.pi', 'agents', 'custom-agent.md'), '---\nname: custom-agent\nrole: backend\n---\n\nEscribe el código.\n');
   fs.writeFileSync(path.join(dir, '.devteam', 'pipelines', 'tdd.json'), JSON.stringify({
     name: 'TDD', stages: [
       { id: 'red', role: 'qa', phase: 'red', check: { run: 'false', expect: 'fail' } },
@@ -104,6 +107,121 @@ test('extensión de Pi: corre el pipeline en su sesión, con setModel por etapa,
       await fire('session_shutdown');
     });
   } finally {
+    process.chdir(cwd);
+    process.stdin.isTTY = isTTY;
+    await server.close();
+  }
+});
+
+// Skip documentado (el comportamiento no cambia): salta el camino de punta a punta de la extensión
+// —`register → reportAgentRoles → agent_roles`— porque importa la extensión `.ts` y necesita el
+// soporte de TypeScript de Node. Es aceptable porque `process.features.typescript` es siempre truthy
+// en el motor declarado (package.json `engines.node: >=22.13`): en un entorno soportado el test corre.
+// Si igual saltara, el contrato de fondo sigue cubierto: los roles y `roleIssues` de `detectHarness`
+// los prueba test/devteam.test.js, y la ingesta de `agent_roles` la prueba test/office.test.js.
+test('extensión de Pi: al registrarse le enseña a la oficina qué subagente suyo es qué personaje', { skip: !process.features?.typescript && 'Node sin soporte de TypeScript' }, async () => {
+  const dir = tempProject();
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
+  const cwd = process.cwd();
+  const isTTY = process.stdin.isTTY;
+  process.chdir(dir);
+  process.stdin.isTTY = true; // la extensión sólo se conecta en sesiones interactivas
+  const handlers = {};
+  const ctx = { isIdle: () => true, modelRegistry: { find: () => undefined } };
+  const fire = async (name, ev = {}) => { for (const h of handlers[name] || []) await h(ev, ctx); };
+  const pi = { on: (name, h) => { (handlers[name] ||= []).push(h); }, setModel: async () => true, setThinkingLevel: () => {}, sendUserMessage: () => {} };
+  try {
+    await withEnv({ DEV_TEAM_OFFICE_URL: server.url, DEV_TEAM_OFFICE_LIB: path.join(ROOT, 'integrations', 'common', 'devteam.mjs'), DEV_TEAM_OFFICE_SESSION: 'pi-roles' }, async () => {
+      // módulo fresco (query): la extensión fija su URL de la oficina al importarse
+      const mod = await import(pathToFileURL(path.join(ROOT, 'integrations', 'pi', 'dev-team-office.ts')).href + '?roles');
+      mod.default(pi);
+      await fire('session_start');
+      // el agente declara `role: backend` en su frontmatter: la oficina lo aprende al registrarse,
+      // sin esperar a que le manden una tarea (así un subagente local cae en el personaje correcto)
+      await until(() => server.office.sessionSummary('pi-roles')?.agentRoles?.['custom-agent'] === 'backend');
+      assert.equal(server.office.sessionSummary('pi-roles').agentRoles['custom-agent'], 'backend');
+      await fire('session_shutdown');
+    });
+  } finally {
+    process.chdir(cwd);
+    process.stdin.isTTY = isTTY;
+    await server.close();
+  }
+});
+
+test('extensión de Pi: sin agentes en el proyecto igual reporta un mapa de roles vacío, sin avisar', { skip: !process.features?.typescript && 'Node sin soporte de TypeScript' }, async () => {
+  const dir = tempProject();
+  // proyecto sin agentes: el mapa vacío es un dato (no aprendí nada), no un error
+  fs.rmSync(path.join(dir, '.pi', 'agents'), { recursive: true, force: true });
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dto-home-')); // aísla los agentes del usuario real
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
+  const cwd = process.cwd();
+  const isTTY = process.stdin.isTTY;
+  process.chdir(dir);
+  process.stdin.isTTY = true;
+  const handlers = {};
+  const ctx = { isIdle: () => true, modelRegistry: { find: () => undefined } };
+  const fire = async (name, ev = {}) => { for (const h of handlers[name] || []) await h(ev, ctx); };
+  const pi = { on: (name, h) => { (handlers[name] ||= []).push(h); }, setModel: async () => true, setThinkingLevel: () => {}, sendUserMessage: () => {} };
+  // la queja de la extensión sale por console.warn: se captura para poder afirmar que NO hubo ninguna
+  const warns = [];
+  const realWarn = console.warn;
+  console.warn = (...args) => warns.push(args.join(' '));
+  try {
+    await withEnv({ DEV_TEAM_OFFICE_URL: server.url, DEV_TEAM_OFFICE_LIB: path.join(ROOT, 'integrations', 'common', 'devteam.mjs'), DEV_TEAM_OFFICE_SESSION: 'pi-empty', HOME: home }, async () => {
+      const mod = await import(pathToFileURL(path.join(ROOT, 'integrations', 'pi', 'dev-team-office.ts')).href + '?empty');
+      mod.default(pi);
+      await fire('session_start');
+      // el evento llega igual: la sesión queda con un mapa VACÍO (no en undefined), señal de que se reportó
+      await until(() => {
+        const s = server.office.sessionSummary('pi-empty');
+        return s?.agentRoles && Object.keys(s.agentRoles).length === 0 ? s : null;
+      });
+      assert.deepEqual(server.office.sessionSummary('pi-empty').agentRoles, {});
+      assert.deepEqual(warns.filter((w) => w.includes('[dev-team-office]')), []);
+      await fire('session_shutdown');
+    });
+  } finally {
+    console.warn = realWarn;
+    process.chdir(cwd);
+    process.stdin.isTTY = isTTY;
+    await server.close();
+  }
+});
+
+test('extensión de Pi: un rol declarado que no se puede normalizar avisa y queda fuera del mapa', { skip: !process.features?.typescript && 'Node sin soporte de TypeScript' }, async () => {
+  const dir = tempProject();
+  // `bakend` no es un rol válido: no se adivina ni por nombre ni por tablas, y el operador tiene que verlo
+  fs.writeFileSync(path.join(dir, '.pi', 'agents', 'power-sync.md'), '---\nname: power-sync\nrole: bakend\n---\n\nSincroniza.\n');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dto-home-')); // aísla los agentes del usuario real
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
+  const cwd = process.cwd();
+  const isTTY = process.stdin.isTTY;
+  process.chdir(dir);
+  process.stdin.isTTY = true;
+  const handlers = {};
+  const ctx = { isIdle: () => true, modelRegistry: { find: () => undefined } };
+  const fire = async (name, ev = {}) => { for (const h of handlers[name] || []) await h(ev, ctx); };
+  const pi = { on: (name, h) => { (handlers[name] ||= []).push(h); }, setModel: async () => true, setThinkingLevel: () => {}, sendUserMessage: () => {} };
+  const warns = [];
+  const realWarn = console.warn;
+  console.warn = (...args) => warns.push(args.join(' '));
+  try {
+    await withEnv({ DEV_TEAM_OFFICE_URL: server.url, DEV_TEAM_OFFICE_LIB: path.join(ROOT, 'integrations', 'common', 'devteam.mjs'), DEV_TEAM_OFFICE_SESSION: 'pi-sync', HOME: home }, async () => {
+      const mod = await import(pathToFileURL(path.join(ROOT, 'integrations', 'pi', 'dev-team-office.ts')).href + '?sync');
+      mod.default(pi);
+      await fire('session_start');
+      // el agente bien declarado del proyecto sí llega: con eso se sabe que el reporte ya pasó
+      const s = await until(() => (server.office.sessionSummary('pi-sync')?.agentRoles?.['custom-agent'] === 'backend' ? server.office.sessionSummary('pi-sync') : null));
+      assert.equal(s.agentRoles['power-sync'], undefined); // el roto no entra en el mapa
+      const issue = await until(() => warns.find((w) => w.includes('bakend')));
+      assert.match(issue, /^\[dev-team-office\] /);
+      assert.match(issue, /rol desconocido/);
+      assert.match(issue, /power-sync/);
+      await fire('session_shutdown');
+    });
+  } finally {
+    console.warn = realWarn;
     process.chdir(cwd);
     process.stdin.isTTY = isTTY;
     await server.close();

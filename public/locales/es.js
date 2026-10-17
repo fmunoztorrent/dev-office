@@ -71,7 +71,7 @@ export default {
     yourTurn: '{name}, te toca: {phase}',
     passTurn: '→ {name}: {phase}',
     whatBlocks: '¿Qué te bloquea? 🔓',
-    release: '🚀 Release{text}',
+    release: 'Deploy{text}',
     cheers: ['¡Bien! 🎉', '¡Al fin!', '¡Deploy! 🚀', '¡Qué equipo!'],
     gossip: {
       po: ['¿Vieron lo que pidió el cliente? 🙄', 'Todo es urgente, como siempre 😅', '¿Almorzamos juntas hoy? 🥗', '{manager} va por su quinto café ☕😂', 'El roadmap quedó precioso 📌'],
@@ -377,6 +377,11 @@ Uso:
                                   actividad (un comando, u otro agente con un prompt) y se lo cuenta a la oficina.
   dev-team-office install [pi|opencode|claude]
                                   Instala la integración de cada agente (por defecto, todas).
+  dev-team-office team [--from <packsRoot>]
+                                  Los equipos empaquetados (packs de agentes instalables) y sus roles.
+  dev-team-office team install <team> --agent pi [--project <dir>] [--from <packsRoot>]
+                                  Instala los agentes del equipo en el directorio de agentes del harness.
+                                  --from apunta a una raíz de packs externa (mismo layout que teams/).
   dev-team-office send <kind> [--text …] [--role …] [--phase …] [--tool …] [--file …] [--command …] [--source …] [--session …] [--office …]
 
 Opciones:
@@ -412,10 +417,13 @@ API: docs/api.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
     officesUsage: 'Uso: dev-team-office offices [add "<nombre>" | set <id> | rm <id>] [--name …] [--timezone …] [--location …]',
     config: 'Ajustes (en {file}):', configSaved: '{key} = {value}', configUnknown: 'Ajuste desconocido: {key}. Mira: dev-team-office config',
     paneUsage: 'Uso: dev-team-office pane [--role qa] [--title "tests"] [--agent pi|claude|opencode] -- <comando o prompt>',
+    teams: 'Equipos:', teamNone: '(sin equipos empaquetados)',
+    teamUsage: 'Uso: dev-team-office team [list] | dev-team-office team install <team> --agent pi [--project <dir>] [--from <packsRoot>]',
     paneOpened: '{pane}', paneOffline: '(la oficina no está corriendo: el pane se abrió, pero no aparece en el juego)',
   },
   install: {
-    unknown: 'no conozco: {names} (usa pi, opencode o claude)', lib: 'Librería común en {path}',
+    unknown: 'no conozco: {names} (usa pi, opencode o claude)', lib: 'Librería común en {path}', configSkill: 'Skill de configuración en {path}',
+    configSkillFail: 'No se pudo copiar el skill de configuración: {error} · el resto se instala igual',
     pi: 'Pi: extensión en {ext} y skill en {skill}/', piHint: '    Abre pi en tu proyecto: se conecta sola a la oficina.',
     opencode: 'OpenCode: plugin en {plugin}', opencodeHint: '    Abre opencode en tu proyecto: se conecta solo a la oficina.',
     claude: 'Claude Code: hook en {hook}', claudeStep: '    Falta un paso tuyo: copia la sección "hooks" de {snippet}', claudeWhere: '    a ~/.claude/settings.json (o a .claude/settings.json del proyecto).',

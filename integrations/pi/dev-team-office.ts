@@ -77,7 +77,7 @@ export default function (pi: ExtensionAPI) {
   });
   pi.on('session_compact', async () => report({ kind: 'compact' }));
   // con un pipeline en curso cada etapa termina un turno: el "listo" lo da el pipeline al final
-  pi.on('agent_end', async (_e: any, c: any) => { ctx = c; if (!run) report({ kind: 'done' }); });
+  pi.on('agent_end', async (_e: any, c: any) => { ctx = c; if (!run) report({ kind: 'turn_end' }); });
   pi.on('agent_settled', async (event: any, c: any) => {
     ctx = c;
     if (!run || !waiting) return;
@@ -141,9 +141,34 @@ export default function (pi: ExtensionAPI) {
   let ws: WebSocket | null = null;
   let closed = false;
   const wsSend = (m: unknown) => ws?.readyState === 1 && ws.send(JSON.stringify(m));
+
+  // El harness declara qué subagente suyo es qué personaje (frontmatter `role`): se lo cuenta a la
+  // oficina al registrarse, así una sesión que sólo delega en local también cae en el personaje correcto.
+  // Va aparte del registro para no mezclar la sesión con el reporte de roles (y para poder verlo fallar).
+  function reportAgentRoles() {
+    // sin librería no hay nada que detectar; ya se avisa en `register`/`startPipeline` (no se repite)
+    if (!lib) return;
+    let detected: any;
+    try {
+      // SÓLO la lectura puede fallar: el reporte no, se traga sus propios errores
+      detected = lib.detectHarness(cwd);
+    } catch (err: any) {
+      // no se pudieron LEER los roles: la oficina usa su respaldo por texto; se avisa y nunca se rompe a Pi
+      console.warn(`[dev-team-office] no se pudieron leer los roles del harness: ${String(err?.message || err)}`);
+      return;
+    }
+    // Un mapa vacío es un DATO LEGÍTIMO (el proyecto no tiene agentes con rol), no un error: se reporta
+    // igual, así la oficina distingue "no aprendí nada" de "no me lo contaron". No lo conviertas en aviso:
+    // sería ruido en cada sesión de un proyecto sin agentes.
+    report({ kind: 'agent_roles', roles: detected?.roles || {} });
+    // Una declaración rota no se tapa: la oficina no puede adivinar el personaje y el operador tiene que verlo.
+    for (const issue of detected?.roleIssues || []) console.warn(`[dev-team-office] ${issue}`);
+  }
+
   function register() {
     const project = lib ? lib.catalogEntry(lib.loadProject(cwd)) : null;
     wsSend({ type: 'register', agent: 'pi', session, cwd, pid: process.pid, can: lib ? ['task', 'pipeline'] : ['task'], project, ...WHERE });
+    reportAgentRoles();
   }
   if (!process.stdin.isTTY || process.env.DEV_TEAM_OFFICE_LAUNCHED || typeof WebSocket === 'undefined') return;
 

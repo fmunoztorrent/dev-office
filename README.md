@@ -95,6 +95,8 @@ dev-team-office install          # o: install pi | opencode | claude
 
 Claude Code necesita un paso más: copiar la sección `hooks` que te indica el comando a tu `~/.claude/settings.json`.
 
+Para conectar cualquier harness (o entender el contrato de roles), ver [docs/configurar-harness.md](docs/configurar-harness.md).
+
 ## Uso
 
 ```bash
