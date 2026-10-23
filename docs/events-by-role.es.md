@@ -1,5 +1,7 @@
 # Propuesta: eventos por rol para el agente de turno (Pi)
 
+[English](events-by-role.md) · **Español**
+
 Un agente como Pi trabaja solo, pero sigue un flujo de equipo: piensa como arquitecto, escribe un test que falla como QA, implementa como backend, vuelve a QA para verlo en verde, revisa como tech lead… Esta propuesta le da a ese flujo **eventos explícitos**, para que la oficina muestre quién tiene el turno y en qué fase está.
 
 ## Dos fuentes de eventos
@@ -7,7 +9,7 @@ Un agente como Pi trabaja solo, pero sigue un flujo de equipo: piensa como arqui
 | Fuente | Qué reporta | Cómo |
 |---|---|---|
 | Extensión `integrations/pi/dev-team-office.ts` | Lo mecánico: prompt, cada herramienta (inicio/fin, error), compactación, fin del agente | Automática, con hooks de Pi (`before_agent_start`, `tool_call`, `tool_result`, `agent_end`…) |
-| Skill `integrations/pi/skills/dev-team-office` | Lo semántico: qué **rol** tiene el turno y en qué **fase** está | El modelo ejecuta `office-event.mjs` al cambiar de rol o de fase |
+| Skill `skills/dev-team-office` | Lo semántico: qué **rol** tiene el turno y en qué **fase** está | El modelo ejecuta `office-event.mjs` al cambiar de rol o de fase |
 
 Las dos comparten la sesión a través de `DEV_TEAM_OFFICE_SESSION`: la define la extensión y la heredan los comandos que lanza Pi. Así, cuando el skill declara `backend implementa`, las ediciones que la extensión reporta después se le atribuyen a Diego (backend), sin deducirlo del nombre del archivo.
 
@@ -110,10 +112,10 @@ Para verlo sin Pi: `dev-team-office demo --pi`, la tecla `p` en la oficina o el 
 ## Instalación en Pi
 
 ```bash
-mkdir -p ~/.agents/skills ~/.pi/agent/extensions
-cp -r integrations/pi/skills/dev-team-office ~/.agents/skills/
-cp integrations/pi/dev-team-office.ts ~/.pi/agent/extensions/
+dev-team-office setup --only pi
 ```
+
+(A mano: `cp -r skills/dev-team-office ~/.agents/skills/` y `cp integrations/pi/dev-team-office.ts ~/.pi/agent/extensions/`.) El mismo skill sirve a Codex, OpenCode y Claude Code: `setup` lo deja donde cada uno lo lee.
 
 `~/.agents/skills/` es la ubicación estándar de Agent Skills que Pi lee. Para un solo proyecto, usa `.agents/skills/` en la raíz del repo.
 

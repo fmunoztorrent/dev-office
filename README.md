@@ -1,330 +1,419 @@
 # Dev Team Office
 
-Una oficina en pixel art, al estilo AI Town, que muestra en vivo lo que hace un agente de código. En vez de un pueblo hay un **equipo de desarrollo**, y cada persona representa un tipo de subtarea del agente.
+**English** · [Español](README.es.md)
 
-**El juego es el frontend; el agente es el backend.** La oficina dibuja lo que reportan Claude Code, Pi u OpenCode y les manda tareas y pipelines. No ejecuta nada: el trabajo, los gates y los cambios de modelo los hace cada agente, en su propia sesión, con su integración.
+A pixel-art office, in the style of AI Town, that shows live what a coding agent is doing. Instead of a town there is a **development team**, and each person stands for a kind of subtask of the agent.
 
-Se lanza desde una terminal (`dev-team-office`): ahí corre la **bitácora** con la actividad de los agentes, y el juego se abre en esa misma terminal (`g`) o en el navegador (`o`). Una instancia es una **empresa**: puede tener varias **oficinas** (equipos o dominios), cada una con sus agentes, sus personajes, su zona horaria y su clima; siempre se ve la que eliges. Dentro de herdr, el agente se abre en un **pane nuevo** y desde ahí orquesta su trabajo, incluso abriendo más panes. El juego está en **inglés** por defecto y en **español**; todos los ajustes se guardan en SQLite.
+**The game is the frontend; the agent is the backend.** The office draws what Claude Code, Codex, OpenCode or Pi report and sends them tasks and pipelines. It runs nothing itself: the work, the gates and the model switches are done by each agent, in its own session, through its integration.
 
-| Personaje | Rol | Qué del agente representa |
+It is launched from a terminal (`dev-team-office`): that is where the **log** with the agents' activity runs, and the game opens in that same terminal (`g`) or in the browser (`o`). In the browser the office is seen **from the front** (the usual view) or **top-down, in isometric**, your choice. Inside herdr the terminal shows the **activity monitor** (how many agents are running and what each one is doing), the agent opens in a **new pane** and **each subagent it launches, in its own**. One instance is a **company**: it can hold several **offices** (teams or domains), each one with its agents, its characters, its time zone and its weather; you always see the one you pick. The game is in **English** by default and in **Spanish**; every setting is saved in SQLite.
+
+**Documentation:** [installing on a new machine](docs/installation.md) · [usage guide](docs/usage.md) · [conventions](docs/conventions.md) · [contributing](CONTRIBUTING.md) · [API](docs/api.md) · [MCP](docs/mcp.md) · [pipelines](docs/pipelines.md) · [events by role](docs/events-by-role.md) · [connecting a harness](docs/connect-a-harness.md) · [changelog](CHANGELOG.md). Every document has a Spanish version next to it (`.es.md`). For agents working on this repository: [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md).
+
+## Install in a minute
+
+You need **Node.js ≥ 22.13** (macOS or Linux). Nothing else: the office has no dependencies.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fmunoztorrent/dev-office/main/install.sh | sh
+dev-team-office
+```
+
+Step by step, with every way to start it and how to add your project: [docs/installation.md](docs/installation.md).
+
+The installer puts the office in `~/.dev-team-office/app`, the `dev-team-office` command in `~/.local/bin`, and runs `dev-team-office setup`, which **connects every agent it finds by itself** (Claude Code, Codex, OpenCode, Pi, Gemini CLI, Cursor): its live integration, the **MCP server** and the **skills**. No manual steps. To check or undo: `dev-team-office doctor` · `dev-team-office uninstall`. To update: `dev-team-office update` (or the same `curl`).
+
+Other ways:
+
+| How | Command |
+|---|---|
+| Try it without installing | `npx github:fmunoztorrent/dev-office` |
+| Install it with npm | `npm install -g github:fmunoztorrent/dev-office && dev-team-office setup` |
+| As a Claude Code plugin (hooks + MCP + skills) | `/plugin marketplace add fmunoztorrent/dev-office` and `/plugin install dev-team-office@dev-office` |
+| Only the skills, in any agent | `npx skills add fmunoztorrent/dev-office` |
+| From source | `git clone https://github.com/fmunoztorrent/dev-office && cd dev-office && node bin/dev-team-office.js setup` |
+
+With the Claude Code plugin there is nothing else to install: ask Claude to open the office (the `office_start` MCP tool starts it in the background and gives you the URL).
+
+**To add a project to the game** (any folder, with any agent): open your agent there and use `/mcp__dev-team-office__join` (the MCP server's prompt, in Claude Code), ask it to "join the office" (the `join_office` tool), `/office` in Pi, or `dev-team-office join` in the terminal. In one step it starts the office if needed, registers the repo root with its agent and tells you which character plays each subagent (by its `role:`, its name or its description). **If your agent lacks roles (or brings no subagents), it completes the team with the office's** (architect, explorer, backend, frontend and QA) in the project, in the agent's own format: `.claude/agents`, `.opencode/agents`, `.pi/agents` or `.codex/agents` ([details](docs/installation.md#if-your-agent-brings-no-team)).
+
+**With Pi you do not even need that:** after `setup`, open `pi` in your project. If the office is not running, Pi starts it in the background, registers the project (its git root) and tells you the URL; each subagent it launches shows up as its character. `/office` does it on demand and `/office open` opens it in the browser (with `DEV_TEAM_OFFICE_AUTOSTART=0`, Pi only starts it with `/office`).
+
+| Character | Role | What of the agent they stand for |
 |---|---|---|
-| Sofía | Product Owner | El prompt del usuario (nueva tarea), preguntas al usuario, historias de usuario |
-| Valentina | Analista de negocio | Exploración, `WebSearch`/`WebFetch`, lectura de docs `.md`, subagentes `Explore` |
-| Marco | Manager | Tablero de todos (`TodoWrite`/`TaskCreate`), entrega subtareas, pide tu aprobación, compactación |
-| Tomás | Tech Lead / arquitecto | Lint, git, búsquedas en el código, planes (`Plan`), reviews, ayuda cuando algo falla |
-| Andrés | QA | Archivos de test, `npm test`/`jest`/`pytest`/`playwright`…; si un test falla, le lleva el bug 🐞 al último dev que tocó código |
-| Diego | Backend | Edición de código de servidor, migraciones, comandos de shell |
+| Sofía | Product Owner | The user's prompt (a new task), questions to the user, user stories |
+| Valentina | Business Analyst | Exploration, `WebSearch`/`WebFetch`, reading `.md` docs, `Explore` subagents |
+| Marco | Manager | The todo board (`TodoWrite`/`TaskCreate`), hands out subtasks, asks for your approval, compaction |
+| Tomás | Tech Lead / architect | Lint, git, code searches, plans (`Plan`), reviews, help when something fails |
+| Andrés | QA | Test files, `npm test`/`jest`/`pytest`/`playwright`…; if a test fails, he takes the bug 🐞 to the last dev who touched code |
+| Diego | Backend | Editing server code, migrations, shell commands |
 | Lucía | Frontend | `.tsx/.vue/.css/...`, `components/`, `pages/`, dev servers |
-| Camila | Diseñadora | `.svg/.png`, `design/`, tokens, MCP de Figma |
+| Camila | Designer | `.svg/.png`, `design/`, tokens, the Figma MCP |
 
-Lo que se ve en la oficina:
+What you see in the office:
 
-- **Pizarra kanban** en un atril, con los todos del agente (por hacer / en curso / hecho) y una barra de progreso. Encima tiene un **reloj digital de puntitos rojos**, con la hora de la oficina (su zona horaria).
-- **Nuevo requerimiento:** la PO lo anuncia en el rincón de producto, se lo lleva al manager y él se lo reparte a quien corresponda según de qué trata (pantallas → frontend, endpoints → backend, bugs → QA, colores y logos → diseño; si no está claro, al Tech Lead).
-- **Subagente (`Task`/`Agent`):** el manager camina con una tarjeta hasta el escritorio de quien corresponde y le deja una carpeta mientras dure la subtarea.
-- **Uso de herramientas:** el personaje teclea, su monitor muestra código y saltan glifos. El rack de servidores parpadea cuando trabaja backend.
-- **Error:** el personaje se sacude con chispas rojas y el Tech Lead se acerca a ayudar.
-- **Permiso pendiente:** el manager levanta la mano y aparece un banner naranja.
-- **`Stop`:** confeti y todo el equipo celebra en la mesa de reuniones.
-- **Sin actividad:** de vez en cuando alguien va por café o se sienta a ver tele.
+- A **kanban whiteboard** on an easel, with the agent's todos (to do / in progress / done) and a progress bar. On top there is a **red-dot digital clock** with the office's time (its time zone).
+- **A new requirement:** the PO announces it in the product corner, takes it to the manager, and he hands it to whoever fits depending on what it is about (screens → frontend, endpoints → backend, bugs → QA, colors and logos → design; if unclear, the Tech Lead).
+- **A subagent (`Task`/`Agent`):** the manager walks a card to the right desk and leaves a folder there for as long as the subtask lasts.
+- **Tool use:** the character types, their monitor shows code and glyphs pop out. The server rack blinks when backend is working.
+- **An error:** the character shakes with red sparks and the Tech Lead comes over to help.
+- **A pending permission:** the manager raises his hand and an orange banner shows up.
+- **`Stop`:** confetti, and the whole team celebrates at the meeting table.
+- **No activity:** every now and then someone goes for coffee or sits down to watch TV.
 
-Además, cada personaje tiene **vida propia**: necesidades que crecen con el tiempo (conversar, café, baño, consultar, imaginar) y una personalidad que decide qué hace cuando nadie le pide nada:
+On top of that, each character has **a life of their own**: needs that grow over time (talking, coffee, bathroom, consulting, imagining) and a personality that decides what they do when nobody asks them for anything:
 
-- **Sofía, Valentina y Camila** (PO, analista y diseñadora) son NPC del negocio: se sientan juntas y cotorrean, desde sus escritorios o juntándose en la cafetería o junto al sofá. Comentan lo que pasa en la oficina (la tarea en curso, quién se peleó con un error, quién vio todo en verde, el último incendio) y a veces de la charla sale una idea que le llevan a Marco, que la manda al backlog.
-- **Sueños:** Camila salta e imagina **unicornios 🦄 o arcoíris 🌈**; Andrés (QA) tiene **pesadillas con calaveras 💀**; Diego y Lucía sueñan con **pizza 🍕**. Aparecen en una nube de pensamiento en pixel art que brilla.
-- **Diego, Lucía y Andrés**, mientras trabajan, a veces se paran a **consultar a Tomás** (el TL). Y **Tomás, el arquitecto**, a veces va a conversar con producto: prioridades con Sofía, datos con Valentina, mockups con Camila.
-- **Marco** hace rondas para preguntar cómo van.
-- **A las 13:00 el equipo se va a almorzar** al **comedor**, bajo la cafetería, con la hora de la oficina: pasan por la barra, entran al comedor y se sientan a la mesa larga (producto y el manager detrás, de frente; el equipo técnico delante, de espaldas), sin atravesar la mesa, y conversan hasta volver, a más tardar a las 14:00. Quien tiene un subagente trabajando almuerza en su escritorio 🥪, y si el agente necesita a alguien que está almorzando, deja el plato y vuelve a su puesto.
-- **El baño 🚻** se usa de a uno: si está ocupado, el siguiente espera afuera, inquieto. La luz del letrero muestra si está libre.
-- **A veces el servidor se incendia 🔥:** suena la alarma, producto grita, Diego (o quien esté) toma el extintor, el equipo técnico lo apaga, reinicia los servidores y Tomás agenda el postmortem.
-- **La cafetería** es la de una oficina moderna: neón, azulejos, máquina de espresso con vapor, vitrina con tortas, refrigerador de bebidas, una mesita alta y piso de roble. **Debajo, el comedor:** un muro bajo con vidrio y su letrero lo separa (se entra por la puerta o por el pasillo de abajo), piso de cerámica, alfombra, la mesa larga con mantel y dos lámparas colgantes que de noche alumbran la mesa.
-- **La pared del fondo es de vidrio.** Detrás se ve la ciudad con la hora real: el sol cruza el cielo y se esconde detrás de los cerros, el cielo se pone rojizo al atardecer, de noche se prenden las ventanas de los edificios, los faroles y las luces de los autos, y sale la luna con su fase del día.
-- **La fecha cuenta:** la estación (según el hemisferio) cambia el parque, con flores en primavera, verde intenso en verano, hojas rojas que caen en otoño y árboles pelados en invierno. También cambian la nieve de los cerros y la hora del amanecer y del atardecer.
-- **El clima es el de verdad** (el de la ciudad de cada oficina), de [Open-Meteo](https://open-meteo.com) (gratis y sin API key): nubes, neblina, llovizna, lluvia con gotas que resbalan por el vidrio, nieve, y tormenta con relámpagos que iluminan la oficina. Con frío, el vidrio se empaña. Cuando cambia el clima alguien lo comenta, con lluvia dan ganas de café y de tele, y a veces un trueno asusta a alguien. Sin conexión, la oficina inventa un clima según la estación. El clima también se ve en el HUD y en la tele.
-- **La sala de estar** tiene una tele en un trípode y un sofá. Cuando no tienen nada que hacer, los técnicos a veces se sientan a verla, de espaldas (con lluvia, más seguido). La tele muestra el clima, las noticias del equipo («EN VIVO: el equipo trabaja en…»), fútbol si alguien la está mirando, y **última hora** si se incendia el servidor.
-- **De noche** las luces de la oficina siguen prendidas: el color se enfría apenas, y el neón, los monitores, las lámparas y los sueños brillan tenues.
+- **Sofía, Valentina and Camila** (PO, analyst and designer) are the business NPCs: they sit together and chit-chat, from their desks or meeting at the café or by the sofa. They talk about what is going on in the office (the current task, who fought with an error, who saw everything green, the last fire) and sometimes an idea comes out of the chat that they take to Marco, who sends it to the backlog.
+- **Dreams:** Camila jumps and imagines **unicorns 🦄 or rainbows 🌈**; Andrés (QA) has **nightmares about skulls 💀**; Diego and Lucía dream of **pizza 🍕**. They show up in a glowing pixel-art thought cloud.
+- **Diego, Lucía and Andrés**, while working, sometimes get up to **consult Tomás** (the TL). And **Tomás, the architect**, sometimes goes to talk with product: priorities with Sofía, data with Valentina, mockups with Camila.
+- **Marco** makes rounds to ask how things are going.
+- **At 13:00 the team goes to lunch** in the **dining room**, below the café, by the office's time: they stop at the counter, go into the dining room and sit at the long table (product and the manager at the back, facing us; the technical team in front, from behind), without crossing the table, and chat until they go back, by 14:00 at the latest. Whoever has a subagent working has lunch at their desk 🥪, and if the agent needs someone who is having lunch, they leave the plate and go back to their spot.
+- **The bathroom 🚻** is used one at a time: if it is occupied, the next one waits outside, restless. The sign's light shows whether it is free.
+- **Sometimes the server catches fire 🔥:** the alarm goes off, product screams, Diego (or whoever is around) grabs the extinguisher, the technical team puts it out, restarts the servers and Tomás schedules the postmortem.
+- **The café** is a modern office's: neon, tiles, an espresso machine with steam, a display case with cakes, a drinks fridge, a high table and an oak floor. **Below it, the dining room:** a low wall with glass and its sign separates it (you enter through the door or from the lower aisle), a ceramic floor, a rug, the long table with its tablecloth and two pendant lamps that light the table at night.
+- **The back wall is glass.** Behind it you see the city at the real time: the sun crosses the sky and sets behind the hills, the sky turns reddish at sunset, at night the buildings' windows, the street lamps and the car lights come on, and the moon rises with the day's phase.
+- **The date matters:** the season (by hemisphere) changes the park, with flowers in spring, deep green in summer, red leaves falling in autumn and bare trees in winter. The snow on the hills and the times of sunrise and sunset change too.
+- **The weather is the real one** (from each office's city), from [Open-Meteo](https://open-meteo.com) (free, no API key): clouds, fog, drizzle, rain with drops sliding down the glass, snow, and storms with lightning that lights up the office. When it is cold, the glass fogs up. When the weather changes someone comments on it, rain makes people want coffee and TV, and sometimes thunder scares someone. Offline, the office makes up a weather by season. The weather also shows in the HUD and on the TV.
+- **The living room** has a TV on a tripod and a sofa. When they have nothing to do, the technical people sometimes sit down to watch it, from behind (more often when it rains). The TV shows the weather, the team news ("LIVE: the team is working on…"), football if someone is watching, and **breaking news** if the server catches fire.
+- **At night** the office lights stay on: the color barely cools down, and the neon, the monitors, the lamps and the dreams glow faintly.
 
-"A veces" significa que hay un factor de azar: la necesidad se llena con el tiempo y además hay que ganar una tirada para que ocurra.
+"Sometimes" means there is a random factor: the need fills up over time and then a roll has to be won for it to happen.
 
-### Lo que hace el harness, en la oficina
+### What the harness does, in the office
 
-La vida de la oficina no es sólo azar: cada señal del agente y de los subagentes de su harness empuja la necesidad o la reacción del personaje que corresponde, y el azar sólo decide el momento exacto.
+Office life is not only chance: each signal from the agent and its harness's subagents pushes the matching character's need or reaction, and chance only decides the exact moment.
 
-| Señal del agente | Lo que pasa en la oficina |
+| Agent signal | What happens in the office |
 |---|---|
-| Se invoca el subagente de backend, frontend, QA… (`Task`/`Agent`, etapa de un pipeline) | Marco le lleva la carpeta y ese personaje se sienta a teclear mientras dure |
-| Herramientas (`Edit`, `Bash`…) del rol | Teclea, su monitor muestra código; los builds y scripts del backend calientan el rack |
-| Tests o gates que fallan (fuera de RED) | Andrés tiene **pesadillas 💀**; quien falló queda con dudas y pronto va a consultar a Tomás |
-| RED de TDD | Fallar es lo esperado: no hay pesadilla |
-| Tests en verde, fase GREEN | Andrés respira tranquilo (se le pasa la pesadilla) y el rack se enfría |
-| Errores seguidos (sobre todo del backend) | El rack se recalienta, humea y **se incendia** («tanto error recalentó el servidor») |
-| Mucho teclear seguido | Les da hambre: sueñan con **pizza 🍕**; y cansa: van por café |
-| Termina un subagente | Se premia: con una pizza soñada o un café |
-| Fases `ux`/`ui` o subagente de diseño | Camila se inspira: unicornios y arcoíris |
-| Fase `arquitectura`/`adr` | Tomás va a preguntarle el alcance a Sofía o los datos a Valentina |
-| Fases `historia`/`criterios`/`requisitos` | Producto va a preguntarle a Tomás si es factible |
-| El agente espera tu OK | Los que no trabajan aprovechan: café, conversación y tele |
-| Tarea terminada (`Stop`) | Celebración en la mesa de reuniones, y los devs sueñan con la pizza del festejo |
+| The backend, frontend, QA… subagent is invoked (`Task`/`Agent`, a pipeline stage) | Marco brings them the folder and that character sits down to type for as long as it lasts |
+| The role's tools (`Edit`, `Bash`…) | They type, their monitor shows code; backend builds and scripts heat up the rack |
+| Failing tests or gates (outside RED) | Andrés has **nightmares 💀**; whoever failed is left with doubts and soon goes to consult Tomás |
+| TDD RED | Failing is expected: no nightmare |
+| Green tests, GREEN phase | Andrés breathes easy (the nightmare goes away) and the rack cools down |
+| Repeated errors (especially backend's) | The rack overheats, smokes and **catches fire** ("so many errors overheated the server") |
+| Lots of typing in a row | They get hungry: they dream of **pizza 🍕**; and tired: they go for coffee |
+| A subagent finishes | They reward themselves: with a dreamed pizza or a coffee |
+| `ux`/`ui` phases or a design subagent | Camila gets inspired: unicorns and rainbows |
+| `architecture`/`adr` phase | Tomás goes to ask Sofía about the scope or Valentina about the data |
+| `story`/`criteria`/`requirements` phases | Product goes to ask Tomás whether it is feasible |
+| The agent awaits your OK | Those not working take the chance: coffee, a chat and TV |
+| Task finished (`Stop`) | A celebration at the meeting table, and the devs dream of the party pizza |
 
-Todo esto sale también en la terminal de actividad, con la causa: `* Andrés tiene una pesadilla con una calavera 💀 (fallaron los tests)`.
+All of this also shows in the activity terminal, with its cause: `* Andrés has a nightmare about a skull 💀 (the tests failed)`.
 
-La simulación es la misma en la terminal y en el navegador ([`public/sim.js`](public/sim.js)), con reloj, hora del día y azar inyectables para probarla en tiempo simulado ([`test/sim.test.js`](test/sim.test.js)).
+The simulation is the same in the terminal and in the browser ([`public/sim.js`](public/sim.js)), with an injectable clock, time of day and randomness to test it in simulated time ([`test/sim.test.js`](test/sim.test.js)).
 
-## Instalación (macOS)
+## What `setup` connects
 
-Elige una de estas dos formas:
+`dev-team-office setup` detects the agents by their command or their config folder and gives each one its pieces. It respects what you already had (it adds its entries next to yours, backs up every file it touches as `<file>.dev-team-office.bak`, keeps the comments of an `opencode.jsonc`), it is idempotent, and `uninstall` removes exactly what it added.
 
-```bash
-# A) Con Node ≥ 22.13 (trae SQLite): deja el comando `dev-team-office` en tu PATH
-npm install
-npm link
+| Agent | Live (what it does, in the office) | MCP server | Skills |
+|---|---|---|---|
+| Claude Code | hooks in `~/.claude/settings.json` | `claude mcp add-json --scope user` (or `~/.claude.json`) | `~/.claude/skills/` |
+| Codex | hooks in `~/.codex/hooks.json` (trust them once with `/hooks`) | `[mcp_servers.dev-team-office]` in `~/.codex/config.toml` | `~/.agents/skills/` |
+| OpenCode | plugin in `~/.config/opencode/plugins/` | `mcp` in `opencode.json(c)` | `~/.agents/skills/` |
+| Pi | extension in `~/.pi/agent/extensions/` (it also reports what its subagents do) | `~/.pi/agent/mcp.json` (Pi ≥ 1.0 or pi-mcp-adapter) | `~/.agents/skills/` |
+| Gemini CLI | — | `mcpServers` in `~/.gemini/settings.json` | — |
+| Cursor | — | `mcpServers` in `~/.cursor/mcp.json` | — |
 
-# B) Binario independiente, no necesita Node (requiere Deno para compilarlo)
-npm install
-npm run build                       # → dist/dev-team-office (arm64, ~80 MB)
-mkdir -p ~/.local/bin && cp dist/dev-team-office ~/.local/bin/
-```
+The hooks and the MCP point to a stable launcher (`~/.dev-team-office/bin/dev-team-office`) that remembers which Node to use, so they also work from desktop apps with a minimal PATH. A hook never breaks its agent: if the office is off, it does nothing. `--only codex,claude` connects only those; `--dry-run` shows what it would do.
 
-Para Mac con Intel: `npm run build:mac-x64`.
+**Standalone binary** (no Node needed; built with Deno): `npm run build` produces `dist/dev-team-office` (arm64; `npm run build:mac-x64` for Intel).
 
-Después, integra tus agentes (copia la extensión de Pi, el plugin de OpenCode, el hook de Claude Code y la librería común que usan los tres):
+To connect any other harness (or understand the role contract), see [docs/connect-a-harness.md](docs/connect-a-harness.md). The MCP server is documented in [docs/mcp.md](docs/mcp.md).
 
-```bash
-dev-team-office install          # o: install pi | opencode | claude
-```
+## The MCP server
 
-Claude Code necesita un paso más: copiar la sección `hooks` que te indica el comando a tu `~/.claude/settings.json`.
+`dev-team-office mcp` (registered by `setup`) gives any agent with MCP these tools:
 
-Para conectar cualquier harness (o entender el contrato de roles), ver [docs/configurar-harness.md](docs/configurar-harness.md).
+| Tool | What for |
+|---|---|
+| `join_office` | **Everything in one step:** starts the office if it is not running, registers the repo root with the calling agent, completes its team with the office's (the roles it lacks) and returns the team (which character plays each subagent). Also as a prompt: `join` (`/mcp__dev-team-office__join` in Claude Code) |
+| `office_status` · `office_start` | Is the office running? Its URL. Starts it in the background if needed |
+| `register_project` | Registers the current folder (or `path`) with the agent that serves it and, optionally, in an office (team or domain; created if it does not exist). Idempotent |
+| `detect_project` | What a project brings: harnesses, pipelines, commands and each subagent's role |
+| `list_projects` · `update_project` · `remove_project` | The projects maintainer |
+| `list_offices` · `create_office` | The company's offices, with their time zone |
+| `report_activity` | Which role and phase you are in (`task`, `phase`, `todos`, `waiting`, `done`…) |
+| `send_task` | Sends a prompt to another registered project's agent |
+| `open_pane` | Inside herdr, opens a pane with an activity (tests in watch mode, another agent…) |
+| `list_teams` · `install_team` | The team packs (one subagent per role) |
 
-## Uso
+With the office off, whatever you register is kept in the database and shows up when it opens.
 
-```bash
-dev-team-office            # levanta la oficina: la API, la web y, en la terminal, la bitácora
-dev-team-office game       # lo mismo, pero entra directo al juego
-dev-team-office serve      # sólo la API y la bitácora, sin teclas (para dejarla en segundo plano)
-dev-team-office watch      # otra terminal mirando la misma oficina
-dev-team-office status     # ¿está corriendo? versión, puerto y socket
-dev-team-office demo --pi  # reproduce una sesión de ejemplo
-dev-team-office send phase --role qa --phase red --text "2 tests fallan"
-dev-team-office task "Agrega paginación" --agent pi    # tarea para el agente
-dev-team-office tasks                                  # estado de las tareas
-dev-team-office install                                # integra Pi, OpenCode y Claude Code
-dev-team-office agents add ~/Workspace/Errementari --agent claude --office pagos   # registra un agente
-dev-team-office agents                                 # los agentes y los pipelines de su harness
-dev-team-office prompt errementari-claude-code "el SSE no reconecta" --pipeline errementari:bugfix
-dev-team-office offices add "Pagos" --timezone Europe/Madrid   # otra oficina de la empresa
-dev-team-office config lang es                         # los ajustes (en la base SQLite)
-dev-team-office pane --role qa -- npm test -- --watch  # dentro de herdr: una actividad en otro pane
-```
+## btw: a side question
 
-**La terminal donde lanzas la oficina muestra la bitácora:** la actividad de los agentes de todas las oficinas (fases, herramientas, errores, subagentes, panes, tareas y pipelines), con la hora de cada oficina y, si hay varias, de qué oficina es cada línea. Arriba, la URL de la web. Teclas: `g` abre el juego en esa misma terminal (`q` vuelve a la bitácora, con lo que pasó mientras tanto), `o` lo abre en el navegador, `h` repite la ayuda y `q` cierra la oficina. Sin terminal interactiva (`serve`, o en segundo plano) sólo se escribe la bitácora, sin colores.
+From the game you can ask the **agent on duty** of the office you are watching something about the domain, the team or what they are doing, without interrupting its work: type `btw <question>` (or `/btw …`) in the game terminal's command line (`>_`), or press `b` in the terminal game. Also `dev-team-office btw "who is on the tests?"`.
 
-Si ya hay una oficina corriendo, `dev-team-office` abre su juego en vez de fallar. Puedes tener varias terminales mirando la misma.
+It is Claude Code's `/btw` brought to every harness: the session that worked most recently in that office answers, **forked and not saved** (`claude --resume … --fork-session`, `opencode run --session … --fork`), read-only; if it cannot fork (Pi, Codex) or there is no session, the office's registered agent answers with a summary of what is going on. Whoever holds the turn stays thinking and answers out loud; the full answer shows in a card at the top, in the log, and is saved.
 
-**Teclas del juego:** `t` (o clic en la pizarra) nuevo encargo · `c` (o clic en ⚙, arriba a la derecha de la oficina) ajustes · `o` (o clic en el selector, arriba a la izquierda) la siguiente oficina · `a` (o clic en `>_`, abajo a la izquierda) muestra u oculta la actividad: sin ella, la oficina ocupa toda la terminal · `x` cancelar · `q` vuelve a la bitácora · `tab`/flechas o clic para elegir personaje · `m` mensaje al equipo · `s` saludar · `d`/`p` demos · `r` reiniciar · `esc` soltar.
-
-**Requisitos de la terminal:** al menos 60×18 (se ve bien desde 120×36). Con *truecolor* se ve mejor: iTerm2, Ghostty, WezTerm, Kitty, la terminal de VS Code y la de Claude lo tienen. En las demás se usan 256 colores; se fuerza con `--color truecolor|256`.
-
-La misma oficina se puede ver en el navegador en `http://127.0.0.1:4317`, **a pantalla completa**: todo va dentro del juego.
-
-- **⚙** (arriba a la derecha, o `c`): ajustes. **⛶** (o `f`): pantalla completa del navegador. **🏢** (arriba a la izquierda, o `o`): qué oficina ver, si la empresa tiene más de una.
-- **`>_`** (abajo a la izquierda, o `a`): la **terminal** con la actividad del equipo. Pestañas *actividad* (lo que hace el agente y la vida de la oficina), *equipo* y *encargos* (la tarea, el flujo, los pipelines y las tareas, con las demos). Abajo tiene una línea de comandos: lo que escribas va como mensaje al equipo (o al seleccionado); `/encargo`, `/demo`, `/tdd`, `/reset`, `/ajustes`, `/oficina <nombre>`, `/vida`, `/limpiar` y `/ayuda` (en inglés: `/brief`, `/office`, `/life`, `/help`…). Con la terminal cerrada, un contador avisa lo nuevo.
-- **Clic en un personaje:** su **ficha**, como en Los Sims: el rombo verde sobre la cabeza, qué está haciendo, sus necesidades en barras, sus últimas acciones y botones para saludarlo o escribirle.
-- **Clic en la pizarra** (o `t`): nuevo encargo. `esc` cierra la terminal o la ficha.
-
-## Una empresa con varias oficinas
-
-Una instancia de la oficina es una **empresa**: le puedes ir agregando **oficinas** (equipos o dominios: pagos, web, plataforma…) en **⚙ › Oficinas** o con `dev-team-office offices add`. Cada oficina tiene:
-
-- **sus agentes** (cada agente registrado es de una oficina: `--office` o el selector en ⚙ › Agentes);
-- **sus personajes** (nombres, cargos y colores propios);
-- **su zona horaria** (si no, la de la empresa; si no, la del sistema), y con ella su hora, su almuerzo, su día y su noche, su estación y **su clima**;
-- **su actividad**: cada evento de un agente va a su oficina — la que dice el propio agente (la oficina se la pasa al abrirlo), la de su sesión, la de su pane de herdr o la del agente registrado cuya ruta contiene su carpeta; si no, a la principal.
-
-Las interfaces muestran **una oficina a la vez**: la que eliges en el selector de **arriba a la izquierda** (la web y la terminal; también con `o`). Si hay una sola, no aparece. La elección queda guardada. La bitácora de la terminal muestra la actividad de todas.
-
-## herdr: el agente en un pane
-
-Si lanzas la oficina **dentro de herdr** (`HERDR_ENV=1`), el agente no corre en segundo plano:
-
-- **Al abrir la oficina**, el agente se abre en un **pane nuevo** junto al de la oficina (sin quitarte el foco), con su etiqueta (`🏢 Pagos · Claude Code · tienda`). ¿Cuál? El de `--agent` o el de **⚙ › General › Agente al abrir**: en automático, el agente registrado de la carpeta donde lanzaste la oficina, o el CLI que esa carpeta trae configurado (o el primero instalado). `--no-launch` no abre ninguno.
-- **Las sesiones nuevas** (un prompt desde la pizarra sin sesión abierta) también se abren en un pane, interactivas: el agente recibe el prompt ahí y la tarea termina cuando su turno termina. Se apaga en ⚙ › General.
-- **El agente orquesta lo suyo desde su pane** —subagentes, pipelines de su harness— y **puede abrir más panes** para otras actividades: tests en modo watch, un servidor, un build u otro agente con su propio prompt, con `dev-team-office pane` (el skill de Pi lo explica) o con el propio `herdr`. Eso es del agente, no de la oficina; la oficina lo **entiende**: cada pane es una actividad de la que se encarga alguien del equipo (los tests, QA; el servidor de desarrollo, frontend; otro agente, según su rol) mientras siga abierto. Los panes que un agente abre en la carpeta de su proyecto la oficina los adopta sola; si se bloquea un agente en su pane, el manager levanta la mano.
+## Usage
 
 ```bash
-dev-team-office pane --role qa --title "tests en watch" -- npm test -- --watch
-dev-team-office pane --agent claude --role tl --title review -- "Revisa el diff y reporta sólo lo accionable"
+dev-team-office            # starts the office: the API, the web and, in the terminal, the log (inside herdr, the monitor)
+dev-team-office monitor    # the activity monitor: how many agents are running and what each one is doing
+dev-team-office game       # outside herdr, goes straight into the game in the terminal
+dev-team-office join       # adds this folder to the game: registers the project, detects its subagents and completes the team
+dev-team-office serve      # only the API and the log, no keys (to leave it in the background)
+dev-team-office watch      # another terminal watching the same office
+dev-team-office status     # is it running? version, port and socket
+dev-team-office demo --pi  # replays a sample session
+dev-team-office send phase --role qa --phase red --text "2 tests fail"
+dev-team-office task "Add pagination" --agent pi       # a task for the agent
+dev-team-office tasks                                  # the tasks' status
+dev-team-office setup                                  # connects Claude Code, Codex, OpenCode, Pi… (hooks, MCP, skills)
+dev-team-office doctor                                 # checks the installation
+dev-team-office btw "who is on the tests?"             # a side question to the agent on duty
+dev-team-office agents add ~/Workspace/Errementari --agent claude --office payments   # registers an agent
+dev-team-office agents                                 # the agents and their harness's pipelines
+dev-team-office prompt errementari-claude-code "the SSE does not reconnect" --pipeline errementari:bugfix
+dev-team-office offices add "Payments" --timezone Europe/Madrid   # another office of the company
+dev-team-office config lang es                         # the settings (in the SQLite database)
+dev-team-office pane --role qa -- npm test -- --watch  # inside herdr: an activity in another pane
 ```
 
-Fuera de herdr todo funciona como antes (los agentes nuevos corren en segundo plano). La oficina habla con herdr sólo por su CLI (`herdr pane split|run|list|rename`, `herdr agent start|prompt`).
+**Inside herdr, the terminal shows the activity monitor** (not the game): at the top, how many agents, subagents, panes and tasks there are; in the middle, each agent with its task, what it is doing and its subagents below; then, who on the team is working; at the bottom, the log. `o` opens the game in the browser, `g` in the terminal, `←→` switches office and `q` quits. `dev-team-office monitor` opens it in any terminal (if an office is already running, it connects to it; `--no-monitor` brings back the log inside herdr).
 
-## Agentes: cada uno con su harness engineering
+**Outside herdr, the terminal where you launch the office shows the log:** the activity of the agents of every office (phases, tools, errors, subagents, panes, tasks and pipelines), with each office's time and, if there are several, which office each line belongs to. At the top, the web URL. Keys: `g` opens the game in that same terminal (`q` goes back to the log, with what happened meanwhile), `o` opens it in the browser, `h` repeats the help and `q` closes the office. Without an interactive terminal (`serve`, or in the background) only the log is written, without colors.
 
-Un **agente** es una ruta completa más el CLI que la atiende (Claude Code, OpenCode o Pi). Se registra en **⚙ › Agentes** (o con `dev-team-office agents add`) y se guarda en la base SQLite de la oficina. Lo que trae esa ruta es del agente: su orquestador, sus subagentes, sus comandos, sus pipelines. La oficina lo **detecta** y, al mandarle un prompt, arranca **ese** pipeline:
+If an office is already running, `dev-team-office` opens its game instead of failing. You can have several terminals watching the same one.
 
-| Lo que trae la ruta | Pipelines que ofrece | Cómo se arranca |
+**Game keys:** `t` (or click the whiteboard) new brief · `c` (or click ⚙, at the office's top right) settings · `o` (or click the selector, top left) the next office · `a` (or click `>_`, bottom left) shows or hides the activity: without it, the office takes the whole terminal · `x` cancel · `q` back to the log · `tab`/arrows or click to pick a character · `m` message to the team · `b` btw (a side question to the agent on duty) · `s` greet · `d`/`p` demos · `r` restart · `esc` let go.
+
+**Terminal requirements:** at least 60×18 (it looks good from 120×36). It looks best with *truecolor*: iTerm2, Ghostty, WezTerm, Kitty, VS Code's terminal and Claude's have it. Others use 256 colors; force it with `--color truecolor|256`.
+
+The same office can be seen in the browser at `http://127.0.0.1:4317`, **full screen**: everything goes inside the game.
+
+- **Two views:** the usual **front** view (the default) or the **isometric top-down** one: the floor as a rhombus, the window wall and a side wall, furniture as volumes and people standing, each one in front of or behind what it should be. Switch with **◇** (top right), with `v` or in ⚙ › General › Office view; it is saved.
+- **⚙** (top right, or `c`): settings. **⛶** (or `f`): the browser's full screen. **🏢** (top left, or `o`): which office to watch, if the company has more than one.
+- **`>_`** (bottom left, or `a`): the **terminal** with the team's activity. Tabs *activity* (what the agent does and the office's life), *team* and *briefs* (the task, the flow, the pipelines and the tasks, with the demos). At the bottom it has a command line: what you type goes as a message to the team (or to the selected one); `/brief`, `/demo`, `/tdd`, `/reset`, `/settings`, `/office <name>`, `/life`, `/clear` and `/help` (in Spanish too: `/encargo`, `/oficina`, `/vida`, `/ayuda`…), and `btw <question>` to ask the agent on duty something. With the terminal closed, a counter tells you what is new.
+- **Click a character:** their **sheet**, like in The Sims: the green diamond over the head, what they are doing, their needs as bars, their last actions and buttons to greet them or write to them.
+- **Click the whiteboard** (or `t`): a new brief. `esc` closes the terminal or the sheet.
+
+## A company with several offices
+
+One office instance is a **company**: you can keep adding **offices** (teams or domains: payments, web, platform…) in **⚙ › Offices** or with `dev-team-office offices add`. Each office has:
+
+- **its agents** (each registered agent belongs to an office: `--office` or the selector in ⚙ › Agents);
+- **its characters** (their own names, titles and colors);
+- **its time zone** (otherwise the company's; otherwise the system's), and with it its time, its lunch, its day and night, its season and **its weather**;
+- **its activity**: each agent event goes to its office — the one the agent itself states (the office passes it when opening it), its session's, its herdr pane's, or the one of the registered agent whose path contains its folder; otherwise, the main one.
+
+The interfaces show **one office at a time**: the one you pick in the selector at the **top left** (web and terminal; also with `o`). If there is only one, it does not show. The choice is saved. The terminal log shows the activity of all of them.
+
+## herdr: the agent in a pane, and each subagent in its own
+
+The full flow, inside herdr:
+
+1. You open herdr in your project.
+2. You type `dev-team-office`: it starts the server, shows the **activity monitor** (not the game) and opens your agent (Pi, Claude Code…) in a pane on the right.
+3. You ask your agent for something in its pane, or from the game in the browser (`o` in the monitor; `t` or click the whiteboard). The agent works on it in its pane and **each subagent it launches opens in its own pane**, below the agent: there you see live who it is (its character), its task, each tool, its commands' output and, at the end, its report. The ones running at the same time sit side by side, and each pane closes by itself a few seconds after its subagent finishes.
+
+The subagent is still run by its harness (gentle-pi, Claude Code's Task, OpenCode's): the pane **shows** it with `dev-team-office follow`, it does not run it. Turn it off in **⚙ › General › Each subagent in its pane** (or `dev-team-office config herdr.subagents off`).
+
+If you launch the office **inside herdr** (`HERDR_ENV=1`), the agent does not run in the background:
+
+- **When the office opens**, the agent opens in a **new pane** next to the office's (without taking your focus), with its label (`🏢 Payments · Claude Code · shop`). Which one? The one from `--agent` or from **⚙ › General › Agent on open**: on automatic, the registered agent of the folder where you launched the office, or the CLI that folder has configured (or the first one installed). `--no-launch` opens none.
+- **New sessions** (a prompt from the whiteboard without an open session) also open in a pane, interactive: the agent gets the prompt there and the task ends when its turn ends. Turn it off in ⚙ › General.
+- **The agent orchestrates its own work from its pane** —subagents, its harness's pipelines— and **may open more panes** for other activities: tests in watch mode, a server, a build or another agent with its own prompt, with `dev-team-office pane` (Pi's skill explains it) or with `herdr` itself. That belongs to the agent, not to the office; the office **understands** it: each pane is an activity someone on the team takes care of (tests, QA; the dev server, frontend; another agent, by its role) while it stays open. Panes an agent opens in its project's folder are adopted by the office automatically; if an agent gets blocked in its pane, the manager raises his hand.
+
+```bash
+dev-team-office pane --role qa --title "tests in watch" -- npm test -- --watch
+dev-team-office pane --agent claude --role tl --title review -- "Review the diff and report only what is actionable"
+```
+
+Outside herdr everything works as before (new agents run in the background). The office talks to herdr only through its CLI (`herdr pane split|run|list|rename`, `herdr agent start|prompt`).
+
+## Agents: each one with its harness engineering
+
+An **agent** is a full path plus the CLI that serves it (Claude Code, OpenCode or Pi). It is registered in **⚙ › Agents** (or with `dev-team-office agents add`) and saved in the office's SQLite database. What that path brings belongs to the agent: its orchestrator, its subagents, its commands, its pipelines. The office **detects** it and, when sending it a prompt, starts **that** pipeline:
+
+| What the path brings | Pipelines it offers | How it starts |
 |---|---|---|
-| [Errementari](https://github.com/fmunoztorrent/errementari) (`.errementari.json`) | `/task` (clasifica solo), feature, bugfix, chore, debug | `/task <prompt>` (`/task bug: …`, `/task chore: …`): el agente `pipeline` lo pasa por spec → architect → qa → backend/frontend → qa → close |
-| Comandos de Claude Code (`.claude/commands/*.md`) | `/<comando>` | `claude -p "/<comando> <prompt>"` |
-| Comandos de OpenCode (`opencode.json`, `.opencode/command/`) | `/<comando>` | `opencode run --command <comando> "<prompt>"` |
-| Prompts de Pi (`.pi/prompts`, `~/.pi/agent/prompts`, p. ej. los de gentle-pi) | `/<prompt>` | `pi -p "/<prompt> <prompt>"` |
-| Pipelines de Dev Team Office (`.devteam/pipelines`) | `Pipeline · <nombre>` | Los corre una sesión abierta, dentro de sí misma ([docs/pipelines.md](docs/pipelines.md)) |
-| Cualquier ruta | Prompt directo | El prompt tal cual, para el agente por defecto del harness |
+| [Errementari](https://github.com/fmunoztorrent/errementari) (`.errementari.json`) | `/task` (classifies by itself), feature, bugfix, chore, debug | `/task <prompt>` (`/task bug: …`, `/task chore: …`): the `pipeline` agent runs it through spec → architect → qa → backend/frontend → qa → close |
+| Claude Code commands (`.claude/commands/*.md`) | `/<command>` | `claude -p "/<command> <prompt>"` |
+| OpenCode commands (`opencode.json`, `.opencode/command/`) | `/<command>` | `opencode run --command <command> "<prompt>"` |
+| Pi prompts (`.pi/prompts`, `~/.pi/agent/prompts`, e.g. gentle-pi's) | `/<prompt>` | `pi -p "/<prompt> <prompt>"` |
+| Dev Team Office pipelines (`.devteam/pipelines`) | `Pipeline · <name>` | An open session runs them, inside itself ([docs/pipelines.md](docs/pipelines.md)) |
+| Any path | Direct prompt | The prompt as is, for the harness's default agent |
 
-**A dónde va el prompt:**
+**Where the prompt goes:**
 
-- **Sesión abierta en esa ruta.**
-  - Pi y OpenCode lo reciben al instante: Pi expande el `/comando` y OpenCode lo corre con `session.command`.
-  - Claude Code lo recibe en su hook `Stop`, con el comando expandido.
-- **Sesión nueva.** Dentro de herdr, el agente se abre en un pane nuevo y recibe el prompt ahí. Fuera de herdr, la oficina abre el CLI del agente en su ruta, sin shell y con el prompt como un único argumento. Los hooks y plugins del agente reportan todo a la oficina.
+- **A session open in that path.**
+  - Pi and OpenCode get it instantly: Pi expands the `/command` and OpenCode runs it with `session.command`.
+  - Claude Code gets it in its `Stop` hook, with the command expanded.
+- **A new session.** Inside herdr, the agent opens in a new pane and gets the prompt there. Outside herdr, the office opens the agent's CLI in its path, without a shell and with the prompt as a single argument. The agent's hooks and plugins report everything to the office.
 
-Cuando el orquestador delega, el personaje que se mueve es el de ese subagente:
+**Which character plays each subagent:** the one from its `role:` (in its file's frontmatter, or `role = "…"` in Codex's TOML); if it does not declare one, the one from its name (`qa`, `architect`, `sdd-apply`…) and, failing that, the one its description suggests ("Runs the e2e tests" → QA). Project ones win over global ones (`~/.claude/agents`, `~/.pi/agent/agents`…), and every session working in that folder learns it by itself, even if its agent does not say. `join` (or `detect_project`) shows the team and which ones do not match any role.
 
-- **Errementari:** spec → analista, architect → Tech Lead, qa → QA, backend → backend, pipeline → manager.
-- **gentle-pi:** `subagent_run`, con sdd-* y review-*.
+When the orchestrator delegates, the character that moves is that subagent's:
 
-## Encargos: haz clic en la pizarra
+- **Errementari:** spec → analyst, architect → Tech Lead, qa → QA, backend → backend, pipeline → manager.
+- **gentle-pi:** `subagent_run`, with sdd-* and review-*.
 
-Al hacer clic en la pizarra de la oficina, en la terminal o en la web (en la terminal también con `t`), se abre el diálogo **Nuevo encargo**. Ahí eliges:
+## Briefs: click the whiteboard
 
-- **Agente:** los registrados y las sesiones abiertas.
-- **Pipeline:** las entradas que trae su harness (ver arriba).
-- **Sesión:** una abierta en esa ruta, o una nueva.
-- **El prompt**, en una nota adhesiva.
+Clicking the office's whiteboard, in the terminal or on the web (in the terminal also with `t`), opens the **New brief** dialog. There you choose:
 
-Antes de enviar, el diálogo muestra las etapas del pipeline y qué personaje hace cada una. Con **✉ Enviar prompt** en ⚙ › Agentes se abre con ese agente ya elegido.
+- **Agent:** the registered ones and the open sessions.
+- **Pipeline:** the entries its harness brings (see above).
+- **Session:** one open in that path, or a new one.
+- **The prompt**, on a sticky note.
 
-Los pipelines de `.devteam/pipelines/*.json` los corre la sesión del agente, etapa por etapa:
+Before sending, the dialog shows the pipeline's stages and which character does each one. **✉ Send prompt** in ⚙ › Agents opens it with that agent already chosen.
 
-| Agente | Cómo corre las etapas |
+The pipelines in `.devteam/pipelines/*.json` are run by the agent's session, stage by stage:
+
+| Agent | How it runs the stages |
 |---|---|
-| **Pi** | Un mensaje por etapa en la misma sesión; cambia de modelo con `setModel` en cada etapa |
-| **OpenCode** | Un `session.prompt` por etapa, con el modelo y el agente de la etapa |
-| **Claude Code** | El hook `Stop` encadena las etapas en la sesión. Una etapa que pide **otro** modelo corre como `claude -p --model …` (un hook no puede cambiar el modelo de la sesión) |
+| **Pi** | One message per stage in the same session; it switches model with `setModel` at each stage |
+| **OpenCode** | One `session.prompt` per stage, with the stage's model and agent |
+| **Claude Code** | The `Stop` hook chains the stages in the session. A stage that asks for **another** model runs as `claude -p --model …` (a hook cannot change the session's model) |
 
-Formato completo en [docs/pipelines.md](docs/pipelines.md) y un ejemplo en [`examples/tienda`](examples/tienda).
+Full format in [docs/pipelines.md](docs/pipelines.md) and an example in [`examples/tienda`](examples/tienda).
 
-### Tareas directas
+### Direct tasks
 
-| Destino | Cómo llega |
+| Target | How it arrives |
 |---|---|
-| **Pi** con sesión abierta | Al instante. La extensión llama `pi.sendUserMessage()`, y si Pi está ocupado queda como follow-up |
-| **OpenCode** con sesión abierta | Al instante. El plugin la envía con `client.session.prompt()`; sin sesión conocida, la escribe en el prompt del TUI |
-| **Claude Code** (sesión existente) | En cola. La entrega su hook `Stop` cuando Claude termina el turno en curso, y Claude sigue con ella. Claude Code no permite inyectar mensajes en una sesión interactiva desde fuera: si la sesión está esperando tu mensaje, la tarea llega al terminar el siguiente turno |
-| **Sesión nueva** de un agente registrado | Dentro de herdr, en un pane nuevo (interactivo). Fuera, la oficina abre `claude -p`, `opencode run` o `pi -p` en su ruta. Sus hooks o plugins reportan el trabajo como en cualquier sesión |
+| **Pi** with an open session | Instantly. The extension calls `pi.sendUserMessage()`, and if Pi is busy it stays as a follow-up |
+| **OpenCode** with an open session | Instantly. The plugin sends it with `client.session.prompt()`; without a known session, it types it into the TUI prompt |
+| **Claude Code** (existing session) | Queued. Its `Stop` hook delivers it when Claude ends the current turn, and Claude carries on with it. Claude Code does not allow injecting messages into an interactive session from outside: if the session is waiting for your message, the task arrives when the next turn ends |
+| **New session** of a registered agent | Inside herdr, in a new (interactive) pane. Outside, the office opens `claude -p`, `opencode run` or `pi -p` in its path. Its hooks or plugins report the work like any other session |
 
-`claude -p` lanzado así usa `--permission-mode acceptEdits` (edita archivos sin preguntar y deniega lo demás que necesite permiso), salvo que el agente tenga sus propios argumentos en ⚙ › Agentes › Avanzado.
+A `claude -p` launched this way uses `--permission-mode acceptEdits` (it edits files without asking and denies anything else that needs permission), unless the agent has its own arguments in ⚙ › Agents › Advanced.
 
-Desde la CLI: `dev-team-office task "Agrega paginación" --agent pi` para una tarea directa. Sin argumentos muestra a quién se le puede enviar.
+From the CLI: `dev-team-office task "Add pagination" --agent pi` for a direct task. Without arguments it shows who can receive one.
 
-## ⚙ Ajustes
+## ⚙ Settings
 
-El engranaje de la oficina (arriba a la derecha, en la web y en la terminal; también con `c`):
+The office's gear (top right, on the web and in the terminal; also with `c`):
 
-| Pestaña | Qué hay |
+| Tab | What is there |
 |---|---|
-| General | **Idioma** (inglés por defecto, o español: cambia todo en vivo, en la web, la terminal y la bitácora), **zona horaria** de la empresa (se busca escribiendo la ciudad, la región o el país), clima real o simulado, la vida de la oficina en la bitácora, y herdr: agentes en panes, hacia dónde se abre el pane y qué agente se abre al empezar |
-| Oficinas | Las oficinas de la empresa: nombre, zona horaria y ubicación para el clima; ver, editar y eliminar (sus agentes pasan a la principal) |
-| Agentes | El mantenedor: agregar (ruta completa + CLI + oficina; detecta su harness al escribirla), editar, eliminar y ✉ enviarle un prompt. También las sesiones abiertas sin registrar |
-| Personajes | Nombre, cargo, colores (camisa, pantalón, pelo, piel), pelo largo, barba y lentes de cada personaje de la oficina que estás mirando |
+| General | **Language** (English by default, or Spanish: it changes everything live, on the web, in the terminal and in the log), the company's **time zone** (search by typing the city, the region or the country), real or simulated weather, office life in the log, the **office view** (front or isometric top-down), and herdr: agents in panes, each subagent in its pane, which way the pane opens and which agent opens at start |
+| Offices | The company's offices: name, time zone and location for the weather; view, edit and delete (their agents move to the main one) |
+| Agents | The maintainer: add (full path + CLI + office; it detects its harness as you type it), edit, delete and ✉ send it a prompt. Also the open sessions that are not registered |
+| Characters | Name, title, colors (shirt, pants, hair, skin), long hair, beard and glasses of each character of the office you are watching |
 
-**De la zona horaria sale todo lo "local":** la fecha y la hora (el reloj, el almuerzo, el día y la noche), el **país** y la ciudad (de la tabla de zonas IANA, sin conexión: `America/Santiago` → Chile, Santiago, −33.45, −70.67) y, con esas coordenadas, **el clima**. Por defecto, la zona del sistema.
+**Everything "local" comes from the time zone:** the date and time (the clock, lunch, day and night), the **country** and the city (from the IANA zone table, offline: `America/Santiago` → Chile, Santiago, −33.45, −70.67) and, with those coordinates, **the weather**. By default, the system's zone.
 
-Todo se guarda en una base **SQLite** (también desde la CLI: `dev-team-office config`, `dev-team-office offices`): `~/.dev-team-office/office.db`, o la ruta de `DEV_TEAM_OFFICE_DB`. Usa `node:sqlite`, así que no hay dependencias nativas, y el archivo tiene permisos `0600`. Tiene cuatro tablas:
+Everything is saved in an **SQLite** database (also from the CLI: `dev-team-office config`, `dev-team-office offices`): `~/.dev-team-office/office.db`, or the path in `DEV_TEAM_OFFICE_DB`. It uses `node:sqlite`, so there are no native dependencies, and the file has `0600` permissions. It has four tables:
 
-- `offices`: las oficinas de la empresa;
-- `agents`: los agentes registrados (con su oficina);
-- `settings`: los ajustes generales (`prefs`: idioma, zona horaria, clima, herdr, bitácora y la oficina que se mira) y la apariencia de cada oficina;
-- `prompts`: el historial de lo que les mandaste y cómo terminó.
+- `offices`: the company's offices;
+- `agents`: the registered agents (with their office);
+- `settings`: the general settings (`prefs`: language, time zone, weather, herdr, log and the office being watched) and each office's appearance;
+- `prompts`: the history of what you sent them and how it ended.
 
-Las bases de versiones anteriores se migran solas (se agrega la oficina principal). `DEV_TEAM_OFFICE_LANG=es` elige el idioma mientras no se haya guardado uno.
+Databases from earlier versions migrate by themselves (the main office is added). `DEV_TEAM_OFFICE_LANG=es` picks the language until one has been saved.
 
-Si existía un `~/.dev-team-office/config.json` de versiones anteriores, se importa la primera vez.
+If a `~/.dev-team-office/config.json` from earlier versions existed, it is imported the first time.
 
-Todo se valida antes de escribir, se aplica en caliente y un sitio web ajeno no puede cambiar nada.
+Everything is validated before writing, applied live, and a foreign website cannot change anything.
 
-## API de integración
+## Integration API
 
-Cualquier proceso puede enviarle eventos a la oficina y escucharla:
+Any process can send the office events and listen to it:
 
-- **HTTP/JSON** en `http://127.0.0.1:4317/v1/…`: `POST /v1/events/<source>`, `GET /v1/state?office=`, `GET /v1/weather`, `GET|POST /v1/offices`, `GET|PUT /v1/settings`, `GET|POST /v1/panes`, `POST /v1/commands`.
-- **WebSocket** en `ws://127.0.0.1:4317/v1/ws`: estado en vivo y envío de eventos, con `ack` opcional.
-- **Socket Unix** en `~/.dev-team-office/office.sock`: la misma API, accesible sólo para tu usuario.
+- **HTTP/JSON** at `http://127.0.0.1:4317/v1/…`: `POST /v1/events/<source>`, `GET /v1/state?office=`, `GET /v1/weather`, `GET|POST /v1/offices`, `GET|PUT /v1/settings`, `GET|POST /v1/panes`, `POST /v1/commands`.
+- **WebSocket** at `ws://127.0.0.1:4317/v1/ws`: live state and sending events, with an optional `ack`.
+- **Unix socket** at `~/.dev-team-office/office.sock`: the same API, accessible only to your user.
 
 ```bash
-curl -s --unix-socket ~/.dev-team-office/office.sock http://localhost/v1/events/mi-agente \
-  -d '{"session":"s1","kind":"task","text":"Migrar a Postgres"}'
+curl -s --unix-socket ~/.dev-team-office/office.sock http://localhost/v1/events/my-agent \
+  -d '{"session":"s1","kind":"task","text":"Migrate to Postgres"}'
 ```
 
-El protocolo completo (eventos, mensajes WebSocket, ejemplos en Python y Node, y por qué no gRPC) está en [docs/api.md](docs/api.md).
+The full protocol (events, WebSocket messages, examples in Python and Node, and why not gRPC) is in [docs/api.md](docs/api.md).
 
-### El clima de afuera
+### The weather outside
 
-La oficina le pide el clima a Open-Meteo cada 15 minutos, para cada oficina (las que están en la misma ciudad lo comparten). La ubicación sale de la zona horaria de la oficina: las coordenadas de su ciudad vienen en la tabla de zonas, así que no hace falta geocodificar. Para elegir otra, pon una **ubicación** en ⚙ › Oficinas, con un nombre (`Valparaíso`) o con coordenadas (`-33.45,-70.65`); `DEV_TEAM_OFFICE_LOCATION` hace lo mismo para todas. Sólo se envía eso: el nombre para ubicarla y las coordenadas para pedir el clima. Si se apaga en ⚙ › General (o con `DEV_TEAM_OFFICE_WEATHER=off`) no se consulta nada y el clima se simula según la estación. Las interfaces reciben el clima en el snapshot (`state.weather`) y, cuando cambia, en un mensaje `{ type: 'weather', weather, office }`.
+The office asks Open-Meteo for the weather every 15 minutes, for each office (the ones in the same city share it). The location comes from the office's time zone: its city's coordinates are in the zone table, so no geocoding is needed. To choose another one, set a **location** in ⚙ › Offices, with a name (`Valparaíso`) or with coordinates (`-33.45,-70.65`); `DEV_TEAM_OFFICE_LOCATION` does the same for all of them. Only that is sent: the name to locate it and the coordinates to ask for the weather. If it is turned off in ⚙ › General (or with `DEV_TEAM_OFFICE_WEATHER=off`) nothing is queried and the weather is simulated by season. The interfaces get the weather in the snapshot (`state.weather`) and, when it changes, in a `{ type: 'weather', weather, office }` message.
 
-## Integraciones
+## Integrations
 
-`dev-team-office install` deja todo en su sitio. Las tres integraciones usan la misma librería ([`integrations/common/devteam.mjs`](integrations/common/devteam.mjs)), que se instala en `~/.dev-team-office/lib/`: lee `.devteam/`, arma el prompt de cada etapa, corre los gates, aplica los bucles y reporta todo a la oficina. La oficina es opcional: si está apagada, los agentes siguen igual.
+`dev-team-office setup` puts everything in place and connected (see [What `setup` connects](#what-setup-connects)). The integrations use the same library ([`integrations/common/devteam.mjs`](integrations/common/devteam.mjs)), installed in `~/.dev-team-office/lib/`: it reads `.devteam/`, builds each stage's prompt, runs the gates, applies the loops and reports everything to the office. The office is optional: if it is off, the agents carry on the same.
 
 ### Claude Code (hooks)
 
-`dev-team-office install claude` copia [`hook.mjs`](integrations/claude-code/hook.mjs) a `~/.dev-team-office/claude-code/` y genera allí un `settings.json` con la ruta correcta. Copia su sección `hooks` en `~/.claude/settings.json` (global) o en `.claude/settings.json` (proyecto). La plantilla es [`settings.example.json`](integrations/claude-code/settings.example.json).
+`setup` copies [`hook.mjs`](integrations/claude-code/hook.mjs) to `~/.dev-team-office/claude-code/` and adds its hooks to `~/.claude/settings.json`, next to yours (the template is [`settings.example.json`](integrations/claude-code/settings.example.json)). As a **plugin** ([`.claude-plugin/`](.claude-plugin/plugin.json)) it brings the same, plus the MCP and the skills; if both are present, the plugin's hook stays quiet so events are not duplicated.
 
-El hook reenvía cada evento (por el socket Unix si existe y, si no, por HTTP) con su oficina y su pane de herdr si los tiene, anuncia el proyecto y, en el `Stop`, entrega tareas y ejecuta los pipelines. Nunca escribe nada en stdout salvo la decisión del `Stop`, y siempre sale con 0. Para otra URL o socket, usa `DEV_TEAM_OFFICE_URL` o `DEV_TEAM_OFFICE_SOCKET`.
+The hook forwards each event (through the Unix socket if it exists, otherwise over HTTP) with its office and its herdr pane if it has them, announces the project and, at `Stop`, delivers tasks and runs the pipelines. It never writes anything on stdout except the `Stop` decision, and always exits with 0. For another URL or socket, use `DEV_TEAM_OFFICE_URL` or `DEV_TEAM_OFFICE_SOCKET`.
 
-Las tareas paralelas se identifican por `tool_use_id`/`agent_id`, así que cada una cae en su personaje y no se duplican.
+Parallel tasks are identified by `tool_use_id`/`agent_id`, so each one lands on its character and none is duplicated.
+
+### Codex (hooks)
+
+`setup` copies [`hook.mjs`](integrations/codex/hook.mjs) to `~/.dev-team-office/codex/` and adds it to `~/.codex/hooks.json` for every event (`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `SubagentStart/Stop`, `Stop`…). The office translates Codex's tools: `shell` → command, `apply_patch` → editing the file, `update_plan` → the whiteboard. Codex asks you to trust new hooks once (`/hooks`). Its TOML agents (`.codex/agents/*.toml`) declare their role with `role = "backend"`.
 
 ### OpenCode
 
-`dev-team-office install opencode` copia [`dev-team-office.js`](integrations/opencode/dev-team-office.js) a `~/.config/opencode/plugin/`.
+`setup` copies [`dev-team-office.js`](integrations/opencode/dev-team-office.js) to `~/.config/opencode/plugins/` and registers the MCP in its `opencode.json(c)`. Its subagents (the `task` tool) run in child sessions, which report to the parent's session as the subagent's character.
 
 ### Pi
 
-`dev-team-office install pi` copia la extensión a `~/.pi/agent/extensions/` y el skill a `~/.agents/skills/`.
+`setup` copies the extension to `~/.pi/agent/extensions/` and the skills to `~/.agents/skills/` (the same place Codex and OpenCode read).
 
-- **Extensión** ([`dev-team-office.ts`](integrations/pi/dev-team-office.ts)): reporta el prompt, las herramientas y el fin del agente; recibe tareas y pipelines; lanza sesiones nuevas cuando la oficina se lo pide.
-- **Skill** ([`skills/dev-team-office`](integrations/pi/skills/dev-team-office/SKILL.md)): Pi declara qué rol tiene el turno y en qué fase está, por ejemplo `arquitecto → qa RED → backend implementa → qa GREEN → review → po acepta`. Cada traspaso se anima en la oficina, y las herramientas se atribuyen al rol de turno. El catálogo de eventos y los flujos están en [docs/eventos-por-rol.md](docs/eventos-por-rol.md).
+- **Extension** ([`dev-team-office.ts`](integrations/pi/dev-team-office.ts)): when `pi` opens it starts the office if it is not running and registers the project (`/office` on demand); it reports the prompt, the tools and the agent's end; it receives tasks and pipelines.
+- **Subagents** (gentle-pi, pi-subagents): each one is another `pi` with the same extension. It reports to the parent's session and its work is done by the character of its `role:` (for example, everything `ex-qa` does is done by QA, in RED or GREEN depending on its label). gentle-pi's `todo` list goes to the whiteboard.
+- **Skill** ([`skills/dev-team-office`](skills/dev-team-office/SKILL.md), for any harness): the agent declares which role holds the turn and which phase it is in, for example `architect → qa RED → backend implements → qa GREEN → review → po accepts`. Each handover is animated in the office, and the tools are attributed to the role on duty. The event catalog and the flows are in [docs/events-by-role.md](docs/events-by-role.md).
 
-### Otros agentes
+### Other agents
 
-Usa el formato genérico por WebSocket o por `POST /v1/events/<nombre>` (ver [docs/api.md](docs/api.md)). Para recibir pipelines, impleméntalo como las demás integraciones con `PipelineRun` de la librería común (protocolo en [docs/pipelines.md](docs/pipelines.md#por-api)).
+Use the generic format over WebSocket or `POST /v1/events/<name>` (see [docs/api.md](docs/api.md)). To receive pipelines, implement it like the other integrations with the shared library's `PipelineRun` (protocol in [docs/pipelines.md](docs/pipelines.md#by-api)).
 
-## Estructura
+## Layout
 
 ```
-bin/dev-team-office.js  el ejecutable: open (la bitácora + el juego), game, serve, watch, status, demo, send, task, agents, offices, config, pane, install
-bin/install.js          instala las integraciones de cada agente
-server/server.js        API HTTP + WebSocket en TCP y socket Unix
-server/adapters.js      payload nativo → formato genérico
-server/office.js        estado: sesiones, todos, subagentes, turnos, bitácora
-server/roles.js         qué personaje representa cada herramienta/archivo/comando
-server/tasks.js         tareas hacia los agentes: registro, cola, entrega y sesiones nuevas de un agente registrado
-server/pipeline.js      pipelines: relay entre la pizarra y la sesión de agente que los ejecuta
-server/store.js         la base SQLite: oficinas, agentes registrados, ajustes (idioma, zona, herdr…), apariencia e historial
-server/company.js       la empresa: las oficinas y a cuál va cada evento (por oficina, sesión, pane o ruta)
-server/herdr.js         herdr: los agentes y sus actividades en panes (por su CLI), y lo que pasa con esos panes
-server/registry.js      los agentes (registrados + sesiones abiertas), lo que trae su harness y a dónde va un prompt
-server/demo.js          sesiones simuladas (Claude Code y flujo TDD de Pi)
-server/weather.js       el clima de afuera (Open-Meteo), para la pared de vidrio
-public/sim.js           la simulación (personajes, rutas, reacciones, vida de la oficina); la comparten terminal y navegador
-public/sky.js           lo que se ve por el vidrio: sol, luna, estaciones, clima y la ciudad (terminal y navegador)
-public/clock.js         la hora de la oficina en su zona horaria (ZonedDate), y el país y la ciudad de cada zona
-public/zones.js         zona horaria → país y coordenadas (generado desde zone.tab por scripts/gen-zones.mjs)
-public/i18n.js          los idiomas del juego (inglés y español); los textos están en public/locales/
-public/targets.js       a quién se le puede mandar una tarea (terminal y navegador)
-public/brief.js         el diálogo de la pizarra (terminal y navegador)
-public/settings-ui.js   ⚙ Ajustes en la web
-public/sprite.js        el retrato de un personaje (ficha y ajustes)
-tui/settings.js         ⚙ Ajustes en la terminal
-tui/console.js          la bitácora de la terminal donde se lanza la oficina (g juego · o navegador · q salir)
-examples/tienda/        proyecto de ejemplo con equipo, pipelines y agentes
-tui/                    la oficina en la terminal: framebuffer de medios bloques, vista, teclado y ratón
-public/game.js          la oficina en canvas, para el navegador (vidrio, luces, noche, efectos)
-integrations/common/    la librería del lado del agente: proyecto, pipelines, gates (la usan las tres)
-integrations/           Claude Code (hook), OpenCode (plugin), Pi (extensión + skill)
-docs/                   API y propuesta de eventos por rol
-test/                   node --test (incluye un agente de mentira: test/fixtures/fake-agent.mjs)
+bin/dev-team-office.js  the executable: open (the log + the game; inside herdr, the monitor), monitor, game, serve, watch, status, join, follow, demo, send, task, agents, offices, config, pane, btw, mcp, setup, doctor, uninstall, update
+bin/setup.js            connects each agent (hooks, MCP, skills, launcher), doctor and uninstall
+bin/install.js          copies each integration's files
+bin/team.js             the team packs, in each harness's format, and the team `join` completes
+install.sh              the one-line installer (curl … | sh)
+server/mcp.js           the MCP server (stdio)
+server/asks.js          btw: side questions to the agent on duty
+server/ws.js            dependency-free WebSocket (RFC 6455)
+server/server.js        HTTP + WebSocket API over TCP and a Unix socket
+server/adapters.js      native payload → generic format
+server/office.js        state: sessions, todos, subagents, turns, log
+server/roles.js         which character stands for each tool/file/command
+server/tasks.js         tasks for the agents: registration, queue, delivery and new sessions of a registered agent
+server/pipeline.js      pipelines: relay between the whiteboard and the agent session that runs them
+server/store.js         the SQLite database: offices, registered agents, settings (language, zone, herdr…), appearance and history
+server/company.js       the company: the offices and which one each event goes to (by office, session, pane or path)
+server/herdr.js         herdr: the agents and their activities in panes (through its CLI), and what happens to those panes
+server/subpanes.js      herdr: one pane per subagent (opens `dev-team-office follow` and closes it when it finishes)
+server/registry.js      the agents (registered + open sessions), what their harness brings and where a prompt goes
+server/demo.js          simulated sessions (Claude Code and Pi's TDD flow)
+server/weather.js       the weather outside (Open-Meteo), for the glass wall
+public/sim.js           the simulation (characters, routes, reactions, office life); shared by terminal and browser
+public/sky.js           what is seen through the glass: sun, moon, seasons, weather and the city (terminal and browser)
+public/clock.js         the office's time in its time zone (ZonedDate), and each zone's country and city
+public/zones.js         time zone → country and coordinates (generated from zone.tab by scripts/gen-zones.mjs)
+public/i18n.js          the game's languages (English and Spanish); the texts are in public/locales/
+public/targets.js       who a task can be sent to (terminal and browser)
+public/brief.js         the whiteboard dialog (terminal and browser)
+public/settings-ui.js   ⚙ Settings on the web
+public/sprite.js        a character's portrait (sheet and settings)
+public/game.js          the office on canvas, for the browser (glass, lights, night, effects), in front or top-down view
+public/iso.js           the top-down view's isometric camera (floor, walls and sprites with affine transforms)
+tui/                    the office in the terminal: half-block framebuffer, view, keyboard and mouse
+tui/settings.js         ⚙ Settings in the terminal
+tui/console.js          the log of the terminal where the office is launched (g game · o browser · q quit)
+tui/follow.js           a subagent's pane inside herdr: what it is doing, live
+tui/monitor.js          the activity monitor (inside herdr): figures, each agent and its subagents, the team and the log
+examples/tienda/        sample project with a team, pipelines and agents
+integrations/common/    the agent-side library: project, pipelines, gates (used by all of them)
+integrations/           Claude Code (hook), Codex (hook), OpenCode (plugin), Pi (extension)
+skills/                 the skills (any harness): events by role and configuring a harness
+.claude-plugin/         the Claude Code plugin and marketplace
+teams/                  installable team packs (one subagent per role)
+docs/                   installation, usage, conventions, API, MCP, events by role, pipelines and how to connect a harness (English, with .es.md in Spanish)
+test/                   node --test (includes a fake agent: test/fixtures/fake-agent.mjs)
 ```
 
-Para cambiar quién hace qué, edita las reglas de [`server/roles.js`](server/roles.js).
+To change who does what, edit the rules in [`server/roles.js`](server/roles.js).
+
+## License
+
+[MIT](LICENSE) © Fabián Muñoz. Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).

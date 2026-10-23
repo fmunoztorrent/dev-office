@@ -1,5 +1,7 @@
 # Conectar cualquier harness a la oficina
 
+[English](connect-a-harness.md) · **Español**
+
 La oficina es una **capa gráfica genérica**: dibuja lo que le reporta un agente de código y le manda tareas y pipelines, sin ejecutar nada. Ese agente puede ser cualquier harness (Pi, Claude Code, OpenCode, o uno propio); la oficina no lo orquesta, sólo lo representa.
 
 Para que la representación sea correcta —que el subagente de backend se siente en el escritorio de backend, y no en el de cualquiera— hace falta un mínimo de entendimiento entre las dos partes. Esta guía explica ese contrato y cómo conectar un harness nuevo.
@@ -50,7 +52,7 @@ Además de los 8 valores, se aceptan alias en inglés y en español. El harness 
 
 El orden de resolución de un subagente es fijo:
 
-1. **El mapa aprendido/declarado del harness** (lo que salió de los `role:` del frontmatter). Gana.
+1. **El mapa aprendido/declarado del harness**: lo que salió de los `role:` del frontmatter y, para los subagentes que no declaran rol, lo que dice su nombre (`qa`, `architect`, `sdd-apply`…) o su descripción («Runs the e2e tests» → `qa`). Lo arma la detección del proyecto (los del proyecto ganan sobre los globales) y cada sesión lo aprende de su carpeta, aunque su agente no lo reporte. Gana.
 2. La **heurística** de texto y nombre: la oficina prueba el nombre del agente y el texto de la tarea contra sus reglas.
 3. Un **default** (`tl`) cuando nada de lo anterior resuelve.
 
@@ -58,48 +60,43 @@ Dicho de otro modo: si un harness declara `role: designer`, ese subagente cae en
 
 ## Instalación
 
-### Paso común: la CLI
+### Paso común: instalar y conectar
 
-La oficina se instala una vez por máquina. Con Node ≥ 22.13 (trae SQLite) o con el binario compilado; después se integra cada harness:
-
-```bash
-# A) Con Node: deja `dev-team-office` en tu PATH
-npm install
-npm link
-
-# B) Binario independiente (requiere Deno para compilarlo)
-npm install
-npm run build
-mkdir -p ~/.local/bin && cp dist/dev-team-office ~/.local/bin/
-```
-
-Luego, una vez por harness:
+La oficina se instala una vez por máquina (Node ≥ 22.13, sin dependencias) y `setup` conecta cada harness que encuentre, sin pasos a mano:
 
 ```bash
-dev-team-office install pi
-dev-team-office install opencode
-dev-team-office install claude      # alias de claude-code
-dev-team-office install             # los tres de una vez
+curl -fsSL https://raw.githubusercontent.com/fmunoztorrent/dev-office/main/install.sh | sh   # instala y corre setup
+dev-team-office setup                  # (de nuevo) todos los agentes que encuentre
+dev-team-office setup --only codex     # o sólo uno: pi, claude, opencode, codex, gemini, cursor
+dev-team-office doctor                 # qué quedó conectado
+dev-team-office uninstall              # deshace setup (tus datos quedan)
 ```
 
-### Qué deja `install` en el disco
+`install <harness>` es lo mismo que `setup --only <harness>`.
 
-| Artefacto | Lo instala | Para qué |
+### Qué deja `setup` en el disco
+
+| Artefacto | Para qué harness | Para qué |
 |---|---|---|
-| `~/.dev-team-office/lib/devteam.mjs` | todas las integraciones | la librería común: lee `.devteam/`, lee el frontmatter de los agentes, arma los prompts, corre gates y reporta |
-| `~/.pi/agent/extensions/dev-team-office.ts` | `install pi` | la extensión de Pi: reporta prompt, herramientas y fin del agente; registra el mapa de roles; recibe tareas y pipelines |
-| `~/.agents/skills/dev-team-office/` (`SKILL.md` + `office-event.mjs`) | `install pi` | el skill que declara rol y fase del turno (`arquitecto → qa RED → backend`…) |
-| `~/.agents/skills/dev-team-office-config/SKILL.md` | cualquier `install` | el skill de configuración genérico: es agnóstico del harness (enseña a conectar cualquiera), por eso se copia siempre |
-| `~/.config/opencode/plugin/dev-team-office.js` | `install opencode` | el plugin de OpenCode |
-| `~/.dev-team-office/claude-code/hook.mjs` + `settings.json` | `install claude` | el hook de Claude Code y la sección `hooks` ya apuntando a él |
+| `~/.dev-team-office/bin/dev-team-office` | todos | el lanzador estable: los hooks y el servidor MCP lo usan (recuerda qué Node usar) |
+| `~/.dev-team-office/lib/devteam.mjs` | todos | la librería común: lee `.devteam/`, lee el frontmatter de los agentes, arma los prompts, corre gates y reporta |
+| `~/.agents/skills/dev-team-office/` (`SKILL.md` + `office-event.mjs`) | Pi, Codex, OpenCode | el skill que declara rol y fase del turno (`arquitecto → qa RED → backend`…) y usa el MCP |
+| `~/.agents/skills/dev-team-office-config/SKILL.md` | Pi, Codex, OpenCode | el skill de configuración genérico (enseña a conectar cualquier harness) |
+| `~/.claude/skills/dev-team-office*/` | Claude Code | los mismos dos skills, donde los lee Claude Code |
+| `~/.pi/agent/extensions/dev-team-office.ts` | Pi | la extensión: reporta prompt, herramientas y fin del agente; registra el mapa de roles; recibe tareas y pipelines |
+| `~/.config/opencode/plugins/dev-team-office.js` + `mcp` en `opencode.json(c)` | OpenCode | el plugin y el servidor MCP |
+| `~/.dev-team-office/claude-code/hook.mjs` + `hooks` en `~/.claude/settings.json` + MCP de usuario | Claude Code | el hook (ya conectado, junto a tus hooks) y el servidor MCP |
+| `~/.dev-team-office/codex/hook.mjs` + `~/.codex/hooks.json` + `[mcp_servers.dev-team-office]` en `config.toml` | Codex | el hook (confía en él una vez con `/hooks`) y el servidor MCP |
+| `mcpServers` en `~/.gemini/settings.json` / `~/.cursor/mcp.json` | Gemini CLI / Cursor | el servidor MCP |
 
-> **`install` NO instala los archivos de agente del harness.** Sólo deja las piezas de integración. Los `.md` de tus agentes son tuyos y del harness: si no están en los directorios que la oficina escanea, el mapa de roles sale vacío. Esto se trata como gotcha más abajo.
+Cada archivo de configuración que se toca queda respaldado en `<archivo>.dev-team-office.bak`. El servidor MCP está documentado en [mcp.es.md](mcp.es.md).
+
+> **`setup` NO instala los archivos de agente del harness.** Sólo deja las piezas de integración. Los `.md` de tus agentes son tuyos y del harness: si no están en los directorios que la oficina escanea, el mapa de roles sale vacío. Esto se trata como gotcha más abajo.
 
 ### Pi
 
 ```bash
-npm install && npm link
-dev-team-office install pi
+dev-team-office setup --only pi
 ```
 
 Deja la extensión en `~/.pi/agent/extensions/dev-team-office.ts` y el skill en `~/.agents/skills/dev-team-office/`. Si tus agentes viven en otro repo (por ejemplo uno propio del harness), corré el paso de sincronización de ese harness para exponerlos en `~/.pi/agent/agents/` (el `sync.sh` del harness suele crear los symlinks). Pi declara el rol del turno con el skill y reporta el mapa de agentes al registrarse.
@@ -107,22 +104,30 @@ Deja la extensión en `~/.pi/agent/extensions/dev-team-office.ts` y el skill en 
 ### OpenCode
 
 ```bash
-dev-team-office install opencode
+dev-team-office setup --only opencode
 ```
 
-Copia el plugin a `~/.config/opencode/plugin/dev-team-office.js`. Los agentes se leen de `<proyecto>/.opencode/agents` y de `~/.config/opencode/agents`.
+Copia el plugin a `~/.config/opencode/plugins/dev-team-office.js` y registra el servidor MCP en `opencode.json(c)` (si tiene comentarios, se conservan). Los agentes se leen de `<proyecto>/.opencode/agents` y de `~/.config/opencode/agents`.
 
 ### Claude Code
 
 ```bash
-dev-team-office install claude
+dev-team-office setup --only claude
 ```
 
-Copia el hook a `~/.dev-team-office/claude-code/hook.mjs` y genera ahí un `settings.json` con la ruta correcta. **El instalador sólo imprime la sección `hooks`; hay que copiarla a mano** en `~/.claude/settings.json` (global) o en `.claude/settings.json` (proyecto). La plantilla es `integrations/claude-code/settings.example.json`. Los agentes se leen de `<proyecto>/.claude/agents` y de `~/.claude/agents`.
+Copia el hook a `~/.dev-team-office/claude-code/hook.mjs` y **agrega sus hooks a `~/.claude/settings.json`** junto a los que ya tengas (la plantilla es `integrations/claude-code/settings.example.json`), registra el servidor MCP (`claude mcp add-json --scope user`) y deja los skills en `~/.claude/skills/`. También se instala como plugin: `/plugin marketplace add fmunoztorrent/dev-office` y `/plugin install dev-team-office@dev-office`. Los agentes se leen de `<proyecto>/.claude/agents` y de `~/.claude/agents`.
+
+### Codex
+
+```bash
+dev-team-office setup --only codex
+```
+
+Copia el hook a `~/.dev-team-office/codex/hook.mjs`, lo agrega a `~/.codex/hooks.json` (Codex pide confiar una vez en los hooks nuevos: `/hooks`) y registra el servidor MCP en `~/.codex/config.toml`. Los skills quedan en `~/.agents/skills/`, donde los lee Codex. Sus agentes son TOML en `<proyecto>/.codex/agents/` y `~/.codex/agents/`; el rol se declara con `role = "backend"` (o con un comentario `# role: backend`, si tu versión de Codex rechaza claves que no conoce).
 
 ### Otros harness
 
-Cualquier proceso puede integrarse por la API genérica (HTTP o WebSocket, ver [`api.md`](api.md)): reporta sus eventos y, si quiere que los subagentes caigan en el personaje correcto, emite un evento `agent_roles` con su mapa `nombre → rol` y declare `role:` en el frontmatter de sus agentes.
+Cualquier agente con MCP (Gemini CLI, Cursor…) puede usar el [servidor MCP](mcp.es.md) para registrar proyectos y reportar fases. Y cualquier proceso puede integrarse por la API genérica (HTTP o WebSocket, ver [`api.es.md`](api.es.md)): reporta sus eventos y, si quiere que los subagentes caigan en el personaje correcto, emite un evento `agent_roles` con su mapa `nombre → rol` y declare `role:` en el frontmatter de sus agentes.
 
 ## Cómo llega el mapa de roles a la oficina
 
@@ -175,9 +180,15 @@ console.log("PASS: mapa de roles leído desde " + dir);
 
 Éxito: imprime el mapa `nombre → rol` con un `role:` por línea de frontmatter y termina en `PASS:` con exit 0. Si el mapa sale vacío, el problema es que los agentes no están en los directorios escaneados (gotcha 1).
 
-### El caso concreto y verificado
+### Las declaraciones y la oficina, de punta a punta
 
-El caso real con nombres de un harness propio —el mapa de sus cinco agentes y la ingestión en la oficina— está en **[Caso real verificado](#caso-real-verificado)**, con el comando exacto y el ejemplo de una corrida exitosa.
+Toma el directorio de agentes del harness como **argumento obligatorio**: no trae ningún default, no nombra ningún harness y no lee ninguna ruta propia de una máquina. Descubre los `.md` del directorio en vez de listarlos a mano, así que sirve para cualquier harness con cualquier cantidad de agentes. Sin argumento imprime una línea de uso y sale con código distinto de cero. Termina la línea con el directorio de agentes de tu harness:
+
+```bash
+cd "$(git rev-parse --show-toplevel)" && node --input-type=module -e 'import assert from "node:assert/strict"; import fs from "node:fs"; import path from "node:path"; import { parseAgentFile, roleOfAgent } from "./integrations/common/devteam.mjs"; import { Office } from "./server/office.js"; const dir = process.argv[1]; if (!dir) { console.error("uso: pasá el directorio de agentes del harness como argumento"); process.exit(2); } const roles = {}; for (const f of fs.readdirSync(dir).filter((f) => f.endsWith(".md"))) { const a = parseAgentFile(fs.readFileSync(path.join(dir, f), "utf8"), f); const r = roleOfAgent(a.name, a.role); if (r) roles[a.name] = r; } assert.ok(Object.keys(roles).length > 0, "no se mapeó ningún rol: revisá el frontmatter role:"); const office = new Office(); for (const [agent, expected] of Object.entries(roles)) { const s = "s-" + agent; office.ingest("pi", { session: s, cwd: "/x", kind: "session_start" }); office.ingest("pi", { session: s, cwd: "/x", kind: "agent_roles", roles }); office.ingest("pi", { session: s, cwd: "/x", kind: "tool_start", tool: "subagent_run", input: { agent, task: "implementar" } }); assert.equal(office.sessionSummary(s).subagents[0].role, expected); } console.log("PASS: " + Object.keys(roles).length + " agentes declarados, ingestados en la oficina");' "$@"
+```
+
+Éxito: imprime `PASS: N agentes declarados, ingestados en la oficina` y termina con exit 0. Prueba las dos puntas del contrato: que cada `.md` del directorio aporta su `role:` declarado al mapa, y que al inyectar ese mapa y lanzar un `subagent_run` con cada nombre, la oficina resuelve el rol declarado (no la heurística).
 
 ### La precedencia, con un nombre neutro
 
@@ -225,8 +236,8 @@ Todos observados en esta máquina durante la verificación.
 
 ### 1. `install <harness>` no instala los agentes del harness
 
-- **Síntoma:** corriste `dev-team-office install pi` (o `opencode`/`claude`) y el mapa de roles queda vacío; ningún subagente cae en su personaje.
-- **Causa:** `install` deja la librería común, la extensión de Pi y el skill de Pi (más el plugin/hook del harness). Los archivos `.md` de tus agentes no son suyos. Si no están en los directorios escaneados (`~/.pi/agent/agents/`, etc.), `detectHarness` no encuentra ninguno y `roles` sale `{}`.
+- **Síntoma:** corriste `dev-team-office setup` y el mapa de roles queda vacío; ningún subagente cae en su personaje.
+- **Causa:** `setup` deja la librería común, los skills y la integración de cada harness (extensión, plugin o hook). Los archivos `.md` de tus agentes no son suyos. Si no están en los directorios escaneados (`~/.pi/agent/agents/`, etc.), `detectHarness` no encuentra ninguno y `roles` sale `{}`.
 - **Qué hacer:** correr el paso de sincronización del propio harness para exponer sus agentes (por ejemplo, symlinkearlos en `~/.pi/agent/agents/`). Un harness que guarda sus agentes en su repo necesita su propio sync.
 
 ### 2. `detectHarness` sólo anuncia `pi` si el repo tiene `.pi/`
@@ -281,41 +292,3 @@ Todos observados en esta máquina durante la verificación.
 | Editar el repo no tiene efecto | las piezas instaladas son copias, no symlinks | re-correr `dev-team-office install <harness>`; comprobar con `cmp ~/.dev-team-office/lib/devteam.mjs integrations/common/devteam.mjs` |
 | `pi` no aparece como harness de ese repo | el repo no tiene `.pi/` | es esperado; el mapa sale del scope de usuario (gotcha 2). No crear `.pi/` a ciegas |
 | El evento `agent_roles` devuelve `accepted:0` | es un evento aprendido, no dibujado | confiar en el HTTP 200; verificar con `agentRoles` de la sesión (gotcha 4) |
-
-## Caso real verificado
-
-El caso concreto que se verificó en esta máquina es el harness `falabella-pi-agents`: cinco agentes (`fb-architect`, `fb-backend`, `fb-frontend`, `fb-qa`, `fb-explorer`) con su repositorio propio, y su `sync.sh` los symlinkea en `~/.pi/agent/agents/`. Cada uno declara su rol en el frontmatter:
-
-| Agente | `role:` declarado |
-|---|---|
-| `fb-architect` | `tl` |
-| `fb-backend` | `backend` |
-| `fb-frontend` | `frontend` |
-| `fb-qa` | `qa` |
-| `fb-explorer` | `analyst` |
-
-Evidencia observada: `detectHarness` corrido sobre el repo de la oficina devuelve `harnesses: []` (ese repo no tiene `.pi/`, ver gotcha 2) y aun así arma `roles` con los cinco `fb-*` más los otros agentes del scope de usuario — **15 agentes mapeados en total**. Es la prueba de que la lista de harnesses y el mapa de roles son independientes.
-
-### Comando de verificación (portable)
-
-Toma el repo de la oficina con `git rev-parse` y el directorio de agentes del harness como **parámetro obligatorio**: no trae ningún default, no nombra ningún harness y no lee ninguna ruta absoluta propia de una máquina. Descubre los `.md` del directorio en vez de listarlos a mano, así que sirve para cualquier harness con cualquier cantidad de agentes. Terminá la línea con el directorio de agentes de tu harness como argumento (el ejemplo de abajo usaría el scope de usuario de Pi):
-
-> **El directorio es obligatorio.** Sin argumento el comando no corre: imprime una línea de uso y sale con código distinto de cero.
-
-```bash
-cd "$(git rev-parse --show-toplevel)" && node --input-type=module -e 'import assert from "node:assert/strict"; import fs from "node:fs"; import path from "node:path"; import { parseAgentFile, roleOfAgent } from "./integrations/common/devteam.mjs"; import { Office } from "./server/office.js"; const dir = process.argv[1]; if (!dir) { console.error("uso: pasá el directorio de agentes del harness como argumento"); process.exit(2); } const roles = {}; for (const f of fs.readdirSync(dir).filter((f) => f.endsWith(".md"))) { const a = parseAgentFile(fs.readFileSync(path.join(dir, f), "utf8"), f); const r = roleOfAgent(a.name, a.role); if (r) roles[a.name] = r; } assert.ok(Object.keys(roles).length > 0, "no se mapeó ningún rol: revisá el frontmatter role:"); const office = new Office(); for (const [agent, expected] of Object.entries(roles)) { const s = "s-" + agent; office.ingest("pi", { session: s, cwd: "/x", kind: "session_start" }); office.ingest("pi", { session: s, cwd: "/x", kind: "agent_roles", roles }); office.ingest("pi", { session: s, cwd: "/x", kind: "tool_start", tool: "subagent_run", input: { agent, task: "implementar" } }); assert.equal(office.sessionSummary(s).subagents[0].role, expected); } console.log("PASS: " + Object.keys(roles).length + " agentes declarados, ingestados en la oficina");' "$@"
-```
-
-Éxito: imprime `PASS: N agentes declarados, ingestados en la oficina` y termina con exit 0. Prueba las dos puntas del contrato: que cada `.md` del directorio aporta su `role:` declarado al mapa, y que al inyectar ese mapa y lanzar un `subagent_run` con cada nombre, la oficina resuelve el rol declarado (no la heurística).
-
-### Evidencia cruda y ejemplo de corrida
-
-El transcript crudo de la máquina donde se hizo la verificación original —el comando exacto que se ejecutó y su salida, con sus rutas absolutas— vive en el artefacto de trabajo [`odd/tasks/integracion-harness-falabella.md`](../odd/tasks/integracion-harness-falabella.md), bajo el encabezado **Evidencia cruda (transcript de esta máquina)**. Es registro, no instrucción: no la copies.
-
-Lo que se ve en una corrida exitosa, ya generalizado (con cualquier cantidad de agentes y roles cualesquiera):
-
-```text
-PASS: N agentes declarados, ingestados en la oficina
-```
-
-Cada `.md` del directorio aportó su `role:` declarado al mapa y, al inyectar ese mapa y lanzar un `subagent_run` con cada nombre, la oficina resolvió el rol declarado (no la heurística).
