@@ -69,7 +69,7 @@ export function drawFrame(scr, L, sim, model, now) {
   items.push({ y: DINING.table.y - 1, fn: () => drawDiningBackChairs(g) });
   items.push({ y: DINING.table.y + 1, fn: () => drawDiningTable(g, sim) });
   for (const s of DINING_SEATS.front) items.push({ y: s.y + 1, fn: () => drawDiningFrontChair(g, s) });
-  items.push({ y: 242, fn: () => drawProps(g, sim, now) });
+  items.push({ y: 242, fn: () => drawProps(g, sim, now, model) });
   items.push({ y: TV.feet, fn: () => drawTV(g, sim, now) });
   items.push({ y: SOFA.y + 8, fn: () => drawSofa(g) });
   items.sort((p, q) => p.y - q.y).forEach((i) => i.fn());
@@ -87,6 +87,7 @@ export function drawFrame(scr, L, sim, model, now) {
   drawFooter(scr, L, model);
   if (L.panelW) drawPanel(scr, L, sim, model);
   if (model.brief) drawBrief(scr, L, model);
+  if (model.svc) drawServices(scr, L, model);
   if (model.settings) model.settings.draw(scr, L);
 }
 
@@ -390,10 +391,10 @@ function drawDesk(g, a, now) {
   // carpetas = subagentes asignados
   for (let i = 0; i < Math.min(3, a.badges.size); i++) rect(s.x - 46 + i * 6, s.y - 30 - i * 4, 18, 12, C.folder);
   // name plate
-  g.centered(s.x, g.row(s.y + 10), ` ${a.cfg.name} `, hex(c.shirt), C.frame);
+  g.centered(s.x, g.row(s.y + 10), a.id === 'po' ? ` ${a.cfg.name} · ${t('team.you')} ` : ` ${a.cfg.name} `, hex(c.shirt), C.frame); // the PO is you
 }
 
-function drawProps(g, sim, now) {
+function drawProps(g, sim, now, model = {}) {
   const { rect, X, Y, scr } = g;
   // server rack: blinks with the backend; on fire, red; when repaired it boots little by little
   const f = sim.fire, burning = f && ['burning', 'fighting'].includes(f.phase);
@@ -410,6 +411,9 @@ function drawProps(g, sim, now) {
       scr.pset(x0 + j * 2, Y(156) + i * 2, c);
     }
   }
+  // each service running in the background lights a unit, in cyan (click or l: which ones)
+  const running = (model.services || []).filter((s) => s.status === 'running').length;
+  for (let i = 0; i < Math.min(running, rows); i++) scr.pset(x0 + 8, Y(156) + i * 2, (Math.floor(now / 700) + i) % 3 ? hex('#7ff7ff') : hex('#2bb7c9'));
   if (f && f.level > 0) {
     // flames: three layers that flicker over time
     for (let i = 0; i < 9; i++) {
@@ -680,7 +684,7 @@ function drawFooter(scr, L, model) {
     scr.text(L.cols - strWidth(hint), row, hint, C.muted, C.headerBg);
     return;
   }
-  const keys = ['t', 'c', 'a', ...((model.offices || []).length > 1 ? ['o'] : []), 'q', 'tab', 'm', 'b', 's', 'x', 'd', 'p', 'r', 'esc'];
+  const keys = ['t', 'c', 'a', ...((model.services || []).length ? ['l'] : []), ...((model.offices || []).length > 1 ? ['o'] : []), 'q', 'tab', 'm', 'b', 's', 'x', 'd', 'p', 'r', 'esc'];
   let c = 1;
   for (const k of keys) {
     const label = t(`tui.keys.${k === 'q' && model.quitKey === 'quit' ? 'quit' : k}`);
@@ -883,6 +887,61 @@ export function boardAtCell(L, col, row) {
   const x0 = L.ox + Math.round(BOARD.x * L.s), x1 = L.ox + Math.round((BOARD.x + BOARD.w) * L.s);
   const r0 = Math.floor((L.oy + Math.round(BOARD.y * L.s)) / 2), r1 = Math.floor((L.oy + Math.round((BOARD.y + BOARD.h) * L.s)) / 2);
   return col >= x0 && col <= x1 && row >= r0 && row <= r1;
+}
+
+/** Does that cell fall on the server rack? (a click lists the services running in the background) */
+export function rackAtCell(L, col, row) {
+  if (L.tooSmall) return false;
+  const x0 = L.ox + Math.round(RACK.x * L.s), x1 = L.ox + Math.round((RACK.x + RACK.w) * L.s);
+  const r0 = Math.floor((L.oy + Math.round(RACK.y * L.s)) / 2), r1 = Math.floor((L.oy + Math.round((RACK.y + RACK.h) * L.s)) / 2);
+  return col >= x0 && col <= x1 && row >= r0 && row <= r1;
+}
+
+// ------------------------------------------------------------------ the services in the background
+
+const PH = Object.fromEntries(Object.entries({ bg: '#06100b', head: '#0b1d14', phos: '#7dffb0', dim: '#3f9e6c', amber: '#ffcf6e', sel: '#1e4a33' }).map(([k, v]) => [k, hex(v)]));
+
+/** The services left running in the background and, below, what the chosen one prints (a phosphor terminal). */
+function drawServices(scr, L, model) {
+  const v = model.svc, list = model.services || [];
+  const w = Math.min(L.cols - 2, 100), x0 = Math.floor((L.cols - w) / 2);
+  const h = Math.max(8, L.rows - 4), y0 = Math.max(1, Math.floor((L.rows - h) / 2));
+  for (let r = y0 + 1; r <= y0 + h; r++) scr.fill(x0 + 1, r, w, CB.shadow);
+  for (let r = y0; r < y0 + h; r++) scr.fill(x0, r, w, PH.bg);
+  scr.fill(x0, y0, w, PH.head);
+  scr.text(x0 + 1, y0, fit(`● ${t('services.title')}`, w - 2), PH.amber, PH.head);
+  const close = t('brief.close');
+  scr.text(x0 + w - 1 - strWidth(close), y0, close, PH.dim, PH.head);
+  let r = y0 + 1;
+  if (!list.length) {
+    for (const line of wrap(t('services.empty'), w - 4, 3)) scr.text(x0 + 2, r++, line, PH.dim, PH.bg);
+  }
+  const listRows = Math.min(list.length, Math.max(1, Math.floor((h - 6) / 3)));
+  const first = Math.max(0, Math.min(v.sel - listRows + 1, list.length - listRows));
+  list.slice(first, first + listRows).forEach((s, i) => {
+    const on = s.status === 'running', sel = first + i === v.sel, bg = sel ? PH.sel : PH.bg;
+    scr.fill(x0 + 1, r, w - 2, bg);
+    let c = x0 + 2;
+    c += scr.text(c, r, `${on ? '▶' : '■'} `, on ? C.ok : PH.dim, bg);
+    c += scr.text(c, r, fit(s.name || s.command || '', 30).padEnd(31), on ? PH.phos : PH.dim, bg);
+    const when = on ? t('services.since', { time: timeOf(s.startedAt, model.office?.timezone) }) : t('services.stopped', { time: timeOf(s.endedAt, model.office?.timezone) });
+    scr.text(c, r, fit([TEAM[s.role]?.name, AGENT_NAME[s.agent] || s.agent, when].filter(Boolean).join(' · '), x0 + w - 2 - c), PH.dim, bg);
+    r++;
+  });
+  // what the chosen one prints
+  const s = list[v.sel];
+  if (s) {
+    scr.fill(x0 + 1, r, w - 2, PH.head);
+    scr.text(x0 + 2, r, fit(`$ ${s.command}`, w - 4), PH.dim, PH.head);
+    r++;
+    const room = y0 + h - 1 - r;
+    const lines = (v.lines.length ? v.lines : [v.note || t('services.waiting')]).flatMap((l) => wrap(l, w - 4, 4)).slice(-room);
+    for (const line of lines) scr.text(x0 + 2, r++, line, PH.phos, PH.bg);
+  }
+  const keys = [['↑↓', t('services.keyPick')], ...(model.herdr?.available ? [['Enter', t('services.openPane')]] : []), ['Esc', t('settings.keys.close')]];
+  let c = x0 + 2;
+  for (const [k, label] of keys) { c += scr.text(c, y0 + h - 1, k, PH.amber, PH.bg); c += scr.text(c, y0 + h - 1, ` ${label}   `, PH.dim, PH.bg); }
+  if (v.msg) scr.text(c, y0 + h - 1, fit(v.msg, x0 + w - 2 - c), PH.amber, PH.bg);
 }
 
 // ------------------------------------------------------------------ "New brief" dialog

@@ -54,13 +54,34 @@ La pregunta la contesta el agente de turno de la oficina (la sesión más recien
 
 | Método | Ruta | Cuerpo | Respuesta |
 |---|---|---|---|
-| `GET` | `/v1/offices` | | `{ ok, offices, view }`: cada una con `{ id, name, custom, timezone, ownTimezone, location, country, city, agents, sessions }`; `view`, la que se está mirando |
+| `GET` | `/v1/offices` | | `{ ok, offices, view }`: cada una con `{ id, name, custom, timezone, ownTimezone, location, place, country, city, agents, sessions }`; `view`, la que se está mirando |
 | `POST` | `/v1/offices` | `{ name, timezone?, location? }` | `201 { ok, office }` |
 | `GET` | `/v1/offices/<id>` | | `{ ok, office }` |
 | `PUT` | `/v1/offices/<id>` | `{ name?, timezone?, location? }` (`null`: la de la empresa / la de la zona) | `{ ok, office }` |
 | `DELETE` | `/v1/offices/<id>` | | `{ ok }`; sus agentes pasan a la principal (`main`, que no se elimina) |
 
-`timezone` es una zona IANA (`Europe/Madrid`); de ella salen la hora, el país, la ciudad y el clima de la oficina. Los cambios se difunden como `{ type: "offices", offices }`.
+`timezone` es una zona IANA (`Europe/Madrid`); de ella salen la hora y el país de la oficina. `location` es su propia ciudad: un nombre (`Valparaíso`), coordenadas (`-33.45,-70.65`) o las dos cosas, como la guarda el buscador de ciudades (`Concepción, Región del Biobío (-36.8270, -73.0498)`). `place` es la ciudad que usa, `{ name, lat, lon }`: la suya, la de la empresa (`prefs.city`) si hereda la zona horaria, o la de la zona horaria. Los cambios se difunden como `{ type: "offices", offices }`.
+
+| Método | Ruta | Responde |
+|---|---|---|
+| `GET` | `/v1/places?q=<texto>&timezone=<zona>` (o `&office=<id>`) | `{ ok, country, places, offline? }`: las ciudades del país de esa zona que empiezan con `q` (el geocodificador de Open-Meteo), cada una con `{ name, region, country, lat, lon, label, location }`; `location` es lo que se guarda. Con `DEV_TEAM_OFFICE_WEATHER=off` o sin conexión, `offline: true` y sin ciudades |
+
+## Servicios en segundo plano
+
+Los servicios que un agente deja corriendo (un servidor de desarrollo, un watcher, una cola…). La oficina los lista y muestra lo que imprimen; nunca los levanta ni los detiene.
+
+| Método | Ruta | Responde |
+|---|---|---|
+| `GET` | `/v1/services?office=<id>` | `{ ok, services }`: cada uno `{ id, name, command, cwd, log, agent, session, role, status: "running" \| "ended", pids, startedAt, endedAt }`, primero los que corren |
+| `GET` | `/v1/services/<id>/log?from=<byte>` | `{ ok, text, offset, size, status, reset?, missing? }`: sin `from`, el final de su log (64 KB); con él, lo que llegó después de ese byte (pasa el último `offset`). `reset`: el archivo se achicó y empieza de nuevo. Sin los colores de la terminal |
+| `POST` | `/v1/services/<id>/terminal` | `{ ok, pane }`: dentro de herdr, un pane debajo del de su agente que sigue el log (`tail -n 200 -F`). Fuera de herdr, `409` |
+
+- **De dónde salen:**
+  - un `Bash` de Claude Code con `run_in_background` (su `backgroundTaskId`; Claude escribe la salida en `/tmp/claude-<uid>/…/tasks/<id>.output`);
+  - un comando de cualquier agente mandado a segundo plano con su salida a un archivo (`npm run dev > dev.log 2>&1 &`, `nohup … > out.log &`), en un `tool_end` con `input.command`;
+  - una integración que lo reporta tal cual: `{ kind: "service_start", id, command, cwd, log }` y `{ kind: "service_stop", id }`.
+- **¿Sigue corriendo?** Quien tiene su log abierto es el servicio (`lsof`); cuando nadie lo tiene, terminó. `KillShell`/`TaskStop` también lo terminan. Sin `lsof` cuenta como corriendo hasta que el agente lo detiene o (los de Claude Code) termina su sesión. Uno terminado sigue en la lista 30 minutos.
+- **En vivo:** la lista le llega a quien mira esa oficina como `{ type: "services", services, office }`, y viene en el snapshot (`state.services`). La bitácora lo cuenta con los eventos `service_up` y `service_down` (`{ role, service, text }`).
 
 ## herdr: panes
 
@@ -141,6 +162,7 @@ Formato y protocolo con los agentes: [pipelines.es.md](pipelines.es.md).
 |---|---|
 | `lang` | `en` (por defecto) o `es` |
 | `timezone` | zona IANA de la empresa, o `null` (la del sistema) |
+| `city` | la ciudad de la empresa (como la `location` de arriba), o `null` (la de la zona horaria). Cambiar `timezone` sin `city` la borra |
 | `weather` | `true` / `false` (clima real o simulado) |
 | `view` | `{ office: <id>, mode: "flat" \| "iso" }`: la oficina que se mira y cómo se ve en el navegador (frontal, por defecto, o cenital isométrica) |
 | `herdr` | `{ launch: bool, subagents: bool, direction: "right" \| "down", startAgent: "auto" \| "none" \| <id de agente> }` (`subagents`: un pane por subagente) |
@@ -160,7 +182,7 @@ Formato y protocolo con los agentes: [pipelines.es.md](pipelines.es.md).
 - `clouds` y `precip`: de 0 a 1.
 - `sunrise` y `sunset`: ms de época.
 
-`GET /v1/weather?office=<id>` da el de esa oficina. También llega en el snapshot (`state.weather`) y, cuando cambia, en `{ type: "weather", weather, office }`. La ubicación sale de la zona horaria de la oficina (las coordenadas de su ciudad); se cambia con la `location` de la oficina, o para todas con `DEV_TEAM_OFFICE_LOCATION`, con una ciudad o con `lat,lon`.
+`GET /v1/weather?office=<id>` da el de esa oficina. También llega en el snapshot (`state.weather`) y, cuando cambia, en `{ type: "weather", weather, office }`. El lugar es el `place` de la oficina: su `location`, la `prefs.city` de la empresa o, sin ninguna, `DEV_TEAM_OFFICE_LOCATION` o la ciudad de la zona horaria.
 
 ## Tareas para los agentes
 
@@ -238,19 +260,19 @@ suyos: no cambian la sesión del padre. Una `phase` suya cambia la fase del suba
 | `kind` | Qué representa | En la oficina |
 |---|---|---|
 | `session_start` / `session_end` | Abre o cierra una sesión del agente | El manager saluda o se despide |
-| `task` | El pedido del usuario | La PO lo presenta en la pizarra |
+| `task` | El pedido del usuario | Tú (la PO) lo anuncias y se lo llevas al manager |
 | `thinking` | El modelo está pensando | El rol de turno piensa 💭 |
 | `tool_start` / `tool_end` | Una herramienta empieza o termina | El rol que corresponde trabaja; si falla, aparece el bug o la ayuda del TL |
 | `subagent_start` / `subagent_end` | Una subtarea delegada | El manager lleva la tarjeta; luego "✔ Listo" |
 | `todos` | La lista de tareas del agente | El kanban de la pizarra |
 | `phase` / `phase_end` | Un rol toma o suelta el turno (ver [events-by-role.es.md](events-by-role.es.md)) | Etiqueta ▶FASE y traspaso de tarjeta |
-| `dispatch` | Tarea enviada desde la oficina (la emite el servidor) | La PO lleva la tarjeta a la pizarra |
-| `waiting` | El agente espera al usuario | Banner naranja; el manager levanta la mano |
+| `dispatch` | Tarea enviada desde la oficina (la emite el servidor) | Tú (la PO) le llevas la tarjeta al manager |
+| `waiting` | El agente espera al usuario | Banner naranja; el manager va a tu escritorio (el de la PO) y levanta la mano |
 | `error` | Error general | El personaje se bloquea |
 | `compact` | Compactación de contexto | El manager ordena notas |
 | `done` | Fin de la tarea | Celebración en la mesa |
 
-Roles: `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`. También se aceptan alias como `arquitecto`, `tester` o `ux`.
+Roles: `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`. También se aceptan alias como `arquitecto`, `tester` o `ux`. La PO es el usuario: un `role` `po` que mande un agente se dibuja como la analista.
 
 ## Protocolo WebSocket
 

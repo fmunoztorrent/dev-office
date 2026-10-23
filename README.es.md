@@ -41,9 +41,9 @@ Con el plugin de Claude Code no hace falta instalar nada más: pídele a Claude 
 
 | Personaje | Rol | Qué del agente representa |
 |---|---|---|
-| Sofía | Product Owner | El prompt del usuario (nueva tarea), preguntas al usuario, historias de usuario |
-| Valentina | Analista de negocio | Exploración, `WebSearch`/`WebFetch`, lectura de docs `.md`, subagentes `Explore` |
-| Marco | Manager | Tablero de todos (`TodoWrite`/`TaskCreate`), entrega subtareas, pide tu aprobación, compactación |
+| Sofía | Product Owner | **Tú.** Tus pedidos (el prompt, un encargo desde la oficina) y tus preguntas al margen; el agente viene a tu escritorio con sus preguntas y a pedirte el OK. Ponle tu nombre y tu apariencia en ⚙ › Personajes |
+| Valentina | Analista de negocio | Exploración, `WebSearch`/`WebFetch`, lectura de docs `.md`, subagentes `Explore`; historias de usuario, criterios de aceptación y prioridades (lo que un agente reportaría como PO) |
+| Marco | Manager | Tablero de todos (`TodoWrite`/`TaskCreate`), entrega subtareas, te trae las preguntas del agente y te pide el OK, compactación |
 | Tomás | Tech Lead / arquitecto | Lint, git, búsquedas en el código, planes (`Plan`), reviews, ayuda cuando algo falla |
 | Andrés | QA | Archivos de test, `npm test`/`jest`/`pytest`/`playwright`…; si un test falla, le lleva el bug 🐞 al último dev que tocó código |
 | Diego | Backend | Edición de código de servidor, migraciones, comandos de shell |
@@ -53,19 +53,19 @@ Con el plugin de Claude Code no hace falta instalar nada más: pídele a Claude 
 Lo que se ve en la oficina:
 
 - **Pizarra kanban** en un atril, con los todos del agente (por hacer / en curso / hecho) y una barra de progreso. Encima tiene un **reloj digital de puntitos rojos**, con la hora de la oficina (su zona horaria).
-- **Nuevo requerimiento:** la PO lo anuncia en el rincón de producto, se lo lleva al manager y él se lo reparte a quien corresponda según de qué trata (pantallas → frontend, endpoints → backend, bugs → QA, colores y logos → diseño; si no está claro, al Tech Lead).
+- **Nuevo requerimiento:** tú (la PO) lo anuncias en el rincón de producto y se lo llevas al manager, y él se lo reparte a quien corresponda según de qué trata (pantallas → frontend, endpoints → backend, bugs → QA, colores y logos → diseño; si no está claro, al Tech Lead).
 - **Subagente (`Task`/`Agent`):** el manager camina con una tarjeta hasta el escritorio de quien corresponde y le deja una carpeta mientras dure la subtarea.
 - **Uso de herramientas:** el personaje teclea, su monitor muestra código y saltan glifos. El rack de servidores parpadea cuando trabaja backend.
 - **Error:** el personaje se sacude con chispas rojas y el Tech Lead se acerca a ayudar.
-- **Permiso pendiente:** el manager levanta la mano y aparece un banner naranja.
+- **Permiso pendiente:** el manager va a tu escritorio (el de la PO) a pedirte el OK, levanta la mano y aparece un banner naranja. Si el agente te pregunta algo (`AskUserQuestion`), te trae la pregunta.
 - **`Stop`:** confeti y todo el equipo celebra en la mesa de reuniones.
 - **Sin actividad:** de vez en cuando alguien va por café o se sienta a ver tele.
 
 Además, cada personaje tiene **vida propia**: necesidades que crecen con el tiempo (conversar, café, baño, consultar, imaginar) y una personalidad que decide qué hace cuando nadie le pide nada:
 
-- **Sofía, Valentina y Camila** (PO, analista y diseñadora) son NPC del negocio: se sientan juntas y cotorrean, desde sus escritorios o juntándose en la cafetería o junto al sofá. Comentan lo que pasa en la oficina (la tarea en curso, quién se peleó con un error, quién vio todo en verde, el último incendio) y a veces de la charla sale una idea que le llevan a Marco, que la manda al backlog.
+- **Sofía, Valentina y Camila** (PO, analista y diseñadora) son NPC del negocio: se sientan juntas y cotorrean, desde sus escritorios o juntándose en la cafetería o junto al sofá. Comentan lo que pasa en la oficina (la tarea en curso, quién se peleó con un error, quién vio todo en verde, el último incendio) y a veces de la charla sale una idea que Valentina o Camila le llevan a Marco, que la manda al backlog. Sofía eres tú: cotorrea, pero nunca decide nada por su cuenta.
 - **Sueños:** Camila salta e imagina **unicornios 🦄 o arcoíris 🌈**; Andrés (QA) tiene **pesadillas con calaveras 💀**; Diego y Lucía sueñan con **pizza 🍕**. Aparecen en una nube de pensamiento en pixel art que brilla.
-- **Diego, Lucía y Andrés**, mientras trabajan, a veces se paran a **consultar a Tomás** (el TL). Y **Tomás, el arquitecto**, a veces va a conversar con producto: prioridades con Sofía, datos con Valentina, mockups con Camila.
+- **Diego, Lucía y Andrés**, mientras trabajan, a veces se paran a **consultar a Tomás** (el TL). Y **Tomás, el arquitecto**, a veces va a conversar con producto: datos con Valentina, mockups con Camila. A ti, la PO, no te pregunta: cuando el agente tiene una pregunta para ti, te la hace de verdad.
 - **Marco** hace rondas para preguntar cómo van.
 - **A las 13:00 el equipo se va a almorzar** al **comedor**, bajo la cafetería, con la hora de la oficina: pasan por la barra, entran al comedor y se sientan a la mesa larga (producto y el manager detrás, de frente; el equipo técnico delante, de espaldas), sin atravesar la mesa, y conversan hasta volver, a más tardar a las 14:00. Quien tiene un subagente trabajando almuerza en su escritorio 🥪, y si el agente necesita a alguien que está almorzando, deja el plato y vuelve a su puesto.
 - **El baño 🚻** se usa de a uno: si está ocupado, el siguiente espera afuera, inquieto. La luz del letrero muestra si está libre.
@@ -94,7 +94,7 @@ La vida de la oficina no es sólo azar: cada señal del agente y de los subagent
 | Mucho teclear seguido | Les da hambre: sueñan con **pizza 🍕**; y cansa: van por café |
 | Termina un subagente | Se premia: con una pizza soñada o un café |
 | Fases `ux`/`ui` o subagente de diseño | Camila se inspira: unicornios y arcoíris |
-| Fase `arquitectura`/`adr` | Tomás va a preguntarle el alcance a Sofía o los datos a Valentina |
+| Fase `arquitectura`/`adr` | Tomás va a preguntarle el alcance y los datos a Valentina |
 | Fases `historia`/`criterios`/`requisitos` | Producto va a preguntarle a Tomás si es factible |
 | El agente espera tu OK | Los que no trabajan aprovechan: café, conversación y tele |
 | Tarea terminada (`Stop`) | Celebración en la mesa de reuniones, y los devs sueñan con la pizza del festejo |
@@ -184,11 +184,12 @@ Si ya hay una oficina corriendo, `dev-team-office` abre su juego en vez de falla
 
 La misma oficina se puede ver en el navegador en `http://127.0.0.1:4317`, **a pantalla completa**: todo va dentro del juego.
 
-- **Dos vistas:** la **frontal** de siempre (por defecto) o la **cenital isométrica**: el piso en rombo, la pared del ventanal y una pared lateral, los muebles como volúmenes y las personas de pie, cada una delante o detrás de lo que corresponda. Se cambia con **◇** (arriba a la derecha), con `v` o en ⚙ › General › Vista de la oficina, y queda guardada.
+- **Dos vistas:** la **frontal** de siempre (por defecto) o la **cenital isométrica**: el piso en rombo, la pared del ventanal y una pared lateral, los muebles como volúmenes y las personas de pie, cada una delante o detrás de lo que corresponda. La oficina es el último piso de una torre de vidrio, con el paisaje del ventanal detrás (cielo, clima y ciudad). Se cambia con **◇** (arriba a la derecha), con `v` o en ⚙ › General › Vista de la oficina, y queda guardada.
 - **⚙** (arriba a la derecha, o `c`): ajustes. **⛶** (o `f`): pantalla completa del navegador. **🏢** (arriba a la izquierda, o `o`): qué oficina ver, si la empresa tiene más de una.
 - **`>_`** (abajo a la izquierda, o `a`): la **terminal** con la actividad del equipo. Pestañas *actividad* (lo que hace el agente y la vida de la oficina), *equipo* y *encargos* (la tarea, el flujo, los pipelines y las tareas, con las demos). Abajo tiene una línea de comandos: lo que escribas va como mensaje al equipo (o al seleccionado); `/encargo`, `/demo`, `/tdd`, `/reset`, `/ajustes`, `/oficina <nombre>`, `/vida`, `/limpiar` y `/ayuda` (en inglés: `/brief`, `/office`, `/life`, `/help`…), y `btw <pregunta>` para preguntarle algo al agente de turno. Con la terminal cerrada, un contador avisa lo nuevo.
 - **Clic en un personaje:** su **ficha**, como en Los Sims: el rombo verde sobre la cabeza, qué está haciendo, sus necesidades en barras, sus últimas acciones y botones para saludarlo o escribirle.
 - **Clic en la pizarra** (o `t`): nuevo encargo. `esc` cierra la terminal o la ficha.
+- **Servicios en segundo plano:** cuando un agente deja un servicio corriendo (un servidor de desarrollo con el `run_in_background` de Claude Code, `npm run dev > dev.log 2>&1 &`…), se enciende en cian una unidad del rack de servidores y aparece el chip **▶** en el HUD. **Clic en el rack** o en el chip (o `l`): la lista de servicios y una terminal con lo que imprime el elegido, en vivo. Dentro de herdr, **⧉ Abrir en herdr** sigue su log en un pane propio (`tail -F`). La oficina sólo los mira: los levanta y los detiene el agente.
 
 ## Una empresa con varias oficinas
 
@@ -291,8 +292,8 @@ El engranaje de la oficina (arriba a la derecha, en la web y en la terminal; tam
 
 | Pestaña | Qué hay |
 |---|---|
-| General | **Idioma** (inglés por defecto, o español: cambia todo en vivo, en la web, la terminal y la bitácora), **zona horaria** de la empresa (se busca escribiendo la ciudad, la región o el país), clima real o simulado, la vida de la oficina en la bitácora, la **vista de la oficina** (frontal o cenital isométrica), y herdr: agentes en panes, cada subagente en su pane, hacia dónde se abre el pane y qué agente se abre al empezar |
-| Oficinas | Las oficinas de la empresa: nombre, zona horaria y ubicación para el clima; ver, editar y eliminar (sus agentes pasan a la principal) |
+| General | **Idioma** (inglés por defecto, o español: cambia todo en vivo, en la web, la terminal y la bitácora), **zona horaria** de la empresa (se busca escribiendo la ciudad, la región o el país) y su **ciudad** (entre las ciudades del país de esa zona), clima real o simulado, la vida de la oficina en la bitácora, la **vista de la oficina** (frontal o cenital isométrica), y herdr: agentes en panes, cada subagente en su pane, hacia dónde se abre el pane y qué agente se abre al empezar |
+| Oficinas | Las oficinas de la empresa: nombre, zona horaria y ciudad para el clima; ver, editar y eliminar (sus agentes pasan a la principal) |
 | Agentes | El mantenedor: agregar (ruta completa + CLI + oficina; detecta su harness al escribirla), editar, eliminar y ✉ enviarle un prompt. También las sesiones abiertas sin registrar |
 | Personajes | Nombre, cargo, colores (camisa, pantalón, pelo, piel), pelo largo, barba y lentes de cada personaje de la oficina que estás mirando |
 
@@ -315,7 +316,7 @@ Todo se valida antes de escribir, se aplica en caliente y un sitio web ajeno no 
 
 Cualquier proceso puede enviarle eventos a la oficina y escucharla:
 
-- **HTTP/JSON** en `http://127.0.0.1:4317/v1/…`: `POST /v1/events/<source>`, `GET /v1/state?office=`, `GET /v1/weather`, `GET|POST /v1/offices`, `GET|PUT /v1/settings`, `GET|POST /v1/panes`, `POST /v1/commands`.
+- **HTTP/JSON** en `http://127.0.0.1:4317/v1/…`: `POST /v1/events/<source>`, `GET /v1/state?office=`, `GET /v1/weather`, `GET|POST /v1/offices`, `GET|PUT /v1/settings`, `GET|POST /v1/panes`, `GET /v1/services`, `POST /v1/commands`.
 - **WebSocket** en `ws://127.0.0.1:4317/v1/ws`: estado en vivo y envío de eventos, con `ack` opcional.
 - **Socket Unix** en `~/.dev-team-office/office.sock`: la misma API, accesible sólo para tu usuario.
 
@@ -328,7 +329,7 @@ El protocolo completo (eventos, mensajes WebSocket, ejemplos en Python y Node, y
 
 ### El clima de afuera
 
-La oficina le pide el clima a Open-Meteo cada 15 minutos, para cada oficina (las que están en la misma ciudad lo comparten). La ubicación sale de la zona horaria de la oficina: las coordenadas de su ciudad vienen en la tabla de zonas, así que no hace falta geocodificar. Para elegir otra, pon una **ubicación** en ⚙ › Oficinas, con un nombre (`Valparaíso`) o con coordenadas (`-33.45,-70.65`); `DEV_TEAM_OFFICE_LOCATION` hace lo mismo para todas. Sólo se envía eso: el nombre para ubicarla y las coordenadas para pedir el clima. Si se apaga en ⚙ › General (o con `DEV_TEAM_OFFICE_WEATHER=off`) no se consulta nada y el clima se simula según la estación. Las interfaces reciben el clima en el snapshot (`state.weather`) y, cuando cambia, en un mensaje `{ type: 'weather', weather, office }`.
+La oficina le pide el clima a Open-Meteo cada 15 minutos, para cada oficina (las que están en la misma ciudad lo comparten). El lugar es la **ciudad** de la oficina. Una zona horaria abarca toda una región (en Chile, Concepción y Punta Arenas usan la de Santiago), así que la ciudad se elige en ⚙ › General › Ciudad: escribes y te sugiere las ciudades del país de la zona horaria, y la que eliges queda guardada con sus coordenadas. Cada oficina puede tener la suya (⚙ › Oficinas); las que heredan la zona horaria de la empresa heredan también su ciudad. Sin ciudad, se usa la de la zona horaria (sus coordenadas vienen en la tabla de zonas). `dev-team-office config city Concepción` hace lo mismo desde la terminal, y `DEV_TEAM_OFFICE_LOCATION` (un nombre o `-33.45,-70.65`) la fija para todas las oficinas que no tengan una. La ciudad decide también el sol, la luna y el clima simulado. Sólo se envía eso: lo que escribes para buscar la ciudad y las coordenadas para pedir el clima. Si se apaga en ⚙ › General (o con `DEV_TEAM_OFFICE_WEATHER=off`) no se consulta nada y el clima se simula según la estación. Las interfaces reciben el clima en el snapshot (`state.weather`) y, cuando cambia, en un mensaje `{ type: 'weather', weather, office }`.
 
 ## Integraciones
 
@@ -356,7 +357,7 @@ Las tareas paralelas se identifican por `tool_use_id`/`agent_id`, así que cada 
 
 - **Extensión** ([`dev-team-office.ts`](integrations/pi/dev-team-office.ts)): al abrir `pi` levanta la oficina si no está corriendo y registra el proyecto (`/office` a pedido); reporta el prompt, las herramientas y el fin del agente; recibe tareas y pipelines.
 - **Subagentes** (gentle-pi, pi-subagents): cada uno es otro `pi` con la misma extensión. Reporta a la sesión del padre y su trabajo lo hace el personaje de su `role:` (por ejemplo, todo lo que hace `ex-qa` lo hace QA, en RED o GREEN según su etiqueta). La lista `todo` de gentle-pi va a la pizarra.
-- **Skill** ([`skills/dev-team-office`](skills/dev-team-office/SKILL.md), para cualquier harness): el agente declara qué rol tiene el turno y en qué fase está, por ejemplo `arquitecto → qa RED → backend implementa → qa GREEN → review → po acepta`. Cada traspaso se anima en la oficina, y las herramientas se atribuyen al rol de turno. El catálogo de eventos y los flujos están en [docs/events-by-role.es.md](docs/events-by-role.es.md).
+- **Skill** ([`skills/dev-team-office`](skills/dev-team-office/SKILL.md), para cualquier harness): el agente declara qué rol tiene el turno y en qué fase está, por ejemplo `arquitecto → qa RED → backend implementa → qa GREEN → review → analyst acepta`. Cada traspaso se anima en la oficina, y las herramientas se atribuyen al rol de turno. El catálogo de eventos y los flujos están en [docs/events-by-role.es.md](docs/events-by-role.es.md).
 
 ### Otros agentes
 

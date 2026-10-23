@@ -36,6 +36,8 @@ Outside herdr, `dev-team-office` shows the **log**: one line for each thing that
 
 Keys: `o` opens the game in the browser, `g` opens it in the terminal (`q` goes back to the monitor), `←`/`→` switch office and `q` quits. If the monitor started the office, `q` also closes it.
 
+When an agent leaves a service running in the background (a dev server, a watcher…), a **SERVICES** section lists them, numbered: `1`–`9` open that service's log in a herdr pane below its agent's (`tail -F`), and `l` the newest one running.
+
 "Of the team working" counts real work: announcements (a task handed out, a pane opening or closing) do not move it.
 
 ### The game's views (browser)
@@ -44,7 +46,8 @@ Keys: `o` opens the game in the browser, `g` opens it in the terminal (`q` goes 
 - **Top-down (isometric):** the same office seen from above and at an angle:
   - the floor as a rhombus, the window wall and a side wall;
   - furniture as volumes;
-  - people standing, each one in front of or behind what it should be.
+  - people standing, each one in front of or behind what it should be;
+  - the office is the top floor of a glass tower, in muted colors so the office stands out (at night, with some windows lit), and behind the tower is the same landscape seen through the windows: sky, sun or moon, weather and city.
 
 To switch views: the ◇ button (top right), the `v` key or **⚙ › General › Office view**. The choice is saved in the settings and every window follows it. The terminal game always uses the front view.
 
@@ -87,7 +90,7 @@ The subagent is still run by its harness; the pane only **shows** it, with `dev-
   - If the agent **lacks roles** (or brings no subagents), it completes its team with the office's (architect, explorer, backend, frontend and QA) in the project, in the agent's format: `.claude/agents`, `.opencode/agents`, `.pi/agents` or `.codex/agents`. Claude Code (if that folder did not exist) and OpenCode need a restart to see them; Pi uses them from the next subagent call. Details in [installation.md](installation.md#if-your-agent-brings-no-team).
   - `--team <pack>` picks another pack and `--no-team` adds none.
 - **⚙ › Agents** (or `dev-team-office agents add <path> --agent <cli>`) is the maintainer: full path, CLI and office.
-- **Offices:** a company can have several (teams or domains), each one with its time zone, its weather and its characters. Create them in ⚙ › Offices or with `dev-team-office offices add "Payments" --timezone Europe/Madrid`.
+- **Offices:** a company can have several (teams or domains), each one with its time zone, its city (its weather) and its characters. Create them in ⚙ › Offices or with `dev-team-office offices add "Payments" --timezone Europe/Madrid`.
 - **Team packs:** `dev-team-office team install example --agent <pi|claude|opencode|codex> --project .` leaves one subagent per role, in that agent's format.
 
 ## btw: a side question
@@ -113,7 +116,7 @@ The subagent is still run by its harness; the pane only **shows** it, with `dev-
 | `dev-team-office btw "…"` | A side question |
 | `dev-team-office send <kind> …` | Sends an event by hand (for testing) |
 | `dev-team-office demo [--pi]` | A sample session |
-| `dev-team-office config [key] [value]` | The settings: `lang`, `timezone`, `weather`, `herdr.*`, `log.life`, `view.office`, `view.mode flat\|iso` |
+| `dev-team-office config [key] [value]` | The settings: `lang`, `timezone`, `city <city>\|zone`, `weather`, `herdr.*`, `log.life`, `view.office`, `view.mode flat\|iso` |
 | `dev-team-office team …` | The team packs |
 | `dev-team-office setup` · `doctor` · `update` · `uninstall` | The installation |
 | `dev-team-office mcp` | The MCP server (stdio; registered by `setup`) |
@@ -122,7 +125,7 @@ The subagent is still run by its harness; the pane only **shows** it, with `dev-
 
 | Where | Keys |
 |---|---|
-| Monitor | `o` browser · `g` game · `←→` office · `q` quit |
+| Monitor | `o` browser · `g` game · `←→` office · `1`–`9`/`l` a service's logs · `q` quit |
 | Log | `g` game · `o` browser · `h` help · `q` close |
-| Game (terminal) | `t` brief · `c` settings · `o` office · `a` activity · `tab`/arrows pick · `m` message · `b` btw · `s` greet · `x` cancel · `d`/`p` demos · `r` restart · `q` back |
-| Game (browser) | `t` brief · `c` settings · `o` office · `a` activity terminal · `f` full screen · `v` front or top-down view · `esc` close |
+| Game (terminal) | `t` brief · `c` settings · `o` office · `a` activity · `tab`/arrows pick · `m` message · `b` btw · `s` greet · `x` cancel · `l` services (or click the rack) · `d`/`p` demos · `r` restart · `q` back |
+| Game (browser) | `t` brief · `c` settings · `o` office · `a` activity terminal · `f` full screen · `v` front or top-down view · `l` services (or click the rack) · `esc` close |

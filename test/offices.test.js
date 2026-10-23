@@ -163,3 +163,23 @@ test('la zona horaria de cada oficina: la suya, si no la de la empresa, si no la
   assert.equal(company.zoneOf('remota'), 'America/Santiago');
   assert.deepEqual([company.info('remota').country, company.info('remota').city], ['CL', 'Santiago']);
 });
+
+test('la ciudad de la empresa: la heredan las oficinas que heredan la zona horaria, y otra zona la borra', () => {
+  const store = openStore(':memory:');
+  const company = new Company({ store });
+  const conce = 'Concepción, Región del Biobío (-36.8270, -73.0498)';
+  assert.equal(store.setPrefs({ timezone: 'America/Santiago', city: conce }).ok, true);
+  store.createOffice({ name: 'Pagos' });
+  store.createOffice({ name: 'Madrid', timezone: 'Europe/Madrid' });
+  store.createOffice({ name: 'Arica', location: 'Arica (-18.4783, -70.3126)' });
+  company.load();
+  const place = (id) => company.info(id).place;
+  assert.deepEqual(place('main'), { name: 'Concepción, Región del Biobío', lat: -36.827, lon: -73.0498 });
+  assert.equal(place('pagos').name, 'Concepción, Región del Biobío', 'hereda la zona y la ciudad');
+  assert.equal(place('madrid').name, 'Madrid', 'con su propia zona, la ciudad de esa zona');
+  assert.equal(place('arica').lat, -18.4783, 'la suya gana');
+  assert.equal(store.setPrefs({ city: 42 }).ok, false);
+  assert.equal(store.setPrefs({ timezone: 'America/Punta_Arenas' }).prefs.city, null, 'otra zona horaria: vuelve a la de la zona');
+  assert.equal(store.setPrefs({ timezone: 'America/Santiago', city: conce }).prefs.city, conce, 'salvo que venga con su ciudad');
+  assert.equal(store.setPrefs({ lang: 'en' }).prefs.city, conce, 'lo demás no la toca');
+});

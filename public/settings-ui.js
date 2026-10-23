@@ -1,6 +1,6 @@
 // ⚙ Settings in the web view. The office is the frontend and keeps its own data in its SQLite database:
-//   General      game language, the company's time zone, real weather, herdr and the log
-//   Offices      the company's offices (teams or domains): name, time zone and location
+//   General      game language, the company's time zone and city, real weather, herdr and the log
+//   Offices      the company's offices (teams or domains): name, time zone and city
 //   Agents       the maintainer: each agent is a full path + the CLI that serves it + its
 //                office. What its harness brings (Errementari, commands, prompts, .devteam/) is
 //                detected, and a prompt sent from the whiteboard starts THAT pipeline.
@@ -10,6 +10,7 @@ import { TEAM, DEFAULT_TEAM, APPEARANCE_KEYS, LOOK_PALETTES } from './sim.js';
 import { drawSprite } from './sprite.js';
 import { t, LANGUAGES, getLanguage } from './i18n.js';
 import { allZones, zoneInfo, countryName } from './clock.js';
+import { parsePlace } from './sky.js';
 
 const ROLE_ORDER = ['po', 'analyst', 'manager', 'tl', 'qa', 'backend', 'frontend', 'designer'];
 const HARNESS_NAME = { pi: 'Pi', 'claude-code': 'Claude Code', opencode: 'OpenCode', codex: 'Codex' };
@@ -56,6 +57,46 @@ function zoneInput({ value, placeholder, label, onPick }) {
     onPick(z);
   };
   return [input, list, country];
+}
+
+/** The name of a stored city, without its coordinates. */
+const placeName = (location) => parsePlace(location)?.name || String(location || '');
+
+/**
+ * A city field: type to search among the cities of the time zone's country (Open-Meteo, through the
+ * office); the one picked is saved with its coordinates. Empty: the zone's city. Without a
+ * connection, what was typed is saved as is (a name or "lat, lon").
+ */
+function cityInput({ value, timezone, placeholder, label, onPick }) {
+  const id = `city-${Math.random().toString(36).slice(2, 8)}`;
+  const C = (k, v) => t(`settings.general.${k}`, v);
+  const list = el('datalist', { id });
+  const input = el('input', { type: 'text', value: placeName(value), placeholder, list: id, 'aria-label': label, autocomplete: 'off', maxlength: 80 });
+  const note = el('span', { class: 'hint tz-country' }, '');
+  const country = zoneInfo(timezone).country;
+  let found = [], offline = false, timer = null, seq = 0;
+  input.oninput = () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (q.length < 2) { found = []; list.replaceChildren(); note.textContent = ''; return; }
+    timer = setTimeout(async () => {
+      const n = ++seq;
+      const r = await api('GET', `/v1/places?q=${encodeURIComponent(q)}&timezone=${encodeURIComponent(timezone || '')}`);
+      if (n !== seq || !r.ok) return;
+      found = r.places || [];
+      offline = !!r.offline;
+      list.replaceChildren(...found.map((p) => option(p.label, countryName(p.country, getLanguage()))));
+      note.textContent = offline ? C('cityOffline') : found.length ? '' : C('cityNone', { country: countryName(country, getLanguage()) || country || '' });
+    }, 250);
+  };
+  input.onchange = () => {
+    const v = input.value.trim(), low = v.toLowerCase();
+    if (!v) { note.textContent = ''; onPick(null); return; }
+    const hit = found.find((p) => p.label.toLowerCase() === low) || found.find((p) => p.name.toLowerCase() === low) || (found.length === 1 ? found[0] : null);
+    if (hit) { input.value = hit.label; note.textContent = ''; onPick(hit.location); return; }
+    if (offline) onPick(v);
+  };
+  return [input, list, note];
 }
 
 /**
@@ -125,6 +166,9 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       el('label', { class: 'b-field' }, el('span', {}, G('timezone')),
         el('span', { class: 'tz-field' }, zoneInput({ value: p.timezone, placeholder: G('tzSystem', { tz: st.data?.systemZone || '' }), label: G('timezone'), onPick: (z) => setPref({ timezone: z }) }))),
       el('p', { class: 'hint' }, G('tzHint')),
+      el('label', { class: 'b-field' }, el('span', {}, G('city')),
+        el('span', { class: 'tz-field' }, cityInput({ value: p.city, timezone: p.timezone || st.data?.systemZone, placeholder: G('cityZone', { city: zoneInfo(p.timezone || st.data?.systemZone).city || '' }), label: G('city'), onPick: (c) => setPref({ city: c }) }))),
+      el('p', { class: 'hint' }, G('cityHint')),
       check(p.weather, `${G('weather')}: ${G(p.weather ? 'weatherOn' : 'weatherOff')}`, (e) => setPref({ weather: e.target.checked })),
       check(p.log?.life, G('life'), (e) => setPref({ log: { life: e.target.checked } })),
       el('label', { class: 'b-field' }, el('span', {}, G('viewMode')),
@@ -153,7 +197,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         el('b', {}, o.name), o.id === 'main' ? el('span', { class: 's-tag' }, O('main')) : null,
         el('span', { class: 's-tag kind' }, tzLabel(o.timezone)),
         o.id === here() ? el('span', { class: 's-ok' }, O('viewing')) : null),
-      el('div', { class: 'hint' }, `${O('agents', { n: o.agents })}${o.location ? ` · 📍 ${o.location}` : ''}${o.ownTimezone ? '' : ` · ${O('inherit', { tz: company })}`}`),
+      el('div', { class: 'hint' }, `${O('agents', { n: o.agents })}${o.place?.name ? ` · 📍 ${o.place.name}` : ''}${o.ownTimezone ? '' : ` · ${O('inherit', { tz: company })}`}`),
       el('div', { class: 's-row' },
         o.id !== here() ? el('button', { type: 'button', class: 's-mini', onclick: () => { onView?.(o.id); $('settings').close(); } }, `👁 ${O('view')}`) : null,
         el('button', { type: 'button', class: 's-mini', onclick: () => { st.office = { id: o.id, name: o.custom ? o.name : '', timezone: o.ownTimezone || '', location: o.location || '' }; renderOffices(); } }, O('edit')),
@@ -167,8 +211,14 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       el('div', { class: 's-form' },
         el('label', { class: 'b-field' }, el('span', {}, O('name')), el('input', { type: 'text', value: f.name, maxlength: 40, oninput: (e) => { f.name = e.target.value; } })),
         el('label', { class: 'b-field' }, el('span', {}, O('timezone')),
-          el('span', { class: 'tz-field' }, zoneInput({ value: f.timezone, placeholder: O('inherit', { tz: company }), label: O('timezone'), onPick: (z) => { f.timezone = z || ''; } }))),
-        el('label', { class: 'b-field' }, el('span', {}, O('location')), el('input', { type: 'text', value: f.location, placeholder: O('locationPh'), maxlength: 80, oninput: (e) => { f.location = e.target.value; } })),
+          el('span', { class: 'tz-field' }, zoneInput({ value: f.timezone, placeholder: O('inherit', { tz: company }), label: O('timezone'), onPick: (z) => {
+            // another country: its city is no longer valid
+            if (zoneInfo(z || company).country !== zoneInfo(f.timezone || company).country) f.location = '';
+            f.timezone = z || ''; renderOffices();
+          } }))),
+        el('label', { class: 'b-field' }, el('span', {}, O('location')),
+          el('span', { class: 'tz-field' }, cityInput({ value: f.location, timezone: f.timezone || company, label: O('location'), onPick: (c) => { f.location = c || ''; },
+            placeholder: !f.timezone && p.city ? O('cityInherit', { city: placeName(p.city) }) : O('locationPh', { city: zoneInfo(f.timezone || company).city || '' }) }))),
         el('div', { class: 's-row' },
           el('button', { type: 'button', class: 'btn', onclick: saveOffice }, f.id ? O('saveChanges') : O('add')),
           f.id ? el('button', { type: 'button', class: 'btn ghost', onclick: () => { st.office = emptyOffice(); renderOffices(); } }, O('cancel')) : null)));
@@ -327,7 +377,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         el('div', { class: 'colors' }, color('shirt'), color('pants'), color('hair'), color('skin')),
         el('div', { class: 'toggles' }, toggle('long'), toggle('beard'), toggle('glasses')),
         el('div', { class: 'toggles' },
-          el('span', { class: 'hint' }, LK('role', { role })),
+          el('span', { class: 'hint' }, role === 'po' ? `${LK('role', { role })} · ${LK('you')}` : LK('role', { role })),
           el('button', { type: 'button', class: 's-mini', title: LK('randomTitle'), onclick: () => { Object.assign(look, { shirt: pickOne(LOOK_PALETTES.shirt), hair: pickOne(LOOK_PALETTES.hair), skin: pickOne(LOOK_PALETTES.skin), pants: pickOne(LOOK_PALETTES.pants), long: Math.random() < 0.5, beard: Math.random() < 0.3, glasses: Math.random() < 0.3 }); renderLook(); } }, '🎲'),
           el('button', { type: 'button', class: 's-mini', title: LK('resetTitle'), onclick: () => { Object.assign(look, DEFAULT_TEAM[role]); renderLook(); } }, '↺')),
       );

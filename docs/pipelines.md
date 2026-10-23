@@ -47,7 +47,7 @@ There is a full example in [`examples/tienda`](../examples/tienda). The agent re
 {
   "name": "Shop",
   "harness": "pi",                          // default harness to look agents up in: pi | claude-code | opencode
-  "roles": {                                // po, analyst, manager, tl, qa, backend, frontend, designer
+  "roles": {                                // analyst, manager, tl, qa, backend, frontend, designer
     "tl": { "agent": "architect", "model": "anthropic/claude-opus-5-5" },
     "qa": { "agent": "tester", "model": "anthropic/claude-haiku-5-5" },
     "backend": { "agent": "backend-dev" }

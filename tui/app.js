@@ -2,7 +2,7 @@
 
 import { createSim, TEAM, applyAppearance } from '../public/sim.js';
 import { Screen, detectColorMode } from './screen.js';
-import { computeLayout, drawFrame, agentAtCell, boardAtCell, officeAtCell } from './view.js';
+import { computeLayout, drawFrame, agentAtCell, boardAtCell, officeAtCell, rackAtCell } from './view.js';
 import { briefOptions, briefFields, briefCycle, briefProblem, briefMessage, defaultTarget } from '../public/brief.js';
 import { createSettings } from './settings.js';
 import { t, setLanguage } from '../public/i18n.js';
@@ -32,6 +32,8 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       brief: null, // the whiteboard dialog while it is open
       settings: null, // ⚙ Settings while open
       panel: true, // the team's activity on the right (>_ or the a key hide it: the office in full screen)
+      services: [], // the ones the agents left running in the background (the rack)
+      svc: null,    // the services panel while it is open: { sel, id, lines, offset, msg }
     };
     let L;
     let active = true;
@@ -44,7 +46,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
 
     feed.start({
       onSnapshot(state) {
-        if (state.office) { model.office = state.office; sim.setZone(state.office.timezone); }
+        if (state.office) { model.office = state.office; sim.setZone(state.office.timezone); sim.setPlace(state.office.place); }
         if (state.offices) model.offices = state.offices;
         sim.reset();
         sessions.clear();
@@ -69,9 +71,10 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       onOffices(list, office) {
         model.offices = list || [];
         const cur = office || model.offices.find((o) => o.id === model.office?.id);
-        if (cur) { model.office = cur; sim.setZone(cur.timezone); }
+        if (cur) { model.office = cur; sim.setZone(cur.timezone); sim.setPlace(cur.place); }
       },
       onHerdr(st) { model.herdr = st; },
+      onServices(list) { model.services = list || []; if (model.svc) model.svc.sel = Math.min(model.svc.sel, Math.max(0, model.services.length - 1)); },
       onError(err) { flash(t('tui.flash.failed', { error: err }), 6000); },
     });
     if (notice) flash(notice, 8000);
@@ -117,6 +120,49 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       });
     }
 
+    // ---- the services left running in the background (l, or a click on the rack) ----
+    const LOG_LINES = 400;
+    let svcTimer = null;
+    function openServices() {
+      model.brief = null;
+      const i = model.services.findIndex((s) => s.status === 'running');
+      model.svc = { sel: Math.max(0, i), id: null, lines: [], offset: undefined, msg: '', note: '' };
+      pollService();
+    }
+    function closeServices() { clearTimeout(svcTimer); model.svc = null; }
+    /** What the chosen service printed since last time (every second while the panel is open). */
+    async function pollService() {
+      clearTimeout(svcTimer);
+      const v = model.svc;
+      if (!v || !active) return;
+      const s = model.services[v.sel];
+      if (s && s.id !== v.id) Object.assign(v, { id: s.id, lines: [], offset: undefined, note: '' });
+      if (s) {
+        try {
+          const q = v.offset === undefined ? '' : `?from=${v.offset}`;
+          const r = await (await fetch(`${feed.http}/v1/services/${encodeURIComponent(s.id)}/log${q}`)).json();
+          if (model.svc === v && v.id === s.id && r.ok) {
+            if (r.reset) v.lines = [];
+            if (r.text) v.lines = [...v.lines, ...r.text.replace(/\n$/, '').split('\n')].slice(-LOG_LINES);
+            v.note = r.missing ? t('services.noLog') : '';
+            v.offset = r.offset;
+          }
+        } catch { /* the office is restarting */ }
+      }
+      if (model.svc === v) svcTimer = setTimeout(pollService, 1000);
+    }
+    async function serviceKey(k) {
+      const v = model.svc, n = model.services.length;
+      if (k === 'esc' || k === 'q' || k === 'l') return closeServices();
+      if ((k === 'up' || k === 'down') && n) { v.sel = (v.sel + (k === 'down' ? 1 : -1) + n) % n; v.msg = ''; return pollService(); }
+      if ((k === '\r' || k === '\n') && model.services[v.sel] && model.herdr?.available) {
+        try {
+          const r = await (await fetch(`${feed.http}/v1/services/${encodeURIComponent(model.services[v.sel].id)}/terminal`, { method: 'POST' })).json();
+          v.msg = r.ok ? t('services.paneOpened', { pane: r.pane }) : `✖ ${r.error}`;
+        } catch (err) { v.msg = `✖ ${err.message}`; }
+      }
+    }
+
     function briefKey(k) {
       const b = model.brief;
       const opts = briefOptions({ targets: model.targets }, b.sel);
@@ -149,6 +195,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       if (k === '\x03') return quit(); // Ctrl+C siempre sale
       if (model.settings) { if (model.settings.key(k) === 'close') model.settings = null; return; }
       if (model.brief) return briefKey(k);
+      if (model.svc) return serviceKey(k);
       if (model.chat !== null) {
         if (k === 'esc') model.chat = null;
         else if (k === '\r' || k === '\n') {
@@ -177,6 +224,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
         case 'b': model.chat = 'btw '; break; // a side question to the agent on duty
         case 't': openBrief(); break;
         case 'c': openSettings(); break;
+        case 'l': openServices(); break; // the services in the background, and their logs
         case 'a': model.panel = !model.panel; resize(); break; // the activity (>_): without it, the office takes the whole terminal
         case 'x': {
           const run = [...model.pipelines].reverse().find((r) => r.status === 'running');
@@ -203,9 +251,10 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
           if (press && btn === 0 && officeAtCell(L, col, row) && !model.brief && !model.settings) nextOffice(1);
           else if (press && btn === 0 && !L.tooSmall && at(L.gearCell, 3)) openSettings();
           else if (press && btn === 0 && !L.tooSmall && !model.brief && !model.settings && at(L.termCell, 4)) { model.panel = !model.panel; resize(); }
-          else if (press && btn === 0 && !model.brief && !model.settings) {
+          else if (press && btn === 0 && !model.brief && !model.settings && !model.svc) {
             const who = agentAtCell(L, sim, col, row);
             if (!who && boardAtCell(L, col, row)) openBrief();
+            else if (!who && rackAtCell(L, col, row)) openServices();
             else model.selected = who;
           }
           s = s.slice(m[0].length);
@@ -229,6 +278,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       if (!active) return;
       active = false;
       clearInterval(timer);
+      clearTimeout(svcTimer);
       stdout.off('resize', resize);
       stdin.off('data', onInput);
       if (stdin.isTTY) stdin.setRawMode(false);

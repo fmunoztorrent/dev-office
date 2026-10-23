@@ -52,6 +52,31 @@ export function sunTimes(date = new Date(), { lat, lon } = {}) {
   return { sunrise: noon - half, sunset: noon + half };
 }
 
+// ------------------------------------------------------------------ the place
+
+// Where an office is (its city), as stored: a name ("Valparaíso", looked up in the geocoder),
+// coordinates ("-33.45,-70.65") or both, the way the city picker saves it:
+// "Concepción, Región del Biobío (-36.8270, -73.0498)".
+const PLACE_RX = /^\s*(?:(.*?)\s*\(\s*)?(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)?\s*$/;
+const PLACE_MAX = 80;
+
+/** The stored text → { name, lat?, lon? } (null if empty). */
+export function parsePlace(text) {
+  const s = String(text ?? '').trim();
+  if (!s) return null;
+  const m = PLACE_RX.exec(s);
+  if (!m) return { name: s };
+  const lat = Number(m[2]), lon = Number(m[3]);
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return { name: s };
+  return { name: (m[1] || '').trim(), lat, lon };
+}
+
+/** { name, lat, lon } → the text that is stored (it always fits in 80 characters). */
+export function placeLocation({ name = '', lat, lon }) {
+  const at = ` (${Number(lat).toFixed(4)}, ${Number(lon).toFixed(4)})`;
+  return `${String(name).trim().slice(0, PLACE_MAX - at.length)}${at}`;
+}
+
 // ------------------------------------------------------------------ clima
 
 // Each weather's name is in the languages (i18n: weather.<type>).
@@ -243,9 +268,11 @@ function layout(x0, x1) {
  * The landscape behind the glass, back to front, and the glass on top (frames, reflections,
  * drops, fogging). All clipped to the rectangle [x0, x1] × [top, bottom].
  * @param lod 'full' (browser) or 'low' (terminal: fewer small details)
+ * @param glass false: only the landscape, without the glass (the top-down view's backdrop)
+ * @param arc   how high above the horizon the sun climbs at noon (the moon, a little less)
  * @returns {{ shapes: Array<[x, y, w, h, color, alpha, fixed]>, flash: number }}
  */
-export function outdoor({ date = new Date(), weather, light, now = 0, x0 = 0, x1 = 704, top = 6, bottom = 108, lod = 'full' } = {}) {
+export function outdoor({ date = new Date(), weather, light, now = 0, x0 = 0, x1 = 704, top = 6, bottom = 108, lod = 'full', glass = true, arc = 66 } = {}) {
   const w = weather || simulatedWeather(date);
   const L = light || daylight(date, w);
   const low = lod === 'low';
@@ -288,7 +315,7 @@ export function outdoor({ date = new Date(), weather, light, now = 0, x0 = 0, x1
   const vis = 1 - Math.min(0.92, w.clouds * 0.9) - (fog ? 0.3 : 0);
   if (L.alt > -0.08 && vis > 0) {
     const k = Math.min(1, Math.max(0, (L.hour - L.sunrise) / (L.sunset - L.sunrise)));
-    const sx = x0 + 16 + k * (W - 32), sy = HZ - 4 - Math.max(0, L.alt) * 66;
+    const sx = x0 + 16 + k * (W - 32), sy = HZ - 4 - Math.max(0, L.alt) * arc;
     const col = mixc(0xffb46b, 0xfff6d8, Math.min(1, L.alt * 3));
     if (!low) { disc(sx, sy, 22, 0xffe6a8, 0.05 * vis); disc(sx, sy, 14, 0xffe6a8, 0.09 * vis); }
     disc(sx, sy, 6, col, Math.min(1, vis + 0.15));
@@ -297,7 +324,7 @@ export function outdoor({ date = new Date(), weather, light, now = 0, x0 = 0, x1
   if (L.night > 0.3) {
     const nightLen = 24 - (L.sunset - L.sunrise);
     const k = (((L.hour - L.sunset + 24) % 24) / nightLen);
-    const mx = x0 + 30 + Math.min(1, k) * (W - 60), my = HZ - 12 - Math.sin(Math.PI * Math.min(1, k)) * 58;
+    const mx = x0 + 30 + Math.min(1, k) * (W - 60), my = HZ - 12 - Math.sin(Math.PI * Math.min(1, k)) * (arc - 8);
     const p = moonPhase(date), r = 5;
     const a = Math.min(1, L.night) * Math.max(0.15, 1 - w.clouds * 0.85);
     if (!low) disc(mx, my, 12, 0xdfe6ff, 0.05 * a);
@@ -457,29 +484,31 @@ export function outdoor({ date = new Date(), weather, light, now = 0, x0 = 0, x1
   }
 
   // ---- the glass: a very slight tint, diagonal reflections, drops and fogging
-  R(x0, top, W, bottom - top, 0x9fc6e6, 0.05);
-  if (L.night > 0.05) R(x0, top, W, bottom - top, 0x1a2036, 0.12 * L.night); // at night it reflects the interior a little
-  const panes = [];
-  for (let px = x0; px < x1; px += 88) panes.push(px);
-  if (!low) {
-    for (const px of panes) {
-      const a = 0.04 + 0.03 * L.night;
-      for (let k = 0; k * 8 < bottom - top; k++) { R(px + 12 + k * 3, top + k * 8, 9, 8, 0xffffff, a); R(px + 30 + k * 3, top + k * 8, 3, 8, 0xffffff, a * 0.8); }
-      if (L.night > 0.2) disc(px + 44, top + 9, 3, 0xffe9c0, 0.22 * L.night); // the ceiling lamps, reflected
+  if (glass) {
+    R(x0, top, W, bottom - top, 0x9fc6e6, 0.05);
+    if (L.night > 0.05) R(x0, top, W, bottom - top, 0x1a2036, 0.12 * L.night); // at night it reflects the interior a little
+    const panes = [];
+    for (let px = x0; px < x1; px += 88) panes.push(px);
+    if (!low) {
+      for (const px of panes) {
+        const a = 0.04 + 0.03 * L.night;
+        for (let k = 0; k * 8 < bottom - top; k++) { R(px + 12 + k * 3, top + k * 8, 9, 8, 0xffffff, a); R(px + 30 + k * 3, top + k * 8, 3, 8, 0xffffff, a * 0.8); }
+        if (L.night > 0.2) disc(px + 44, top + 9, 3, 0xffe9c0, 0.22 * L.night); // the ceiling lamps, reflected
+      }
     }
-  }
-  if (WET.has(w.kind)) {
-    const span = bottom - top;
-    for (let i = 0; i < (low ? 10 : 28); i++) {
-      const x = x0 + hash(i * 5.3 + 1) * W, sp = 5 + hash(i * 1.9) * 14, len = 3 + Math.floor(hash(i * 4.1) * 7);
-      const y = top + ((hash(i * 2.1) * span + t * sp) % span);
-      R(x, y - len, 1, len, 0xe2efff, 0.22, true);
-      R(x, y, 2, 2, 0xf2f8ff, 0.5, true);
+    if (WET.has(w.kind)) {
+      const span = bottom - top;
+      for (let i = 0; i < (low ? 10 : 28); i++) {
+        const x = x0 + hash(i * 5.3 + 1) * W, sp = 5 + hash(i * 1.9) * 14, len = 3 + Math.floor(hash(i * 4.1) * 7);
+        const y = top + ((hash(i * 2.1) * span + t * sp) % span);
+        R(x, y - len, 1, len, 0xe2efff, 0.22, true);
+        R(x, y, 2, 2, 0xf2f8ff, 0.5, true);
+      }
     }
+    if (Number.isFinite(w.temp) && w.temp <= 6) R(x0, bottom - 16, W, 16, 0xe8eef5, Math.min(0.16, 0.07 + (6 - w.temp) * 0.01)); // fogging
+    // the aluminum frames
+    for (const px of [...panes, x1]) { R(px - 2, top, 4, bottom - top, 0x39415a); R(px - 2, top, 1, bottom - top, 0x59627c); }
   }
-  if (Number.isFinite(w.temp) && w.temp <= 6) R(x0, bottom - 16, W, 16, 0xe8eef5, Math.min(0.16, 0.07 + (6 - w.temp) * 0.01)); // fogging
-  // the aluminum frames
-  for (const px of [...panes, x1]) { R(px - 2, top, 4, bottom - top, 0x39415a); R(px - 2, top, 1, bottom - top, 0x59627c); }
 
   return { shapes: out, flash: bolt.flash };
 }

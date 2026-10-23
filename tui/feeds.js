@@ -20,6 +20,7 @@ export function localFeed(server) {
   const onPrefs = (p) => h?.onPrefs?.(p);
   const onOffices = (list) => h?.onOffices?.(list, server.company.info(view));
   const onHerdr = (st) => h?.onHerdr?.(st);
+  const onServices = (id) => { if (mine(id)) h?.onServices?.(server.services.list(view)); };
   const snapshot = () => {
     const st = server.fullState(view);
     h.onPrefs?.(st.prefs);
@@ -31,6 +32,7 @@ export function localFeed(server) {
     h.onAppearance?.(st.appearance);
     h.onWeather?.(st.weather);
     h.onHerdr?.(st.herdr);
+    h.onServices?.(st.services || []);
   };
   return {
     http: server.url,
@@ -49,6 +51,7 @@ export function localFeed(server) {
       server.bus.on('prefs', onPrefs);
       server.bus.on('offices', onOffices);
       server.bus.on('herdr', onHerdr);
+      server.services.on('change', onServices);
     },
     send(msg) {
       if (msg?.type === 'view') {
@@ -69,6 +72,7 @@ export function localFeed(server) {
       server.bus.off('prefs', onPrefs);
       server.bus.off('offices', onOffices);
       server.bus.off('herdr', onHerdr);
+      server.services.off('change', onServices);
     },
   };
 }
@@ -97,12 +101,14 @@ export function remoteFeed(wsUrl) {
         h.onAppearance?.(st.appearance || {});
         h.onWeather?.(st.weather || null);
         h.onHerdr?.(st.herdr || null);
+        h.onServices?.(st.services || []);
       }
       if (msg.type === 'appearance') h.onAppearance?.(msg.appearance);
       if (msg.type === 'weather') h.onWeather?.(msg.weather);
       if (msg.type === 'prefs') h.onPrefs?.(msg.prefs);
       if (msg.type === 'offices') h.onOffices?.(msg.offices, (msg.offices || []).find((o) => o.id === view));
       if (msg.type === 'herdr') h.onHerdr?.(msg.herdr);
+      if (msg.type === 'services' && msg.office === view) h.onServices?.(msg.services || []);
       if (msg.type === 'pipelines') h.onPipelines(msg.runs);
       if (msg.type === 'targets') h.onTargets?.(msg.targets);
       if (msg.type === 'event') h.onEvent(msg.event, msg.session);

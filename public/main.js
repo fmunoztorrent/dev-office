@@ -3,6 +3,7 @@ import { applyAppearance, needsOf, DREAMS } from './sim.js';
 import { AGENT_NAME, TASK_STATUS } from './targets.js';
 import { briefOptions, briefProblem, briefMessage, defaultTarget, targetLabel } from './brief.js';
 import { createSettings } from './settings-ui.js';
+import { createServices } from './services-ui.js';
 import { drawSprite } from './sprite.js';
 import { season, isSouth, daylight, weatherIcon } from './sky.js';
 import { t, setLanguage, onLanguage, getLanguage, timeOf } from './i18n.js';
@@ -22,8 +23,9 @@ let offices = []; // the company's offices (the selector, top left)
 let office = null; // the one being watched: { id, name, timezone, country, city, … }
 let prefs = null;  // the general settings (language, zone, weather, herdr, log)
 let herdr = { available: false, panes: [] };
+let services = []; // the services the agents left running in the background (the rack, the ▶ chip)
 
-const game = createGame($('office'), { onSelect: (id) => select(id), onBoardClick: () => openBrief() });
+const game = createGame($('office'), { onSelect: (id) => select(id), onBoardClick: () => openBrief(), onRackClick: () => servicesUi.open() });
 const zone = () => office?.timezone || null;
 const hhmm = (ts) => timeOf(ts, zone());
 
@@ -48,6 +50,8 @@ onLanguage(() => {
   onRuns(runs);
   if ($('brief').open) renderBrief();
   settings.refresh?.(true);
+  renderServicesChip();
+  servicesUi.refresh();
 });
 
 // ---------------------------------------------------------------- socket
@@ -68,12 +72,14 @@ function connect() {
       if (st.tasks) onTasks(st);
       onRuns(st.pipelines || []);
       onTargets(st.targets);
+      onServices(st.services || []);
     }
     if (msg.type === 'prefs') onPrefs(msg.prefs);
     if (msg.type === 'offices') onOffices(msg.offices, msg.offices.find((o) => o.id === office?.id));
     if (msg.type === 'herdr') onHerdr(msg.herdr);
     if (msg.type === 'pipelines') onRuns(msg.runs);
     if (msg.type === 'targets') onTargets(msg.targets);
+    if (msg.type === 'services' && msg.office === office?.id) onServices(msg.services);
     if (msg.type === 'snapshot' || msg.type === 'appearance') { applyAppearance((msg.state || msg).appearance || {}); renderTeam(); renderSheet(true); }
     if (msg.type === 'snapshot' || msg.type === 'weather') { game.sim.setWeather((msg.state ? msg.state.weather : msg.weather) || null); renderWeather(); }
     if (msg.type === 'event') onEvent(msg.event, msg.session);
@@ -85,6 +91,29 @@ function connect() {
   };
 }
 const send = (obj) => ws?.readyState === 1 && ws.send(JSON.stringify(obj));
+
+// ---------------------------------------------------------------- the services in the background
+
+const servicesUi = createServices({ getServices: () => services, getHerdr: () => herdr, who: (role) => TEAM[role]?.name || '', hhmm: (ts) => hhmm(ts) });
+
+function onServices(list) {
+  services = list || [];
+  game.setServices(services);
+  renderServicesChip();
+  servicesUi.refresh();
+}
+
+/** The ▶ chip in the HUD: how many are running (it shows up with the first one). */
+function renderServicesChip() {
+  const n = services.filter((s) => s.status === 'running').length;
+  const chip = $('svc-chip');
+  chip.hidden = !services.length;
+  chip.textContent = `▶ ${n}`;
+  chip.classList.toggle('idle', !n);
+  chip.title = t('ui.servicesKey', { n });
+  chip.setAttribute('aria-label', chip.title);
+}
+$('svc-chip').onclick = () => servicesUi.open();
 
 function onPrefs(p) {
   prefs = p;
@@ -102,7 +131,7 @@ function onOffices(list, current) {
   offices = list || [];
   const changed = current && current.id !== office?.id;
   if (current) office = current;
-  if (office) game.sim.setZone(office.timezone);
+  if (office) { game.sim.setZone(office.timezone); game.sim.setPlace(office.place); }
   renderOffices();
   if (changed) sysLine(t('ui.viewing', { name: office.name, tz: office.timezone }));
   renderWeather();
@@ -141,7 +170,7 @@ function renderWeather() {
   const el = $('wx');
   el.hidden = false;
   el.textContent = `${icon} ${temp}`;
-  const place = w.place || office?.city || t('ui.here');
+  const place = w.place || office?.place?.name || office?.city || t('ui.here');
   const country = office?.country ? `, ${countryName(office.country, getLanguage())}` : '';
   const where = w.source === 'open-meteo' ? t('ui.weatherReal', { place: `${place}${country}` }) : `${t('ui.weatherSim')} · ${place}${country}`;
   el.title = t('ui.weatherTitle', { label: t(`weather.${w.kind}`), temp: temp ? `, ${temp}C` : '', season: t(`season.${season(now, isSouth(w.lat, zone() || undefined))}`), where });
@@ -658,6 +687,7 @@ document.addEventListener('keydown', (e) => {
   else if (k === 'f') { e.preventDefault(); toggleFullscreen(); }
   else if (k === 'v') { e.preventDefault(); toggleView(); }
   else if (k === 'o') { e.preventDefault(); nextOffice(); }
+  else if (k === 'l') { e.preventDefault(); servicesUi.open(); }
 });
 
 applyI18n();

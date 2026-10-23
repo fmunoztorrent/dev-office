@@ -232,6 +232,45 @@ canvas#office { position: absolute; inset: 0; width: 100%; height: 100%; display
 .muted { color: var(--muted); margin: 0 0 6px; font-size: 12px; }
 h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
 
+/* ---------- the services left running in the background: the HUD chip and their dialog ---------- */
+.svc-chip { font: 18px/1 "VT323", monospace; padding: 4px 10px 3px; background: rgba(18, 20, 33, .82); color: var(--phos); box-shadow: 0 0 0 2px #0b0c14, inset 0 0 0 2px #1e4a33; border: 0; cursor: pointer; white-space: nowrap; text-shadow: 0 0 6px #7dffb088; }
+.svc-chip:hover { color: #fff; }
+.svc-chip:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.svc-chip.idle { color: var(--muted); text-shadow: none; box-shadow: 0 0 0 2px #0b0c14, inset 0 0 0 2px #3a3f58; }
+.services { width: min(760px, calc(100vw - 32px)); }
+.services .svc-card { background: var(--paper); box-shadow: 0 0 0 3px var(--ink), 4px 4px 0 3px #00000040; display: flex; flex-direction: column; max-height: calc(100vh - 56px); }
+.svc-empty { margin: 0; font-size: 14px; color: #6c757d; }
+.svc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 30vh; overflow-y: auto; }
+.svc-pick {
+  width: 100%; display: flex; gap: 10px; align-items: center; text-align: left; cursor: pointer; padding: 6px 10px;
+  font: 14px "Space Grotesk", sans-serif; color: var(--ink); background: #fff; border: 0; box-shadow: 0 0 0 2px var(--ink);
+}
+.svc-pick[aria-pressed="true"] { background: #fff4d6; box-shadow: 0 0 0 2px var(--ink), 3px 3px 0 2px var(--ink); }
+.svc-pick:focus-visible { outline: 3px solid #f4a261; outline-offset: 2px; }
+.svc-dot { width: 10px; height: 10px; flex: none; background: #adb5bd; box-shadow: 0 0 0 2px var(--ink); }
+.svc.running .svc-dot { background: var(--ok); animation: svc-blink 1.6s steps(2) infinite; }
+@keyframes svc-blink { 50% { background: #04a57b; } }
+.svc-main { display: grid; min-width: 0; }
+.svc-main b { font: 20px/1.05 "VT323", monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.svc-meta { font-size: 12.5px; color: #6c757d; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.svc-term {
+  position: relative; display: flex; flex-direction: column; min-height: 0;
+  background: #06100b; color: var(--phos); font: 16px/1.2 "VT323", ui-monospace, monospace; text-shadow: 0 0 5px #7dffb088;
+  box-shadow: 0 0 0 3px #0b0c14, inset 0 0 0 2px #1e4a33;
+}
+.svc-term::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(to bottom, #0000 0 2px, #00000038 2px 3px); }
+.svc-term.ended { color: #a7c9b5; }
+.svc-term-head { display: flex; align-items: center; gap: 10px; padding: 6px 8px; background: #0b1d14; box-shadow: inset 0 -2px 0 #1e4a33; }
+.svc-term-head b { font-weight: normal; color: var(--amber); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.svc-state { color: var(--phos-dim); white-space: nowrap; margin-right: auto; }
+.svc-pane { position: relative; z-index: 1; font: inherit; color: #06100b; background: var(--phos); border: 0; padding: 1px 8px; cursor: pointer; text-shadow: none; }
+.svc-pane:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+.svc-cmd { padding: 4px 8px 0; color: var(--phos-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.svc-out { margin: 0; padding: 4px 8px 8px; height: min(42vh, 360px); overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.svc-out:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
+.svc-msg { margin: 0; padding: 0 8px 6px; color: var(--amber); }
+.svc-msg:empty { display: none; }
+
 /* ---------- "New brief" dialog: a cork board with a pinned sheet ---------- */
 .brief {
   --ink: #2b2d42; --paper: #fdfcf6; --cork: #b9895a;

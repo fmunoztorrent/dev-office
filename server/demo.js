@@ -101,7 +101,7 @@ export function piDemoScript(session = `pi-demo-${Math.random().toString(36).sli
   return [
     [400, { ...b, kind: 'session_start' }],
     [1200, { ...b, kind: 'task', text: t('demo.pi.task') }],
-    phase('po', 'criterios', t('demo.pi.criteria')),
+    phase('analyst', 'criterios', t('demo.pi.criteria')),
     todos(['in_progress']),
     phase('analyst', 'analiza', t('demo.pi.analyze')),
     ...tool('read', { path: 'docs/orders.md' }),
@@ -130,7 +130,7 @@ export function piDemoScript(session = `pi-demo-${Math.random().toString(36).sli
     ...tool('bash', { command: 'npm test' }, { gap: 1800 }),
     phase('tl', 'aprueba'),
     todos(['completed', 'completed', 'completed', 'completed', 'completed', 'completed']),
-    phase('po', 'acepta', t('demo.pi.accept')),
+    phase('analyst', 'acepta', t('demo.pi.accept')),
     phase('manager', 'release', 'v1.4.0'),
     [6000, { ...b, kind: 'done', text: t('demo.pi.done') }],
   ];

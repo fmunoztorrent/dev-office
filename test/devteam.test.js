@@ -40,6 +40,17 @@ test('rol declarado en el frontmatter: el harness manda sobre las tablas heredad
   assert.equal(lib.roleOfAgent('custom-reviewer', 'not-a-role'), null);
 });
 
+test('la PO es el usuario: un subagente o una etapa nunca la juega (es de la analista)', () => {
+  assert.equal(lib.roleOfAgent('story-writer', 'po'), 'analyst');
+  assert.equal(lib.roleOfAgent('product-owner'), 'analyst');
+  assert.equal(lib.roleOfAgent('sdd-proposal'), 'analyst');
+  assert.equal(lib.roleFromText('Escribe las historias de usuario y prioriza el backlog'), 'analyst');
+  assert.ok(!lib.AGENT_ROLE_IDS.includes('po') && lib.ROLE_IDS.includes('po'), 'el personaje sigue: eres tú');
+  const { stages, issues } = lib.resolvePipeline('p', { stages: [{ id: 'criterios', role: 'po' }] });
+  assert.deepEqual(issues, []);
+  assert.deepEqual([stages[0].role, stages[0].phase], ['analyst', 'criterios'], 'con la fase que tenía la PO');
+});
+
 test('roleOfAgent: un rol declarado gana, y uno que no se puede normalizar NO cae en la heurística', () => {
   // declared and normalizable: it wins even if the name says nothing about the role
   assert.equal(lib.roleOfAgent('power-sync', 'backend'), 'backend');

@@ -2,6 +2,19 @@
 
 All notable changes to Dev Team Office. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/) (while it is `0.x`, a minor version may change behavior).
 
+## [Unreleased]
+
+### Added
+
+- **Background services:** a service an agent leaves running (Claude Code's `run_in_background`, or any command sent to the background with its output in a file) lights a unit of the server rack. Clicking the rack, the ▶ chip or `l` lists them with a live terminal of what each one prints; inside herdr, its log opens in a pane (`tail -F`). The monitor lists them too (`1`–`9`). `GET /v1/services`, `/v1/services/<id>/log` and `/v1/services/<id>/terminal`.
+- **The office's city:** ⚙ › General › City (and each office's, in ⚙ › Offices) suggests the cities of the time zone's country and saves the one picked with its coordinates. A time zone covers many cities (in Chile, Concepción and Punta Arenas use Santiago's): the weather, the sun, the moon and the simulated weather now follow the city. Also `dev-team-office config city <city>` and `GET /v1/places`.
+- **The top-down view shows the building:** the office is the top floor of a solid glass tower in muted colors (lit windows at night), and behind it is the window's landscape with its sky, sun or moon, weather and city.
+
+### Changed
+
+- **The PO is you.** The user gives the orders and decides what gets done, so the Product Owner character stands for the user: it carries your requests and side questions, and the agent's questions (`AskUserQuestion`) and permission requests come to its desk (the manager walks over to ask). Its name plate says "you".
+- **An agent never plays the PO:** what it reports as `po` (stories, acceptance criteria, priorities, acceptance; `sdd-proposal`, `role: po`) is drawn as the analyst. The PO no longer pitches ideas or answers the TL's scope questions on its own, and side questions are answered by the role on duty or the TL.
+
 ## [0.6.0] - 2026-10-22
 
 First release meant to be installed from the internet.
@@ -43,6 +56,7 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.6.0...HEAD
 [0.6.0]: https://github.com/fmunoztorrent/dev-office/releases/tag/v0.6.0
 [0.5.0]: https://github.com/fmunoztorrent/dev-office/compare/2693433...e4576a1
 [0.4.0]: https://github.com/fmunoztorrent/dev-office/compare/2693433...6ff6df0

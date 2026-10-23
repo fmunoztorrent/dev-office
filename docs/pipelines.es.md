@@ -47,7 +47,7 @@ Hay un ejemplo completo en [`examples/tienda`](../examples/tienda). El agente vu
 {
   "name": "Tienda",
   "harness": "pi",                          // harness por defecto para buscar agentes: pi | claude-code | opencode
-  "roles": {                                // po, analyst, manager, tl, qa, backend, frontend, designer
+  "roles": {                                // analyst, manager, tl, qa, backend, frontend, designer
     "tl": { "agent": "architect", "model": "anthropic/claude-opus-5-5" },
     "qa": { "agent": "tester", "model": "anthropic/claude-haiku-5-5" },
     "backend": { "agent": "backend-dev" }

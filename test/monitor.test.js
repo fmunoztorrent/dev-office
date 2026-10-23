@@ -73,3 +73,20 @@ test('el monitor no cuenta los anuncios de pane como trabajo, pero sí el trabaj
   assert.equal(mon.counts(now).working, 1);
   assert.match(renderMonitor(mon, { cols: 120, rows: 14, color: false, now }).join('\n'), /Diego +trabajando/);
 });
+
+test('monitor: los servicios que quedaron corriendo, numerados para abrir sus logs', () => {
+  const mon = createMonitor();
+  const now = Date.now();
+  mon.services([
+    { id: 's2', name: 'npm run dev', command: 'npm run dev > dev.log 2>&1 &', role: 'frontend', agent: 'claude-code', cwd: '/p/web', status: 'running', startedAt: now - 120_000 },
+    { id: 's1', name: 'cargo watch', command: 'cargo watch', role: 'backend', agent: 'pi', cwd: '/p/api', status: 'ended', startedAt: now - 600_000, endedAt: now - 60_000 },
+  ]);
+  const lines = renderMonitor(mon, { cols: 170, rows: 24, color: false, now });
+  const text = lines.join('\n');
+  assert.match(lines[1], /▶ 1 servicio\(s\) corriendo/);
+  assert.match(text, /SERVICIOS/);
+  assert.match(text, /1 ▶ npm run dev +Lucía · Claude +corriendo · 2m +web/);
+  assert.match(text, /2 ■ cargo watch +Diego · Pi +se detuvo hace 1m +api/);
+  assert.match(lines.at(-1), /1-9 los logs de un servicio/);
+  assert.equal(lines.length, 24);
+});

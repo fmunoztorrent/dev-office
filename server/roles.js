@@ -21,6 +21,14 @@ export function normRole(r) {
   return ROLE_IDS.includes(k) ? k : ROLE_ALIASES[k] || null;
 }
 
+// The PO is the user: they give the orders and decide what gets done. An agent never plays it:
+// what it would report as PO (stories, criteria, priorities, acceptance) is drawn as the analyst.
+export const AGENT_ROLE_IDS = ROLE_IDS.filter((r) => r !== 'po');
+export function agentRole(r) {
+  const k = normRole(r);
+  return k === 'po' ? 'analyst' : k;
+}
+
 // Phases of the development flow (see docs/events-by-role.md). English aliases are accepted.
 const PHASE_ALIASES = {
   story: 'historia', criteria: 'criterios', acceptance: 'criterios', prioritize: 'prioriza', accept: 'acepta', reject: 'rechaza',
@@ -62,12 +70,12 @@ export function roleForCommand(c = '') {
 const AGENT_TYPES = {
   explore: 'analyst', plan: 'tl', 'code-reviewer': 'tl', reviewer: 'tl', 'claude-code-guide': 'analyst',
   'statusline-setup': 'frontend', designer: 'designer', frontend: 'frontend', backend: 'backend',
-  research: 'analyst', analyst: 'analyst', po: 'po', 'product-owner': 'po', manager: 'manager',
+  research: 'analyst', analyst: 'analyst', po: 'analyst', 'product-owner': 'analyst', manager: 'manager',
   qa: 'qa', tester: 'qa', 'test-runner': 'qa', 'test-writer': 'qa', e2e: 'qa',
   // subagents of known harnesses: Errementari and gentle-pi / gentle-ai
   pipeline: 'manager', spec: 'analyst', architect: 'tl', researcher: 'analyst',
   'sdd-init': 'manager', 'sdd-onboard': 'manager', 'sdd-status': 'manager', 'sdd-explore': 'analyst', 'sdd-research': 'analyst',
-  'sdd-proposal': 'po', 'sdd-spec': 'analyst', 'sdd-design': 'tl', 'sdd-tasks': 'manager', 'sdd-apply': 'backend',
+  'sdd-proposal': 'analyst', 'sdd-spec': 'analyst', 'sdd-design': 'tl', 'sdd-tasks': 'manager', 'sdd-apply': 'backend',
   'sdd-remediate': 'backend', 'sdd-verify': 'qa', 'sdd-archive': 'manager', 'gentle-ai-explore': 'analyst',
   'gentle-ai-worker': 'backend', 'gentle-ai-verify': 'qa', 'review-risk': 'tl', 'review-readability': 'tl',
   'review-reliability': 'tl', 'review-resilience': 'tl', 'jd-judge-a': 'tl', 'jd-judge-b': 'tl', 'jd-fix-agent': 'backend',
@@ -101,7 +109,7 @@ export function roleForTool(tool = '', input = {}) {
   switch (t) {
     case 'todowrite': case 'todoread': case 'taskcreate': case 'taskupdate': case 'tasklist': return 'manager';
     case 'websearch': case 'webfetch': return 'analyst';
-    case 'askuserquestion': case 'question': return 'po';
+    case 'askuserquestion': case 'question': return 'manager'; // the agent brings the question to you (the PO)
     case 'enterplanmode': case 'exitplanmode': case 'lsp': return 'tl';
     case 'bash': case 'shell': case 'exec': return roleForCommand(input.command || input.cmd || '');
     case 'skill': return roleForText(`${input.skill || ''} ${input.args || ''}`);
@@ -138,7 +146,10 @@ export function describe(tool = '', input = {}) {
     case 'webfetch': {
       try { return t('events.webfetch', { host: new URL(input.url).host }); } catch { return t('events.web'); }
     }
-    case 'askuserquestion': case 'question': return t('events.ask');
+    case 'askuserquestion': case 'question': {
+      const q = input.questions?.[0]?.question || input.question;
+      return q ? clip(t('events.askWhat', { question: q })) : t('events.ask');
+    }
     case 'exitplanmode': return t('events.plan');
     case 'enterplanmode': return t('events.planning');
     case 'skill': return clip(t('events.skill', { skill: input.skill || '' }));

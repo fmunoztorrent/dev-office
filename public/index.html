@@ -24,6 +24,7 @@
         </label>
         <span id="conn" class="conn off">offline</span>
         <span id="wx" class="wx" hidden></span>
+        <button id="svc-chip" class="svc-chip" type="button" hidden data-i18n-title="ui.servicesKey"></button>
       </div>
       <div class="hud hud-tr">
         <button id="open-settings" class="hud-btn" type="button" data-i18n-title="ui.settingsKey" data-i18n-aria="ui.settings">
@@ -117,6 +118,33 @@
       </section>
     </div>
   </main>
+
+  <!-- The services an agent left running in the background: the list and a terminal with what the
+       chosen one prints (services-ui.js). -->
+  <dialog id="services" class="brief services" aria-labelledby="svc-title">
+    <div class="svc-card">
+      <header class="brief-head">
+        <span class="pin" aria-hidden="true"></span>
+        <h2 id="svc-title" data-i18n="services.title">Background services</h2>
+        <button type="button" class="brief-x" id="svc-close" data-i18n-aria="settings.close">✕</button>
+      </header>
+      <div class="brief-body">
+        <p id="svc-empty" class="svc-empty" data-i18n="services.empty" hidden></p>
+        <ul id="svc-list" class="svc-list"></ul>
+        <section id="svc-term" class="svc-term" hidden>
+          <div class="svc-term-head">
+            <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <b id="svc-term-name"></b>
+            <span id="svc-term-state" class="svc-state"></span>
+            <button id="svc-pane" class="svc-pane" type="button" hidden data-i18n="services.openPane">⧉ Open in herdr</button>
+          </div>
+          <div id="svc-cmd" class="svc-cmd"></div>
+          <pre id="svc-out" class="svc-out" tabindex="0"></pre>
+          <p id="svc-msg" class="svc-msg" role="status"></p>
+        </section>
+      </div>
+    </div>
+  </dialog>
 
   <dialog id="brief" class="brief" aria-labelledby="brief-title">
     <form id="brief-form" method="dialog">

@@ -2,7 +2,7 @@
 import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { season, moonPhase, sunTimes, weatherKind, fromOpenMeteo, simulatedWeather, daylight, outdoor, lightning, isSouth } from '../public/sky.js';
+import { season, moonPhase, sunTimes, weatherKind, fromOpenMeteo, simulatedWeather, daylight, outdoor, lightning, isSouth, parsePlace, placeLocation } from '../public/sky.js';
 
 test('la estación depende de la fecha y del hemisferio', () => {
   const oct = new Date(2026, 9, 16), jan = new Date(2026, 0, 10), jul = new Date(2026, 6, 10), may = new Date(2026, 4, 5);
@@ -87,4 +87,30 @@ test('el paisaje: todo dentro del vidrio, con lluvia, nieve o relámpagos según
   for (let now = 0; now < 60_000; now += 40) if (lightning(now, { kind: 'storm' }).flash > 0.5) flashes++;
   assert.ok(flashes > 3);
   assert.equal(lightning(1000, { kind: 'clear' }).flash, 0);
+});
+
+test('el paisaje sin vidrio (el fondo de la vista cenital): sin marcos, y el sol sube lo que se le pida', () => {
+  const date = new Date(2026, 9, 16, 13);
+  const weather = { kind: 'clear', clouds: 0.05, precip: 0, wind: 5, temp: 20, lat: -33.4, sunrise: 7, sunset: 20 };
+  const box = { x0: 0, x1: 320, top: 0, bottom: 200 };
+  const frames = (s) => s.filter(([, , w, , c]) => c === 0x39415a && w === 4).length;
+  assert.ok(frames(outdoor({ date, weather, ...box }).shapes) > 0, 'en la ventana, con sus marcos');
+  const bare = outdoor({ date, weather, ...box, glass: false }).shapes;
+  assert.equal(frames(bare), 0, 'el fondo, sin marcos');
+  for (const [x, y, w, h] of bare) assert.ok(x >= box.x0 && x + w <= box.x1 && y >= box.top && y + h <= box.bottom, 'no se sale del fondo');
+  // the sun: the brightest disc, its highest row
+  const sunTop = (s) => Math.min(...s.filter(([, , , , c, a]) => c === 0xfff6d8 && a > 0.5).map(([, y]) => y));
+  assert.ok(sunTop(outdoor({ date, weather, ...box, glass: false, arc: 165 }).shapes) < sunTop(bare) - 60, 'con más arco, el sol sube más');
+});
+
+test('la ciudad guardada: nombre, coordenadas o las dos cosas', () => {
+  assert.equal(parsePlace(''), null);
+  assert.deepEqual(parsePlace('Valparaíso'), { name: 'Valparaíso' });
+  assert.deepEqual(parsePlace('-33.45,-70.65'), { name: '', lat: -33.45, lon: -70.65 });
+  assert.deepEqual(parsePlace('Concepción, Región del Biobío (-36.8270, -73.0498)'), { name: 'Concepción, Región del Biobío', lat: -36.827, lon: -73.0498 });
+  assert.deepEqual(parsePlace('Calle 5, 10'), { name: 'Calle 5, 10' }, 'un nombre con números no son coordenadas');
+  assert.deepEqual(parsePlace('(120, 300)'), { name: '(120, 300)' }, 'fuera de rango, tampoco');
+  const long = placeLocation({ name: 'x'.repeat(200), lat: -36.82699, lon: -73.04977 });
+  assert.ok(long.length <= 80);
+  assert.deepEqual(parsePlace(long).lat, -36.827);
 });

@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { adapt } from './adapters.js';
-import { ROLE_IDS, roleForTool, roleForText, describe, clip, normRole, normPhase } from './roles.js';
+import { ROLE_IDS, roleForTool, roleForText, describe, clip, normRole, agentRole, normPhase } from './roles.js';
 import { t } from '../public/i18n.js';
 import { realDir, insideDir } from './paths.js';
 
@@ -39,7 +39,7 @@ function excerpt(text, { max = 1200, lines = 14, head = false } = {}) {
   return kept.length > max ? (head ? `${kept.slice(0, max - 1)}…` : `…${kept.slice(-(max - 1))}`) : kept;
 }
 /** Announcements: they are logged but do not change any role's state. */
-const ANNOUNCEMENTS = new Set(['dispatch', 'pane_open', 'pane_close', 'pane_state']);
+const ANNOUNCEMENTS = new Set(['dispatch', 'pane_open', 'pane_close', 'pane_state', 'service_up', 'service_down']);
 /** What state a character ends up in after one of its events (shared by the office and the monitor);
  *  `null` for announcements, which do not change the state (nor set it to idle). */
 export const roleStatus = (ev) => (ANNOUNCEMENTS.has(ev.kind) ? null : ev.phase === 'red' ? 'red' : ev.kind === 'tool_end' && !ev.ok ? 'blocked' : ev.kind === 'waiting' ? 'waiting' : ev.kind === 'done' ? 'done' : ev.kind === 'turn_end' || ev.kind === 'session_end' ? 'idle' : 'working');
@@ -68,6 +68,8 @@ export class Office extends EventEmitter {
       // that folder's most recent session, so its phase and the hook's tools go together.
       if (!raw.session && raw.cwd) raw = { ...raw, session: this.sessionFor(raw.cwd) || undefined };
       const ev = this.#enrich({ ...raw, source: clip(raw.source || source, 30) });
+      // what arrived, as it arrived (the services left running in the background are seen here)
+      this.emit('raw', { ...raw, source: raw.source || source }, ev);
       if (!ev) continue;
       this.#apply(ev);
       out.push(ev);
@@ -174,10 +176,10 @@ export class Office extends EventEmitter {
       if (OFFICE_CLI.test(String(input.command || ''))) return null;
       // If the agent declared who is on duty, that role does the work; otherwise it is inferred from the tool.
       if (sub) {
-        ev.role = normRole(r.role) || sub.role || roleForTool(tool, input);
+        ev.role = agentRole(r.role) || sub.role || roleForTool(tool, input);
         if (sub.phase && ev.role === sub.role) ev.phase = sub.phase;
       } else {
-        ev.role = normRole(r.role) || s.turn || roleForTool(tool, input);
+        ev.role = agentRole(r.role) || s.turn || roleForTool(tool, input);
         if (s.turn && ev.role === s.turn) ev.phase = s.phase;
       }
       ev.text = clip(r.text && start ? r.text : describe(tool, input), 90);
@@ -186,7 +188,8 @@ export class Office extends EventEmitter {
       return ev;
     }
 
-    const role = normRole(r.role) || (sub && ['thinking', 'waiting', 'error'].includes(r.kind) ? sub.role : null);
+    // the role the agent declares (never the PO: that is the user); chat and poke name the character you picked
+    const role = agentRole(r.role) || (sub && ['thinking', 'waiting', 'error'].includes(r.kind) ? sub.role : null);
     switch (r.kind) {
       case 'phase': {
         if (!role) return null;
@@ -196,7 +199,7 @@ export class Office extends EventEmitter {
           if (role === sub.role) sub.phase = phase;
           return { ...ev, role, phase, from: null, text: clip(r.text, 120) };
         }
-        const prev = normRole(r.from) || s.turn;
+        const prev = agentRole(r.from) || s.turn;
         s.turn = role;
         s.phase = phase;
         s.flow.push({ role, phase, text: clip(r.text, 90), ts: ev.ts });
@@ -243,19 +246,23 @@ export class Office extends EventEmitter {
         return { ...ev, role: 'manager', text: clip(r.text || t('events.done')) };
       case 'session_start': return { ...ev, role: 'manager', text: t('events.sessionStart') };
       case 'session_end': return { ...ev, role: 'manager', text: t('events.sessionEnd') };
-      case 'chat': return { ...ev, role, from: clip(r.from || t('events.you'), 30), text: clip(r.text, 200) };
+      case 'chat': return { ...ev, role: normRole(r.role), from: clip(r.from || t('events.you'), 30), text: clip(r.text, 200) };
       // A side question (btw) to the agent on duty: the question, and its answer (or why there was none).
       case 'btw': {
         const phase = ['ask', 'answer', 'failed'].includes(r.phase) ? r.phase : 'ask';
-        return { ...ev, role: role || 'po', phase, askId: clip(r.askId, 40), agent: clip(r.agent, 30), from: clip(r.from || t('events.you'), 30), text: clip(r.text, phase === 'answer' ? 1500 : 300) };
+        return { ...ev, role: role || 'tl', phase, askId: clip(r.askId, 40), agent: clip(r.agent, 30), from: clip(r.from || t('events.you'), 30), text: clip(r.text, phase === 'answer' ? 1500 : 300) };
       }
       case 'stage_end': return role ? { ...ev, role, ok: r.ok !== false, text: clip(r.text, 160) } : null;
       // The agent says which subagent is which role (when starting a pipeline): it is not drawn, it is learned.
       case 'agent_roles':
-        if (r.roles && typeof r.roles === 'object') this.setAgentRoles(s.id, Object.fromEntries(Object.entries(r.roles).filter(([, v]) => ROLE_IDS.includes(v)).slice(0, 40)));
+        if (r.roles && typeof r.roles === 'object') this.setAgentRoles(s.id, Object.fromEntries(Object.entries(r.roles).map(([k, v]) => [k, agentRole(v)]).filter(([, v]) => v).slice(0, 40)));
         return null;
       case 'dispatch': return { ...ev, role: 'po', from: clip(r.from || t('events.you'), 30), agent: clip(r.agent, 30), mode: r.mode === 'launch' ? 'launch' : 'session', text: clip(r.text, 200) };
-      case 'poke': return role ? { ...ev, role, from: clip(r.from || t('events.you'), 30), text: '👋' } : null;
+      case 'poke': return normRole(r.role) ? { ...ev, role: normRole(r.role), from: clip(r.from || t('events.you'), 30), text: '👋' } : null;
+      // a service the agent left running in the background starts or ends (server/services.js)
+      case 'service_up':
+      case 'service_down':
+        return { ...ev, role: role || 'backend', ok: r.ok !== false, service: clip(r.service, 20), text: clip(t(r.kind === 'service_up' ? 'events.serviceUp' : 'events.serviceDown', { name: r.text || '' }), 120) };
       // herdr panes: the agent (or the office) opens a terminal for an activity, and someone on the
       // team takes care of it while it stays open.
       case 'pane_open':

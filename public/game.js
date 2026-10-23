@@ -4,8 +4,9 @@
 // the ◇ button or the v key): the usual front view (the default) and the isometric top-down view
 // (the floor as a rhombus, the back and left walls, furniture as volumes and people standing,
 // sorted by depth; see iso.js). The back wall is glass: behind it you see the city with the real
-// time, season and weather (sky.js). On top of the scene goes a subtle lighting pass (lamps, neon,
-// monitors, the TV, the fire and the glow of the dreams).
+// time, season and weather (sky.js). In the top-down view the office is the top floor of a glass
+// tower, with that same landscape behind it. On top of the scene goes a subtle lighting pass
+// (lamps, neon, monitors, the TV, the fire and the glow of the dreams).
 
 import {
   createSim, W, H, SPOT, PLANTS, STATUS_ICON, PHASE_COLOR, phaseInfo, onBoard, tvChannel,
@@ -30,7 +31,7 @@ const hslRgb = (h, s, l) => {
  * @param now   () => Date: the instant (daylight, clock, lunch). The real one by default.
  * @param zone  the office's time zone (null: the system's); changed with sim.setZone
  */
-export function createGame(canvas, { onSelect, onBoardClick, onHover, now: clockNow = () => new Date(), zone = null, view = 'flat' } = {}) {
+export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHover, now: clockNow = () => new Date(), zone = null, view = 'flat' } = {}) {
   const ctx = canvas.getContext('2d');
   let iso = view !== 'flat';
   const cam = isoCamera();
@@ -39,6 +40,8 @@ export function createGame(canvas, { onSelect, onBoardClick, onHover, now: clock
   let selected = null;
   let hover = null;
   let hoverBoard = false;
+  let hoverRack = false;
+  let services = []; // the ones left running in the background: a light each on the rack
   let last = performance.now();
   let scale = 1;
 
@@ -145,16 +148,19 @@ export function createGame(canvas, { onSelect, onBoardClick, onHover, now: clock
 
   // The glass wall: the landscape (sky.js) with its glass on top, between the ceiling beam and the skirting.
   function drawGlass(now, light) {
-    const { shapes } = outdoor({ date: sim.date(), weather: sim.weather, light, now, x0: GLASS.x0, x1: GLASS.x1, top: GLASS.top, bottom: GLASS.bottom });
+    drawOutdoor(outdoor({ date: sim.date(), weather: sim.weather, light, now, x0: GLASS.x0, x1: GLASS.x1, top: GLASS.top, bottom: GLASS.bottom }));
+    R(GLASS.x0, 0, GLASS.x1 - GLASS.x0, GLASS.top, '#262c42');               // ceiling beam
+    R(GLASS.x0, GLASS.top - 1, GLASS.x1 - GLASS.x0, 1, '#1b1f33');
+    R(GLASS.x0, GLASS.bottom, GLASS.x1 - GLASS.x0, 116 - GLASS.bottom, '#3a4158'); // window sill
+    R(GLASS.x0, GLASS.bottom, GLASS.x1 - GLASS.x0, 1, '#59627c');
+  }
+
+  function drawOutdoor({ shapes }) {
     for (const [x, y, w, h, c, a] of shapes) {
       ctx.globalAlpha = a; ctx.fillStyle = colorHex(c);
       ctx.fillRect(Math.round(x), Math.round(y), w, h);
     }
     ctx.globalAlpha = 1;
-    R(GLASS.x0, 0, GLASS.x1 - GLASS.x0, GLASS.top, '#262c42');               // ceiling beam
-    R(GLASS.x0, GLASS.top - 1, GLASS.x1 - GLASS.x0, 1, '#1b1f33');
-    R(GLASS.x0, GLASS.bottom, GLASS.x1 - GLASS.x0, 116 - GLASS.bottom, '#3a4158'); // window sill
-    R(GLASS.x0, GLASS.bottom, GLASS.x1 - GLASS.x0, 1, '#59627c');
   }
 
   // The bathroom: a door in the wall with its vacant/occupied sign.
@@ -595,7 +601,8 @@ export function createGame(canvas, { onSelect, onBoardClick, onHover, now: clock
     const s = a.cfg.seat, c = a.cfg;
     R(s.x - 38, s.y + 6, 76, 14, '#1b1f33');
     ctx.font = `${fpx(14)}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = c.shirt; ctx.fillText(fit(`${c.name} · ${c.title}`, 72), s.x, s.y + 13);
+    // the PO is you (the user): the plate says so
+    ctx.fillStyle = c.shirt; ctx.fillText(fit(`${c.name} · ${a.id === 'po' ? t('team.you') : c.title}`, 72), s.x, s.y + 13);
   }
   // what is on the desk: the screens and each role's things, the keyboard and the folders
   function drawDeskProps(a, now) {
@@ -687,7 +694,23 @@ export function createGame(canvas, { onSelect, onBoardClick, onHover, now: clock
       }
     }
     if (sim.heat > 0.75 && !f) R(rx + 2, ry + 2, 38, 3, '#ff9f1c'); // red-hot
+    // each service running in the background lights a unit (cyan, with its own heartbeat)
+    const running = services.filter((s) => s.status === 'running');
+    running.slice(0, 6).forEach((s, i) => R(rx + 25, ry + 9 + i * 14, 9, 3, (Math.floor(now / 700) + i) % 3 ? '#7ff7ff' : '#2bb7c9'));
+    if (hoverRack) { ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2; ctx.strokeRect(rx - 1, ry - 1, 44, 94); }
+    if (!iso && services.length) drawServiceTag(rx + 21, ry - 4, running.length);
     drawFire(now);
+  }
+
+  /** The tag over the rack: how many services are running (click: which ones, and their logs). */
+  function drawServiceTag(x, y, n) {
+    const text = `▶ ${n}`;
+    ctx.font = `${fpx(16)}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const w = Math.ceil(ctx.measureText(text).width) + 10, h = fpx(14);
+    R(x - w / 2 - 1, y - h - 1, w + 2, h + 2, '#0b0c14');
+    R(x - w / 2, y - h, w, h, n ? '#0b1d14' : '#22263a');
+    ctx.fillStyle = n ? '#7dffb0' : '#9095b0';
+    ctx.fillText(text, x, y - h / 2 + 1);
   }
 
   // the fire extinguisher, next to the rack
@@ -1060,11 +1083,65 @@ export function createGame(canvas, { onSelect, onBoardClick, onHover, now: clock
   }
   const BOARD_M = () => cam.front(EASEL.feet);
 
-  function drawIsoRoom(t, now, light) {
+  // Behind the office: the landscape of its windows (the same sky, weather and city, with bigger
+  // pixels) and, in front of it, the tower the office is the top floor of: solid, so the landscape
+  // only shows around it, and in muted colors, so the office (the only floor drawn whole) stands out.
+  const BACKDROP_PX = 3;
+  const STOREY_SLAB = 20, STOREY = WALL_H + STOREY_SLAB; // the slab is the 12 px under the office's floor
+  const FLOORS = 5;                                       // below the office: past the edge of the canvas
+  const MULLION = 80;
+  const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+  const mixRgb = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * k));
+  const rgb = (c) => `rgb(${c.join(',')})`;
+  function drawIsoBackdrop(now, light) {
+    use([BACKDROP_PX, 0, 0, BACKDROP_PX, 0, 0]);
+    drawOutdoor(outdoor({ date: sim.date(), weather: sim.weather, light, now, x0: 0, x1: W / BACKDROP_PX, top: 0, bottom: H / BACKDROP_PX, glass: false, arc: 165 }));
+    drawTower(light);
+  }
+  /** The tower's colors: by day and by night, greyer on a grey day and warmer at sunset. */
+  function towerColors(light) {
+    const n = light.night, g = light.gloom * (1 - n), d = light.dusk * (1 - n);
+    const tone = (day, night) => rgb(mixRgb(mixRgb(mixRgb(day, night, n), [124, 128, 136], 0.35 * g), [206, 136, 108], 0.16 * d));
+    return {
+      glass: tone([122, 141, 170], [29, 35, 56]), shine: tone([140, 160, 188], [35, 42, 66]),
+      mullion: tone([164, 180, 202], [50, 59, 84]), slab: tone([78, 88, 110], [17, 20, 33]), edge: tone([182, 196, 216], [64, 76, 104]),
+    };
+  }
+  /** The floors below the office: the two faces the camera sees, a curtain wall of glass. */
+  function drawTower(light) {
     use(ID);
-    const bg = ctx.createLinearGradient(0, 0, 0, H);
-    bg.addColorStop(0, '#1a1e33'); bg.addColorStop(1, '#0f1220');
-    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    const n = light.night, c = towerColors(light);
+    const P0 = (x, y, z) => cam.proj(x, y, z);
+    const face = ([ax, ay], [bx, by], u0, u1, z0, z1, color) => {
+      const at = (u) => [ax + (bx - ax) * u, ay + (by - ay) * u];
+      poly([P0(...at(u0), z0), P0(...at(u1), z0), P0(...at(u1), z1), P0(...at(u0), z1)], color);
+    };
+    const faces = [[[0, H], [W, H]], [[W, H], [W, BACK]]];
+    const lit = `rgba(255,214,140,${0.55 * n})`;
+    for (let k = 1; k <= FLOORS; k++) {
+      const z = -k * STOREY; // the floor of the k-th one below
+      faces.forEach(([a, b], f) => {
+        face(a, b, 0, 1, z + WALL_H, z + STOREY, c.slab);
+        face(a, b, 0, 1, z, z + WALL_H, c.glass);
+        const panes = Math.round(Math.hypot(b[0] - a[0], b[1] - a[1]) / MULLION);
+        for (let i = 0; i < panes; i++) {
+          const u = i / panes, w = 1 / panes;
+          face(a, b, u + w * 0.12, u + w * 0.3, z + 4, z + WALL_H - 4, c.shine); // the glass's reflection
+          if (n > 0.3 && hash(k * 31 + i * 7 + f * 101) < 0.25) face(a, b, u + w * 0.06, u + w * 0.94, z + 8, z + WALL_H - 8, lit);
+          face(a, b, u, u + 1.5 / MULLION / panes, z, z + WALL_H, c.mullion);
+        }
+      });
+    }
+    // the tower's edges, from the street to the office
+    ctx.strokeStyle = c.edge; ctx.lineWidth = 1;
+    for (const [x, y] of [[0, H], [W, H], [W, BACK]]) {
+      ctx.beginPath(); ctx.moveTo(...P0(x, y, -(FLOORS + 1) * STOREY)); ctx.lineTo(...P0(x, y, 0)); ctx.stroke();
+    }
+  }
+
+  function drawIsoRoom(t, now, light) {
+    drawIsoBackdrop(now, light);
+    use(ID);
     const P0 = (x, y, z = 0) => cam.proj(x, y, z);
     // the floor: a rhombus with its model-like thickness on the two front edges
     const slab = 12;
@@ -1130,6 +1207,19 @@ export function createGame(canvas, { onSelect, onBoardClick, onHover, now: clock
     box(x, gy - 22, x + w, gy, h, { top: '#2b2d42', front: '#1b1f33', side: '#151827' });
     use(cam.front(gy, gy));
     drawRack(now);
+    if (services.length) {
+      use(ID);
+      drawServiceTag(...cam.proj(x + w / 2, gy - 11, h + 10), services.filter((s) => s.status === 'running').length);
+    }
+  }
+  /** Is the pointer over the rack? (in the isometric view, its volume on the screen) */
+  function overRack(mx, my) {
+    const { x, y, w, h } = RACK, gy = y + h;
+    if (!iso) return mx >= x && mx <= x + w && my >= y && my <= gy;
+    const pts = [];
+    for (const px of [x, x + w]) for (const py of [gy - 22, gy]) for (const z of [0, h]) pts.push(cam.proj(px, py, z));
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    return mx >= Math.min(...xs) && mx <= Math.max(...xs) && my >= Math.min(...ys) && my <= Math.max(...ys);
   }
 
   function isoMeetingTable() {
@@ -1383,14 +1473,16 @@ export function createGame(canvas, { onSelect, onBoardClick, onHover, now: clock
     const was = hover;
     hover = agentAt(x, y);
     hoverBoard = !hover && overBoard(x, y);
-    canvas.style.cursor = hover || hoverBoard ? 'pointer' : 'default';
+    hoverRack = !hover && !hoverBoard && !!onRackClick && overRack(x, y);
+    canvas.style.cursor = hover || hoverBoard || hoverRack ? 'pointer' : 'default';
     if (was !== hover) onHover?.(hover);
   });
-  canvas.addEventListener('mouseleave', () => { hover = null; hoverBoard = false; });
+  canvas.addEventListener('mouseleave', () => { hover = null; hoverBoard = false; hoverRack = false; });
   canvas.addEventListener('click', (e) => {
     const [x, y] = toWorld(e);
     const who = agentAt(x, y);
     if (!who && overBoard(x, y)) return onBoardClick?.();
+    if (!who && onRackClick && overRack(x, y)) return onRackClick();
     selected = who;
     onSelect?.(selected);
   });
@@ -1405,5 +1497,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onHover, now: clock
     /** 'flat' (the front view, the default) or 'iso' (the isometric top-down one): the office view. */
     get view() { return iso ? 'iso' : 'flat'; },
     setView(v) { iso = v !== 'flat'; },
+    /** The services left running in the background (server/services.js): the rack shows them. */
+    setServices(list) { services = Array.isArray(list) ? list : []; },
   };
 }

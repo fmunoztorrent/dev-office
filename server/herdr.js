@@ -14,7 +14,7 @@
 import { EventEmitter } from 'node:events';
 import { execFile } from 'node:child_process';
 import { which } from '../integrations/common/devteam.mjs';
-import { roleForCommand, roleForText, normRole, clip } from './roles.js';
+import { roleForCommand, roleForText, agentRole, clip } from './roles.js';
 import { t } from '../public/i18n.js';
 import { insideDir as inside } from './paths.js';
 
@@ -25,7 +25,7 @@ export const quote = (s) => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${String(s).repl
 
 /** Which office role a pane stands for: the requested one, or by its agent or its command. */
 export function paneRole({ role, agent, title = '', command = '' } = {}) {
-  const r = normRole(role);
+  const r = agentRole(role);
   if (r) return r;
   if (agent) return roleForText(title, agent) || 'tl';
   return roleForCommand(command || title);

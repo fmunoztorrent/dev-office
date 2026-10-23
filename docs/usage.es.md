@@ -36,6 +36,8 @@ Fuera de herdr, `dev-team-office` muestra la **bitácora**: una línea por cada 
 
 Teclas: `o` abre el juego en el navegador, `g` lo abre en la terminal (`q` vuelve al monitor), `←`/`→` cambian de oficina y `q` sale. Si el monitor levantó la oficina, `q` también la cierra.
 
+Cuando un agente deja un servicio corriendo en segundo plano (un servidor de desarrollo, un watcher…), una sección **SERVICIOS** los lista, numerados: `1`–`9` abren el log de ese servicio en un pane de herdr debajo del de su agente (`tail -F`), y `l` el más nuevo que esté corriendo.
+
 «Del equipo trabajando» cuenta trabajo de verdad: los anuncios (una tarea repartida, un pane que se
 abre o se cierra) no lo mueven.
 
@@ -45,7 +47,8 @@ abre o se cierra) no lo mueven.
 - **Cenital (isométrica):** la misma oficina vista desde arriba y en diagonal:
   - el piso en rombo, la pared del ventanal y una pared lateral;
   - los muebles como volúmenes;
-  - las personas de pie, cada una delante o detrás de lo que corresponda.
+  - las personas de pie, cada una delante o detrás de lo que corresponda;
+  - la oficina es el último piso de una torre de vidrio, en tonos apagados para que la oficina destaque (de noche, con algunas ventanas encendidas), y detrás de la torre está el mismo paisaje que se ve por las ventanas: cielo, sol o luna, clima y ciudad.
 
 Para cambiar de vista: el botón ◇ (arriba a la derecha), la tecla `v` o **⚙ › General › Vista de la oficina**. La elección queda en los ajustes y todas las ventanas la siguen. El juego en la terminal usa siempre la frontal.
 
@@ -91,7 +94,7 @@ El subagente lo sigue corriendo su harness; el pane sólo lo **muestra**, con `d
   - Si al agente **le faltan roles** (o no trae subagentes), le completa el equipo con el de la oficina (arquitecto, explorador, backend, frontend y QA) en el proyecto, en su formato: `.claude/agents`, `.opencode/agents`, `.pi/agents` o `.codex/agents`. Claude Code (si esa carpeta no existía) y OpenCode tienen que reiniciarse para verlos; Pi los usa desde el próximo subagente. Detalle en [installation.es.md](installation.es.md#si-tu-agente-no-trae-equipo).
   - `--team <pack>` elige otro pack y `--no-team` no deja ninguno.
 - **⚙ › Agentes** (o `dev-team-office agents add <ruta> --agent <cli>`) es el mantenedor: ruta completa, CLI y oficina.
-- **Oficinas:** una empresa puede tener varias (equipos o dominios), cada una con su zona horaria, su clima y sus personajes. Se crean en ⚙ › Oficinas o con `dev-team-office offices add "Pagos" --timezone Europe/Madrid`.
+- **Oficinas:** una empresa puede tener varias (equipos o dominios), cada una con su zona horaria, su ciudad (su clima) y sus personajes. Se crean en ⚙ › Oficinas o con `dev-team-office offices add "Pagos" --timezone Europe/Madrid`.
 - **Team packs:** `dev-team-office team install example --agent <pi|claude|opencode|codex> --project .` deja un subagente por rol, en el formato de ese agente.
 
 ## btw: una pregunta al margen
@@ -117,7 +120,7 @@ El subagente lo sigue corriendo su harness; el pane sólo lo **muestra**, con `d
 | `dev-team-office btw "…"` | Una pregunta al margen |
 | `dev-team-office send <kind> …` | Manda un evento a mano (para probar) |
 | `dev-team-office demo [--pi]` | Una sesión de ejemplo |
-| `dev-team-office config [clave] [valor]` | Los ajustes: `lang`, `timezone`, `weather`, `herdr.*`, `log.life`, `view.office`, `view.mode flat\|iso` |
+| `dev-team-office config [clave] [valor]` | Los ajustes: `lang`, `timezone`, `city <ciudad>\|zone`, `weather`, `herdr.*`, `log.life`, `view.office`, `view.mode flat\|iso` |
 | `dev-team-office team …` | Los team packs |
 | `dev-team-office setup` · `doctor` · `update` · `uninstall` | La instalación |
 | `dev-team-office mcp` | El servidor MCP (stdio; lo registra `setup`) |
@@ -126,7 +129,7 @@ El subagente lo sigue corriendo su harness; el pane sólo lo **muestra**, con `d
 
 | Dónde | Teclas |
 |---|---|
-| Monitor | `o` navegador · `g` juego · `←→` oficina · `q` salir |
+| Monitor | `o` navegador · `g` juego · `←→` oficina · `1`–`9`/`l` los logs de un servicio · `q` salir |
 | Bitácora | `g` juego · `o` navegador · `h` ayuda · `q` cerrar |
-| Juego (terminal) | `t` encargo · `c` ajustes · `o` oficina · `a` actividad · `tab`/flechas elegir · `m` mensaje · `b` btw · `s` saludar · `x` cancelar · `d`/`p` demos · `r` reiniciar · `q` volver |
-| Juego (navegador) | `t` encargo · `c` ajustes · `o` oficina · `a` terminal de actividad · `f` pantalla completa · `v` vista frontal o cenital · `esc` cerrar |
+| Juego (terminal) | `t` encargo · `c` ajustes · `o` oficina · `a` actividad · `tab`/flechas elegir · `m` mensaje · `b` btw · `s` saludar · `x` cancelar · `l` servicios (o clic en el rack) · `d`/`p` demos · `r` reiniciar · `q` volver |
+| Juego (navegador) | `t` encargo · `c` ajustes · `o` oficina · `a` terminal de actividad · `f` pantalla completa · `v` vista frontal o cenital · `l` servicios (o clic en el rack) · `esc` cerrar |

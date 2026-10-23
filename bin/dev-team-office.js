@@ -318,8 +318,19 @@ async function cmdOffices() {
   for (const o of list) console.log(t('cli.officeLine', { id: o.id, name: o.name, tz: o.timezone, country: o.country ? ` (${countryName(o.country, getLanguage())})` : '', agents: o.agents, viewing: o.id === view ? t('cli.viewing') : '' }));
 }
 
+/**
+ * The city as it is stored: the first one of that name in the time zone's country, with its
+ * coordinates (Open-Meteo's geocoder); without a connection, the name as is.
+ */
+async function cityLocation(name, timezone) {
+  if (process.env.DEV_TEAM_OFFICE_WEATHER === 'off') return name;
+  const { findPlaces } = await import('../server/weather.js');
+  const hits = await findPlaces(name, { country: zoneInfo(timezone).country }).catch(() => []);
+  return hits[0]?.location || name;
+}
+
 // The general settings (dev-team-office config [key] [value]).
-const CONFIG_KEYS = ['lang', 'timezone', 'weather', 'herdr.launch', 'herdr.subagents', 'herdr.direction', 'herdr.startAgent', 'log.life', 'view.office', 'view.mode'];
+const CONFIG_KEYS = ['lang', 'timezone', 'city', 'weather', 'herdr.launch', 'herdr.subagents', 'herdr.direction', 'herdr.startAgent', 'log.life', 'view.office', 'view.mode'];
 async function cmdConfig() {
   const [, key, ...rest] = args._;
   const live = await runningOffice();
@@ -329,13 +340,15 @@ async function cmdConfig() {
       const p = store.getPrefs();
       console.log(t('cli.config', { file: tilde(store.file) }));
       const get = (k) => k.split('.').reduce((o, x) => o?.[x], p);
-      for (const k of CONFIG_KEYS) console.log(`  ${k.padEnd(18)}${get(k) ?? `system (${systemZone()})`}`);
+      const zone = p.timezone || systemZone();
+      for (const k of CONFIG_KEYS) console.log(`  ${k.padEnd(18)}${get(k) ?? (k === 'city' ? `zone (${zoneInfo(zone).city || zone})` : `system (${systemZone()})`)}`);
       return;
     }
     if (!CONFIG_KEYS.includes(key)) fail(t('cli.configUnknown', { key }));
     let value = rest.join(' ');
     if (['weather', 'herdr.launch', 'herdr.subagents', 'log.life'].includes(key)) value = /^(on|true|yes|si|sí|1)$/i.test(value);
     if (key === 'timezone' && (!value || value === 'system')) value = null;
+    if (key === 'city') value = !value || value === 'zone' ? null : await cityLocation(value, store.getPrefs().timezone || systemZone());
     const [a, b] = key.split('.');
     const patch = b ? { [a]: { [b]: value } } : { [a]: value };
     const out = live ? await api('/v1/settings', { prefs: patch }, 'PUT') : store.setPrefs(patch);

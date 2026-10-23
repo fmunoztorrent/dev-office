@@ -29,6 +29,7 @@ You are the agent that... (system prompt)
 
 - Exact field: `role:`
 - Accepted values (the game's 8 roles): `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`.
+- **The PO is the user** (they give the orders), so a subagent never plays it: `role: po` is drawn as `analyst`.
 - If the field is missing or has an unknown value, nothing breaks: the office falls back to its heuristic (below).
 - Codex agents are TOML: `role = "backend"`, or a `# role: backend` comment if your Codex version rejects unknown keys.
 
@@ -44,7 +45,7 @@ Besides the 8 values, English and Spanish aliases are accepted. The harness can 
 | `qa` | `tester`, `test`, `testing`, `calidad` |
 | `analyst` | `analista`, `ba`, `business` |
 | `manager` | `pm`, `project-manager`, `scrum` |
-| `po` | `product-owner`, `producto`, `product` |
+| `po` (drawn as `analyst`: the PO is the user) | `product-owner`, `producto`, `product` |
 | `backend` | `be`, `back` |
 | `frontend` | `fe`, `front` |
 | `designer` | `diseñador`, `diseñadora`, `disenador`, `disenadora`, `design`, `ux` |

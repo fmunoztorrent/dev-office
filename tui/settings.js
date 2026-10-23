@@ -1,6 +1,6 @@
 // ⚙ Settings in the terminal: a form over the cork board, with the same tabs as the web.
-//   General      language, time zone, real weather, herdr (agents in panes) and the log
-//   Offices      the company's offices: name, time zone and location; view, edit, delete
+//   General      language, time zone and city, real weather, herdr (agents in panes) and the log
+//   Offices      the company's offices: name, time zone and city; view, edit, delete
 //   Agents       the maintainer: add (full path + CLI + office), delete and send it a prompt;
 //                shows what each one's harness brings
 //   Characters   name, title, colors and features of the characters of the office being watched
@@ -10,6 +10,7 @@
 import { TEAM, DEFAULT_TEAM, APPEARANCE_KEYS, LOOK_PALETTES } from '../public/sim.js';
 import { t, LANGUAGES } from '../public/i18n.js';
 import { allZones, zoneInfo, countryName } from '../public/clock.js';
+import { parsePlace } from '../public/sky.js';
 import { hex, fit, strWidth } from './screen.js';
 
 const ROLES = ['po', 'analyst', 'manager', 'tl', 'qa', 'backend', 'frontend', 'designer'];
@@ -34,7 +35,9 @@ const searchZones = (q, lang) => {
 };
 
 const HARNESS_IDS = ['claude-code', 'opencode', 'pi', 'codex'];
-const emptyOffice = () => ({ id: null, name: '', timezone: null, location: '', tzQuery: '' });
+const emptyCity = () => ({ query: '', hits: [], offline: false, busy: false, seq: 0, timer: null });
+const emptyOffice = () => ({ id: null, name: '', timezone: null, location: '', tzQuery: '', city: emptyCity() });
+const placeName = (location) => parsePlace(location)?.name || String(location || '');
 
 /**
  * @param office  () => the office being watched (the characters' one)
@@ -44,7 +47,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
   const s = {
     tab: 'general', focus: 0, msg: '', msgOk: false, loading: true, data: null, targets: [], offices: [], prefs: null, herdr: null,
     form: { path: '', harness: 'claude-code', name: '', office: office() }, looks: null, role: 'tl',
-    tzQuery: '', officeForm: emptyOffice(),
+    tzQuery: '', city: emptyCity(), officeForm: emptyOffice(),
   };
 
   async function api(method, path, body) {
@@ -120,6 +123,37 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
     await Promise.all([loadSettings(), loadAgents()]);
   }
 
+  // ---------------------------------------------------------------- the city
+
+  /** Searches (a moment after typing) the cities of the time zone's country that start with c.query. */
+  function findCities(c, timezone) {
+    clearTimeout(c.timer);
+    const q = c.query.trim();
+    c.hits = []; c.busy = q.length >= 2;
+    if (!c.busy) return;
+    c.timer = setTimeout(async () => {
+      const n = ++c.seq;
+      const r = await api('GET', `/v1/places?q=${encodeURIComponent(q)}&timezone=${encodeURIComponent(timezone || '')}`);
+      if (n !== c.seq) return;
+      c.busy = false;
+      c.hits = r.ok ? r.places || [] : [];
+      c.offline = !r.ok || !!r.offline;
+    }, 250);
+  }
+  /** Enter: the first city found (empty: the time zone's; without a connection, what was typed). */
+  function pickCity(c, onPick) {
+    const q = c.query.trim();
+    if (q && !c.hits[0] && !c.offline) return;
+    onPick(!q ? null : c.hits[0]?.location || q);
+    Object.assign(c, emptyCity());
+  }
+  /** A city field: type, and Enter keeps the first one found in the time zone's country. */
+  const cityField = (c, { label, timezone, placeholder, onPick }) => ({
+    type: 'text', label, value: () => c.query, placeholder,
+    edit: (v) => { c.query = v.slice(0, 80); findCities(c, timezone()); }, enter: () => pickCity(c, onPick),
+    suffix: () => (!c.query ? '' : c.hits[0] ? `→ ${c.hits[0].label}` : c.offline ? `→ ${c.query}` : c.busy ? '…' : '✗'),
+  });
+
   // ---------------------------------------------------------------- each tab's fields
 
   const tzLabel = (tz) => { const z = zoneInfo(tz); return `${tz}${z.country ? ` · ${countryName(z.country, s.prefs?.lang)}` : ''}`; };
@@ -139,6 +173,9 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
       f.push({ type: 'select', label: '', value: () => (p.timezone ? tzLabel(p.timezone) : t('settings.general.tzSystem', { tz: system || '' })),
         cycle: (d) => { const list = [null, ...zones()]; setPref({ timezone: cycle(list, p.timezone, d) }); } });
       f.push({ type: 'info', text: `  ${t('settings.general.tzHint')}` });
+      f.push(cityField(s.city, { label: t('settings.general.city'), timezone: () => p.timezone || system, onPick: (c) => setPref({ city: c }),
+        placeholder: () => (p.city ? placeName(p.city) : t('settings.general.cityZone', { city: zoneInfo(p.timezone || system).city || '' })) }));
+      f.push({ type: 'info', text: `  ${t('settings.general.cityHint')}` });
       f.push({ type: 'select', label: t('settings.general.weather'), value: () => t(p.weather ? 'settings.general.weatherOn' : 'settings.general.weatherOff'), cycle: () => setPref({ weather: !p.weather }) });
       f.push({ type: 'select', label: t('settings.general.life'), value: () => yesNo(p.log.life), cycle: () => setPref({ log: { life: !p.log.life } }) });
       f.push({ type: 'heading', text: t('settings.general.herdr') });
@@ -154,9 +191,9 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
       f.push({ type: 'info', text: `  ${t('settings.offices.hint')}` });
       for (const o of s.offices) {
         const own = o.ownTimezone ? tzLabel(o.timezone) : t('settings.offices.inherit', { tz: o.timezone });
-        f.push({ type: 'info', text: `  ${o.name}${o.id === 'main' ? ` (${t('settings.offices.main')})` : ''} · ${own} · ${t('settings.offices.agents', { n: o.agents })}${o.id === office() ? `  ${t('settings.offices.viewing')}` : ''}`, color: C.ink });
+        f.push({ type: 'info', text: `  ${o.name}${o.id === 'main' ? ` (${t('settings.offices.main')})` : ''} · ${own}${o.place?.name ? ` · 📍 ${o.place.name}` : ''} · ${t('settings.offices.agents', { n: o.agents })}${o.id === office() ? `  ${t('settings.offices.viewing')}` : ''}`, color: C.ink });
         if (o.id !== office()) f.push({ type: 'action', label: '', value: () => `👁 ${t('settings.offices.view')} ${o.name}`, run: () => onView?.(o.id) });
-        f.push({ type: 'action', label: '', value: () => `✎ ${t('settings.offices.edit')} ${o.name}`, run: () => { s.officeForm = { id: o.id, name: o.custom ? o.name : '', timezone: o.ownTimezone, location: o.location || '', tzQuery: '' }; s.focus = 0; } });
+        f.push({ type: 'action', label: '', value: () => `✎ ${t('settings.offices.edit')} ${o.name}`, run: () => { s.officeForm = { ...emptyOffice(), id: o.id, name: o.custom ? o.name : '', timezone: o.ownTimezone, location: o.location || '' }; s.focus = 0; } });
         if (o.id !== 'main') f.push({ type: 'action', label: '', value: () => `✕ ${t('settings.offices.delete')} ${o.name}`, run: () => deleteOffice(o) });
       }
       const of = s.officeForm;
@@ -166,7 +203,9 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
       f.push({ type: 'text', label: t('settings.offices.timezone'), value: () => of.tzQuery, placeholder: () => (of.timezone ? tzLabel(of.timezone) : t('settings.offices.inherit', { tz: p.timezone || '' })),
         edit: (v) => { of.tzQuery = v; of.timezone = searchZones(v, p.lang)[0] || of.timezone; }, suffix: () => (of.tzQuery ? `→ ${zones()[0] || '✗'}` : '') });
       f.push({ type: 'select', label: '', value: () => (of.timezone ? tzLabel(of.timezone) : t('settings.offices.inherit', { tz: p.timezone || '' })), cycle: (d) => { of.timezone = cycle([null, ...zones()], of.timezone, d); } });
-      f.push({ type: 'text', label: t('settings.offices.location'), value: () => of.location, placeholder: t('settings.offices.locationPh'), edit: (v) => { of.location = v.slice(0, 80); } });
+      const officeZone = () => of.timezone || p.timezone || s.data.systemZone;
+      f.push(cityField(of.city, { label: t('settings.offices.location'), timezone: officeZone, onPick: (c) => { of.location = c || ''; },
+        placeholder: () => (of.location ? placeName(of.location) : !of.timezone && p.city ? t('settings.offices.cityInherit', { city: placeName(p.city) }) : t('settings.offices.locationPh', { city: zoneInfo(officeZone()).city || '' })) }));
       f.push({ type: 'action', label: '', value: () => (of.id ? t('settings.offices.saveChanges') : t('settings.offices.add')), run: () => saveOffice() });
       if (of.id) f.push({ type: 'action', label: '', value: () => t('settings.offices.cancel'), run: () => { s.officeForm = emptyOffice(); } });
     } else if (s.tab === 'agents') {
@@ -195,7 +234,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
     } else if (s.tab === 'look') {
       const look = s.looks[s.role];
       const L = (k) => t(`settings.look.${k}`);
-      f.push({ type: 'select', label: L('character'), value: () => `${look.name} (${s.role})`, cycle: (d) => { s.role = cycle(ROLES, s.role, d); } });
+      f.push({ type: 'select', label: L('character'), value: () => `${look.name} (${s.role}${s.role === 'po' ? ` · ${t('team.you')}` : ''})`, cycle: (d) => { s.role = cycle(ROLES, s.role, d); } });
       f.push({ type: 'text', label: L('name'), value: () => look.name, edit: (v) => { look.name = v.slice(0, 20); } });
       f.push({ type: 'text', label: L('title'), value: () => look.title, edit: (v) => { look.title = v.slice(0, 30); } });
       for (const k of ['shirt', 'pants', 'hair', 'skin']) {

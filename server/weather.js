@@ -1,18 +1,18 @@
 // The weather outside, for the office's glass wall: Open-Meteo (free, no API key).
 //
-// The location comes from DEV_TEAM_OFFICE_LOCATION (a city, "Valparaíso", or coordinates,
-// "-33.45,-70.65") or, if unset, from the city of the team's time zone
-// (America/Santiago → Santiago). Only that is sent: the city's name to locate it and its
+// The location is the office's city (⚙ › General › City, or each office's), DEV_TEAM_OFFICE_LOCATION
+// (a city, "Valparaíso", or coordinates, "-33.45,-70.65") or, if unset, the city of the team's time
+// zone (America/Santiago → Santiago). Only that is sent: the city's name to locate it and its
 // coordinates to ask for the weather. With DEV_TEAM_OFFICE_WEATHER=off nothing is queried and the
-// office makes up a weather by season (the same happens offline).
+// office makes up a weather by season (the same happens offline). findPlaces() is the city picker's
+// search: the cities of one country whose name starts with what was typed.
 
 import { EventEmitter } from 'node:events';
-import { fromOpenMeteo, localZone } from '../public/sky.js';
+import { fromOpenMeteo, localZone, parsePlace, placeLocation } from '../public/sky.js';
 import { t, getLanguage } from '../public/i18n.js';
 
 const GEOCODING = 'https://geocoding-api.open-meteo.com/v1/search';
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
-const COORDS = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/;
 
 export class Weather extends EventEmitter {
   /**
@@ -53,9 +53,9 @@ export class Weather extends EventEmitter {
 
   /** Where the office is: direct coordinates or the city looked up in the geocoder. */
   async locate() {
-    const m = COORDS.exec(this.location || '');
-    if (m) return { lat: Number(m[1]), lon: Number(m[2]), name: this.placeName };
-    const name = (this.location || this.timezone.split('/').pop() || '').replace(/_/g, ' ').trim();
+    const own = parsePlace(this.location);
+    if (Number.isFinite(own?.lat)) return { lat: own.lat, lon: own.lon, name: own.name || this.placeName };
+    const name = (own?.name || this.timezone.split('/').pop() || '').replace(/_/g, ' ').trim();
     if (!name) throw new Error(t('weatherMsg.noLocation'));
     const q = new URLSearchParams({ name, count: '5', language: getLanguage(), format: 'json' });
     const hits = (await this.getJson(`${GEOCODING}?${q}`)).results || [];
@@ -84,4 +84,23 @@ export class Weather extends EventEmitter {
     }
     return this.current;
   }
+}
+
+/**
+ * The cities of a country whose name starts with `q` (Open-Meteo's geocoder), for the city picker.
+ * @param country  ISO 3166-1 alpha-2 code (the time zone's country); without it, any country
+ * @returns [{ name, region, country, lat, lon, label, location }] (`location`: the text that is stored)
+ */
+export async function findPlaces(q, { country, lang = getLanguage(), fetch = globalThis.fetch, count = 8 } = {}) {
+  const name = String(q ?? '').trim();
+  if (name.length < 2 || typeof fetch !== 'function') return [];
+  const params = new URLSearchParams({ name, count: String(count), language: lang, format: 'json', ...(country ? { countryCode: country } : {}) });
+  const res = await fetch(`${GEOCODING}?${params}`, { signal: AbortSignal.timeout(8000), headers: { accept: 'application/json' } });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return ((await res.json()).results || [])
+    .filter((h) => Number.isFinite(h.latitude) && Number.isFinite(h.longitude) && (!country || h.country_code === country))
+    .map((h) => {
+      const label = [h.name, h.admin1 && h.admin1 !== h.name ? h.admin1 : null].filter(Boolean).join(', ');
+      return { name: h.name, region: h.admin1 || '', country: h.country_code || '', lat: h.latitude, lon: h.longitude, label, location: placeLocation({ name: label, lat: h.latitude, lon: h.longitude }) };
+    });
 }

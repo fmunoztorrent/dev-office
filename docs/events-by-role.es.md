@@ -20,7 +20,7 @@ Las dos comparten la sesión a través de `DEV_TEAM_OFFICE_SESSION`: la define l
 {
   "session": "pi-1234",
   "kind": "phase",
-  "role": "qa",            // po | analyst | manager | tl | qa | backend | frontend | designer (+ alias: arquitecto, tester, ux…)
+  "role": "qa",            // analyst | manager | tl | qa | backend | frontend | designer (+ alias: arquitecto, tester, ux…)
   "phase": "red",          // ver catálogo; acepta alias en inglés (implement, approve, architecture…)
   "text": "2 tests fallan: orders.cancel.test.ts",
   "from": "tl"             // opcional; por defecto, el rol que tenía el turno
@@ -47,13 +47,15 @@ Qué hace el servidor con una fase:
 
 ## Catálogo de fases
 
+**La PO es el usuario:** da las órdenes y decide qué se hace, así que un agente nunca la juega. Lo que un agente reporta como `po` (historias, criterios, prioridades, aceptación) se dibuja como la analista.
+
 | Rol | Fase | Significado | En la oficina |
 |---|---|---|---|
-| `po` | `historia` | Escribe la historia de usuario | Va a la pizarra y la presenta |
-| `po` | `criterios` | Define los criterios de aceptación | Pizarra |
-| `po` | `prioriza` | Ordena el backlog | Pizarra |
-| `po` | `acepta` | Acepta el incremento | Salta ✅ con confeti |
-| `po` | `rechaza` | No cumple los criterios | Se sacude, burbuja naranja ❌ |
+| `analyst` | `historia` | Escribe la historia de usuario | Va a la pizarra y la presenta |
+| `analyst` | `criterios` | Define los criterios de aceptación | Pizarra |
+| `analyst` | `prioriza` | Propone el orden del backlog | Pizarra |
+| `analyst` | `acepta` | El incremento cumple los criterios | Salta ✅ con confeti |
+| `analyst` | `rechaza` | No cumple los criterios | Se sacude, burbuja naranja ❌ |
 | `analyst` | `analiza` | Entiende el dominio y el código existente | Piensa 🧐 |
 | `analyst` | `investiga` | Busca en docs o en la web | Trabaja 🔎 |
 | `analyst` | `requisitos` | Documenta los requisitos | Pizarra |
@@ -89,20 +91,20 @@ Una fase desconocida no se descarta: se muestra como trabajo genérico con su no
 ## Flujos de referencia
 
 ```
-Feature backend TDD   po criterios → analyst analiza → tl arquitectura → qa red → backend implementa
-                      → qa green → backend refactor → qa green → tl review → tl aprueba → po acepta
+Feature backend TDD   analyst criterios → analyst analiza → tl arquitectura → qa red → backend implementa
+                      → qa green → backend refactor → qa green → tl review → tl aprueba → analyst acepta
 
-Feature con UI        po historia → designer ux → designer ui → qa red → frontend implementa → qa green
-                      → designer revision-visual → tl review → po acepta
+Feature con UI        analyst historia → designer ux → designer ui → qa red → frontend implementa → qa green
+                      → designer revision-visual → tl review → analyst acepta
 
 Full-stack            tl arquitectura → manager planifica → qa red → backend implementa → qa green
-                      → qa red → frontend implementa → qa green → qa regresion → tl review → po acepta
+                      → qa red → frontend implementa → qa green → qa regresion → tl review → analyst acepta
 
 Bug                   qa bug → qa red → backend fix → qa green → qa regresion → tl review
 
 Refactor              tl arquitectura → qa green (línea base) → backend refactor → qa green → tl review
 
-Spike                 analyst investiga → tl adr → po prioriza
+Spike                 analyst investiga → tl adr → analyst prioriza
 
 Review con cambios    tl review → tl cambios → backend fix → qa green → tl review → tl aprueba
 ```

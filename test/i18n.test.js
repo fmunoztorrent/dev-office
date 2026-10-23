@@ -67,7 +67,8 @@ test('la vida de la oficina habla el idioma del juego (con los nombres actuales 
     run(12);
     assert.ok(said.has('Bruno, this one is yours: DB'), [...said].join(' | '));
     sim.handle({ kind: 'waiting', text: 'Bash?' });
-    assert.equal(sim.agents.manager.bubble.text, 'We need your OK! ✋');
+    run(15);
+    assert.ok(said.has('Sofía, can I have your OK? ✋'), [...said].join(' | ')); // at your desk: the PO is you
   } finally { applyAppearance({}); }
 });
 

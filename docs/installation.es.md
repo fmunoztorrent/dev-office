@@ -191,7 +191,7 @@ dev-team-office demo --pi   # una sesión de ejemplo: el equipo se mueve
 
 En el navegador, `http://127.0.0.1:4317` muestra la oficina. Dos atajos útiles:
 
-- **⚙ › General** elige el idioma, la zona horaria y la **vista**: la **frontal** de siempre o la **cenital (isométrica)**. También se cambia con el botón ◇ o con `v`.
+- **⚙ › General** elige el idioma, la zona horaria, la **ciudad** (para el clima, el sol y la luna: una zona horaria abarca muchas ciudades) y la **vista**: la **frontal** de siempre o la **cenital (isométrica)**. También se cambia con el botón ◇ o con `v`.
 - **⚙ › Agentes** muestra lo que quedó registrado.
 
 ## 7. Dónde queda cada cosa
@@ -220,5 +220,5 @@ dev-team-office uninstall --purge      # además borra ~/.dev-team-office (tu ba
 | El puerto 4317 está ocupado | `dev-team-office --port 4318`, o `DEV_TEAM_OFFICE_PORT=4318` |
 | Pi no muestra nada | `dev-team-office doctor`; revisa que la extensión esté en `~/.pi/agent/extensions/` y que Pi sea ≥ 1.2 si usas gentle-pi |
 | Codex no reporta | Confía en los hooks nuevos con `/hooks` |
-| Los subagentes salen con el personaje equivocado | Agrega `role: <rol>` a su archivo (`po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`) y vuelve a correr `join` |
+| Los subagentes salen con el personaje equivocado | Agrega `role: <rol>` a su archivo (`analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`) y vuelve a correr `join` |
 | Dentro de herdr no se abren panes por subagente | ⚙ › General › «Cada subagente en su pane», o `dev-team-office config herdr.subagents on` |

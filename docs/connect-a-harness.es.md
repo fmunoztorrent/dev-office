@@ -29,6 +29,7 @@ Eres el agente que... (system prompt)
 
 - Campo exacto: `role:`
 - Valores aceptados (los 8 roles del juego): `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`.
+- **La PO es el usuario** (da las órdenes), así que un subagente nunca la juega: `role: po` se dibuja como `analyst`.
 - Si el campo falta o trae un valor desconocido, no se rompe nada: la oficina cae en su heurística (más abajo).
 
 Este documento es la **fuente canónica** del contrato: la lista de los 8 roles, los alias que acepta cada uno, la regla de precedencia y qué pasa con una declaración vacía o rota. El skill **Dev Team Office: conectar un harness** (`dev-team-office-config`, instalado con `dev-team-office install`) ejecuta el procedimiento paso a paso y apunta acá para el contrato completo. Si el contrato cambia, se actualiza acá y el skill sólo lo referencia: así no pueden derivar uno del otro.
@@ -43,7 +44,7 @@ Además de los 8 valores, se aceptan alias en inglés y en español. El harness 
 | `qa` | `tester`, `test`, `testing`, `calidad` |
 | `analyst` | `analista`, `ba`, `business` |
 | `manager` | `pm`, `project-manager`, `scrum` |
-| `po` | `product-owner`, `producto`, `product` |
+| `po` (se dibuja como `analyst`: la PO es el usuario) | `product-owner`, `producto`, `product` |
 | `backend` | `be`, `back` |
 | `frontend` | `fe`, `front` |
 | `designer` | `diseñador`, `diseñadora`, `disenador`, `disenadora`, `design`, `ux` |

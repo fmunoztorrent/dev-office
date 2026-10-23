@@ -195,15 +195,24 @@ export const DevTeamOffice = async ({ client, directory }) => {
   lib = await loadLib().catch(() => null);
   if (!process.env.DEV_TEAM_OFFICE_LAUNCHED && typeof WebSocket !== 'undefined') connect();
 
+  // a command's arguments, from its start to its end: a command left in the background with its
+  // output in a file is a service the office lists (server/services.js)
+  const commandArgs = new Map();
   return {
     'tool.execute.before': async (input, output) => {
       const at = await where(input.sessionID);
       seen(input.sessionID);
+      if (input.tool === 'bash' && output?.args) {
+        commandArgs.set(input.callID, output.args);
+        if (commandArgs.size > 50) commandArgs.delete(commandArgs.keys().next().value);
+      }
       send({ ...at, cwd, kind: 'tool_start', tool: input.tool, toolUseId: input.callID, input: output.args });
     },
     'tool.execute.after': async (input, output) => {
       const failed = output?.metadata?.error || output?.metadata?.exit > 0;
-      send({ ...(await where(input.sessionID)), cwd, kind: 'tool_end', tool: input.tool, toolUseId: input.callID, ok: !failed });
+      const args = commandArgs.get(input.callID);
+      commandArgs.delete(input.callID);
+      send({ ...(await where(input.sessionID)), cwd, kind: 'tool_end', tool: input.tool, toolUseId: input.callID, ok: !failed, ...(args ? { input: args } : {}) });
     },
     event: async ({ event }) => {
       const p = event.properties || {};

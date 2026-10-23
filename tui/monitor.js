@@ -1,7 +1,8 @@
 // The activity monitor: what the terminal shows inside herdr, instead of the game. At the top, how
 // many agents, subagents, panes and tasks are running; in the middle, each agent (each session) with
-// its task and what it is doing, and its subagents below; at the end, the log. The game is still at
-// hand: in the browser (o) or in this terminal (g).
+// its task and what it is doing, and its subagents below; then the services the agents left running
+// in the background (1-9 or l: their logs in a herdr pane); at the end, the log. The game is still
+// at hand: in the browser (o) or in this terminal (g).
 //
 // It works with the office in the same process (localFeed) or watching one that is already running (remoteFeed).
 
@@ -35,6 +36,7 @@ export function createMonitor() {
   const m = {
     office: null, offices: [], sessions: new Map(), roles: {}, tasks: [], herdr: null, appearance: {},
     log: [], last: new Map(), subLast: new Map(), connection: { ok: false, key: 'conn.connecting' }, flash: null,
+    services: [], // the ones left running in the background (server/services.js)
   };
   const person = (role) => ({ ...DEFAULT_TEAM[role], ...(m.appearance?.[role] || {}) });
 
@@ -82,6 +84,7 @@ export function createMonitor() {
     },
     tasks(snap) { m.tasks = snap?.tasks || []; },
     herdr(st) { m.herdr = st; },
+    services(list) { m.services = Array.isArray(list) ? list : []; },
     log(entry) { m.log.push({ ts: entry.ts || Date.now(), who: '', text: entry.text, tone: 'dim' }); if (m.log.length > LOG_MAX) m.log.shift(); },
     /** The sessions shown: the ones still going (or that finished recently), the most recent on top. */
     visible(now = Date.now()) {
@@ -99,6 +102,7 @@ export function createMonitor() {
         panes: (m.herdr?.panes || []).length,
         tasks: m.tasks.filter((x) => ['running', 'sent', 'queued'].includes(x.status)).length,
         working: Object.values(m.roles).filter((r) => r.status && r.status !== 'idle' && r.status !== 'done' && now - (r.ts || 0) < 10 * 60_000).length,
+        services: m.services.filter((s) => s.status === 'running').length,
       };
     },
   };
@@ -148,6 +152,7 @@ export function renderMonitor(mon, { cols = 100, rows = 30, color = true, colorM
     ['   👥 ', ''], [t('monitor.working', { n: n.working }), B],
     ['   🪟 ', ''], [t('monitor.panes', { n: n.panes }), B],
     ['   📨 ', ''], [t('monitor.tasks', { n: n.tasks }), B],
+    ...(n.services ? [['   ▶ ', paint(TONE.ok)], [t('monitor.services', { n: n.services }), B]] : []),
   ));
 
   // ---- the agents and their subagents ----
@@ -189,15 +194,33 @@ export function renderMonitor(mon, { cols = 100, rows = 30, color = true, colorM
     ? busy.flatMap(([role, r], i) => [[i ? ' · ' : '  ', D], [`${mon.person(role).name || role}`, `${B}${paint(mon.person(role).shirt)}`], [` ${t(`state.${r.status}`) || r.status}`, paint(r.status === 'red' || r.status === 'blocked' ? TONE.err : r.status === 'waiting' ? TONE.warn : null)]])
     : [[`  ${t('monitor.teamIdle')}`, D]];
 
+  // ---- the services left running in the background: a number each (its logs in a pane) ----
+  const svcRows = m.services.slice(0, 9).map((s, i) => {
+    const on = s.status === 'running';
+    const p = s.role ? mon.person(s.role) : null;
+    return row(
+      [`  ${i + 1} `, B], [on ? '▶ ' : '■ ', paint(on ? TONE.ok : null)], [fit(s.name || s.command || '', 28).padEnd(29), on ? B : D],
+      [fit([p?.name, AGENT_NAME[s.agent] || s.agent].filter(Boolean).join(' · '), 22).padEnd(23), D],
+      [on ? t('monitor.svcUp', { ago: ago(now - (s.startedAt || now)) }) : t('monitor.svcDown', { ago: ago(now - (s.endedAt || now)) }), on ? paint(TONE.ok) : D],
+      [`  ${project(s.cwd)}`, D],
+    );
+  });
+
   // ---- splitting the height ----
-  const footer = row(['  ', ''], [t('monitor.keys', { quit: info.local ? t('monitor.quitOffice') : t('monitor.quit') }), D], ...(m.flash ? [[`   ${m.flash}`, paint(TONE.accent)]] : []));
+  const keys = `${t('monitor.keys', { quit: info.local ? t('monitor.quitOffice') : t('monitor.quit') })}${m.services.length ? ` · ${t('monitor.keysServices')}` : ''}`;
+  const footer = row(['  ', ''], [keys, D], ...(m.flash ? [[`   ${m.flash}`, paint(TONE.accent)]] : []));
   const fixed = lines.length + 1 /* regla agentes */ + 1 /* equipo */ + 1 /* log rule */ + 1 /* pie */;
   const room = Math.max(0, rows - fixed);
-  const agentsMax = Math.max(1, Math.min(agentRows.length, Math.floor(room * 0.5)));
+  const svcMax = svcRows.length ? Math.min(svcRows.length, Math.max(1, Math.floor(room * 0.25))) : 0;
+  const agentsMax = Math.max(1, Math.min(agentRows.length, Math.floor((room - (svcMax ? svcMax + 1 : 0)) * 0.5)));
   lines.push(rule(t('monitor.agentsTitle')));
   const shown = agentRows.slice(0, agentsMax);
   if (agentRows.length > agentsMax) shown[agentsMax - 1] = row([`  … ${t('monitor.more', { n: agentRows.length - agentsMax + 1 })}`, D]);
   lines.push(...shown);
+  if (svcMax) {
+    lines.push(rule(t('monitor.servicesTitle')));
+    lines.push(...svcRows.slice(0, svcMax));
+  }
   lines.push(row([`  ${t('tui.team')}`, B], ...teamParts));
   lines.push(rule(t('tui.log')));
   const logRoom = Math.max(0, rows - lines.length - 1);
@@ -240,6 +263,7 @@ export function runMonitor({ feed, stdin = process.stdin, stdout = process.stdou
       onTasks(snap) { mon.tasks(snap); dirty = true; },
       onPipelines() {},
       onHerdr(st) { mon.herdr(st); dirty = true; },
+      onServices(list) { mon.services(list); dirty = true; },
       onAppearance(a) { mon.model.appearance = a || {}; dirty = true; },
       onOffices(list, current) { mon.model.offices = list || []; if (current) mon.model.office = current; dirty = true; },
       onPrefs(p) { if (p?.lang) setLanguage(p.lang); dirty = true; },
@@ -262,7 +286,18 @@ export function runMonitor({ feed, stdin = process.stdin, stdout = process.stdou
         if (k === '\x03' || k === 'q' || k === 'Q') return quit();
         if ((k === 'o' || k === 'O') && onBrowser) { onBrowser(); flash(t('console.opening', { url: info.url || '' })); }
         if ((k === 'g' || k === 'G') && onGame) return game();
+        if (k >= '1' && k <= '9') openLogs(mon.model.services[Number(k) - 1]);
+        if (k === 'l' || k === 'L') openLogs(mon.model.services.find((x) => x.status === 'running') || mon.model.services[0]);
       }
+    }
+
+    /** A service's logs, in a herdr pane below its agent's (`tail -F`). */
+    async function openLogs(s) {
+      if (!s) return flash(t('monitor.svcNone'));
+      try {
+        const r = await (await fetch(`${feed.http}/v1/services/${encodeURIComponent(s.id)}/terminal`, { method: 'POST' })).json();
+        flash(r.ok ? t('monitor.svcPane', { name: s.name, pane: r.pane }) : `✖ ${r.error}`);
+      } catch (err) { flash(`✖ ${err.message}`); }
     }
     const listen = () => { if (!tty) return; stdin.setRawMode(true); stdin.setEncoding('utf8'); stdin.on('data', onKey); stdin.resume(); };
     const unlisten = () => { if (!tty) return; stdin.off('data', onKey); stdin.setRawMode(false); };

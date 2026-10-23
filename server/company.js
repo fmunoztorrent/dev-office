@@ -17,7 +17,14 @@ import { MAIN_OFFICE } from './store.js';
 import { insideDir } from './paths.js';
 import { t } from '../public/i18n.js';
 import { systemZone, zoneInfo } from '../public/clock.js';
+import { parsePlace } from '../public/sky.js';
 
+/** Where an office is, for the game (the sun, the moon and the simulated weather): its city or the zone's. */
+function placeOf(location, z) {
+  const p = parsePlace(location);
+  if (Number.isFinite(p?.lat)) return { name: p.name || z.city || '', lat: p.lat, lon: p.lon };
+  return { name: p?.name || z.city || '', lat: z.lat ?? null, lon: z.lon ?? null };
+}
 
 export class Company extends EventEmitter {
   /** @param store the database (server/store.js): offices, agents and settings */
@@ -54,6 +61,7 @@ export class Company extends EventEmitter {
     // which subagent is which character according to each session's folder (set by the server)
     office.rolesFor = (cwd) => this.rolesFor?.(cwd) || null;
     office.on('event', (ev, session) => this.emit('event', id, ev, session));
+    office.on('raw', (raw, ev) => this.emit('raw', id, raw, ev));
     office.on('reset', () => this.emit('reset', id));
     this.offices.set(id, office);
   }
@@ -69,6 +77,15 @@ export class Company extends EventEmitter {
     return own || this.store.getPrefs().timezone || systemZone();
   }
 
+  /**
+   * An office's city (the stored text): its own; if it has no time zone of its own, the company's;
+   * otherwise null (the time zone's city).
+   */
+  locationOf(id) {
+    const o = this.store.getOffice(id);
+    return o?.location || (o && !o.timezone ? this.store.getPrefs().city : null) || null;
+  }
+
   /** What the interfaces know about each office (the selector, the clock, the weather). */
   info(id) {
     const o = this.store.getOffice(id);
@@ -78,7 +95,7 @@ export class Company extends EventEmitter {
     const office = this.get(id);
     return {
       id: o.id, name: o.name || t('offices.main'), custom: !!o.name, timezone: tz, ownTimezone: o.timezone, location: o.location,
-      country: z.country, city: z.city, agents: this.store.listAgents().filter((a) => a.office === o.id).length,
+      country: z.country, city: z.city, place: placeOf(this.locationOf(id), z), agents: this.store.listAgents().filter((a) => a.office === o.id).length,
       sessions: [...office.sessions.values()].filter((s) => s.id !== 'office').length,
     };
   }

@@ -20,7 +20,7 @@ Both share the session through `DEV_TEAM_OFFICE_SESSION`: the extension sets it 
 {
   "session": "pi-1234",
   "kind": "phase",
-  "role": "qa",            // po | analyst | manager | tl | qa | backend | frontend | designer (+ aliases: architect, tester, ux…)
+  "role": "qa",            // analyst | manager | tl | qa | backend | frontend | designer (+ aliases: architect, tester, ux…)
   "phase": "red",          // see the catalog; English aliases are accepted (implement, approve, architecture…)
   "text": "2 tests fail: orders.cancel.test.ts",
   "from": "tl"             // optional; by default, the role that held the turn
@@ -47,15 +47,17 @@ What the server does with a phase:
 
 ## Phase catalog
 
+**The PO is the user:** they give the orders and decide what gets done, so an agent never plays the PO. What an agent reports as `po` (stories, criteria, priorities, acceptance) is drawn as the analyst.
+
 The phase is sent with its English alias or its canonical id (the office stores the canonical one).
 
 | Role | Phase (alias · id) | Meaning | In the office |
 |---|---|---|---|
-| `po` | `story` · `historia` | Writes the user story | Goes to the whiteboard and presents it |
-| `po` | `criteria` · `criterios` | Defines the acceptance criteria | Whiteboard |
-| `po` | `prioritize` · `prioriza` | Orders the backlog | Whiteboard |
-| `po` | `accept` · `acepta` | Accepts the increment | Jumps ✅ with confetti |
-| `po` | `reject` · `rechaza` | It does not meet the criteria | Shakes, orange bubble ❌ |
+| `analyst` | `story` · `historia` | Writes the user story | Goes to the whiteboard and presents it |
+| `analyst` | `criteria` · `criterios` | Defines the acceptance criteria | Whiteboard |
+| `analyst` | `prioritize` · `prioriza` | Proposes the backlog's order | Whiteboard |
+| `analyst` | `accept` · `acepta` | The increment meets the criteria | Jumps ✅ with confetti |
+| `analyst` | `reject` · `rechaza` | It does not meet the criteria | Shakes, orange bubble ❌ |
 | `analyst` | `analysis` · `analiza` | Understands the domain and the existing code | Thinks 🧐 |
 | `analyst` | `research` · `investiga` | Searches docs or the web | Works 🔎 |
 | `analyst` | `requirements` · `requisitos` | Documents the requirements | Whiteboard |
@@ -91,20 +93,20 @@ An unknown phase is not dropped: it shows as generic work with its name in capit
 ## Reference flows
 
 ```
-Backend TDD feature   po criteria → analyst analysis → tl architecture → qa red → backend implement
-                      → qa green → backend refactor → qa green → tl review → tl approve → po accept
+Backend TDD feature   analyst criteria → analyst analysis → tl architecture → qa red → backend implement
+                      → qa green → backend refactor → qa green → tl review → tl approve → analyst accept
 
-Feature with UI       po story → designer ux → designer ui → qa red → frontend implement → qa green
-                      → designer visual-review → tl review → po accept
+Feature with UI       analyst story → designer ux → designer ui → qa red → frontend implement → qa green
+                      → designer visual-review → tl review → analyst accept
 
 Full-stack            tl architecture → manager plan → qa red → backend implement → qa green
-                      → qa red → frontend implement → qa green → qa regression → tl review → po accept
+                      → qa red → frontend implement → qa green → qa regression → tl review → analyst accept
 
 Bug                   qa bug → qa red → backend fix → qa green → qa regression → tl review
 
 Refactor              tl architecture → qa green (baseline) → backend refactor → qa green → tl review
 
-Spike                 analyst research → tl adr → po prioritize
+Spike                 analyst research → tl adr → analyst prioritize
 
 Review with changes   tl review → tl changes → backend fix → qa green → tl review → tl approve
 ```

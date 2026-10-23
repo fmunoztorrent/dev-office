@@ -1,6 +1,6 @@
 ---
 name: dev-team-office
-description: Report to Dev Team Office (a live pixel-art office where each character is a role of a dev team) which role has the turn and which phase you are in — product owner, analyst, manager, tech lead/architect, QA (RED/GREEN), backend, frontend, designer. Use it in any development task with stages (feature, bug, refactor, TDD, spike), to register the current project with the office, to send work to another registered agent, or to open herdr panes for side activities.
+description: Report to Dev Team Office (a live pixel-art office where each character is a role of a dev team) which role has the turn and which phase you are in — analyst, manager, tech lead/architect, QA (RED/GREEN), backend, frontend, designer. Use it in any development task with stages (feature, bug, refactor, TDD, spike), to register the current project with the office, to send work to another registered agent, or to open herdr panes for side activities.
 ---
 
 # Dev Team Office: work as a team, and let the office show it
@@ -45,14 +45,15 @@ node <skill-folder>/office-event.mjs done "summary"
 
 | Role | Character | Use it when you… | Phases |
 |---|---|---|---|
-| `po` | Product Owner | define what and why; accept the result | `story`, `criteria`, `prioritize`, `accept`, `reject` |
-| `analyst` | Business analyst | understand the domain, read docs and existing code, research | `analysis`, `research`, `requirements` |
+| `analyst` | Business analyst | understand the domain, read docs and existing code, research; write stories and acceptance criteria, check the result against them | `analysis`, `research`, `requirements`, `story`, `criteria`, `prioritize`, `accept`, `reject` |
 | `manager` | Manager | split the work, coordinate, release | `plan`, `assign`, `unblock`, `release` |
 | `tl` | Architect / Tech Lead | decide the technical design, review code | `architecture`, `adr`, `review`, `approve`, `changes`, `refactor` |
 | `qa` | QA | define cases, write and run tests | `test-plan`, `red`, `green`, `regression`, `bug`, `verify` |
 | `backend` | Backend | server, API, data, migrations | `implement`, `fix`, `refactor`, `migration` |
 | `frontend` | Frontend | components, pages, styles | `implement`, `fix`, `refactor` |
 | `designer` | Designer | UX flows, UI, tokens, visual review | `ux`, `ui`, `visual-review` |
+
+The product owner is the user: they give the orders and decide what gets done. Never report as `po`; when you need their decision, send `wait "question"` and ask them.
 
 Any role can use `blocked`. Spanish phase names also work (`implementa`, `aprueba`, `arquitectura`…),
 and `architect` is an alias of `tl`.
@@ -61,14 +62,14 @@ and `architect` is an alias of `tl`.
 
 Pick the one that fits and skip what does not apply. Each arrow is a `phase`.
 
-- **Backend feature with TDD**: `po criteria` → `analyst analysis` → `tl architecture` → `qa red` →
-  `backend implement` → `qa green` → `backend refactor` → `qa green` → `tl review` → `tl approve` → `po accept`
-- **Feature with UI**: `po story` → `designer ux` → `designer ui` → `qa red` → `frontend implement` →
-  `qa green` → `designer visual-review` → `tl review` → `po accept`
+- **Backend feature with TDD**: `analyst criteria` → `analyst analysis` → `tl architecture` → `qa red` →
+  `backend implement` → `qa green` → `backend refactor` → `qa green` → `tl review` → `tl approve` → `analyst accept`
+- **Feature with UI**: `analyst story` → `designer ux` → `designer ui` → `qa red` → `frontend implement` →
+  `qa green` → `designer visual-review` → `tl review` → `analyst accept`
 - **Bug**: `qa bug` (reproduce) → `qa red` (a test that catches it) → `backend fix` → `qa green` →
   `qa regression` → `tl review`
 - **Refactor**: `tl architecture` → `qa green` (baseline) → `backend refactor` → `qa green` → `tl review`
-- **Spike**: `analyst research` → `tl adr` → `po prioritize`
+- **Spike**: `analyst research` → `tl adr` → `analyst prioritize`
 
 If the review asks for changes: `tl changes "…"` → `backend fix` → `qa green` → `tl review` → `tl approve`.
 

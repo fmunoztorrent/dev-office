@@ -41,9 +41,9 @@ With the Claude Code plugin there is nothing else to install: ask Claude to open
 
 | Character | Role | What of the agent they stand for |
 |---|---|---|
-| Sofía | Product Owner | The user's prompt (a new task), questions to the user, user stories |
-| Valentina | Business Analyst | Exploration, `WebSearch`/`WebFetch`, reading `.md` docs, `Explore` subagents |
-| Marco | Manager | The todo board (`TodoWrite`/`TaskCreate`), hands out subtasks, asks for your approval, compaction |
+| Sofía | Product Owner | **You.** Your requests (the prompt, a brief from the office) and your side questions; the agent comes to your desk with its questions and to ask for your OK. Give the character your name and look in ⚙ › Characters |
+| Valentina | Business Analyst | Exploration, `WebSearch`/`WebFetch`, reading `.md` docs, `Explore` subagents; user stories, acceptance criteria and priorities (what an agent would report as PO) |
+| Marco | Manager | The todo board (`TodoWrite`/`TaskCreate`), hands out subtasks, brings you the agent's questions and asks for your OK, compaction |
 | Tomás | Tech Lead / architect | Lint, git, code searches, plans (`Plan`), reviews, help when something fails |
 | Andrés | QA | Test files, `npm test`/`jest`/`pytest`/`playwright`…; if a test fails, he takes the bug 🐞 to the last dev who touched code |
 | Diego | Backend | Editing server code, migrations, shell commands |
@@ -53,19 +53,19 @@ With the Claude Code plugin there is nothing else to install: ask Claude to open
 What you see in the office:
 
 - A **kanban whiteboard** on an easel, with the agent's todos (to do / in progress / done) and a progress bar. On top there is a **red-dot digital clock** with the office's time (its time zone).
-- **A new requirement:** the PO announces it in the product corner, takes it to the manager, and he hands it to whoever fits depending on what it is about (screens → frontend, endpoints → backend, bugs → QA, colors and logos → design; if unclear, the Tech Lead).
+- **A new requirement:** you (the PO) announce it in the product corner and take it to the manager, and he hands it to whoever fits depending on what it is about (screens → frontend, endpoints → backend, bugs → QA, colors and logos → design; if unclear, the Tech Lead).
 - **A subagent (`Task`/`Agent`):** the manager walks a card to the right desk and leaves a folder there for as long as the subtask lasts.
 - **Tool use:** the character types, their monitor shows code and glyphs pop out. The server rack blinks when backend is working.
 - **An error:** the character shakes with red sparks and the Tech Lead comes over to help.
-- **A pending permission:** the manager raises his hand and an orange banner shows up.
+- **A pending permission:** the manager goes to your desk (the PO's) to ask for your OK, raises his hand and an orange banner shows up. If the agent asks you something (`AskUserQuestion`), he brings you the question.
 - **`Stop`:** confetti, and the whole team celebrates at the meeting table.
 - **No activity:** every now and then someone goes for coffee or sits down to watch TV.
 
 On top of that, each character has **a life of their own**: needs that grow over time (talking, coffee, bathroom, consulting, imagining) and a personality that decides what they do when nobody asks them for anything:
 
-- **Sofía, Valentina and Camila** (PO, analyst and designer) are the business NPCs: they sit together and chit-chat, from their desks or meeting at the café or by the sofa. They talk about what is going on in the office (the current task, who fought with an error, who saw everything green, the last fire) and sometimes an idea comes out of the chat that they take to Marco, who sends it to the backlog.
+- **Sofía, Valentina and Camila** (PO, analyst and designer) are the business NPCs: they sit together and chit-chat, from their desks or meeting at the café or by the sofa. They talk about what is going on in the office (the current task, who fought with an error, who saw everything green, the last fire) and sometimes an idea comes out of the chat that Valentina or Camila take to Marco, who sends it to the backlog. Sofía is you: the character chats, but never decides anything on its own.
 - **Dreams:** Camila jumps and imagines **unicorns 🦄 or rainbows 🌈**; Andrés (QA) has **nightmares about skulls 💀**; Diego and Lucía dream of **pizza 🍕**. They show up in a glowing pixel-art thought cloud.
-- **Diego, Lucía and Andrés**, while working, sometimes get up to **consult Tomás** (the TL). And **Tomás, the architect**, sometimes goes to talk with product: priorities with Sofía, data with Valentina, mockups with Camila.
+- **Diego, Lucía and Andrés**, while working, sometimes get up to **consult Tomás** (the TL). And **Tomás, the architect**, sometimes goes to talk with product: data with Valentina, mockups with Camila. He does not ask you, the PO: when the agent has a question for you, it really asks.
 - **Marco** makes rounds to ask how things are going.
 - **At 13:00 the team goes to lunch** in the **dining room**, below the café, by the office's time: they stop at the counter, go into the dining room and sit at the long table (product and the manager at the back, facing us; the technical team in front, from behind), without crossing the table, and chat until they go back, by 14:00 at the latest. Whoever has a subagent working has lunch at their desk 🥪, and if the agent needs someone who is having lunch, they leave the plate and go back to their spot.
 - **The bathroom 🚻** is used one at a time: if it is occupied, the next one waits outside, restless. The sign's light shows whether it is free.
@@ -94,7 +94,7 @@ Office life is not only chance: each signal from the agent and its harness's sub
 | Lots of typing in a row | They get hungry: they dream of **pizza 🍕**; and tired: they go for coffee |
 | A subagent finishes | They reward themselves: with a dreamed pizza or a coffee |
 | `ux`/`ui` phases or a design subagent | Camila gets inspired: unicorns and rainbows |
-| `architecture`/`adr` phase | Tomás goes to ask Sofía about the scope or Valentina about the data |
+| `architecture`/`adr` phase | Tomás goes to ask Valentina about the scope and the data |
 | `story`/`criteria`/`requirements` phases | Product goes to ask Tomás whether it is feasible |
 | The agent awaits your OK | Those not working take the chance: coffee, a chat and TV |
 | Task finished (`Stop`) | A celebration at the meeting table, and the devs dream of the party pizza |
@@ -184,11 +184,12 @@ If an office is already running, `dev-team-office` opens its game instead of fai
 
 The same office can be seen in the browser at `http://127.0.0.1:4317`, **full screen**: everything goes inside the game.
 
-- **Two views:** the usual **front** view (the default) or the **isometric top-down** one: the floor as a rhombus, the window wall and a side wall, furniture as volumes and people standing, each one in front of or behind what it should be. Switch with **◇** (top right), with `v` or in ⚙ › General › Office view; it is saved.
+- **Two views:** the usual **front** view (the default) or the **isometric top-down** one: the floor as a rhombus, the window wall and a side wall, furniture as volumes and people standing, each one in front of or behind what it should be. The office is the top floor of a glass tower, with the window's landscape behind it (sky, weather and city). Switch with **◇** (top right), with `v` or in ⚙ › General › Office view; it is saved.
 - **⚙** (top right, or `c`): settings. **⛶** (or `f`): the browser's full screen. **🏢** (top left, or `o`): which office to watch, if the company has more than one.
 - **`>_`** (bottom left, or `a`): the **terminal** with the team's activity. Tabs *activity* (what the agent does and the office's life), *team* and *briefs* (the task, the flow, the pipelines and the tasks, with the demos). At the bottom it has a command line: what you type goes as a message to the team (or to the selected one); `/brief`, `/demo`, `/tdd`, `/reset`, `/settings`, `/office <name>`, `/life`, `/clear` and `/help` (in Spanish too: `/encargo`, `/oficina`, `/vida`, `/ayuda`…), and `btw <question>` to ask the agent on duty something. With the terminal closed, a counter tells you what is new.
 - **Click a character:** their **sheet**, like in The Sims: the green diamond over the head, what they are doing, their needs as bars, their last actions and buttons to greet them or write to them.
 - **Click the whiteboard** (or `t`): a new brief. `esc` closes the terminal or the sheet.
+- **Background services:** when an agent leaves a service running (a dev server with Claude Code's `run_in_background`, `npm run dev > dev.log 2>&1 &`…), a unit of the server rack lights up in cyan and the **▶** chip shows up in the HUD. **Click the rack** or the chip (or `l`): the list of services and a terminal with what the chosen one prints, live. Inside herdr, **⧉ Open in herdr** follows its log in a pane of its own (`tail -F`). The office only watches them: the agent starts and stops them.
 
 ## A company with several offices
 
@@ -291,8 +292,8 @@ The office's gear (top right, on the web and in the terminal; also with `c`):
 
 | Tab | What is there |
 |---|---|
-| General | **Language** (English by default, or Spanish: it changes everything live, on the web, in the terminal and in the log), the company's **time zone** (search by typing the city, the region or the country), real or simulated weather, office life in the log, the **office view** (front or isometric top-down), and herdr: agents in panes, each subagent in its pane, which way the pane opens and which agent opens at start |
-| Offices | The company's offices: name, time zone and location for the weather; view, edit and delete (their agents move to the main one) |
+| General | **Language** (English by default, or Spanish: it changes everything live, on the web, in the terminal and in the log), the company's **time zone** (search by typing the city, the region or the country) and its **city** (among the cities of that zone's country), real or simulated weather, office life in the log, the **office view** (front or isometric top-down), and herdr: agents in panes, each subagent in its pane, which way the pane opens and which agent opens at start |
+| Offices | The company's offices: name, time zone and city for the weather; view, edit and delete (their agents move to the main one) |
 | Agents | The maintainer: add (full path + CLI + office; it detects its harness as you type it), edit, delete and ✉ send it a prompt. Also the open sessions that are not registered |
 | Characters | Name, title, colors (shirt, pants, hair, skin), long hair, beard and glasses of each character of the office you are watching |
 
@@ -315,7 +316,7 @@ Everything is validated before writing, applied live, and a foreign website cann
 
 Any process can send the office events and listen to it:
 
-- **HTTP/JSON** at `http://127.0.0.1:4317/v1/…`: `POST /v1/events/<source>`, `GET /v1/state?office=`, `GET /v1/weather`, `GET|POST /v1/offices`, `GET|PUT /v1/settings`, `GET|POST /v1/panes`, `POST /v1/commands`.
+- **HTTP/JSON** at `http://127.0.0.1:4317/v1/…`: `POST /v1/events/<source>`, `GET /v1/state?office=`, `GET /v1/weather`, `GET|POST /v1/offices`, `GET|PUT /v1/settings`, `GET|POST /v1/panes`, `GET /v1/services`, `POST /v1/commands`.
 - **WebSocket** at `ws://127.0.0.1:4317/v1/ws`: live state and sending events, with an optional `ack`.
 - **Unix socket** at `~/.dev-team-office/office.sock`: the same API, accessible only to your user.
 
@@ -328,7 +329,7 @@ The full protocol (events, WebSocket messages, examples in Python and Node, and 
 
 ### The weather outside
 
-The office asks Open-Meteo for the weather every 15 minutes, for each office (the ones in the same city share it). The location comes from the office's time zone: its city's coordinates are in the zone table, so no geocoding is needed. To choose another one, set a **location** in ⚙ › Offices, with a name (`Valparaíso`) or with coordinates (`-33.45,-70.65`); `DEV_TEAM_OFFICE_LOCATION` does the same for all of them. Only that is sent: the name to locate it and the coordinates to ask for the weather. If it is turned off in ⚙ › General (or with `DEV_TEAM_OFFICE_WEATHER=off`) nothing is queried and the weather is simulated by season. The interfaces get the weather in the snapshot (`state.weather`) and, when it changes, in a `{ type: 'weather', weather, office }` message.
+The office asks Open-Meteo for the weather every 15 minutes, for each office (the ones in the same city share it). The place is the office's **city**. A time zone covers a whole region (in Chile, Concepción and Punta Arenas use Santiago's), so pick the city in ⚙ › General › City: type and it suggests the cities of the time zone's country, and the one you pick is saved with its coordinates. Each office can have its own (⚙ › Offices); the ones that inherit the company's time zone also inherit its city. Without a city, the time zone's is used (its coordinates are in the zone table). `dev-team-office config city Concepción` does the same from the terminal, and `DEV_TEAM_OFFICE_LOCATION` (a name or `-33.45,-70.65`) sets it for every office without one. The city also decides the sun, the moon and the simulated weather. Only that is sent: what you type to search for the city, and the coordinates to ask for the weather. If it is turned off in ⚙ › General (or with `DEV_TEAM_OFFICE_WEATHER=off`) nothing is queried and the weather is simulated by season. The interfaces get the weather in the snapshot (`state.weather`) and, when it changes, in a `{ type: 'weather', weather, office }` message.
 
 ## Integrations
 
@@ -356,7 +357,7 @@ Parallel tasks are identified by `tool_use_id`/`agent_id`, so each one lands on 
 
 - **Extension** ([`dev-team-office.ts`](integrations/pi/dev-team-office.ts)): when `pi` opens it starts the office if it is not running and registers the project (`/office` on demand); it reports the prompt, the tools and the agent's end; it receives tasks and pipelines.
 - **Subagents** (gentle-pi, pi-subagents): each one is another `pi` with the same extension. It reports to the parent's session and its work is done by the character of its `role:` (for example, everything `ex-qa` does is done by QA, in RED or GREEN depending on its label). gentle-pi's `todo` list goes to the whiteboard.
-- **Skill** ([`skills/dev-team-office`](skills/dev-team-office/SKILL.md), for any harness): the agent declares which role holds the turn and which phase it is in, for example `architect → qa RED → backend implements → qa GREEN → review → po accepts`. Each handover is animated in the office, and the tools are attributed to the role on duty. The event catalog and the flows are in [docs/events-by-role.md](docs/events-by-role.md).
+- **Skill** ([`skills/dev-team-office`](skills/dev-team-office/SKILL.md), for any harness): the agent declares which role holds the turn and which phase it is in, for example `architect → qa RED → backend implements → qa GREEN → review → analyst accepts`. Each handover is animated in the office, and the tools are attributed to the role on duty. The event catalog and the flows are in [docs/events-by-role.md](docs/events-by-role.md).
 
 ### Other agents
 

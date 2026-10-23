@@ -3,6 +3,7 @@
 
 export default {
   team: {
+    you: 'tú', // the PO is the user
     titles: { designer: 'Diseñadora', po: 'Product Owner', analyst: 'Analista de negocio', manager: 'Manager', frontend: 'Frontend', backend: 'Backend', qa: 'QA', tl: 'Tech Lead' },
   },
   needs: { social: 'Social', coffee: 'Café', bladder: 'Baño', dream: 'Imaginación', doubt: 'Dudas' },
@@ -63,6 +64,8 @@ export default {
     subtask: 'Subtarea: {text}',
     subDone: '✔ Listo: {text}',
     needOk: '¡Necesitamos tu OK! ✋',
+    askOk: '{name}, ¿me das el OK? ✋',
+    askYou: '{name}, te tengo una pregunta ❓',
     chatReplies: ['¡Anotado! 📝', 'Lo vemos en la daily 👍', 'Entendido 🙌', '¡Buena idea!'],
     btwThinking: ['Mmm, buena pregunta… 🤔', 'Déjame revisar… 🔍', 'Un segundo, lo busco 📚'],
     btwFail: 'No logré averiguarlo 🤷',
@@ -76,7 +79,7 @@ export default {
     release: 'Deploy{text}',
     cheers: ['¡Bien! 🎉', '¡Al fin!', '¡Deploy! 🚀', '¡Qué equipo!'],
     gossip: {
-      po: ['¿Vieron lo que pidió el cliente? 🙄', 'Todo es urgente, como siempre 😅', '¿Almorzamos juntas hoy? 🥗', '{manager} va por su quinto café ☕😂', 'El roadmap quedó precioso 📌'],
+      po: ['Ojalá esto salga hoy 🤞', 'Todo es urgente, como siempre 😅', '¿Almorzamos en grupo hoy? 🥗', '{manager} va por su quinto café ☕😂', 'El roadmap quedó precioso 📌'],
       analyst: ['Los números de ayer… ¡subieron! 📈', 'Encontré un dato buenísimo 🤓', '¿Vieron el dashboard nuevo? 📊', '{backend} juró que no era un bug 👀', 'Hice una planilla de las planillas 😂'],
       designer: ['¿Y si todo fuera violeta? 💜', 'Ese botón me quita el sueño 😱', 'Le falta aire a esa pantalla ✨', 'Les traje una paleta nueva 🎨', '¿Quién usó Comic Sans? 😤'],
     },
@@ -99,18 +102,15 @@ export default {
     answers: ['Hazlo simple, después refactorizamos 👍', 'Mándame el PR y lo miro 🔍', 'Sigue el ADR que acordamos 📐', 'Sí, pero agrégale un test 🧪', 'Sepáralo, va a crecer ♻️', 'Hagamos pair 5 minutos 👥'],
     thanks: ['¡Gracias! 🙌', 'Dale, voy 💪', 'Perfecto 👌', '¡Me salvaste! 😅'],
     tlAsks: {
-      po: ['{po}, ¿esto es prioridad o puede esperar? 📌', '{po}, ¿cuál es el MVP de esto?', 'Para eso necesitamos un spike técnico 🏛️'],
       analyst: ['{analyst}, ¿cuántos usuarios esperamos? 📈', '¿De dónde salen esos datos? 🗄️', '¿Qué reglas de negocio aplican aquí? 📑'],
       designer: ['{designer}, ¿ese mockup es factible? Lo vemos 🎨', 'Esa animación… ¿también en mobile? 😅', '¿Lo armamos con el design system? 🧩'],
     },
     tlReplies: {
-      po: ['Es prioridad, el cliente lo espera 📌', 'MVP primero, después iteramos ✨', 'Dale, lo agendo en la planning 🗂️'],
       analyst: ['Unos 10 mil al mes 📊', 'Te paso la planilla 🤓', 'Lo reviso con el negocio y te cuento 📑'],
       designer: ['¡Sí! Con microinteracciones ✨', 'Lo simplifico, prometido 💜', 'Todo sale del design system 🎨'],
     },
     tlThanks: ['Perfecto, con eso diseño la solución 🏛️', 'Ok, lo dejo en un ADR 📐', 'Buenísimo, gracias 🙌'],
     tlScope: {
-      po: ['{po}, antes de diseñar: ¿cuál es el alcance? 🏛️', '{po}, ¿qué es lo mínimo que tiene que salir? 📌'],
       analyst: ['{analyst}, ¿qué volumen de datos manejamos? 📈', '{analyst}, ¿qué reglas de negocio no puedo romper? 📑'],
       designer: ['{designer}, ¿tienes los mockups? Quiero ver los flujos 🎨'],
     },
@@ -134,7 +134,7 @@ export default {
     bathUrgent: ['¡No aguanto más! 😣', '¡Permiso, permiso! 🏃'],
     bathWait: ['¡Apúrate! 😣', '¿Queda mucho? 🙏', '🚻😬'],
     bathDone: ['¡Listo! 🧼', 'Ahhh… 😌', '¡Manos limpias! 🧼'],
-    reqArrived: '¡Llegó un requerimiento! «{text}»',
+    reqArrived: 'Tengo un requerimiento nuevo: «{text}»',
     reqMockups: '¡Yo hago los mockups! 🎨',
     reqAnalyze: 'Lo analizo 🧐',
     reqGo: '¡Vamos! ✨',
@@ -195,10 +195,10 @@ export default {
   events: {
     updateBoard: 'Actualiza el tablero', newCard: 'Nueva tarjeta: {text}', moveCard: 'Mueve una tarjeta', failed: 'Falló: {text}{detail}',
     thinking: 'Pensando…', waiting: 'El agente espera tu aprobación', error: 'Algo salió mal', compact: 'Ordena las notas (compacta el contexto)',
-    done: '¡Tarea terminada!', sessionStart: 'Nueva sesión de trabajo', sessionEnd: 'Sesión cerrada', you: 'Tú', office: 'Oficina', subtask: 'Subtarea',
+    done: '¡Tarea terminada!', sessionStart: 'Nueva sesión de trabajo', sessionEnd: 'Sesión cerrada', serviceUp: 'Levantó un servicio: {name}', serviceDown: 'El servicio se detuvo: {name}', you: 'Tú', office: 'Oficina', subtask: 'Subtarea',
     permission: 'Permiso para {tool}', interrupted: 'Interrumpido', turnEnd: 'termina su turno{text}',
     read: 'Leyendo {file}', write: 'Creando {file}', edit: 'Editando {file}', grep: 'Buscando "{pattern}"', glob: 'Revisando {pattern}', files: 'archivos',
-    websearch: 'Investigando: {query}', webfetch: 'Leyendo {host}', web: 'Leyendo una web', ask: 'Le pregunta algo al usuario',
+    websearch: 'Investigando: {query}', webfetch: 'Leyendo {host}', web: 'Leyendo una web', ask: 'Te pregunta algo', askWhat: 'Te pregunta: {question}',
     plan: 'Presenta el plan', planning: 'Planificando', skill: 'Usando skill {skill}', mcp: 'Usando {tool}', working: 'Trabajando',
   },
   task: {
@@ -215,6 +215,12 @@ export default {
   },
   targets: { openSession: 'sesión abierta', claudeTurn: 'Claude, al terminar su turno' },
   offices: { main: 'Oficina principal' },
+  services: {
+    title: 'Servicios en segundo plano', running: 'corriendo', since: 'desde las {time}', stopped: 'se detuvo a las {time}',
+    empty: 'No hay nada corriendo en segundo plano. Cuando un agente deja un servicio corriendo (un servidor de desarrollo, un watcher…), aparece aquí y enciende una unidad del rack.',
+    waiting: 'Esperando su salida…', noLog: 'Su log ya no está (puede que el agente lo haya borrado).',
+    openPane: '⧉ Abrir en herdr', paneOpened: 'Sus logs están en el pane {pane} de herdr.', keyPick: 'elegir',
+  },
   err: {
     pathMissing: 'falta la ruta', pathRelative: '{path}: usa la ruta completa (p. ej. ~/Workspace/mi-proyecto)', pathNotFound: '{path}: no existe esa carpeta',
     harness: 'elige el agente que atiende esa ruta: claude-code, opencode o pi', args: '{name}: args debe ser una lista de textos',
@@ -233,7 +239,7 @@ export default {
     sessionGone: 'esa sesión ya no está abierta', needsSession: '«{label}» lo corre una sesión abierta: abre {agent} en {path} con su integración', noPath: 'no existe {path}', notInstalled: 'no encuentro "{bin}" en el PATH',
     invalidMessage: 'mensaje inválido', registerWs: 'register sólo por WebSocket', updateWs: 'task_update sólo por WebSocket', unknownCommand: 'comando no disponible: {action}',
     unknownType: 'tipo desconocido: {type}', notFound: 'ruta no encontrada', fullPath: 'usa la ruta completa', hostDenied: 'host no permitido', originDenied: 'origen no permitido',
-    tooLarge: 'payload demasiado grande', noHerdr: 'no estás dentro de herdr (HERDR_ENV=1)', herdrFailed: 'herdr: {error}', paneMissing: 'falta el pane',
+    tooLarge: 'payload demasiado grande', noHerdr: 'no estás dentro de herdr (HERDR_ENV=1)', unknownService: 'no existe ese servicio', serviceNoLog: 'ese servicio no tiene un log que seguir', herdrFailed: 'herdr: {error}', paneMissing: 'falta el pane',
   },
   server: {
     started: 'Dev Team Office {version} en {url}', browser: '  Ábrela en el navegador: {urls}', api: '  API: POST /v1/events/<source> · GET /v1/state · WS /v1/ws{socket}',
@@ -255,6 +261,8 @@ export default {
     panes: '{n} pane(s)', tasks: '{n} tarea(s) en curso', agentsTitle: 'AGENTES', subDone: 'terminó', teamIdle: 'todos libres', more: '{n} más',
     none: 'Sin agentes todavía: abre uno (pi, claude, opencode…) en otro pane, o pide algo desde el juego en la web (o).',
     noHerdr: 'fuera de herdr', keys: 'o navegador · g juego · ←→ oficina · q {quit}', quit: 'salir', quitOffice: 'cerrar la oficina',
+    services: '{n} servicio(s) corriendo', servicesTitle: 'SERVICIOS', svcUp: 'corriendo · {ago}', svcDown: 'se detuvo hace {ago}', keysServices: '1-9 los logs de un servicio',
+    svcPane: 'Logs de {name} en el pane {pane}', svcNone: 'no hay un servicio con ese número',
   },
   // a subagent's pane (dev-team-office follow)
   follow: {
@@ -266,7 +274,7 @@ export default {
   conn: { live: 'en vivo', offline: 'desconectado', connecting: 'conectando…', connectingTo: 'conectando a {host}…', connectedTo: 'conectado a {host}', retrying: 'sin conexión con {host}, reintentando…' },
   tui: {
     msgTo: ' Mensaje para {name}: ', msgTeam: ' Mensaje al equipo: ', msgHint: '  Enter enviar · Esc cancelar ',
-    keys: { t: 'encargo (o clic en la pizarra)', c: 'ajustes ⚙', a: 'actividad >_', q: 'bitácora', tab: 'elegir', m: 'mensaje', b: 'btw (preguntar)', s: 'saludar', x: 'cancelar', d: 'demo', p: 'demo TDD', r: 'reiniciar', esc: 'soltar', o: 'oficina', quit: 'salir' },
+    keys: { t: 'encargo (o clic en la pizarra)', c: 'ajustes ⚙', a: 'actividad >_', q: 'bitácora', tab: 'elegir', m: 'mensaje', b: 'btw (preguntar)', s: 'saludar', x: 'cancelar', d: 'demo', p: 'demo TDD', r: 'reiniciar', esc: 'soltar', o: 'oficina', quit: 'salir', l: 'servicios (o clic en el rack)' },
     task: 'TAREA', noTaskYet: 'Sesión sin tarea todavía', waitingAgent: 'Esperando eventos de un agente…',
     stats: '{tools} acciones · {errors} errores · {subs} sub · {status}', flow: 'FLUJO', pipelines: 'PIPELINES', tasks: 'TAREAS',
     connected: '{n} agente(s) conectado(s)', team: 'EQUIPO', noActivity: 'Sin actividad', detail: 'DETALLE · {name}', nothingYet: 'Todavía no ha hecho nada.',
@@ -296,7 +304,9 @@ export default {
     keys: { field: 'campo', change: 'cambia', action: 'acción', save: 'guardar', close: 'cerrar', tabs: '◂ ▸ cambia de pestaña' },
     yes: 'sí', no: 'no',
     general: {
-      language: 'Idioma', timezone: 'Zona horaria', tzSystem: 'la del sistema ({tz})', tzHint: 'De la zona horaria salen la fecha, la hora, el país y el clima. Cada oficina puede tener la suya (⚙ › Oficinas).',
+      language: 'Idioma', timezone: 'Zona horaria', tzSystem: 'la del sistema ({tz})', tzHint: 'De la zona horaria salen la fecha, la hora y el país. Cada oficina puede tener la suya (⚙ › Oficinas).',
+      city: 'Ciudad', cityZone: 'la de la zona horaria ({city})', cityHint: 'De la ciudad salen el clima, el sol y la luna. Escribe para buscar entre las ciudades del país de la zona horaria: en Chile, por ejemplo, Concepción y Punta Arenas comparten la zona horaria de Santiago.',
+      cityNone: 'no hay una ciudad así en {country}', cityOffline: 'sin conexión: escribe la ciudad o sus coordenadas (lat, lon)',
       tzSearch: 'escribe para buscar (p. ej. Madrid)', country: 'País', weather: 'Clima real', weatherOn: 'sí (Open-Meteo, gratis)', weatherOff: 'no (simulado según la estación)',
       herdr: 'herdr', viewMode: 'Vista de la oficina', view_flat: 'Frontal (la de siempre)', view_iso: 'Cenital (isométrica)', herdrLaunch: 'Agentes en panes', herdrSubagents: 'Cada subagente en su pane', herdrDirection: 'Pane nuevo', right: 'a la derecha', down: 'abajo', startAgent: 'Agente al abrir', auto: 'automático (el de la carpeta)', none: 'ninguno',
       herdrOn: 'Dentro de herdr (pane {pane}): los agentes se abren en un pane nuevo y desde ahí pueden abrir más.', herdrOff: 'No estás dentro de herdr: los agentes se lanzan en segundo plano.',
@@ -304,7 +314,7 @@ export default {
     },
     offices: {
       hint: 'Cada oficina es un equipo o dominio, como en una empresa de verdad: sus agentes, sus personajes, su zona horaria y su clima. Arriba a la izquierda eliges cuál ver (si hay más de una).',
-      name: 'Nombre', timezone: 'Zona horaria', inherit: 'la de la empresa ({tz})', location: 'Ubicación (clima)', locationPh: '(la ciudad de la zona horaria)',
+      name: 'Nombre', timezone: 'Zona horaria', inherit: 'la de la empresa ({tz})', location: 'Ciudad (clima)', locationPh: 'la de la zona horaria ({city})', cityInherit: 'la de la empresa ({city})',
       agents: '{n} agente(s)', viewing: '● la que estás mirando', main: 'principal', view: 'Ver', edit: 'Editar', delete: 'Eliminar', add: '＋ Agregar oficina', saveChanges: 'Guardar cambios',
       newTitle: 'Nueva oficina', editTitle: 'Editar «{name}»', created: 'Listo: «{name}» ya es parte de la empresa.', updated: 'Oficina actualizada.', deleted: 'Oficina eliminada (sus agentes pasaron a la principal).',
       confirmDelete: '¿Eliminar la oficina «{name}»? Sus agentes pasan a la principal; sus carpetas no se tocan.', cancel: 'Cancelar',
@@ -327,13 +337,13 @@ export default {
     look: {
       hint: 'Cómo se ven y cómo se llaman los personajes de esta oficina. Cada uno sigue representando su rol (QA, backend…).',
       character: 'Personaje', name: 'Nombre', title: 'Cargo', shirt: 'Camisa', pants: 'Pantalón', hair: 'Pelo', skin: 'Piel', long: 'Pelo largo', beard: 'Barba', glasses: 'Lentes',
-      random: '🎲 Al azar', reset: '↺ Volver al original', randomTitle: 'Al azar', resetTitle: 'Volver al original', role: 'rol: {role}', preview: 'Vista previa de {name}', of: '{label} de {name}',
+      random: '🎲 Al azar', reset: '↺ Volver al original', randomTitle: 'Al azar', resetTitle: 'Volver al original', role: 'rol: {role}', you: 'eres tú', preview: 'Vista previa de {name}', of: '{label} de {name}',
       saved: 'Listo: el equipo ya luce así en la oficina.',
     },
   },
   ui: {
     canvas: 'La oficina: clic en un personaje para ver su ficha, en la pizarra para un nuevo encargo',
-    settings: 'Ajustes', settingsKey: 'Ajustes (c)', fullscreen: 'Pantalla completa', fullscreenKey: 'Pantalla completa (f)', view: 'Vista frontal o cenital', viewKey: 'Vista frontal o cenital (v)',
+    settings: 'Ajustes', settingsKey: 'Ajustes (c)', fullscreen: 'Pantalla completa', fullscreenKey: 'Pantalla completa (f)', view: 'Vista frontal o cenital', viewKey: 'Vista frontal o cenital (v)', servicesKey: 'Servicios en segundo plano: {n} corriendo (l)',
     office: 'Oficina', officeKey: 'Elige qué oficina ver (o)',
     sheetClose: 'Cerrar ficha', poke: '👋 Saludar', message: '✉ Mensaje', subagents: '{n} subagente(s)', nothingYet: 'Todavía no ha hecho nada en esta sesión.',
     mood: { bath: 'en el baño 🚻', bathWait: 'esperando el baño 😣', dream: 'sueña con {dream} {emoji}', lunch: 'almorzando {food}', fire: '¡apagando el incendio! 🧯', talking: 'conversando 💬' },
@@ -387,7 +397,7 @@ Uso:
   dev-team-office offices set <id> [--name …] [--timezone …] [--location …]
   dev-team-office offices rm <id>
   dev-team-office config [clave] [valor]
-                                  Los ajustes (en la base SQLite): lang en|es, timezone <zona>|system,
+                                  Los ajustes (en la base SQLite): lang en|es, timezone <zona>|system, city <ciudad>|zone,
                                   weather on|off, herdr.launch on|off, herdr.subagents on|off, herdr.direction right|down,
                                   herdr.startAgent auto|none|<id>, log.life on|off, view.office <id>, view.mode flat|iso.
   dev-team-office agents          El mantenedor de agentes: los registrados y lo que trae su harness.

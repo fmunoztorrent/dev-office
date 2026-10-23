@@ -7,9 +7,12 @@
 // it does when nobody asks it for anything. The product NPCs (PO, analyst, designer) sit together
 // and chit-chat; the designer dreams of unicorns and rainbows, QA of skulls and the devs of pizza;
 // the technical people sometimes go consult the TL and the TL sometimes goes to talk with product;
-// the manager hands out the requirements and makes rounds. The office also has its own life: at
-// 13:00 the team goes to lunch in the dining room, there is a bathroom (one at a time, with a
-// queue) and sometimes the server catches fire and the technical team puts it out and repairs it.
+// the manager hands out the requirements and makes rounds. The PO is the user: the PO brings your
+// requests, the agent's questions and permissions go to the PO's desk, and the PO never decides
+// anything alone (chit-chat yes; pitching ideas or answering scope questions, no). The office
+// also has its own life: at 13:00 the team goes to lunch in the dining room, there is a bathroom
+// (one at a time, with a queue) and sometimes the server catches fire and the technical team puts
+// it out and repairs it.
 // The texts (dialogs, log) are in the game's languages (i18n.js, locales/).
 // What happens "sometimes" always has a random factor: the need fills up and then a roll has to
 // be won for it to happen.
@@ -483,8 +486,13 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   const later = (ms, fn) => timers.push({ at: simNow + ms, fn });
   let tz = validZone(zone) ? zone : null;
   const wallDate = () => zoned(wall(), tz);
-  // without real weather, it is simulated in the time zone's city
-  const simPlace = () => { const z = zoneInfo(tz || systemZone()); return { lat: z.lat, lon: z.lon, place: z.city }; };
+  // without real weather, it is simulated in the office's city (by default, the time zone's)
+  let city = null;
+  const simPlace = () => {
+    if (Number.isFinite(city?.lat)) return { lat: city.lat, lon: city.lon, place: city.name };
+    const z = zoneInfo(tz || systemZone());
+    return { lat: z.lat, lon: z.lon, place: z.city };
+  };
   const minutesOfDay = () => { const d = wallDate(); return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60; };
   const dayKey = () => { const d = wallDate(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
 
@@ -567,6 +575,16 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
       }
       case 'tool_start':
         if (!a) break;
+        if (/^(askuserquestion|question)$/i.test(ev.tool || '') && a.id !== 'po') {
+          // the agent asks you something: you both leave what you were doing and whoever asks goes to
+          // your desk (the PO's) with the question
+          const po = agents.po;
+          banner = { text: `❓ ${ev.text}`, tone: 'chat', until: now + 12_000 };
+          interrupt(a); summon(po);
+          if (!po.hidden && !a.hidden) visit(a, 'po', T('sim.askYou', { name: po.cfg.name }), { stay: 3000 });
+          else a.say(T('sim.askYou', { name: po.cfg.name }), 4000);
+          break;
+        }
         work(a, ev.text, ev.phase === 'red' ? 'red' : 'working', ev.phase === 'red' ? 10_000 : 6000);
         emit(a.cfg.seat.x + 34, a.cfg.seat.y - 50, 3, 'code', a.cfg.shirt);
         if (DEVS.includes(ev.role)) lastDev = ev.role;
@@ -620,12 +638,20 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         // small note for a finished subtask: the big celebration is saved for 'done' (merge)
         emit(a.x, a.y - 60, 1, 'check');
         break;
-      case 'waiting':
-        agents.manager.handUp = true;
-        agents.manager.setState('waiting', 60_000);
-        agents.manager.say(T('sim.needOk'), 8000, 'warn');
+      case 'waiting': {
+        // the agent needs your OK: you both leave what you were doing and Marco goes to your desk
+        // (the PO's) to ask for it, hand up. Another wait while this one is open does not send him again.
+        const m = agents.manager, po = agents.po;
+        if (!m.handUp) {
+          interrupt(m); summon(po);
+          if (!po.hidden && !m.hidden) visit(m, 'po', T('sim.askOk', { name: po.cfg.name }), { stay: 3000 });
+          else m.say(T('sim.needOk'), 8000, 'warn');
+        }
+        m.handUp = true;
+        m.setState('waiting', 60_000);
         banner = { text: `⚠  ${ev.text}`, tone: 'warn', until: now + 60_000 };
         break;
+      }
       case 'error':
         if (!a) break;
         a.setState('blocked', 6000);
@@ -647,16 +673,17 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         break;
       case 'chat': {
         banner = { text: `💬 ${ev.from}: ${ev.text}`, tone: 'chat', until: now + 7000 };
-        const who = a || agents.po;
+        const who = a && a.id !== 'po' ? a : agents.manager; // you are the PO: the team answers you
         who.say(P(L('sim.chatReplies')), 3500);
         break;
       }
-      // btw: a side question to the agent on duty. Whoever holds the turn (or the PO) stays thinking
-      // and then answers out loud; the full answer stays in the log.
+      // btw: a side question to the agent on duty. You (the PO) ask it out loud; whoever holds the
+      // turn (or the TL) stays thinking and then answers; the full answer stays in the log.
       case 'btw': {
-        const who = a || agents.po;
+        const who = a && a.id !== 'po' ? a : agents.tl;
         if (ev.phase === 'ask') {
           banner = { text: `❓ btw · ${ev.from}: ${short(ev.text, 90)}`, tone: 'chat', until: now + 8000 };
+          if (!agents.po.hidden) agents.po.say(`❓ ${short(ev.text, 60)}`, 4500);
           who.setState('thinking', 120_000);
           who.say(P(L('sim.btwThinking')), 5000);
         } else if (ev.phase === 'answer') {
@@ -845,6 +872,15 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     if (busy && !a.seated) { clearQueue(a); a.goHome(); }
   }
 
+  /** The agent needs you (the PO): you leave what you were doing, unless you are in the bathroom,
+   *  and go back to your desk. */
+  function summon(po) {
+    interrupt(po);
+    if (po.hidden || bath.occupant === po.id) return;
+    clearQueue(po);
+    if (!po.seated) po.goHome();
+  }
+
   /**
    * A conversation: the participants go to `spot` (or stay where they are if it is null) and
    * talk in turns. lines: [[who, text], …]
@@ -902,11 +938,12 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     if (chance(0.5)) lines.push([a.id, P([...L('sim.replies'), gossipLine(a.id)])]);
     // sitting together they chit-chat from the desk; sometimes they meet at the café or the sofa
     const spot = chance(0.55) ? null : P([{ x: COUNTER_SPOTS[0].x, y: COUNTER_SPOTS[0].y + 4 }, SPOT.sofa, { x: 210, y: CORRIDOR_TOP + 4 }]);
-    // and sometimes an idea comes out of the chat and they take it to the manager
-    const idea = chance(0.2) && agents.manager.free;
+    // and sometimes an idea comes out of the chat and they take it to the manager (not you, the PO:
+    // what goes to the backlog is your call)
+    const pitcher = chance(0.2) && agents.manager.free ? members.map((id) => agents[id]).find((x) => x.id !== 'po') : null;
     scene(spot ? 'gossip' : 'deskchat', members, lines, {
       spot,
-      after: () => { if (idea) pitchIdea(a); emit(agents[members[0]].x, agents[members[0]].y - 70, 3, 'emote', null, P(['😂', '💬', '✨', '💜'])); },
+      after: () => { if (pitcher) pitchIdea(pitcher); emit(agents[members[0]].x, agents[members[0]].y - 70, 3, 'emote', null, P(['😂', '💬', '✨', '💜'])); },
     });
     for (const id of members) { agents[id].mind.social = -R(0, 0.4); agents[id].setState('talking', 4000); }
     return true;
@@ -959,10 +996,11 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     return true;
   }
 
-  /** The architect goes to talk with someone from product (priorities, data, designs). */
+  /** The architect goes to talk with someone from product (data, designs). Not with you, the PO:
+   *  the agent asks you for real (AskUserQuestion), it is not made up. */
   function archChat(tl, { target: want, asks = 'sim.tlAsks' } = {}) {
     if (!tl.free) return false;
-    const who = PRODUCT.filter((id) => agents[id].free);
+    const who = PRODUCT.filter((id) => id !== 'po' && agents[id].free);
     if (!who.length) return false;
     const target = agents[who.includes(want) ? want : P(who)];
     const s = target.cfg.seat;
@@ -1304,7 +1342,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         if (!a) break;
         if (['ux', 'ui', 'revision-visual'].includes(ev.phase) && a.id === 'designer') a.mind.dream = Math.max(a.mind.dream, 0.85);
         if (['arquitectura', 'adr', 'planifica'].includes(ev.phase) && a.id === 'tl') {
-          later(R(9000, 14_000), () => { if (chance(0.7)) archChat(agents.tl, { target: P(['po', 'analyst']), asks: 'sim.tlScope' }); });
+          later(R(9000, 14_000), () => { if (chance(0.7)) archChat(agents.tl, { target: 'analyst', asks: 'sim.tlScope' }); });
         }
         if (['historia', 'criterios', 'requisitos', 'analiza'].includes(ev.phase) && PRODUCT.includes(a.id)) {
           later(R(7000, 11_000), () => { if (chance(0.5)) feasibility(a); });
@@ -1521,6 +1559,8 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     date: () => wallDate(),
     get zone() { return tz; },
     setZone(z) { tz = validZone(z) ? z : null; },
+    /** The office's city ({ name, lat, lon }; null: the time zone's). */
+    setPlace(p) { city = p && Number.isFinite(p.lat) && Number.isFinite(p.lon) ? p : null; },
     setWeather(w) { weather = w && WEATHER[w.kind] ? w : null; },
     watchTV: (id, opts) => watchTV(agents[id], opts),
     setBoard(session) {

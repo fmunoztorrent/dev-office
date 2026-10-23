@@ -103,7 +103,7 @@ export class AskDesk extends EventEmitter {
     const cmd = askCommand(duty.harness, { question: this.#prompt(clip(question, 600), officeId, duty), session: duty.session, bin: duty.bin });
     if (cmd.error) return { ok: false, error: cmd.code === 'missing' ? t('err.notInstalled', { bin: cmd.bin }) : cmd.error };
 
-    const role = duty.turn || 'po';
+    const role = duty.turn || 'tl'; // who answers you (you, the PO, are the one asking)
     const ask = {
       id: `btw-${Date.now().toString(36)}-${++seq}`, office: officeId, agent: duty.harness, agentId: duty.agentId, session: duty.session, cwd: duty.cwd,
       question: clip(question, 600), answer: null, status: 'asking', error: null, from: clip(from || t('events.you'), 30), forked: !!cmd.forked, role, createdAt: Date.now(),

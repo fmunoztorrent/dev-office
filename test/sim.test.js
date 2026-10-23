@@ -83,6 +83,43 @@ test('un requerimiento: la PO se lo lleva al manager y él lo reparte según la 
   assert.ok(sim.agents.po.seated && sim.agents.manager.seated, 'y vuelven a sus puestos');
 });
 
+test('la PO eres tú: el agente va a tu escritorio a pedirte el OK y a hacerte sus preguntas', () => {
+  const { sim, said, run } = office(5);
+  const m = sim.agents.manager, po = sim.agents.po;
+  const atYourDesk = () => !m.seated && Math.hypot(m.x - (TEAM.po.seat.x + 62), m.y - (TEAM.po.seat.y - 6)) < 4;
+  // even if you were away from your desk for a while: you go back to it
+  po.goTo(SOFA.side).wait(120_000).goHome();
+  run(6);
+  assert.ok(!po.seated, 'te habías ido al sofá');
+  sim.handle({ kind: 'waiting', role: 'manager', text: 'Claude necesita permiso para usar Bash' });
+  sim.handle({ kind: 'waiting', role: 'manager', text: 'Claude necesita permiso para usar Bash' }); // a repeated notice
+  let went = false;
+  run(20, () => { if (atYourDesk()) went = true; });
+  assert.ok(went, 'Marco fue a tu escritorio');
+  assert.ok(po.seated, 'y tú volviste a él');
+  assert.equal(said.filter((s) => s.who === 'manager' && /¿me das el OK/.test(s.text)).length, 1, 'una sola vez');
+  assert.ok(said.some((s) => s.who === 'manager' && /Sofía, ¿me das el OK\?/.test(s.text)));
+  assert.ok(m.handUp && sim.banner?.tone === 'warn', 'y espera tu OK con la mano arriba');
+  run(10);
+  sim.handle({ kind: 'tool_start', role: 'manager', tool: 'AskUserQuestion', text: 'Te pregunta: ¿Postgres o SQLite?' });
+  assert.ok(!m.handUp, 'tu respuesta lo destrabó');
+  went = false;
+  run(15, () => { if (atYourDesk()) went = true; });
+  assert.ok(went, 'y vuelve con la pregunta');
+  assert.ok(said.some((s) => s.who === 'manager' && /Sofía, te tengo una pregunta/.test(s.text)));
+  assert.equal(sim.agents.po.state === 'working', false, 'tú no te pones a trabajar');
+});
+
+test('la PO eres tú: cotorrea, pero no lleva ideas al backlog ni contesta alcances por su cuenta', () => {
+  const { sim, run } = office(11);
+  for (let i = 0; i < 8; i++) { sim.handle({ kind: 'phase', role: 'tl', phase: 'arquitectura', text: 'módulo de pagos' }); run(90); }
+  const j = sim.journal;
+  assert.ok(j.some((x) => ['gossip', 'deskchat'].includes(x.kind) && [x.who, ...(x.with || [])].includes('po')), 'cotorrea con el resto');
+  assert.ok(j.some((x) => x.kind === 'archchat'), 'el TL sí va donde producto');
+  assert.ok(!j.some((x) => x.kind === 'archchat' && x.with.includes('po')), 'pero no a preguntarte el alcance');
+  assert.ok(!j.some((x) => x.kind === 'idea' && x.who === 'po'), 'ni llevas ideas que no diste');
+});
+
 test('trabajando, los técnicos a veces van a consultar al TL (no siempre)', () => {
   const { sim, said, run } = office(5);
   // Diego and Andrés work all the time; Lucía does nothing
@@ -264,8 +301,8 @@ test('lo que hace el harness se ve en la oficina: arquitectura → el TL va dond
   sim.handle({ kind: 'phase', role: 'tl', phase: 'arquitectura', text: 'diseño del módulo de pagos' });
   run(40);
   const chat = sim.journal.find((j) => j.kind === 'archchat');
-  assert.ok(chat && ['po', 'analyst'].includes(chat.with[0]), JSON.stringify(chat));
-  assert.ok(said.some((s) => s.who === 'tl' && /alcance|mínimo|volumen|reglas de negocio/.test(s.text)));
+  assert.ok(chat && ['analyst', 'designer'].includes(chat.with[0]), JSON.stringify(chat)); // not you, the PO
+  assert.ok(said.some((s) => s.who === 'tl' && /volumen|reglas de negocio|mockups/.test(s.text)));
   sim.agents.designer.mind.dream = 0;
   sim.handle({ kind: 'phase', role: 'designer', phase: 'ux', text: 'flujo de pago' });
   run(25);
@@ -421,4 +458,15 @@ test('mientras el agente espera tu OK, uno se toma un café y otro se pone a ver
   run(10);
   const tv = sim.journal.find((j) => j.kind === 'tv');
   assert.ok(tv && /esperan tu OK/.test(tv.text));
+});
+
+test('sin clima real, el clima simulado (y el sol) es el de la ciudad de la oficina, no el de la zona', () => {
+  const sim = createSim({ zone: 'America/Santiago', wall: () => Date.UTC(2026, 11, 21, 15) });
+  assert.equal(sim.weather.place, 'Santiago');
+  const santiago = sim.weather.sunset;
+  sim.setPlace({ name: 'Punta Arenas', lat: -53.16, lon: -70.91 });
+  assert.deepEqual([sim.weather.place, sim.weather.lat], ['Punta Arenas', -53.16]);
+  assert.ok(sim.weather.sunset > santiago + 0.5, 'en el sur, en verano, el sol se pone más tarde');
+  sim.setPlace(null);
+  assert.equal(sim.weather.place, 'Santiago');
 });

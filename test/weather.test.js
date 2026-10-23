@@ -3,7 +3,7 @@ import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import WebSocket from 'ws';
-import { Weather } from '../server/weather.js';
+import { Weather, findPlaces } from '../server/weather.js';
 import { startServer } from '../server/server.js';
 
 const FORECAST = (code = 3, temp = 13.5) => ({
@@ -91,5 +91,46 @@ test('la oficina comparte el clima: en el estado y en vivo por WebSocket', async
   } finally {
     ws.close();
     await server.close();
+  }
+});
+
+test('la ciudad elegida (nombre y coordenadas) no se vuelve a buscar: el clima es el de esas coordenadas', async () => {
+  const { fetch, calls } = fakeFetch({ 'api.open-meteo.com': () => FORECAST(3) });
+  const w = new Weather({ fetch, timezone: 'America/Santiago', location: 'Concepción, Región del Biobío (-36.8270, -73.0498)', enabled: true });
+  const out = await w.refresh();
+  assert.equal(calls.length, 1, 'sin geocodificar');
+  assert.equal(new URL(calls[0]).searchParams.get('latitude'), '-36.827');
+  assert.equal(out.place, 'Concepción, Región del Biobío');
+});
+
+const CITIES = { results: [
+  { name: 'Concepción', admin1: 'Región del Biobío', country_code: 'CL', latitude: -36.82699, longitude: -73.04977 },
+  { name: 'Concepción', admin1: 'Tucumán', country_code: 'AR', latitude: -27.34, longitude: -65.59 },
+] };
+
+test('el buscador de ciudades: sólo las del país de la zona horaria, con lo que se guarda', async () => {
+  const { fetch, calls } = fakeFetch({ 'geocoding-api.open-meteo.com': () => CITIES });
+  const hits = await findPlaces('Conce', { country: 'CL', fetch, lang: 'es' });
+  const q = new URL(calls[0]).searchParams;
+  assert.deepEqual([q.get('name'), q.get('countryCode'), q.get('language')], ['Conce', 'CL', 'es']);
+  assert.deepEqual(hits.map((h) => [h.label, h.location]), [['Concepción, Región del Biobío', 'Concepción, Región del Biobío (-36.8270, -73.0498)']]);
+  assert.deepEqual(await findPlaces('C', { country: 'CL', fetch }), [], 'con una letra no busca');
+  assert.equal(calls.length, 1);
+});
+
+test('el servidor busca ciudades en el país de la zona horaria; sin conexión lo dice', async () => {
+  const { fetch, calls } = fakeFetch({ 'geocoding-api.open-meteo.com': () => CITIES });
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false, places: { fetch } });
+  const off = await startServer({ port: 0, socket: null, db: ':memory:', weather: false, places: false });
+  try {
+    const r = await (await globalThis.fetch(`${server.url}/v1/places?q=Conce&timezone=America/Santiago`)).json();
+    assert.equal(r.country, 'CL');
+    assert.equal(new URL(calls[0]).searchParams.get('countryCode'), 'CL');
+    assert.deepEqual(r.places.map((p) => p.name), ['Concepción']);
+    const o = await (await globalThis.fetch(`${off.url}/v1/places?q=Conce&timezone=Europe/Madrid`)).json();
+    assert.deepEqual([o.offline, o.places, o.country], [true, [], 'ES']);
+  } finally {
+    await server.close();
+    await off.close();
   }
 });

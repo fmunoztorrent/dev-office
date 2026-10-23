@@ -455,6 +455,12 @@ test('plugin de OpenCode: corre el pipeline en su sesión con el modelo de cada 
       assert.equal(bash.role, 'qa');
       assert.equal(server.office.sessionSummary('ses_hija'), null, 'la sesión hija no es otra sesión del equipo');
       assert.ok(!server.office.log.some((e) => e.session === 'ses_1' && e.kind === 'turn_end' && e.ts >= bash.ts), 'el fin de turno de la hija no es del padre');
+
+      // a command left in the background with its output in a file: a service the office lists
+      await hooks['tool.execute.before']({ sessionID: 'ses_1', tool: 'bash', callID: 'c3' }, { args: { command: 'npm run dev > dev.log 2>&1 &' } });
+      await hooks['tool.execute.after']({ sessionID: 'ses_1', tool: 'bash', callID: 'c3' }, { metadata: { exit: 0 } });
+      const svc = await until(() => server.services.list('main').find((s) => s.name === 'npm run dev'));
+      assert.deepEqual([svc.agent, svc.session, path.basename(svc.log)], ['opencode', 'ses_1', 'dev.log']);
     });
   } finally {
     await server.close();

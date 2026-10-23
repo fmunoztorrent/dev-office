@@ -52,6 +52,10 @@ export const harnessId = (h) => ({ claude: 'claude-code', 'claude-code': 'claude
 
 const clip = (s, n) => { s = String(s ?? '').trim(); return s.length > n ? `${s.slice(0, n - 1)}…` : s; };
 export const normRole = (r) => { const k = String(r ?? '').toLowerCase().trim(); return ROLE_IDS.includes(k) ? k : ROLE_ALIASES[k] || null; };
+// The PO is the user (they give the orders and decide what gets done): an agent never plays it.
+// What an agent would do as PO (stories, criteria, priorities, acceptance) is the analyst's.
+export const AGENT_ROLE_IDS = ROLE_IDS.filter((r) => r !== 'po');
+export const agentRole = (r) => { const k = normRole(r); return k === 'po' ? 'analyst' : k; };
 export const normPhase = (p) => {
   const k = String(p ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, '-').slice(0, 30);
   return PHASE_ALIASES[k] || k;
@@ -201,8 +205,8 @@ export function resolvePipeline(id, raw, team = {}, agents = {}) {
   if (!list.length) issues.push('el pipeline no tiene etapas');
   const stages = list.map((s, i) => {
     const sid = String(s.id || `etapa-${i + 1}`).replace(/[^\w-]/g, '-').slice(0, 40);
-    const role = normRole(s.role) || 'tl';
-    if (s.role && !normRole(s.role)) issues.push(`${sid}: rol desconocido "${s.role}" (usa ${ROLE_IDS.join(', ')})`);
+    const role = agentRole(s.role) || 'tl';
+    if (s.role && !agentRole(s.role)) issues.push(`${sid}: rol desconocido "${s.role}" (usa ${AGENT_ROLE_IDS.join(', ')})`);
     const roleCfg = team.roles?.[role] || {};
     const harness = harnessId(s.harness || roleCfg.harness) || defaultHarness;
     const agent = s.agent ?? roleCfg.agent ?? null;
@@ -212,7 +216,7 @@ export function resolvePipeline(id, raw, team = {}, agents = {}) {
       id: sid,
       name: String(s.name || sid).slice(0, 60),
       role,
-      phase: normPhase(s.phase || DEFAULT_PHASE[role]),
+      phase: normPhase(s.phase || DEFAULT_PHASE[normRole(s.role)] || DEFAULT_PHASE[role]),
       harness,
       agent,
       native: !!def?.native,
@@ -269,7 +273,7 @@ export function catalogEntry(project) {
 export const SUBAGENT_ROLES = {
   pipeline: 'manager', spec: 'analyst', architect: 'tl', qa: 'qa', backend: 'backend', frontend: 'frontend', explore: 'analyst',
   researcher: 'analyst', 'sdd-init': 'manager', 'sdd-onboard': 'manager', 'sdd-status': 'manager', 'sdd-explore': 'analyst',
-  'sdd-research': 'analyst', 'sdd-proposal': 'po', 'sdd-spec': 'analyst', 'sdd-design': 'tl', 'sdd-tasks': 'manager',
+  'sdd-research': 'analyst', 'sdd-proposal': 'analyst', 'sdd-spec': 'analyst', 'sdd-design': 'tl', 'sdd-tasks': 'manager',
   'sdd-apply': 'backend', 'sdd-remediate': 'backend', 'sdd-verify': 'qa', 'sdd-archive': 'manager', 'gentle-ai-explore': 'analyst',
   'gentle-ai-worker': 'backend', 'gentle-ai-verify': 'qa', 'review-risk': 'tl', 'review-readability': 'tl', 'review-reliability': 'tl',
   'review-resilience': 'tl', 'jd-judge-a': 'tl', 'jd-judge-b': 'tl', 'jd-fix-agent': 'backend',
@@ -280,7 +284,7 @@ export const hasDeclaredRole = (declared) => declared !== undefined && declared 
 
 // The role a text suggests (a subagent's description, a task's label). null if nothing matches.
 export const TEXT_RULES = [
-  ['po', /product|producto|user stor|historias? de usuario|backlog|priori|roadmap|acceptance|aceptaci[oó]n|criterios?/i],
+  ['analyst', /product|producto|user stor|historias? de usuario|backlog|priori|roadmap|acceptance|aceptaci[oó]n|criterios?/i],
   ['qa', /\bqa\b|\btests?\b|testing|pruebas?\b|\be2e\b|end-to-end|regresi[oó]n|verificar|verify|calidad|quality|cobertura|coverage/i],
   ['designer', /dise[ñn]|design|\bux\b|figma|mockup|wireframe|paleta|palette|tipograf|typograph|brand|marca|icono|icon|logo|visual/i],
   ['frontend', /front|\bui\b|css|component|react|vue|svelte|p[aá]gina|\bpage|layout|responsive|html|browser|navegador|vista/i],
@@ -309,9 +313,9 @@ export function projectRoot(dir) {
 // replaced by a guess); a blank declaration is an attempt without a value and falls back to the
 // legacy heuristic (but is reported); without a declaration, the legacy heuristic is used (SUBAGENT_ROLES + name).
 export const roleOfAgent = (name, declared) => {
-  if (hasDeclaredRole(declared)) return normRole(declared);
+  if (hasDeclaredRole(declared)) return agentRole(declared);
   const k = String(name || '').toLowerCase();
-  return SUBAGENT_ROLES[k] || normRole(k) || null;
+  return SUBAGENT_ROLES[k] || agentRole(k) || null;
 };
 
 // Errementari (https://github.com/fmunoztorrent/errementari): the `pipeline` agent classifies the
@@ -428,7 +432,7 @@ export function detectHarness(dir) {
     //   non-empty and not normalizable → null, left out of the map, and reported
     //   missing → legacy heuristic, not reported
     if (hasDeclaredRole(declared)) {
-      if (!r) roleIssues.push(`rol desconocido "${declared}" declarado por el agente "${a.name}" (usa ${ROLE_IDS.join(', ')})`);
+      if (!r) roleIssues.push(`rol desconocido "${declared}" declarado por el agente "${a.name}" (usa ${AGENT_ROLE_IDS.join(', ')})`);
     } else if (declared !== undefined) {
       roleIssues.push(`rol en blanco declarado por el agente "${a.name}"`);
     }

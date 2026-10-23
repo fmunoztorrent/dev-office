@@ -32,6 +32,7 @@ export const MAIN_OFFICE = 'main';
 export const DEFAULT_PREFS = {
   lang: DEFAULT_LANGUAGE,       // the game's language: en | es
   timezone: null,               // the company's time zone (null: the system's); each office may have its own
+  city: null,                   // the company's city, in that zone's country (null: the zone's city): weather, sun and moon
   weather: true,                // query the real weather (Open-Meteo); otherwise it is simulated by season
   herdr: { launch: true, direction: 'right', startAgent: 'auto', subagents: true }, // inside herdr: the agents (and each subagent) in panes
   log: { life: false },         // the terminal log also shows the office's life
@@ -311,11 +312,16 @@ export class Store {
     return this.#write(() => {
       if (!isObj(patch)) fail(t('err.prefValue', { key: 'prefs' }));
       const next = this.getPrefs();
+      const zone = next.timezone;
       const bool = (key, v) => (typeof v === 'boolean' ? v : fail(t('err.prefValue', { key })));
       for (const [k, v] of Object.entries(patch)) {
         switch (k) {
           case 'lang': if (!isLanguage(v)) fail(t('err.language', { lang: v })); next.lang = v; break;
           case 'timezone': if (v !== null && !validZone(v)) fail(t('err.timezone', { tz: v })); next.timezone = v || null; break;
+          case 'city':
+            if (v !== null && typeof v !== 'string') fail(t('err.prefValue', { key: k }));
+            next.city = String(v ?? '').trim().slice(0, 80) || null;
+            break;
           case 'weather': next.weather = bool(k, v); break;
           case 'herdr':
             if (!isObj(v)) fail(t('err.prefValue', { key: k }));
@@ -344,6 +350,8 @@ export class Store {
           default: fail(t('err.pref', { key: k }));
         }
       }
+      // another time zone (another country, perhaps): the city goes back to the zone's, unless one came too
+      if (next.timezone !== zone && !('city' in patch)) next.city = null;
       this.#put('prefs', next);
       return { ok: true, prefs: next };
     });

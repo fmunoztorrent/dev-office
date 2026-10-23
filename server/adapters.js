@@ -4,6 +4,7 @@
 //
 // kind: session_start | task | thinking | tool_start | tool_end | subagent_start | subagent_end
 //       | todos | waiting | error | compact | turn_end | done | session_end | chat | pane_open | pane_close | pane_state
+//       | service_start | service_stop (a service left running in the background: server/services.js)
 
 import { t } from '../public/i18n.js';
 
@@ -31,7 +32,11 @@ function fromClaudeCode(p) {
     case 'PreToolUse':
       return { ...b, kind: 'tool_start', tool: p.tool_name, input: p.tool_input, toolUseId: p.tool_use_id };
     case 'PostToolUse':
-      return { ...b, kind: 'tool_end', tool: p.tool_name, input: p.tool_input, toolUseId: p.tool_use_id, ok: !isError(p.tool_response), output: outputOf(p.tool_response) };
+      return {
+        ...b, kind: 'tool_end', tool: p.tool_name, input: p.tool_input, toolUseId: p.tool_use_id, ok: !isError(p.tool_response), output: outputOf(p.tool_response),
+        // a command left running in the background (run_in_background): a service
+        ...(p.tool_response?.backgroundTaskId ? { backgroundTaskId: String(p.tool_response.backgroundTaskId) } : {}),
+      };
     case 'PostToolUseFailure':
       return { ...b, kind: 'tool_end', tool: p.tool_name, input: p.tool_input, toolUseId: p.tool_use_id, ok: false, text: p.error };
     case 'Notification':

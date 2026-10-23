@@ -23,6 +23,8 @@ La oficina conoce **exactamente 8 roles**:
 
 `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`
 
+La PO es el usuario (da las órdenes): un subagente con `role: po` se dibuja como `analyst`.
+
 Un harness declara su propio mapeo con un campo **opcional `role:`** en el frontmatter YAML de cada
 archivo de agente. Ese campo es la única superficie de integración: la oficina nunca ve los nombres
 del harness.

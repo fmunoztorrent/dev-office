@@ -14,7 +14,7 @@ import http from 'node:http';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { detectHarness, harnessId, projectRoot, HARNESS_IDS, ROLE_IDS, ROLE_NAME } from '../integrations/common/devteam.mjs';
+import { detectHarness, harnessId, projectRoot, HARNESS_IDS, AGENT_ROLE_IDS, ROLE_NAME } from '../integrations/common/devteam.mjs';
 import { DEFAULT_TEAM } from '../public/sim.js';
 import { realDir } from './paths.js';
 
@@ -22,7 +22,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 const KINDS = ['task', 'phase', 'phase_end', 'todos', 'waiting', 'error', 'turn_end', 'done', 'chat', 'agent_roles'];
 
-const INSTRUCTIONS = `Dev Team Office is a live pixel-art office that shows what coding agents do: each character is a role of a dev team (po, analyst, manager, tl, qa, backend, frontend, designer).
+const INSTRUCTIONS = `Dev Team Office is a live pixel-art office that shows what coding agents do: each character is a role of a dev team. The product owner (po) is the user, who gives the orders; you and your subagents are the rest: analyst, manager, tl, qa, backend, frontend, designer.
 To add yourself and this project to the office in one step, call join_office (or the user runs the \`join\` prompt): it starts the office if needed, registers the project and returns which character plays each subagent.
 Use these tools to: register the current project (register_project) so the office can send it work; see what a project's harness brings (detect_project); tell the office which role and phase you are in while you work (report_activity: task → phase … → done); send a prompt to another registered agent (send_task); and open herdr panes for side activities (open_pane).
 If the office is not running, office_start opens it; office_status gives its URL. Reporting is best effort: never stop or retry your real work because the office is offline.`;
@@ -175,15 +175,15 @@ const TOOLS = [
   {
     name: 'report_activity',
     title: 'Report activity',
-    description: `Tells the office what you are doing so the right character animates it. Send kind "task" when you start (text = the request in one line), "phase" each time the role or phase changes (role + phase + short text, e.g. qa/red "2 tests fail: cart.test.ts", backend/implement, qa/green "14/14", tl/review), "todos" with the plan, "waiting" when you need the user, "error" when blocked, and "done" with a summary at the end. "agent_roles" teaches the office which of your subagents plays which role ({ name: role }). Roles: ${ROLE_IDS.join(', ')}. Best effort: if the office is offline, keep working.`,
+    description: `Tells the office what you are doing so the right character animates it. Send kind "task" when you start (text = the request in one line), "phase" each time the role or phase changes (role + phase + short text, e.g. qa/red "2 tests fail: cart.test.ts", backend/implement, qa/green "14/14", tl/review), "todos" with the plan, "waiting" when you need the user, "error" when blocked, and "done" with a summary at the end. "agent_roles" teaches the office which of your subagents plays which role ({ name: role }). Roles: ${AGENT_ROLE_IDS.join(', ')} (the product owner is the user: stories, criteria, priorities and acceptance go as analyst). Best effort: if the office is offline, keep working.`,
     inputSchema: {
       type: 'object',
       properties: {
         kind: { type: 'string', enum: KINDS },
         text: { type: 'string', description: 'Short detail (≤ 80 chars is best)' },
-        role: { type: 'string', enum: ROLE_IDS },
+        role: { type: 'string', enum: AGENT_ROLE_IDS },
         phase: { type: 'string', description: 'e.g. story, analysis, architecture, red, implement, green, refactor, review, approve, accept, blocked' },
-        from: { type: 'string', enum: ROLE_IDS, description: 'Role handing over the turn (defaults to the previous one)' },
+        from: { type: 'string', enum: AGENT_ROLE_IDS, description: 'Role handing over the turn (defaults to the previous one)' },
         todos: { type: 'array', items: { type: 'object', properties: { content: { type: 'string' }, status: { type: 'string', enum: ['pending', 'in_progress', 'completed'] } }, required: ['content'] } },
         roles: { type: 'object', additionalProperties: { type: 'string' }, description: 'For agent_roles: subagent name → role' },
         cwd: { type: 'string', description: 'Project folder (defaults to the current one)' },
@@ -215,7 +215,7 @@ const TOOLS = [
         command: { type: 'string', description: 'Shell command to run (for a command pane)' },
         agent: { type: 'string', enum: HARNESS_IDS, description: 'Start this agent instead of a command' },
         prompt: { type: 'string', description: 'Prompt for the agent' },
-        role: { type: 'string', enum: ROLE_IDS },
+        role: { type: 'string', enum: AGENT_ROLE_IDS },
         title: { type: 'string' },
         direction: { type: 'string', enum: ['right', 'down'] },
       },

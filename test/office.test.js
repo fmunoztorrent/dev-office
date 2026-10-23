@@ -20,13 +20,32 @@ test('asigna roles según archivo, comando y descripción', () => {
   assert.equal(roleForTool('Bash', { command: 'git commit -m "add tests"' }), 'tl');
   assert.equal(roleForTool('WebSearch', { query: 'x' }), 'analyst');
   assert.equal(roleForTool('edit', { filePath: 'app/page.vue' }), 'frontend'); // OpenCode usa filePath
-  assert.equal(roleForText('Escribir historias de usuario'), 'po');
+  assert.equal(roleForText('Escribir historias de usuario'), 'analyst'); // la PO eres tú
   assert.equal(roleForText('', 'Explore'), 'analyst');
   assert.equal(roleForText('Diseñar la paleta de colores'), 'designer');
   assert.equal(roleForText('Crear endpoint de pagos'), 'backend');
   assert.equal(roleForText('Escribir tests e2e del checkout'), 'qa');
   assert.equal(roleForText('Revisar la arquitectura'), 'tl');
   assert.equal(roleForText('', 'tester'), 'qa');
+});
+
+test('la PO eres tú: el agente nunca la juega, y lo que te pide llega a tu escritorio', () => {
+  const o = new Office();
+  const pi = (e) => o.ingest('pi', { session: 'po-1', cwd: '/p', ...e });
+  // what an agent would do as PO (criteria, acceptance) is the analyst's
+  assert.equal(pi({ kind: 'phase', role: 'po', phase: 'criteria', text: 'criterios del login' })[0].role, 'analyst');
+  assert.equal(pi({ kind: 'phase', role: 'product-owner', phase: 'accept' })[0].role, 'analyst');
+  assert.equal(roleForText('', 'sdd-proposal'), 'analyst');
+  pi({ kind: 'agent_roles', roles: { writer: 'po' } });
+  const sub = pi({ kind: 'tool_start', tool: 'subagent_run', toolUseId: 'w1', input: { agent: 'writer', task: 'Historias del checkout', mode: 'task' } }).find((e) => e.kind === 'subagent_start');
+  assert.equal(sub.role, 'analyst', 'un subagente con role: po');
+  assert.equal(o.roles.po.status, 'idle', 'tú no estabas trabajando');
+  // the agent asks you something: Marco brings you the question
+  const [ask] = o.ingest('claude-code', cc({ hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion', tool_use_id: 'q1', tool_input: { questions: [{ question: '¿Postgres o SQLite?', header: 'DB', options: [] }] } }));
+  assert.deepEqual([ask.role, ask.text], ['manager', 'Te pregunta: ¿Postgres o SQLite?']);
+  // what you do is the PO's, and the team answers you
+  assert.equal(pi({ kind: 'dispatch', agent: 'pi', text: 'Para Pi: login' })[0].role, 'po');
+  assert.equal(pi({ kind: 'btw', phase: 'ask', text: '¿qué falta?' })[0].role, 'tl');
 });
 
 test('Task + SubagentStart + SubagentStop + PostToolUse producen un solo inicio y un solo fin', () => {

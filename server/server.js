@@ -21,9 +21,11 @@ import { PipelineHub } from './pipeline.js';
 import { AgentRegistry } from './registry.js';
 import { AskDesk } from './asks.js';
 import { openStore, dbFile, MAIN_OFFICE } from './store.js';
-import { Weather } from './weather.js';
-import { Herdr, paneRole } from './herdr.js';
+import { Weather, findPlaces } from './weather.js';
+import { Herdr, paneRole, quote } from './herdr.js';
+import { clip } from './roles.js';
 import { SubPanes } from './subpanes.js';
+import { ServiceHub } from './services.js';
 import { DEFAULT_TEAM } from '../public/sim.js';
 import { detectHarness, projectRoot, HARNESSES, which } from '../integrations/common/devteam.mjs';
 import { t, setLanguage, getLanguage } from '../public/i18n.js';
@@ -58,11 +60,14 @@ class HttpError extends Error {
  * @param db       the SQLite database: a path (~/.dev-team-office/office.db by default), ':memory:' or an open Store
  * @param weather  the weather outside (Open-Meteo): false to not query it, Weather options or an
  *                 instance (the same one for every office)
+ * @param places   the city picker's search (Open-Meteo's geocoder): false to not query it, or
+ *                 { fetch } (the tests); by default, unless DEV_TEAM_OFFICE_WEATHER=off
+ * @param services the services left running in the background: a ServiceHub or its options (the tests)
  * @param herdr    true: if running inside herdr, opens agents in panes (the executable asks for it);
  *                 a Herdr instance (the tests); false/omitted: no herdr at all
  * @returns {Promise<{company, office, url, socket, command, handleMessage, close, …}>}
  */
-export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, herdr: herdrOpt, asks: asksOpt = {} } = {}) {
+export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {} } = {}) {
   const ownStore = !db || typeof db === 'string';
   const store = ownStore ? openStore(db || dbFile()) : db; // oficinas, agentes, ajustes e historial
   setLanguage(store.getPrefs().lang);
@@ -113,7 +118,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   weatherShared?.on('change', (cur) => { for (const oid of company.ids()) bus.emit('weather', oid, cur); });
   weatherShared?.start();
   const weathers = new Map(); // where → Weather
-  const weatherKey = (id) => store.getOffice(id)?.location || process.env.DEV_TEAM_OFFICE_LOCATION || company.zoneOf(id);
+  const weatherKey = (id) => company.locationOf(id) || process.env.DEV_TEAM_OFFICE_LOCATION || company.zoneOf(id);
   function weatherOf(id) {
     if (weatherOpt === false || !prefs().weather) return null;
     if (weatherShared) return weatherShared;
@@ -121,7 +126,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     let w = weathers.get(key);
     if (!w) {
       const tz = company.zoneOf(id), z = zoneInfo(tz);
-      const own = store.getOffice(id)?.location || process.env.DEV_TEAM_OFFICE_LOCATION;
+      const own = company.locationOf(id) || process.env.DEV_TEAM_OFFICE_LOCATION;
       // without its own location: the coordinates of its time zone's city (no geocoding)
       w = new Weather({ log: (m) => say(m), ...(weatherOpt || {}), timezone: tz, location: own || (Number.isFinite(z.lat) ? `${z.lat},${z.lon}` : undefined), place: own ? undefined : z.city });
       w.on('change', (cur) => { for (const oid of company.ids()) if (weatherKey(oid) === key) bus.emit('weather', oid, cur); });
@@ -145,10 +150,32 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       ...company.get(id).snapshot(), ...hub.snapshot(id), pipelines: p.runs, projects: p.projects, targets: registry.targets(id),
       appearance: store.getAppearance(id), weather: weatherOf(id)?.current || null,
       office: company.info(id), offices: company.list(), prefs: prefs(), herdr: herdr ? herdr.status() : { available: false, panes: [] },
-      asks: asks.list(id, 10),
+      asks: asks.list(id, 10), services: services.list(id),
     };
   };
   let stopDemo = null;
+
+  // ---------- the services an agent leaves running in the background (server/services.js) ----------
+
+  const services = servicesOpt instanceof ServiceHub ? servicesOpt : new ServiceHub(servicesOpt || {});
+  services.start();
+  company.on('raw', (id, raw, ev) => services.observe(id, raw, ev || {}));
+  // the log tells it: who started it, and when it stopped
+  const serviceNews = (kind) => (s) => company.ingest('office', { session: s.session || 'office', office: s.office, kind, role: s.role, text: s.name, service: s.id });
+  services.on('up', serviceNews('service_up'));
+  services.on('down', serviceNews('service_down'));
+
+  /** Inside herdr: a pane below the agent's that follows the service's log (`tail -F`). */
+  async function serviceTerminal(s) {
+    if (!herdr?.available) return { ok: false, status: 409, error: t('err.noHerdr') };
+    if (!s.log) return { ok: false, status: 409, error: t('err.serviceNoLog') };
+    const from = company.paneOfSession?.(s.session) || herdr.pane;
+    const { pane } = await herdr.launchCommand({
+      command: `tail -n 200 -F ${quote(s.log)}`, cwd: s.cwd || undefined, from, direction: 'down', ratio: 0.35,
+      office: s.office, role: s.role, title: clip(`📜 ${s.name}`, 60), kind: 'logs',
+    });
+    return { ok: true, pane };
+  }
 
   // ---------- herdr: the agents in panes, and the panes they open ----------
 
@@ -156,7 +183,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     if (!info?.pane) return;
     company.bindPane(info.pane, info.office || MAIN_OFFICE);
     // the agent's pane, or a subagent's: its own events tell its activity
-    if (info.main || info.kind === 'sub') return;
+    if (info.main || info.kind === 'sub' || info.kind === 'logs') return;
     company.ingest('herdr', { session: 'office', office: info.office || MAIN_OFFICE, kind: 'pane_open', pane: info.pane, role: info.role, text: info.title, agent: info.agent });
   }
   herdr?.on('open', (p) => {
@@ -166,14 +193,14 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   });
   herdr?.on('close', (p) => {
     if (p.kind === 'sub') subPanes?.forget(p.pane);
-    if (!p.main && p.kind !== 'sub') company.ingest('herdr', { session: 'office', office: p.office || MAIN_OFFICE, kind: 'pane_close', pane: p.pane, role: p.role, text: p.title });
+    if (!p.main && p.kind !== 'sub' && p.kind !== 'logs') company.ingest('herdr', { session: 'office', office: p.office || MAIN_OFFICE, kind: 'pane_close', pane: p.pane, role: p.role, text: p.title });
     if (p.taskId) hub.paneSettled(p.pane);
     say(t('herdr.closed', { pane: p.pane, title: p.title }), { office: p.office, pane: p.pane });
     bus.emit('herdr', herdr.status());
   });
   herdr?.on('state', (p, status, was) => {
     if (was === 'working' && ['idle', 'done'].includes(status)) hub.paneSettled(p.pane);
-    if (!p.main) company.ingest('herdr', { session: 'office', office: p.office || MAIN_OFFICE, kind: 'pane_state', pane: p.pane, role: p.role, text: p.title, state: status });
+    if (!p.main && p.kind !== 'logs') company.ingest('herdr', { session: 'office', office: p.office || MAIN_OFFICE, kind: 'pane_state', pane: p.pane, role: p.role, text: p.title, state: status });
     bus.emit('herdr', herdr.status());
   });
   // a pane an agent opened on its own, in a project's folder: the office adopts it
@@ -249,9 +276,9 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     const out = store.setPrefs(patch);
     if (!out.ok) return out;
     if (patch.lang) setLanguage(out.prefs.lang);
-    if ('timezone' in patch || 'weather' in patch) refreshWeather();
+    if ('timezone' in patch || 'city' in patch || 'weather' in patch) refreshWeather();
     bus.emit('prefs', out.prefs);
-    if (patch.lang || 'timezone' in patch) bus.emit('offices', company.list());
+    if (patch.lang || 'timezone' in patch || 'city' in patch) bus.emit('offices', company.list());
     return out;
   }
 
@@ -341,6 +368,35 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       if (req.method === 'GET' && p === '/v1/weather') {
         const id = valid(q('office'));
         return json(res, 200, { ok: true, weather: weatherOf(id)?.current || null, enabled: !!weatherOf(id)?.enabled, office: id });
+      }
+      // the services left running in the background: the list, what each one prints, and its pane
+      if (req.method === 'GET' && p === '/v1/services') return json(res, 200, { ok: true, services: services.list(valid(q('office'))) });
+      const sm = p.match(/^\/v1\/services\/([^/]+)\/(log|terminal)$/);
+      if (sm) {
+        const s = services.get(decodeURIComponent(sm[1]));
+        if (!s) return json(res, 404, { ok: false, error: t('err.unknownService') });
+        if (sm[2] === 'log' && req.method === 'GET') {
+          const from = q('from') !== undefined ? Number(q('from')) : undefined;
+          return json(res, 200, { ok: true, service: s.id, ...services.read(s.id, { from }) });
+        }
+        if (sm[2] === 'terminal' && req.method === 'POST') {
+          try {
+            const out = await serviceTerminal(s);
+            return json(res, out.ok ? 200 : out.status, out);
+          } catch (err) { return json(res, 500, { ok: false, error: err.message }); }
+        }
+      }
+      // the city picker: the cities of a time zone's country that start with what was typed
+      if (req.method === 'GET' && p === '/v1/places') {
+        const tz = q('timezone') || company.zoneOf(valid(q('office')));
+        const country = zoneInfo(tz).country || null;
+        const online = placesOpt !== false && (placesOpt?.fetch || process.env.DEV_TEAM_OFFICE_WEATHER !== 'off');
+        if (!online) return json(res, 200, { ok: true, places: [], country, offline: true });
+        try {
+          return json(res, 200, { ok: true, places: await findPlaces(q('q'), { country, fetch: placesOpt?.fetch }), country });
+        } catch (err) {
+          return json(res, 200, { ok: true, places: [], country, offline: true, error: err.message });
+        }
       }
       if (req.method === 'POST' && (p === '/v1/events' || p.startsWith('/v1/events/') || p === '/event' || p.startsWith('/event/'))) {
         const payload = await body(req);
@@ -561,6 +617,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   company.on('event', (id, event) => bus.emit('activity', id, event));
   company.on('event', (_id, event) => { if (event.kind === 'turn_end' || event.kind === 'done') hub.sessionSettled(event.session); });
   company.on('reset', (id) => toOffice(id, { type: 'snapshot', state: fullState(id) }));
+  services.on('change', (id) => toOffice(id, { type: 'services', services: services.list(id), office: id }));
   hub.on('change', () => perOffice((id) => ({ type: 'tasks', ...hub.snapshot(id) })));
   pipelines.on('change', () => perOffice((id) => ({ type: 'pipelines', ...pipelines.snapshot(id) })));
   registry.on('change', () => perOffice((id) => ({ type: 'targets', targets: registry.targets(id) })));
@@ -643,6 +700,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     bus,
     herdr,
     subPanes,
+    services,
     appearance: (id = view()) => store.getAppearance(id),
     weatherOf,
     get weather() { return weatherOf(view()); },
@@ -659,6 +717,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       for (const w of weathers.values()) w.stop();
       weatherShared?.stop?.();
       herdr?.stop();
+      services.stop();
       subPanes?.stop();
       hub.stopAll();
       for (const c of wss.clients) c.terminate();
