@@ -35,12 +35,12 @@ Y abre `http://127.0.0.1:4320`. Con `dev-team-office demo --pi --port 4320` corr
 1. **Los tests:** `npm test`. Todos deben pasar.
 2. **El juego (navegador):** si tocaste `public/`, revísalo en el navegador con la oficina de demo, en las dos vistas (frontal y cenital, con `v`), en español y en inglés.
 3. **La terminal:** si tocaste `tui/`, pruébalo en una terminal real, chica (60×18) y grande.
-4. **Con agentes reales:** si tocaste una integración, pruébala con el agente de verdad, pero aislado:
-   - un `HOME` temporal en `/tmp`, con la configuración mínima del agente;
-   - un puerto distinto de 4317;
-   - si usas herdr, una sesión con nombre propio (`herdr --session dto-prueba server`).
+4. **Como un usuario, con agentes reales:** un cambio que vea el usuario no está listo hasta probarlo como lo usaría un usuario. [`scripts/dev-session.sh`](scripts/dev-session.sh) lo arma siempre igual y aislado:
+   - `scripts/dev-session.sh up --agent pi` instala tu checkout con `install.sh` en un `HOME` temporal en `/tmp`: con el login de tu agente enlazado, un proyecto de prueba, su propia sesión de herdr y el puerto 4390;
+   - abre el herdr que imprime (`scripts/dev-session.sh herdr`) en una terminal de verdad, corre `dev-team-office` y tu agente en panes, abre el juego en `http://127.0.0.1:4390` y pídele trabajo de verdad;
+   - después de cada cambio, `scripts/dev-session.sh update` y reinicia la oficina; al terminar, `scripts/dev-session.sh down`.
 
-   Nunca uses tu configuración real ni tu sesión de herdr por defecto. Al terminar, borra el entorno, desenlazando antes los enlaces simbólicos.
+   Nunca uses tu configuración real ni tu sesión de herdr por defecto.
 
 ## Qué se espera de un cambio
 

@@ -57,7 +57,7 @@ Para agregar algo:
 ## Eventos y roles
 
 - Todo lo que entra a la oficina se traduce al **formato genérico** ([`api.es.md`](api.es.md#formato-genérico-de-un-evento)).
-- **Ocho roles:** `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`.
+- **Ocho roles:** `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`. La PO es el usuario: lo que un agente declara como `po` se dibuja como la analista (`agentRole`).
 - Un subagente declara el suyo con `role:` en su archivo. Si no lo declara, se deduce de su nombre y después de su descripción ([`connect-a-harness.es.md`](connect-a-harness.es.md)).
 - Un rol declarado que no existe **no** se reemplaza en silencio: queda fuera y se reporta.
 - **Lo que hace un subagente lleva su `subId`.**
@@ -81,6 +81,7 @@ npm test
   - nunca en la sesión de herdr por defecto ni en la configuración real del usuario;
   - al terminar se borra todo, desenlazando antes los enlaces simbólicos.
 - Un cambio visible en el juego se revisa en el navegador con la oficina de demo (una base aislada y un agente de mentira), no sólo con tests.
+- **Un cambio que vea el usuario se prueba como un usuario** antes de darlo por listo: `scripts/dev-session.sh` instala el checkout en un `HOME` aislado, con un agente real y su propia sesión de herdr, abierta en una terminal de verdad ([CONTRIBUTING.es.md](../CONTRIBUTING.es.md#cómo-probar-un-cambio)).
 
 ## Commits y cambios
 

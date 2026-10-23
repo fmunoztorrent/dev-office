@@ -35,12 +35,12 @@ And open `http://127.0.0.1:4320`. `dev-team-office demo --pi --port 4320` runs t
 1. **The tests:** `npm test`. They must all pass (CI runs them on macOS and Linux, with Node 22 and 24).
 2. **The game (browser):** if you touched `public/`, check it in the browser with the demo office, in both views (front and top-down, with `v`), in English and in Spanish.
 3. **The terminal:** if you touched `tui/`, try it in a real terminal, small (60×18) and large.
-4. **With real agents:** if you touched an integration, try it with the real agent, but isolated:
-   - a temporary `HOME` under `/tmp`, with the agent's minimal configuration;
-   - a port other than 4317;
-   - if you use herdr, a named session (`herdr --session dto-test server`).
+4. **As a user, with real agents:** a change a user would see is not done until you try it the way a user would. [`scripts/dev-session.sh`](scripts/dev-session.sh) sets that up the same way every time, isolated:
+   - `scripts/dev-session.sh up --agent pi` installs your checkout with `install.sh` in a temporary `HOME` under `/tmp`: your agent's login is linked in, plus a test project, its own herdr session and port 4390;
+   - open the herdr it prints (`scripts/dev-session.sh herdr`) in a real terminal, run `dev-team-office` and your agent in panes, open the game at `http://127.0.0.1:4390` and ask for real work;
+   - after each change, `scripts/dev-session.sh update` and restart the office; when done, `scripts/dev-session.sh down`.
 
-   Never use your real configuration or your default herdr session. When done, delete the environment, unlinking symlinks first.
+   Never use your real configuration or your default herdr session.
 
 ## What a change is expected to bring
 

@@ -11,6 +11,10 @@ Las reglas y el mapa del proyecto son los mismos para todos los agentes y están
   - El plugin está en [`.claude-plugin/`](.claude-plugin/plugin.json), con sus hooks en `integrations/claude-code/plugin-hooks.json`.
 - **El servidor MCP** que registra el plugin es `node bin/dev-team-office.js mcp`. Su prompt `join` aparece como `/mcp__dev-team-office__join`.
 - **Los subagentes de Claude Code** (`Task`/`Agent`) llegan como `PreToolUse(Task)` + `SubagentStart`, y la oficina los empareja. Las herramientas que corren dentro de un subagente traen `agent_id`; la oficina se las atribuye a ese subagente (`subId`).
+- **El flujo real se abre en el panel Terminal** (AGENTS.md, «Probar como un usuario»).
+  - Después de `scripts/dev-session.sh up`, abre herdr con `run_in_terminal`, usando el comando que imprime `scripts/dev-session.sh herdr`, en una pestaña «herdr dto-dev». Así el usuario ve lo mismo que tú.
+  - Manéjalo con `scripts/dev-session.sh h …`.
+  - El navegador del panel abre el juego en `http://localhost:4390`.
 - **`.claude/` es local de cada quien y no se versiona.** Ahí puede haber un `launch.json` con la oficina de prueba (puerto 4320, base aislada y el agente de mentira) para revisar el juego en el navegador.
 - **No corras `dev-team-office setup` en la máquina del usuario** a menos que lo pida: cambia su configuración real de Claude Code, Codex, OpenCode y Pi. Para probar `setup`, usa un `HOME` temporal con `DEV_TEAM_OFFICE_BIN_DIR` y `DEV_TEAM_OFFICE_SETUP_CLI=0` (ver `test/setup.test.js`).
 - **Commits:** sólo cuando el usuario lo pida, con prefijo convencional y, si los hace un agente, con su línea `Co-Authored-By`.
