@@ -1,10 +1,10 @@
-// La consola: lo que se ve en la terminal al lanzar la oficina (`dev-team-office`). Una bitácora que
-// corre con la actividad de los agentes de todas las oficinas y lo que hace la oficina (tareas,
-// pipelines, panes de herdr, clima, ajustes). Desde ahí:
-//   g  abre el juego en esta misma terminal (q vuelve a la bitácora)
-//   o  lo abre en el navegador (la URL que levanta el servidor)
-//   h  repite la ayuda · q (o ctrl+c) cierra la oficina
-// Sin terminal interactiva (en segundo plano, `serve`) sólo se escribe la bitácora, sin colores.
+// The console: what the terminal shows when the office is launched (`dev-team-office`). A log that
+// runs with the activity of the agents of every office and what the office does (tasks,
+// pipelines, herdr panes, weather, settings). From there:
+//   g  opens the game in this same terminal (q goes back to the log)
+//   o  opens it in the browser (the URL the server serves)
+//   h  repeats the help · q (or ctrl+c) closes the office
+// Without an interactive terminal (in the background, `serve`) only the log is written, without colors.
 
 import { spawn } from 'node:child_process';
 import { DEFAULT_TEAM, phaseInfo } from '../public/sim.js';
@@ -17,7 +17,39 @@ const DIM = '\x1b[2m', BOLD = '\x1b[1m', RESET = '\x1b[0m';
 const rgb = (hexStr) => { const n = parseInt(String(hexStr).replace('#', ''), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 const NOISY = new Set(['todos', 'poke', 'pane_state']);
 
-/** Abre una URL en el navegador del sistema (sin esperar). */
+/**
+ * An office event as a log line: { text, tone, speaker? } (speaker: who talks, if it is not a
+ * character), or null if it does not go in the log. Shared by the log and the monitor.
+ */
+export function activityLine(ev) {
+  if (NOISY.has(ev.kind) || (ev.kind === 'tool_end' && ev.ok)) return null;
+  const speaker = ev.kind === 'chat' || (ev.kind === 'btw' && ev.phase === 'ask') ? ev.from : undefined;
+  let text = ev.text || ev.kind;
+  let tone;
+  switch (ev.kind) {
+    case 'phase': { const ph = phaseInfo(ev.phase); text = `${ph.icon} ${ph.label}${ev.text ? `: ${ev.text}` : ''}`; break; }
+    case 'phase_end': text = t('events.turnEnd', { text: ev.text ? `: ${ev.text}` : '' }); tone = 'dim'; break;
+    case 'tool_end': text = `✖ ${ev.text}`; tone = ev.phase === 'red' ? 'warn' : 'err'; break;
+    case 'error': text = `✖ ${ev.text}`; tone = 'err'; break;
+    case 'subagent_start': text = `🤖 ${ev.text}`; break;
+    case 'subagent_end': text = `✔ ${ev.text}`; tone = 'ok'; break;
+    case 'stage_end': text = `${ev.ok ? '✔' : '✖'} ${ev.text}`; tone = ev.ok ? 'ok' : 'err'; break;
+    case 'pane_open': text = `🪟 ${ev.pane} · ${ev.text}`; break;
+    case 'pane_close': text = `🪟 ${ev.pane} · ${ev.text} ✔`; tone = 'dim'; break;
+    case 'dispatch': text = `📨 ${ev.text}`; break;
+    case 'waiting': text = `✋ ${ev.text}`; tone = 'err'; break;
+    case 'done': text = `🎉 ${ev.text}`; tone = 'ok'; break;
+    case 'task': text = `📝 ${ev.text}`; break;
+    case 'btw':
+      text = ev.phase === 'ask' ? `❓ btw: ${ev.text}` : ev.phase === 'answer' ? `💡 ${ev.text}` : `✖ btw: ${ev.text}`;
+      tone = ev.phase === 'failed' ? 'err' : ev.phase === 'answer' ? 'ok' : undefined;
+      break;
+    default: break;
+  }
+  return { text, tone, speaker };
+}
+
+/** Opens a URL in the system's browser (without waiting). */
 export function openBrowser(url) {
   const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
   const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
@@ -25,8 +57,8 @@ export function openBrowser(url) {
 }
 
 /**
- * La bitácora: se engancha a los eventos del servidor y escribe una línea por cada cosa que pasa.
- * @param color  con colores ANSI (una terminal) o texto plano (un log)
+ * The log: hooks into the server's events and writes a line for each thing that happens.
+ * @param color  with ANSI colors (a terminal) or plain text (a log file)
  */
 export function createLog({ server, write, color = true, colorMode = '256' }) {
   const paint = (hexStr) => {
@@ -45,43 +77,25 @@ export function createLog({ server, write, color = true, colorMode = '256' }) {
     return look.name ? { name: look.name, shirt: look.shirt } : null;
   };
 
-  /** Una línea: hora · [oficina] · quién · qué. */
+  /** A line: time · [office] · who · what. */
   function line({ ts = Date.now(), office, who, shirt, text, tone }) {
     const parts = [`${c(DIM)}${timeOf(ts, zone(office), { seconds: true })}${c(RESET)}`];
     if (office && offices().length > 1) parts.push(`${paint('#ffd166')}🏢 ${officeName(office)}${c(RESET)}`);
     if (who) parts.push(`${shirt ? paint(shirt) : ''}${c(BOLD)}${who}${c(RESET)}`);
     const body = clean(String(text ?? ''));
-    parts.push(tone === 'err' ? `${paint('#ef476f')}${body}${c(RESET)}` : tone === 'dim' ? `${c(DIM)}${body}${c(RESET)}` : tone === 'ok' ? `${paint('#06d6a0')}${body}${c(RESET)}` : body);
+    parts.push(tone === 'err' ? `${paint('#ef476f')}${body}${c(RESET)}` : tone === 'warn' ? `${paint('#ffd166')}${body}${c(RESET)}` : tone === 'dim' ? `${c(DIM)}${body}${c(RESET)}` : tone === 'ok' ? `${paint('#06d6a0')}${body}${c(RESET)}` : body);
     write(`${parts.join('  ')}\n`);
   }
 
-  // ---- la actividad de los agentes ----
+  // ---- the agents' activity ----
   function onActivity(office, ev) {
-    if (NOISY.has(ev.kind) || (ev.kind === 'tool_end' && ev.ok)) return;
+    const a = activityLine(ev);
+    if (!a) return;
     const p = ev.role ? person(office, ev.role) : null;
-    const who = ev.kind === 'chat' ? ev.from : p?.name || t('events.office');
-    let text = ev.text || ev.kind;
-    let tone;
-    switch (ev.kind) {
-      case 'phase': { const ph = phaseInfo(ev.phase); text = `${ph.icon} ${ph.label}${ev.text ? `: ${ev.text}` : ''}`; break; }
-      case 'phase_end': text = t('events.turnEnd', { text: ev.text ? `: ${ev.text}` : '' }); tone = 'dim'; break;
-      case 'tool_end': text = `✖ ${ev.text}`; tone = 'err'; break;
-      case 'error': text = `✖ ${ev.text}`; tone = 'err'; break;
-      case 'subagent_start': text = `🤖 ${ev.text}`; break;
-      case 'subagent_end': text = `✔ ${ev.text}`; tone = 'ok'; break;
-      case 'stage_end': text = `${ev.ok ? '✔' : '✖'} ${ev.text}`; tone = ev.ok ? 'ok' : 'err'; break;
-      case 'pane_open': text = `🪟 ${ev.pane} · ${ev.text}`; break;
-      case 'pane_close': text = `🪟 ${ev.pane} · ${ev.text} ✔`; tone = 'dim'; break;
-      case 'dispatch': text = `📨 ${ev.text}`; break;
-      case 'waiting': text = `✋ ${ev.text}`; tone = 'err'; break;
-      case 'done': text = `🎉 ${ev.text}`; tone = 'ok'; break;
-      case 'task': text = `📝 ${ev.text}`; break;
-      default: break;
-    }
-    line({ ts: ev.ts, office, who, shirt: ev.kind === 'chat' ? null : p?.shirt, text, tone });
+    line({ ts: ev.ts, office, who: a.speaker ?? (p?.name || t('events.office')), shirt: a.speaker ? null : p?.shirt, text: a.text, tone: a.tone });
   }
 
-  // ---- tareas y pipelines: sólo cuando cambia su estado ----
+  // ---- tasks and pipelines: only when their state changes ----
   const taskSeen = new Map(), runSeen = new Map();
   function onTasks() {
     for (const task of server.hub.snapshot().tasks) {
@@ -101,7 +115,7 @@ export function createLog({ server, write, color = true, colorMode = '256' }) {
     }
   }
 
-  // ---- lo demás: el servidor, el clima, los ajustes, las oficinas ----
+  // ---- the rest: the server, the weather, the settings, the offices ----
   const weatherSeen = new Map();
   const onLog = (entry) => line({ ...entry, tone: 'dim' });
   const onWeather = (office, w) => {
@@ -140,15 +154,15 @@ export function createLog({ server, write, color = true, colorMode = '256' }) {
 }
 
 /**
- * La consola interactiva. Resuelve cuando el usuario cierra la oficina (q o ctrl+c).
- * @param onGame       () => Promise: abre el juego en la terminal; la bitácora espera y después sigue
- * @param notes        líneas que el servidor dijo al arrancar
- * @param startInGame  entra directo al juego (`dev-team-office game`)
+ * The interactive console. Resolves when the user closes the office (q or ctrl+c).
+ * @param onGame       () => Promise: opens the game in the terminal; the log waits and then goes on
+ * @param notes        lines the server said on startup
+ * @param startInGame  goes straight into the game (`dev-team-office game`)
  */
 export function runConsole({ server, stdin = process.stdin, stdout = process.stdout, colorMode = '256', onGame, notes = [], version = '', startInGame = false }) {
   return new Promise((resolve) => {
     const tty = !!(stdin.isTTY && stdout.isTTY);
-    let paused = null; // mientras el juego ocupa la pantalla, las líneas se guardan
+    let paused = null; // while the game takes the screen, the lines are kept
     const write = (s) => { if (paused) { paused.push(s); if (paused.length > 500) paused.shift(); } else stdout.write(s); };
     const log = createLog({ server, write, color: tty, colorMode });
     const B = tty ? BOLD : '', D = tty ? DIM : '', R = tty ? RESET : '', Y = tty ? '\x1b[33m' : '';

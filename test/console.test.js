@@ -1,5 +1,5 @@
-// La consola: al lanzar la oficina desde la terminal se ve la bitácora con la actividad de los
-// agentes; g abre el juego en esa misma terminal (q vuelve), o lo abre en el navegador, q sale.
+// The console: when the office is launched from the terminal you see the log with the agents'
+// activity; g opens the game in that same terminal (q goes back), o opens it in the browser, q quits.
 import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -36,12 +36,12 @@ test('la bitácora: la actividad de los agentes, con la oficina si hay varias, y
     assert.match(out, /Andrés {2}✖ Falló: \$ npm test/);
     assert.ok(!/\x1b\[/.test(out), 'sin colores');
     assert.equal(out.split('\n').filter(Boolean).length, 3, 'un tool_end que salió bien no ensucia la bitácora');
-    // con dos oficinas, cada línea dice de cuál es
+    // with two offices, each line says which one it belongs to
     await fetch(`${server.url}/v1/offices`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Pagos' }) });
     out = '';
     server.company.ingest('generic', { session: 'p1', office: 'pagos', kind: 'task', text: 'Cobros con QR' });
     assert.match(out, /🏢 Pagos {2}Sofía {2}📝 Cobros con QR/);
-    // las tareas: cuando cambia su estado
+    // the tasks: when their state changes
     out = '';
     server.hub.submit({ text: 'algo', agent: 'claude-code', session: 'c1', office: 'pagos' });
     assert.match(out, /Claude {2}📨 algo → en cola/);
@@ -71,9 +71,9 @@ test('la consola: g abre el juego en la misma terminal, q vuelve a la bitácora 
     assert.equal(stdin.raw, true);
 
     stdin.emit('data', 'g');
-    await until(() => stdout.out.includes('\x1b[?1049h')); // pantalla alternativa: el juego
+    await until(() => stdout.out.includes('\x1b[?1049h')); // alternate screen: the game
     assert.equal(games, 1);
-    // mientras se juega, la bitácora espera
+    // while playing, the log waits
     const before = stdout.out.length;
     server.company.ingest('generic', { session: 's1', kind: 'task', text: 'Durante el juego' });
     await sleep(80);

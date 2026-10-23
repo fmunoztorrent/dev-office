@@ -1,25 +1,33 @@
 {
   "name": "dev-team-office",
-  "version": "0.4.0",
-  "description": "Oficina pixel-art en vivo: un equipo de desarrollo que representa las subtareas de un agente de código (Claude Code, OpenCode, Pi...) recibiendo eventos por WebSocket.",
+  "version": "0.6.0",
+  "license": "MIT",
+  "author": "Fabián Muñoz (https://github.com/fmunoztorrent)",
+  "description": "A live pixel-art office for your coding agent (Claude Code, Codex, OpenCode, Pi…): every subagent is a character of a development team. Zero dependencies, MCP server included.",
+  "keywords": [
+    "ai",
+    "agents",
+    "coding-agent",
+    "claude-code",
+    "codex",
+    "opencode",
+    "pi",
+    "mcp",
+    "subagents",
+    "pixel-art",
+    "tui",
+    "herdr"
+  ],
+  "homepage": "https://github.com/fmunoztorrent/dev-office#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fmunoztorrent/dev-office.git"
+  },
+  "bugs": {
+    "url": "https://github.com/fmunoztorrent/dev-office/issues"
+  },
   "type": "module",
   "main": "server/server.js",
-  "scripts": {
-    "start": "node server/index.js",
-    "office": "node bin/dev-team-office.js",
-    "dev": "node --watch server/index.js",
-    "demo": "node scripts/demo.js",
-    "send": "node scripts/send.js",
-    "test": "node --test \"test/*.test.js\"",
-    "build": "deno compile --no-check --allow-net --allow-read --allow-write --allow-env --allow-sys --allow-run --include public --include integrations --include teams --output dist/dev-team-office bin/dev-team-office.js",
-    "build:mac-x64": "deno compile --no-check --target x86_64-apple-darwin --allow-net --allow-read --allow-write --allow-env --allow-sys --allow-run --include public --include integrations --include teams --output dist/dev-team-office-x64 bin/dev-team-office.js"
-  },
-  "engines": {
-    "node": ">=22.13"
-  },
-  "dependencies": {
-    "ws": "^8.18.0"
-  },
   "bin": {
     "dev-team-office": "bin/dev-team-office.js"
   },
@@ -29,11 +37,31 @@
     "tui",
     "public",
     "integrations",
+    "skills",
     "docs",
-    "teams"
+    "teams",
+    "install.sh",
+    "README.es.md",
+    "CHANGELOG.md"
   ],
+  "scripts": {
+    "start": "node server/index.js",
+    "office": "node bin/dev-team-office.js",
+    "dev": "node --watch server/index.js",
+    "demo": "node scripts/demo.js",
+    "send": "node scripts/send.js",
+    "test": "node --test \"test/*.test.js\"",
+    "build": "deno compile --no-check --allow-net --allow-read --allow-write --allow-env --allow-sys --allow-run --include public --include integrations --include teams --include skills --output dist/dev-team-office bin/dev-team-office.js",
+    "build:mac-x64": "deno compile --no-check --target x86_64-apple-darwin --allow-net --allow-read --allow-write --allow-env --allow-sys --allow-run --include public --include integrations --include teams --include skills --output dist/dev-team-office-x64 bin/dev-team-office.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
   "os": [
     "darwin",
     "linux"
-  ]
+  ],
+  "devDependencies": {
+    "ws": "^8.18.0"
+  }
 }

@@ -1,5 +1,5 @@
-// La vida propia de la oficina (public/sim.js), en tiempo simulado: cada personaje decide qué
-// hacer según sus necesidades y su personalidad.
+// The office's own life (public/sim.js), in simulated time: each character decides what to do
+// based on their needs and personality.
 import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -7,14 +7,14 @@ import { createSim, assignees, PRODUCT, TECH, TEAM, UNICORN, SKULL, PIZZA, rainb
 import { Screen } from '../tui/screen.js';
 import { computeLayout, drawFrame } from '../tui/view.js';
 
-/** Una oficina con reloj y azar propios: corre minutos en milisegundos y siempre igual. */
+/** An office with its own clock and randomness: runs minutes in milliseconds, always the same. */
 const CLEAR = { kind: 'clear', clouds: 0.05, precip: 0, wind: 5, temp: 20, lat: -33.45, lon: -70.65, sunrise: 7, sunset: 20, source: 'test' };
 function office(seed = 7, { hour = 10, weather = CLEAR } = {}) {
   let t = 0;
   const random = () => ((seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296);
-  const morning = new Date(2026, 9, 16, Math.floor(hour), Math.round((hour % 1) * 60)).getTime(); // hora fija: el almuerzo no depende de cuándo corren los tests
+  const morning = new Date(2026, 9, 16, Math.floor(hour), Math.round((hour % 1) * 60)).getTime(); // fixed time: lunch does not depend on when the tests run
   const sim = createSim({ clock: () => t, random, wall: () => morning + t });
-  sim.setWeather(weather); // el clima, fijo: que no dependa de la zona horaria de la máquina
+  sim.setWeather(weather); // the weather, fixed: so it does not depend on the machine's time zone
   const said = [];
   for (const a of Object.values(sim.agents)) {
     const say = a.say.bind(a);
@@ -39,7 +39,7 @@ test('las NPC de producto se sientan juntas y cotorrean entre ellas', () => {
   assert.ok(chats.length >= 4, `conversaron ${chats.length} veces`);
   for (const c of chats) assert.ok([c.who, ...c.with].every((id) => PRODUCT.includes(id)), 'el cotorreo es entre ellas');
   assert.ok(chats.some((c) => c.kind === 'deskchat') && chats.some((c) => c.kind === 'gossip'), 'desde el escritorio y juntándose');
-  // y de verdad se dicen cosas
+  // and they really do say things
   assert.ok(said.filter((s) => PRODUCT.includes(s.who)).length >= 8);
 });
 
@@ -64,7 +64,7 @@ test('un requerimiento: la PO se lo lleva al manager y él lo reparte según la 
   const { sim, said, run } = office(3);
   run(5);
   sim.handle({ kind: 'dispatch', text: 'Para Claude Code: Nueva pantalla de pagos con su endpoint' });
-  sim.handle({ kind: 'task', text: 'Nueva pantalla de pagos con su endpoint' }); // el mismo pedido, reportado por el agente
+  sim.handle({ kind: 'task', text: 'Nueva pantalla de pagos con su endpoint' }); // the same request, reported by the agent
   let poAtManager = false;
   let managerAtDevs = new Set();
   run(70, () => {
@@ -85,7 +85,7 @@ test('un requerimiento: la PO se lo lleva al manager y él lo reparte según la 
 
 test('trabajando, los técnicos a veces van a consultar al TL (no siempre)', () => {
   const { sim, said, run } = office(5);
-  // Diego y Andrés trabajan todo el rato; Lucía no hace nada
+  // Diego and Andrés work all the time; Lucía does nothing
   run(10 * 60, (i) => {
     if (i % 40 === 0) {
       sim.handle({ kind: 'tool_start', role: 'backend', tool: 'Edit', text: 'Editando api.js', ok: true });
@@ -98,7 +98,7 @@ test('trabajando, los técnicos a veces van a consultar al TL (no siempre)', () 
   assert.ok(by('backend') <= 10 && by('qa') <= 10, 'a veces, no a cada rato');
   assert.equal(by('frontend'), 0, 'quien no trabaja no tiene dudas');
   assert.ok(consults.every((c) => TECH.includes(c.who)));
-  // el TL contesta
+  // the TL answers
   assert.ok(said.filter((s) => s.who === 'tl').length >= consults.length);
   assert.ok(said.some((s) => s.who === 'backend' && /^Tomás, /.test(s.text)));
 });
@@ -109,7 +109,7 @@ test('QA a veces sueña con calaveras y los devs con pizza (con su factor de aza
   const dreams = (who) => sim.journal.filter((j) => j.kind === 'dream' && j.who === who);
   assert.ok(dreams('qa').length >= 1 && dreams('qa').every((d) => d.dream === 'skull'), `QA: ${dreams('qa').length}`);
   for (const dev of ['backend', 'frontend']) assert.ok(dreams(dev).length >= 1 && dreams(dev).every((d) => d.dream === 'pizza'), `${dev}: ${dreams(dev).length}`);
-  // a veces: no a cada rato, y no todos al mismo ritmo
+  // sometimes: not all the time, and not everyone at the same pace
   for (const who of ['qa', 'backend', 'frontend']) assert.ok(dreams(who).length <= 14, `${who} soñó ${dreams(who).length} veces en 30 minutos`);
   assert.ok(dreams('analyst').length === 0 && dreams('po').length === 0);
   assert.ok(said.some((s) => s.who === 'qa' && /💀/.test(s.text)) && said.some((s) => s.who === 'backend' && /🍕/.test(s.text)));
@@ -128,33 +128,33 @@ test('a las 13:00 el equipo se va a almorzar al comedor (salvo quien está traba
     const perched = Object.values(sim.agents).filter((a) => a.perch && seats.some((s) => s.x === a.x && s.y === a.y));
     maxAtTables = Math.max(maxAtTables, perched.length);
     for (const a of perched) foods.add(a.food);
-    // nadie atraviesa la mesa: se llega a cada silla por detrás o por delante
+    // nobody crosses the table: each chair is reached from behind or from the front
     for (const a of Object.values(sim.agents)) if (!a.perch && a.x > tx - tw / 2 && a.x < tx + tw / 2 && a.y > ty + 2 && a.y < ty + 44) crossed.push(`${a.id}@${Math.round(a.x)},${Math.round(a.y)}`);
   });
   assert.ok(sim.journal.some((j) => j.kind === 'lunch'), 'a las 13:00 salen a almorzar');
   assert.ok(sim.lunch, 'siguen almorzando');
   assert.equal(maxAtTables, 7, 'todos sentados a la mesa del comedor…');
   assert.deepEqual(crossed, [], 'nadie camina por encima de la mesa');
-  // producto y el manager, detrás de la mesa (de frente); el equipo técnico, delante (de espaldas)
+  // product and the manager, behind the table (facing us); the technical team, in front (from behind)
   for (const id of ['po', 'analyst', 'designer', 'manager']) assert.ok(sim.agents[id].diningSeat?.row === 'back' && !sim.agents[id].back, id);
   for (const id of ['frontend', 'qa', 'tl']) assert.ok(sim.agents[id].diningSeat?.row === 'front' && sim.agents[id].back, id);
   assert.ok(!sim.agents.backend.perch && sim.agents.backend.food === '🥪', '…menos Diego, que el agente lo tiene trabajando');
   assert.ok(foods.has('🍕') && foods.has('🥗'));
   assert.ok(said.some((s) => s.who === 'manager' && /almorzar|comer|almuerzo/i.test(s.text)));
-  // si el agente la necesita, Lucía deja el almuerzo y vuelve a su puesto
+  // if the agent needs her, Lucía leaves lunch and goes back to her spot
   sim.handle({ kind: 'tool_start', role: 'frontend', tool: 'Edit', text: 'Editando App.vue', ok: true });
   run(20);
   assert.ok(sim.agents.frontend.seated && !sim.agents.frontend.lunch);
-  // a las 14:00 a más tardar, todos de vuelta
+  // by 14:00 at the latest, everyone is back
   run(60 * 60);
   assert.ok(sim.journal.some((j) => j.kind === 'lunchend'));
-  assert.ok(!sim.lunch && Object.values(sim.agents).every((a) => !a.lunch && !a.diningSeat && (!a.perch || a.back)), `${now()}`); // en el sofá (mirando tele) no es almuerzo
+  assert.ok(!sim.lunch && Object.values(sim.agents).every((a) => !a.lunch && !a.diningSeat && (!a.perch || a.back)), `${now()}`); // on the sofa (watching TV) is not lunch
   assert.equal(sim.journal.filter((j) => j.kind === 'lunch').length, 1, 'se almuerza una vez al día');
 });
 
 test('el baño: de a uno, con fila si está ocupado, y todos vuelven', () => {
   const { sim, said, run } = office(8);
-  for (const id of ['po', 'qa', 'manager']) sim.agents[id].mind.bladder = 1.7; // a los tres les urge a la vez
+  for (const id of ['po', 'qa', 'manager']) sim.agents[id].mind.bladder = 1.7; // all three need it at the same time
   let maxInside = 0, maxLine = 0;
   run(90, () => {
     maxInside = Math.max(maxInside, Object.values(sim.agents).filter((a) => a.hidden).length);
@@ -166,7 +166,7 @@ test('el baño: de a uno, con fila si está ocupado, y todos vuelven', () => {
   assert.ok(said.some((s) => /Apúrate|Queda mucho|😬/.test(s.text)) || said.some((s) => /aguanto/.test(s.text)));
   run(60);
   assert.ok(Object.values(sim.agents).every((a) => !a.hidden) && !sim.bath.occupant);
-  // y además va solo, cada tanto
+  // and they also go on their own, every so often
   const { sim: s2, run: run2 } = office(12);
   run2(30 * 60);
   assert.ok(s2.journal.filter((j) => j.kind === 'bathroom').length >= 4);
@@ -201,7 +201,7 @@ test('a veces el servidor se incendia y el equipo técnico lo apaga y lo repara'
   assert.ok(said.some((s) => s.who === 'po' && /Fuego/.test(s.text)) && said.some((s) => s.who === 'backend' && /arriba/.test(s.text)));
   assert.ok(sim.particles.length >= 0 && Object.values(sim.agents).every((a) => a.seated), 'todos de vuelta');
   assert.ok(sim.particles.every((p) => p.y < 600));
-  // y solo, por azar: en una hora pasa alguna vez, pero no a cada rato
+  // and on its own, by chance: in an hour it happens at some point, but not all the time
   const { sim: s2, run: run2 } = office(31);
   run2(60 * 60, (i) => { if (i % 60 === 0) s2.handle({ kind: 'tool_start', role: 'backend', tool: 'Bash', text: 'npm run build', ok: true }); });
   const fires = s2.journal.filter((j) => j.kind === 'fire').length;
@@ -213,7 +213,7 @@ test('a veces el servidor se incendia y el equipo técnico lo apaga y lo repara'
 test('lo que hace el harness se ve en la oficina: tests rojos → pesadillas de QA; verde → calma', () => {
   const { sim, said, run } = office(17);
   run(3);
-  sim.agents.qa.mind.dream = 0; // sin sueños pendientes: lo que pase es por los tests
+  sim.agents.qa.mind.dream = 0; // no pending dreams: whatever happens is because of the tests
   sim.handle({ kind: 'tool_start', role: 'qa', tool: 'Bash', text: 'npm test', ok: true });
   sim.handle({ kind: 'tool_end', role: 'qa', tool: 'Bash', text: '3 tests fallaron', ok: false });
   run(6);
@@ -221,7 +221,7 @@ test('lo que hace el harness se ve en la oficina: tests rojos → pesadillas de 
   assert.ok(nightmare && nightmare.dream === 'skull' && nightmare.cause === 'fallaron los tests', JSON.stringify(nightmare));
   assert.match(nightmare.text, /pesadilla/);
   assert.ok(said.some((s) => s.who === 'qa' && /💀/.test(s.text)));
-  // en RED (TDD) fallar es lo esperado: no hay pesadilla
+  // in RED (TDD) failing is expected: no nightmare
   const { sim: tdd, run: runTdd } = office(17);
   runTdd(3);
   tdd.agents.qa.mind.dream = 0;
@@ -229,7 +229,7 @@ test('lo que hace el harness se ve en la oficina: tests rojos → pesadillas de 
   tdd.handle({ kind: 'tool_end', role: 'qa', tool: 'Bash', phase: 'red', text: 'falla como se esperaba', ok: false });
   runTdd(6);
   assert.ok(!tdd.journal.some((j) => j.kind === 'dream' && j.who === 'qa'));
-  // y cuando pasan, se le pasa
+  // and when they pass, it goes away
   sim.agents.qa.dream = { kind: 'skull', start: 0, until: Infinity };
   sim.handle({ kind: 'tool_end', role: 'qa', tool: 'Bash', text: 'npm test', ok: true });
   run(3);
@@ -245,7 +245,7 @@ test('lo que hace el harness se ve en la oficina: el subagente de backend teclea
   assert.ok(diego.seated && diego.badges.has('s1'), 'Diego está en su escritorio con la carpeta del subagente');
   sim.handle({ kind: 'tool_start', role: 'backend', tool: 'Edit', text: 'Editando pagos.js', ok: true });
   assert.equal(diego.state, 'working', 'y teclea');
-  // una seguidilla de errores del backend recalienta el rack hasta que se prende
+  // a streak of backend errors overheats the rack until it catches fire
   let fired = false;
   for (let i = 0; i < 8 && !fired; i++) {
     sim.handle({ kind: 'tool_end', role: 'backend', tool: 'Bash', text: 'npm run build: error', ok: false });
@@ -270,7 +270,7 @@ test('lo que hace el harness se ve en la oficina: arquitectura → el TL va dond
   sim.handle({ kind: 'phase', role: 'designer', phase: 'ux', text: 'flujo de pago' });
   run(25);
   assert.ok(sim.journal.some((j) => j.kind === 'dream' && j.who === 'designer' && j.t > 43_000));
-  // terminar la tarea: celebración y, a veces, pizza
+  // finishing the task: celebration and, sometimes, pizza
   const { sim: s2, run: run2 } = office(3);
   run2(3);
   s2.handle({ kind: 'done', text: 'Pagos listos' });
@@ -285,7 +285,7 @@ test('el fin de turno se dibuja tranquilo: sin festejo, sin confetti, el persona
   assert.equal(sim.banner, null, 'sin banner de festejo');
   assert.ok(!sim.particles.some((p) => p.kind === 'confetti'), 'sin partículas de confetti');
   assert.ok(said.some((s) => s.who === 'manager' && s.text === 'x'), 'el manager dice el texto del evento');
-  // sin texto, cae en la línea tranquila del i18n (la misma del cierre de fase)
+  // without text, it falls back to the i18n's calm line (the same as closing a phase)
   sim.handle({ kind: 'turn_end', role: 'manager' });
   assert.ok(said.some((s) => s.who === 'manager' && s.text === '✔ Termino mi turno'));
   assert.ok(!sim.particles.some((p) => p.kind === 'confetti'), 'sigue sin confetti');
@@ -339,7 +339,7 @@ test('reset deja a todos en su puesto, sin conversaciones ni sueños', () => {
 test('la terminal dibuja el unicornio y el arcoíris', () => {
   const { sim, run, now } = office(2);
   run(1);
-  const L = computeLayout(220, 60); // grande: el sueño en pixel art (en chico va como emoji)
+  const L = computeLayout(220, 60); // large: the dream in pixel art (when small it goes as an emoji)
   const model = { selected: null, log: [], sessions: new Map(), connection: { ok: true, label: '' }, endpoints: [], tasks: { tasks: [], agents: [] }, pipelines: [], targets: [] };
   const render = (kind) => {
     sim.agents.designer.dream = { kind, start: now() - 1000, until: now() + 10_000 };
@@ -348,11 +348,11 @@ test('la terminal dibuja el unicornio y el arcoíris', () => {
     drawFrame(scr, L, sim, model, now());
     return scr.flush();
   };
-  // los colores del sueño aparecen en la salida (rosa de la crin, bandas del arcoíris)
+  // the dream's colors show up in the output (the mane's pink, the rainbow's bands)
   assert.match(render('unicorn'), /255;126;182/);
   assert.match(render('rainbow'), /239;71;111/);
   assert.ok(UNICORN.every((row) => row.length === UNICORN[0].length));
-  // en una terminal chica, como emoji
+  // in a small terminal, as an emoji
   const small = new Screen({ colorMode: 'truecolor' });
   small.resize(100, 30);
   sim.agents.designer.dream = { kind: 'unicorn', start: now() - 1000, until: now() + 10_000 };
@@ -370,18 +370,18 @@ test('el clima de afuera: cuando cambia, se anota y alguien lo comenta; los true
   assert.equal(news.length, 1);
   assert.match(news[0].text, /llover/);
   assert.ok(said.some((x) => /llov|paraguas|lluvia/i.test(x.text)), 'alguien comenta la lluvia');
-  // llovizna y lluvia son lo mismo para comentar: no se repite
+  // drizzle and rain are the same for commenting: it is not repeated
   sim.setWeather({ ...CLEAR, kind: 'drizzle', clouds: 0.9, precip: 0.3 });
   run(2);
   assert.equal(sim.journal.filter((j) => j.kind === 'weather').length, 1);
-  // con tormenta, los truenos
+  // with a storm, the thunder
   sim.setWeather({ ...CLEAR, kind: 'storm', clouds: 1, precip: 1 });
   const shaken = new Set();
   run(120, () => { for (const a of Object.values(sim.agents)) if (a.shakeUntil > 0) shaken.add(a.id); });
   assert.ok(shaken.size >= 1, 'algún trueno asustó a alguien');
   assert.match(sim.journal.filter((j) => j.kind === 'weather').at(-1).text, /tormenta/);
   assert.equal(sim.weather.kind, 'storm');
-  // sin clima del servidor, se simula
+  // without weather from the server, it is simulated
   sim.setWeather(null);
   assert.equal(sim.weather.source, 'simulado');
 });
@@ -391,7 +391,7 @@ test('la tele: se sientan en el sofá de espaldas, sin atravesar la tele, y vuel
   run(2);
   const d = sim.agents.backend;
   assert.ok(sim.watchTV('backend', { cause: 'prueba' }));
-  // por el pasillo de abajo se pasa por detrás de la tele; lo que no puede es bajar a través de ella
+  // through the lower aisle you pass behind the TV; what you cannot do is go down through it
   const tv = { x0: TV.x - TV.w / 2, x1: TV.x + TV.w / 2, y0: 470, y1: TV.feet };
   let crossed = false, sat = false;
   run(30, () => {
@@ -401,11 +401,11 @@ test('la tele: se sientan en el sofá de espaldas, sin atravesar la tele, y vuel
   assert.ok(sat, 'se sentó en el sofá, de espaldas');
   assert.ok(!crossed, 'no atraviesa la tele');
   assert.match(sim.journal.find((j) => j.kind === 'tv').text, /Diego se sienta a ver tele 📺 \(prueba\)/);
-  // otro más: toma otro puesto del sofá
+  // one more: takes another sofa spot
   assert.ok(sim.watchTV('qa'));
   run(20);
   assert.ok(sim.agents.qa.back && sim.agents.qa.x !== d.x);
-  // si el agente lo necesita, deja la tele y vuelve a su puesto (por el costado)
+  // if the agent needs them, they leave the TV and go back to their spot (from the side)
   sim.handle({ kind: 'tool_start', role: 'backend', tool: 'Edit', text: 'Editando api.js', ok: true });
   run(15, () => { if (d.x > tv.x0 && d.x < tv.x1 && d.y > tv.y0 && d.y < tv.y1) crossed = true; });
   assert.ok(d.seated && !d.back && d.tvSeat === null);

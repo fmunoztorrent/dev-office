@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Envía un evento genérico por WebSocket.
+// Sends a generic event over WebSocket.
 //   node scripts/send.js tool_start --tool Edit --file src/app.tsx
-//   node scripts/send.js task --text "Arreglar el checkout"
-//   node scripts/send.js chat --text "¡Buen trabajo, equipo!"
+//   node scripts/send.js task --text "Fix the checkout"
+//   node scripts/send.js chat --text "Great job, team!"
 import WebSocket from 'ws';
 
 const [kind = 'chat', ...rest] = process.argv.slice(2);

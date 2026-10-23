@@ -1,6 +1,6 @@
-// El hook de Claude Code (integrations/claude-code/hook.mjs) de punta a punta: Claude Code es el
-// backend y ejecuta el pipeline en su sesión, encadenando etapas con el Stop hook; una etapa que
-// pide otro modelo corre como `claude -p --model` (aquí, uno de mentira).
+// The Claude Code hook (integrations/claude-code/hook.mjs) end to end: Claude Code is the backend
+// and runs the pipeline in its session, chaining stages with the Stop hook; a stage that asks for
+// another model runs as `claude -p --model` (here, a fake one).
 import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -24,15 +24,15 @@ function setup() {
   fs.writeFileSync(path.join(project, '.devteam', 'team.json'), JSON.stringify({ name: 'Hookeado' }));
   fs.writeFileSync(path.join(project, '.devteam', 'pipelines', 'mini.json'), JSON.stringify({
     name: 'Mini', stages: [
-      { id: 'plan', name: 'Plan', role: 'tl', phase: 'arquitectura' },                                  // en la sesión
-      { id: 'impl', name: 'Implementación', role: 'backend', model: 'sonnet', needs: ['plan'], check: { run: 'true' } }, // otro modelo: claude -p
-      { id: 'review', name: 'Review', role: 'tl', phase: 'review', model: 'opus', needs: ['impl'] },    // el de la sesión: en la sesión
+      { id: 'plan', name: 'Plan', role: 'tl', phase: 'arquitectura' },                                  // in the session
+      { id: 'impl', name: 'Implementación', role: 'backend', model: 'sonnet', needs: ['plan'], check: { run: 'true' } }, // another model: claude -p
+      { id: 'review', name: 'Review', role: 'tl', phase: 'review', model: 'opus', needs: ['impl'] },    // the session's: in the session
     ],
   }));
   return { home, project, transcript: path.join(home, 'transcript.jsonl'), log: path.join(home, 'claude.log') };
 }
 
-/** Corre el hook como lo haría Claude Code: JSON por stdin, decisión por stdout. */
+/** Runs the hook as Claude Code would: JSON on stdin, decision on stdout. */
 function hook(ctx, base, input) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [HOOK], {
@@ -52,14 +52,14 @@ test('Claude Code ejecuta el pipeline en su sesión: Stop → siguiente etapa; o
   const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
   const base = server.url;
   try {
-    // al empezar, el hook anuncia el proyecto (y no imprime nada: sería contexto para Claude)
+    // on start, the hook announces the project (and prints nothing: it would be context for Claude)
     let r = await hook(ctx, base, { hook_event_name: 'SessionStart', source: 'startup' });
     assert.deepEqual(r, { code: 0, out: '' });
     const [project] = server.pipelines.projects();
     assert.equal(project.name, 'Hookeado');
     assert.deepEqual(project.pipelines[0].hosts, [{ agent: 'claude-code', session: 'c1', live: false }]);
 
-    // la oficina lo pide; queda en cola hasta que Claude termine su turno
+    // the office asks for it; it stays queued until Claude ends its turn
     const { run } = await call(base, 'POST', '/v1/pipelines', { session: 'c1', pipeline: 'mini', task: 'Exportar CSV' });
     assert.equal(run.status, 'queued');
     say(ctx, 'Hola, ¿en qué te ayudo?');
@@ -71,26 +71,26 @@ test('Claude Code ejecuta el pipeline en su sesión: Stop → siguiente etapa; o
     assert.equal(server.pipelines.snapshot().runs[0].status, 'running');
     assert.ok(fs.existsSync(path.join(ctx.home, '.dev-team-office', 'claude-runs', 'c1.json')));
 
-    // Claude hizo la etapa 1 en su sesión; al parar, la etapa 2 (sonnet) corre como hijo y la 3
-    // (opus, el modelo de la sesión) vuelve a la sesión
+    // Claude did stage 1 in its session; on stopping, stage 2 (sonnet) runs as a child and stage 3
+    // (opus, the session's model) goes back to the session
     say(ctx, 'Plan: columna export en /reports');
     r = await hook(ctx, base, { hook_event_name: 'Stop', stop_hook_active: true });
     out = JSON.parse(r.out);
     assert.match(out.reason, /^\[Dev Team Office · etapa 3\/3\]/);
-    assert.match(out.reason, /hecho con sonnet/); // el resumen del hijo llega a la etapa siguiente
+    assert.match(out.reason, /hecho con sonnet/); // the child's summary reaches the next stage
     const child = JSON.parse(fs.readFileSync(ctx.log, 'utf8').trim());
     assert.equal(child.model, 'sonnet');
-    assert.equal(child.alias, 'c1'); // sus herramientas se ven en la sesión que lo lanzó
+    assert.equal(child.alias, 'c1'); // its tools show up in the session that launched it
     assert.match(child.prompt, /Plan: columna export en \/reports/);
 
     say(ctx, 'Review: todo bien');
     r = await hook(ctx, base, { hook_event_name: 'Stop', stop_hook_active: true });
-    assert.deepEqual(r, { code: 0, out: '' }); // terminó: Claude se detiene
+    assert.deepEqual(r, { code: 0, out: '' }); // finished: Claude stops
     const done = server.pipelines.snapshot().runs[0];
     assert.equal(done.status, 'done');
     assert.deepEqual(done.stages.map((s) => s.status), ['done', 'done', 'done']);
     assert.equal(fs.existsSync(path.join(ctx.home, '.dev-team-office', 'claude-runs', 'c1.json')), false);
-    // la oficina dibujó cada fase y el gate (un Bash del backend)
+    // the office drew each phase and the gate (a Bash by the backend)
     const s = server.office.sessionSummary('c1');
     assert.deepEqual(s.flow.map((f) => `${f.role}:${f.phase}`), ['tl:arquitectura', 'backend:implementa', 'tl:review']);
     assert.equal(s.status, 'done');
@@ -114,14 +114,14 @@ test('cancelar desde la oficina: el hook lo recoge en el siguiente Stop; y sin o
     assert.deepEqual(r, { code: 0, out: '' });
     assert.equal(server.pipelines.snapshot().runs[0].status, 'cancelled');
 
-    // una tarea directa también llega en el Stop
+    // a direct task also arrives at Stop
     await call(base, 'POST', '/v1/tasks', { agent: 'claude-code', session: 'c1', text: 'Escribe los tests del login' });
     const t = JSON.parse((await hook(ctx, base, { hook_event_name: 'Stop' })).out);
     assert.match(t.reason, /Escribe los tests del login/);
   } finally {
     await server.close();
   }
-  // oficina apagada: sale 0 y no imprime nada
+  // office stopped: it exits 0 and prints nothing
   assert.deepEqual(await hook(ctx, 'http://127.0.0.1:9', { hook_event_name: 'Stop' }), { code: 0, out: '' });
 });
 
@@ -130,7 +130,7 @@ test('a una sesión de Claude ya abierta, el /task de Errementari le llega expan
   const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
   const base = server.url;
   try {
-    await hook(ctx, base, { hook_event_name: 'SessionStart', source: 'startup' }); // la sesión anuncia su ruta
+    await hook(ctx, base, { hook_event_name: 'SessionStart', source: 'startup' }); // the session announces its path
     const { agent } = await call(base, 'POST', '/v1/agents', { path: ctx.project, harness: 'claude-code' });
     const r = await call(base, 'POST', `/v1/agents/${agent.id}/prompt`, { entry: 'errementari:feature', text: 'Login con Google', session: 'c1' });
     assert.equal(r.task.status, 'queued', r.error);

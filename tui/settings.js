@@ -1,11 +1,11 @@
-// ⚙ Ajustes en la terminal: un formulario sobre el corcho, con las mismas pestañas que la web.
-//   General      idioma, zona horaria, clima real, herdr (agentes en panes) y la bitácora
-//   Oficinas     las oficinas de la empresa: nombre, zona horaria y ubicación; ver, editar, eliminar
-//   Agentes      el mantenedor: agregar (ruta completa + CLI + oficina), eliminar y mandarle un prompt;
-//                se ve lo que trae el harness de cada uno
-//   Personajes   nombre, cargo, colores y rasgos de los personajes de la oficina que se mira
-// Todo se guarda en la base SQLite (por la API de la oficina).
-// Teclas: ↑↓/tab campo · ◂▸ cambia · escribir edita · Enter acción · ctrl+s guardar · esc cerrar
+// ⚙ Settings in the terminal: a form over the cork board, with the same tabs as the web.
+//   General      language, time zone, real weather, herdr (agents in panes) and the log
+//   Offices      the company's offices: name, time zone and location; view, edit, delete
+//   Agents       the maintainer: add (full path + CLI + office), delete and send it a prompt;
+//                shows what each one's harness brings
+//   Characters   name, title, colors and features of the characters of the office being watched
+// Everything is saved in the SQLite database (through the office's API).
+// Keys: ↑↓/tab field · ◂▸ change · typing edits · Enter action · ctrl+s save · esc close
 
 import { TEAM, DEFAULT_TEAM, APPEARANCE_KEYS, LOOK_PALETTES } from '../public/sim.js';
 import { t, LANGUAGES } from '../public/i18n.js';
@@ -13,7 +13,7 @@ import { allZones, zoneInfo, countryName } from '../public/clock.js';
 import { hex, fit, strWidth } from './screen.js';
 
 const ROLES = ['po', 'analyst', 'manager', 'tl', 'qa', 'backend', 'frontend', 'designer'];
-const HARNESS_NAME = { pi: 'Pi', 'claude-code': 'Claude Code', opencode: 'OpenCode' };
+const HARNESS_NAME = { pi: 'Pi', 'claude-code': 'Claude Code', opencode: 'OpenCode', codex: 'Codex' };
 const TABS = ['general', 'offices', 'agents', 'look'];
 const C = Object.fromEntries(Object.entries({
   cork: '#b9895a', corkDot: '#8f6640', paper: '#fdfcf6', ink: '#2b2d42', soft: '#6c757d', pin: '#ef476f', shadow: '#0a0b14',
@@ -26,19 +26,19 @@ const cycle = (list, current, delta) => {
   return list[((i < 0 ? 0 : i) + delta + list.length) % list.length];
 };
 const yesNo = (v) => t(v ? 'settings.yes' : 'settings.no');
-/** Las zonas que coinciden con lo que se escribió (la ciudad, la región o el país). */
+/** The zones that match what was typed (the city, the region or the country). */
 const searchZones = (q, lang) => {
   const s = String(q || '').trim().toLowerCase();
   if (!s) return allZones();
   return allZones().filter((z) => z.toLowerCase().replace(/_/g, ' ').includes(s) || countryName(zoneInfo(z).country, lang).toLowerCase().includes(s));
 };
 
-const HARNESS_IDS = ['claude-code', 'opencode', 'pi'];
+const HARNESS_IDS = ['claude-code', 'opencode', 'pi', 'codex'];
 const emptyOffice = () => ({ id: null, name: '', timezone: null, location: '', tzQuery: '' });
 
 /**
- * @param office  () => la oficina que se está mirando (la de los personajes)
- * @param onView  (id) => mirar otra oficina
+ * @param office  () => the office being watched (the characters' one)
+ * @param onView  (id) => watch another office
  */
 export function createSettings({ http, onSaved, onPrompt, office = () => 'main', onView }) {
   const s = {
@@ -75,7 +75,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
     s.looks = Object.fromEntries(ROLES.map((role) => [role, Object.fromEntries(APPEARANCE_KEYS.map((k) => [k, TEAM[role][k]]))]));
   }
 
-  /** Un ajuste general: se guarda al cambiarlo. */
+  /** A general setting: saved when changed. */
   async function setPref(patch) {
     const r = await api('PUT', '/v1/settings', { prefs: patch });
     if (!r.ok) return say(r.error);
@@ -120,7 +120,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
     await Promise.all([loadSettings(), loadAgents()]);
   }
 
-  // ---------------------------------------------------------------- campos de cada pestaña
+  // ---------------------------------------------------------------- each tab's fields
 
   const tzLabel = (tz) => { const z = zoneInfo(tz); return `${tz}${z.country ? ` · ${countryName(z.country, s.prefs?.lang)}` : ''}`; };
 
@@ -144,6 +144,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
       f.push({ type: 'heading', text: t('settings.general.herdr') });
       f.push({ type: 'info', text: `  ${s.herdr?.available ? t('settings.general.herdrOn', { pane: s.herdr.pane || '?' }) : t('settings.general.herdrOff')}` });
       f.push({ type: 'select', label: t('settings.general.herdrLaunch'), value: () => yesNo(p.herdr.launch), cycle: () => setPref({ herdr: { launch: !p.herdr.launch } }) });
+      f.push({ type: 'select', label: t('settings.general.herdrSubagents'), value: () => yesNo(p.herdr.subagents !== false), cycle: () => setPref({ herdr: { subagents: p.herdr.subagents === false } }) });
       f.push({ type: 'select', label: t('settings.general.herdrDirection'), value: () => t(`settings.general.${p.herdr.direction}`), cycle: () => setPref({ herdr: { direction: p.herdr.direction === 'right' ? 'down' : 'right' } }) });
       const starts = ['auto', 'none', ...s.targets.filter((x) => x.registered).map((x) => x.id)];
       const startLabel = (id) => (id === 'auto' || id === 'none' ? t(`settings.general.${id}`) : s.targets.find((x) => x.id === id)?.name || id);
@@ -233,7 +234,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
 
   // ---------------------------------------------------------------- teclado
 
-  /** Devuelve 'close' cuando hay que cerrar. */
+  /** Returns 'close' when it has to close. */
   function key(k) {
     const all = fields();
     const list = focusable(all);
@@ -285,8 +286,8 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
     const all = fields();
     const list = focusable(all);
     const cur = list[Math.min(s.focus, list.length - 1)];
-    const bodyRows = y0 + h - 4 - row; // deja lugar para el mensaje y la ayuda
-    // desplazamiento para que el campo con foco quede a la vista
+    const bodyRows = y0 + h - 4 - row; // leaves room for the message and the help
+    // scrolling so the focused field stays in sight
     const idx = all.indexOf(cur);
     const start = Math.max(0, Math.min(idx - Math.floor(bodyRows / 2), all.length - bodyRows));
     for (const f of all.slice(start, start + bodyRows)) {
@@ -339,7 +340,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
     }
   }
 
-  // Vista previa del personaje: el sprite de la oficina, a doble tamaño, con medios bloques.
+  // Character preview: the office's sprite, at double size, with half blocks.
   function drawPreview(scr, x, y, look) {
     const sh = hex(look.shirt), pa = hex(look.pants), ha = hex(look.hair), sk = hex(look.skin), eye = hex('#1a1a1a'), bg = hex('#c9b48a'), shoe = hex('#222222');
     const grid = Array.from({ length: 10 }, () => Array(5).fill(bg));
@@ -352,7 +353,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
     P(0, 6, sk); P(4, 6, sk);
     for (const cy of [7, 8]) { P(1, cy, pa); P(3, cy, pa); }
     P(1, 9, shoe); P(3, 9, shoe);
-    // cada pixel del sprite = 2 columnas × 1 media fila; dos filas del sprite por fila de texto
+    // each sprite pixel = 2 columns × 1 half row; two sprite rows per text row
     for (let r = 0; r < 5; r++) {
       for (let cx = 0; cx < 5; cx++) {
         for (const dx of [0, 1]) scr.text(x + cx * 2 + dx, y + r * 2, '▀', grid[r * 2][cx], grid[r * 2][cx]);

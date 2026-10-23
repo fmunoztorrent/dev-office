@@ -1,16 +1,16 @@
-// Tareas que el usuario envía desde la oficina hacia un agente de código. La oficina es el
-// frontend: entrega la tarea y muestra su estado; el trabajo lo hace el agente.
+// Tasks the user sends from the office to a coding agent. The office is the frontend: it delivers
+// the task and shows its state; the agent does the work.
 //
-// - A una sesión abierta: Pi y OpenCode se conectan a la oficina (WebSocket, `register`) y
-//   reciben la tarea al instante. Claude Code no tiene un canal así: la tarea queda en cola y
-//   la entrega su hook `Stop` cuando Claude termina el turno en curso.
-// - Una sesión nueva de un agente registrado (⚙ › Agentes, con su ruta): dentro de herdr, la
-//   oficina abre al agente en un pane nuevo (interactivo, a la vista) y le manda el prompt; fuera de
-//   herdr, abre su CLI en segundo plano en esa ruta (`claude -p`, `opencode run`, `pi -p`) con el
-//   prompt o el comando que arranca el pipeline de su harness. No orquesta nada: el pipeline lo
-//   corre el harness; la oficina dibuja lo que reportan sus hooks o plugins.
+// - To an open session: Pi and OpenCode connect to the office (WebSocket, `register`) and
+//   receive the task instantly. Claude Code has no such channel: the task is queued and its
+//   `Stop` hook delivers it when Claude ends the current turn.
+// - A new session of a registered agent (⚙ › Agents, with its path): inside herdr, the office
+//   opens the agent in a new pane (interactive, in sight) and sends it the prompt; outside herdr,
+//   it opens its CLI in the background in that path (`claude -p`, `opencode run`, `pi -p`) with the
+//   prompt or the command that starts its harness's pipeline. It orchestrates nothing: the harness
+//   runs the pipeline; the office draws what its hooks or plugins report.
 //
-// Cada tarea es de una oficina (la del agente registrado, o la de la sesión que la recibe).
+// Each task belongs to an office (the registered agent's, or the one of the session that receives it).
 
 import { EventEmitter } from 'node:events';
 import { spawn } from 'node:child_process';
@@ -24,17 +24,31 @@ import { t as tr } from '../public/i18n.js';
 import { MAIN_OFFICE } from './store.js';
 
 export const AGENT_LABEL = { 'claude-code': 'Claude Code', opencode: 'OpenCode', pi: 'Pi' };
-const HARNESS_IDS = ['claude-code', 'opencode', 'pi'];
+/**
+ * The environment of an agent the office launches: its own, plus the Node the office runs with on the
+ * PATH (a CLI written in Node, like pi, starts even if the office was opened without Node on the PATH).
+ */
+export function childEnv(extra = {}) {
+  const env = { ...process.env, ...extra };
+  // the "Pi session with an owner" mark: if the office was opened from a Pi, what it launches is not its subagent
+  delete env.DEV_TEAM_OFFICE_PI_PID;
+  const dir = path.dirname(process.execPath);
+  const parts = (env.PATH || '').split(path.delimiter).filter(Boolean);
+  if (!parts.includes(dir)) env.PATH = [...parts, dir].join(path.delimiter);
+  return env;
+}
+
+const HARNESS_IDS = ['claude-code', 'opencode', 'pi', 'codex'];
 const TASKS_MAX = 50;
 const TEXT_MAX = 4000;
 const OUTPUT_LINES = 40;
 
 export class TaskHub extends EventEmitter {
   /**
-   * @param company  las oficinas (server/company.js): adónde va cada evento
-   * @param store    la base (server/store.js): cada tarea queda en el historial de prompts
-   * @param herdr    server/herdr.js: dentro de herdr, las sesiones nuevas se abren en un pane
-   * @param prefs    () => los ajustes (herdr.launch, herdr.direction)
+   * @param company  the offices (server/company.js): where each event goes
+   * @param store    the database (server/store.js): each task stays in the prompt history
+   * @param herdr    server/herdr.js: inside herdr, new sessions open in a pane
+   * @param prefs    () => the settings (herdr.launch, herdr.direction)
    */
   constructor(company, { cwd = process.cwd(), officeUrl, store, herdr = null, prefs = () => ({}), socket = null } = {}) {
     super();
@@ -43,19 +57,19 @@ export class TaskHub extends EventEmitter {
     this.herdr = herdr;
     this.prefs = prefs;
     this.socket = socket;
-    this.boot = Date.now().toString(36); // los ids de tarea se reinician con la oficina; en la base no
+    this.boot = Date.now().toString(36); // task ids restart with the office; in the database they do not
     this.officeUrl = officeUrl;
     this.defaultCwd = cwd;
-    this.conns = new Map(); // agentes conectados por WebSocket
+    this.conns = new Map(); // agents connected over WebSocket
     this.tasks = new Map();
-    this.children = new Map(); // sesiones lanzadas por la oficina, por id de tarea
+    this.children = new Map(); // sessions launched by the office, by task id
     this.seq = 0;
   }
 
   // ---------------------------------------------------------------- agentes conectados
 
   /**
-   * Un plugin/extensión se presenta (y se vuelve a presentar cuando cambia de sesión).
+   * A plugin/extension introduces itself (and does it again when it changes session).
    * info: { agent, session, cwd, pid, can: ['task','pipeline'], project: { dir, name, pipelines } }
    */
   register(conn, info = {}) {
@@ -71,7 +85,7 @@ export class TaskHub extends EventEmitter {
     if (Array.isArray(info.can)) c.can = info.can.filter((x) => typeof x === 'string').slice(0, 10);
     if (info.project) c.project = sanitizeProject(info.project, c.cwd);
     if (info.session) { c.session = clip(info.session, 100); c.sessions.add(c.session); }
-    // su oficina: la que dice (la oficina se la pasa al abrirlo), la de su sesión o la de su ruta
+    // its office: the one it states (the office passes it when opening it), its session's or its path's
     if (c.session && !this.office.officeOfSession?.(c.session)) {
       this.office.bindSession?.(c.session, (info.office && this.office.has?.(info.office) && info.office) || this.office.officeForPath?.(c.cwd) || MAIN_OFFICE);
     }
@@ -87,7 +101,7 @@ export class TaskHub extends EventEmitter {
 
   liveAgents() { return [...this.conns.values()]; }
 
-  /** Envía un mensaje a la sesión de un agente conectado. false si no está conectada. */
+  /** Sends a message to a connected agent's session. false if it is not connected. */
   sendToSession(session, msg) {
     const c = [...this.conns.values()].find((x) => x.sessions.has(session));
     if (!c) return false;
@@ -104,11 +118,11 @@ export class TaskHub extends EventEmitter {
   // ---------------------------------------------------------------- tareas
 
   /**
-   * @param title   texto corto para la oficina (el tablero); por defecto, el propio texto
-   * @param command, args  si la tarea es un comando del harness (`/task …`): el agente lo ejecuta
-   *                como comando (OpenCode) o lo expande (Pi, Claude); `text` es "/comando args"
-   * @param launch  { bin, args } del agente registrado, para una sesión nueva (mode: 'launch')
-   * @param meta    { agentId, entry } para el historial: qué agente registrado y por qué entrada
+   * @param title   short text for the office (the board); by default, the text itself
+   * @param command, args  if the task is a harness command (`/task …`): the agent runs it
+   *                as a command (OpenCode) or expands it (Pi, Claude); `text` is "/command args"
+   * @param launch  { bin, args } of the registered agent, for a new session (mode: 'launch')
+   * @param meta    { agentId, entry } for the history: which registered agent and through which entry
    */
   submit({ text, title, agent, session, mode, cwd, from, command, args, launch, meta, office } = {}) {
     text = String(text ?? '').trim();
@@ -152,15 +166,15 @@ export class TaskHub extends EventEmitter {
     return { ok: true, task: this.#public(task) };
   }
 
-  /** ¿Las sesiones nuevas se abren en panes de herdr? (dentro de herdr, salvo que se apague en ⚙) */
+  /** Do new sessions open in herdr panes? (inside herdr, unless it is turned off in ⚙) */
   get inPanes() { return !!this.herdr?.available && this.prefs()?.herdr?.launch !== false; }
 
-  // Dentro de herdr: el agente se abre en un pane nuevo, interactivo, y recibe la tarea como prompt.
-  // Desde ahí orquesta lo suyo (y puede abrir más panes); la tarea termina cuando su turno termina.
+  // Inside herdr: the agent opens in a new, interactive pane and gets the task as its prompt.
+  // From there it orchestrates its own work (and may open more panes); the task ends when its turn ends.
   async #launchInPane(task, { bin, args }) {
     const label = AGENT_LABEL[task.agent] || task.agent;
     const env = { DEV_TEAM_OFFICE_URL: this.officeUrl, DEV_TEAM_OFFICE_OFFICE: task.office, ...(this.socket ? { DEV_TEAM_OFFICE_SOCKET: this.socket } : {}) };
-    // la extensión de Pi adopta este id de sesión: así la tarea sabe qué sesión la está haciendo
+    // the Pi extension adopts this session id: so the task knows which session is doing it
     if (task.agent === 'pi') { env.DEV_TEAM_OFFICE_SESSION = `pi-${task.id}`; task.session = env.DEV_TEAM_OFFICE_SESSION; }
     this.#set(task, 'running', tr('task.inPane', { agent: label, pane: '…' }));
     try {
@@ -175,27 +189,55 @@ export class TaskHub extends EventEmitter {
       if (task.session) this.office.bindSession?.(task.session, task.office);
       this.#set(task, 'running', tr('task.inPane', { agent: label, pane }));
     } catch (err) {
-      this.#set(task, 'failed', tr('err.herdrFailed', { error: err.message }));
+      const pane = err.pane || task.pane;
+      if (err.code && pane) {
+        // S3: the retry did not start the turn either → the task fails with the pane and the code.
+        task.pane = pane;
+        const detail = tr('task.paneNoTurn', { pane, code: err.code });
+        this.#set(task, 'failed', detail);
+        this.#releasePaneRole(pane, task.office, err.code);
+      } else {
+        this.#set(task, 'failed', tr('err.herdrFailed', { error: err.message }));
+      }
     }
   }
 
-  /** El agente de un pane terminó su turno (herdr lo ve idle o done): su tarea queda hecha. */
+  /** S4: when a pane task fails, the role herdr tracks for that pane goes back to idle. */
+  #releasePaneRole(pane, office, code) {
+    const role = this.herdr?.tracked?.get(pane)?.role || 'manager';
+    this.office.ingest('generic', { session: 'office', office, kind: 'turn_end', role, text: tr('task.paneNoTurn', { pane, code }) });
+  }
+
+  /** A pane's agent ended its turn (herdr sees it idle or done): its task is done. */
   paneSettled(pane) {
     const t = [...this.tasks.values()].find((x) => x.pane === pane && x.status === 'running');
     if (t) this.#set(t, 'done', tr('task.paneIdle', { pane }));
   }
 
-  /** La sesión que abrió el agente de un pane (llega en su primer evento). */
+  /**
+   * The session ended its turn (its own event, without depending on herdr recognizing the agent):
+   * what was sent to it, in its pane or to the open session, is done. Without a pane, what was
+   * launched in the background is closed by its exit code, and Claude gets the task right at its Stop.
+   */
+  sessionSettled(session) {
+    for (const t of this.tasks.values()) {
+      if (t.status !== 'running' || !session || t.session !== session) continue;
+      if (!t.pane && (t.mode !== 'session' || t.agent === 'claude-code')) continue;
+      this.#set(t, 'done', tr('task.finished'));
+    }
+  }
+
+  /** The session opened by a pane's agent (it arrives with its first event). */
   paneSession(pane, session) {
     const t = [...this.tasks.values()].find((x) => x.pane === pane && !x.session);
     if (t) { t.session = clip(session, 100); this.#changed(); }
   }
 
-  // Una sesión nueva del agente, en su directorio. La tarea va como un único argumento, sin shell.
+  // A new session of the agent, in its directory. The task goes as a single argument, without a shell.
   #launch(task, { exe, argv }) {
-    const env = { ...process.env, DEV_TEAM_OFFICE_LAUNCHED: '1', ...(this.officeUrl ? { DEV_TEAM_OFFICE_URL: this.officeUrl } : {}) };
+    const env = childEnv({ DEV_TEAM_OFFICE_LAUNCHED: '1', ...(this.officeUrl ? { DEV_TEAM_OFFICE_URL: this.officeUrl } : {}) });
     delete env.DEV_TEAM_OFFICE_SESSION_ALIAS;
-    // la extensión de Pi adopta este id de sesión: así la tarea sabe qué sesión la está haciendo
+    // the Pi extension adopts this session id: so the task knows which session is doing it
     if (task.agent === 'pi') { env.DEV_TEAM_OFFICE_SESSION = `pi-${task.id}`; task.session = env.DEV_TEAM_OFFICE_SESSION; } else delete env.DEV_TEAM_OFFICE_SESSION;
     let child;
     try {
@@ -225,9 +267,9 @@ export class TaskHub extends EventEmitter {
     });
   }
 
-  /** Corta las sesiones lanzadas por la oficina (al cerrarla). */
+  /** Kills the sessions launched by the office (when it closes). */
   stopAll() {
-    for (const child of this.children.values()) { try { process.kill(-child.pid, 'SIGTERM'); } catch { /* ya terminó */ } }
+    for (const child of this.children.values()) { try { process.kill(-child.pid, 'SIGTERM'); } catch { /* already finished */ } }
   }
 
   #deliver(task, conn) {
@@ -237,7 +279,7 @@ export class TaskHub extends EventEmitter {
     conn.send({ type: 'task', id: task.id, text: task.text, session: task.session, ...(task.command ? { command: task.command, args: task.args } : {}) });
   }
 
-  /** Respuesta del agente: accepted | done | failed | rejected. */
+  /** The agent's answer: accepted | done | failed | rejected. */
   update(connId, { id, status, error, detail } = {}) {
     const t = this.tasks.get(String(id));
     if (!t || (t.connId !== undefined && t.connId !== connId)) return { ok: false, error: tr('err.unknownTask') };
@@ -252,7 +294,7 @@ export class TaskHub extends EventEmitter {
     return { ok: true };
   }
 
-  /** Para el hook Stop de Claude Code: la siguiente tarea en cola para esa sesión. */
+  /** For Claude Code's Stop hook: the next queued task for that session. */
   takeForClaude(session) {
     const t = [...this.tasks.values()].find((x) => x.agent === 'claude-code' && x.status === 'queued' && x.session === session);
     if (!t) return null;
@@ -268,7 +310,7 @@ export class TaskHub extends EventEmitter {
     const child = this.children.get(t.id);
     if (child) {
       this.#set(t, 'cancelled', tr('task.cancelled'));
-      try { process.kill(-child.pid, 'SIGTERM'); } catch { /* ya terminó */ }
+      try { process.kill(-child.pid, 'SIGTERM'); } catch { /* already finished */ }
       return { ok: true };
     }
     return { ok: false, error: tr('err.cantCancel', { status: tr(`taskStatus.${t.status}`) }) };
@@ -295,12 +337,12 @@ export class TaskHub extends EventEmitter {
   #save(t) {
     try {
       this.store?.savePrompt({ id: `${this.boot}-${t.id}`, agentId: t.agentId, agent: t.agent, entry: t.entry, text: t.title, session: t.session, mode: t.mode, cwd: t.cwd, status: t.status, detail: t.detail });
-    } catch { /* el historial no puede romper el envío */ }
+    } catch { /* the history cannot break the delivery */ }
   }
 
   #changed() { this.emit('change', this.snapshot()); }
 
-  // La oficina lo anima: la PO se lleva la tarjeta a la pizarra.
+  // The office animates it: the PO takes the card to the whiteboard.
   #dispatchEvent(task) {
     this.office.ingest('generic', {
       session: 'office', office: task.office, kind: 'dispatch', agent: task.agent, mode: task.mode, from: task.from,
@@ -308,7 +350,7 @@ export class TaskHub extends EventEmitter {
     });
   }
 
-  // La sesión destino recibe la tarea como su nuevo pedido (el tablero cambia de título).
+  // The target session gets the task as its new request (the board changes its title).
   #startedEvent(task) {
     if (task.session) this.office.ingest(task.agent, { session: task.session, office: task.office, kind: 'task', text: task.title });
   }
@@ -320,16 +362,16 @@ export class TaskHub extends EventEmitter {
     };
   }
 
-  /** La oficina de un agente conectado: la de su sesión, o la de su ruta. */
+  /** A connected agent's office: its session's, or its path's. */
   connOffice(c) { return (c.session && this.office.officeOfSession?.(c.session)) || this.office.officeForPath?.(c.cwd) || MAIN_OFFICE; }
 
-  /** @param office sólo lo de esa oficina (sin oficina: todo) */
+  /** @param office only that office's (without an office: everything) */
   snapshot(office) {
     const mine = (o) => !office || (o || MAIN_OFFICE) === office;
     return {
       tasks: [...this.tasks.values()].filter((t) => mine(t.office)).slice(-20).map((t) => this.#public(t)),
       agents: [...this.conns.values()].filter((c) => mine(this.connOffice(c))).map((c) => ({ id: c.id, agent: c.agent, session: c.session, cwd: c.cwd, pid: c.pid, can: c.can, project: c.project?.name || null, connectedAt: c.connectedAt })),
-      // Sesiones nuevas: la oficina abre el CLI del agente (si está instalado).
+      // New sessions: the office opens the agent's CLI (if it is installed).
       launchers: HARNESS_IDS.map((agent) => ({ agent, available: !!which(agent === 'claude-code' && process.env.DEV_TEAM_OFFICE_CLAUDE_BIN || HARNESSES[agent].bin) })),
       defaultCwd: this.defaultCwd,
     };

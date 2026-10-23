@@ -1,5 +1,5 @@
-// Framebuffer de terminal: una capa de píxeles (2 por celda, con "▀" y colores de
-// frente/fondo) y una capa de texto encima. flush() sólo reescribe las celdas que cambiaron.
+// Terminal framebuffer: a pixel layer (2 per cell, with "▀" and foreground/background
+// colors) and a text layer on top. flush() only rewrites the cells that changed.
 
 const ESC = '\x1b[';
 
@@ -50,7 +50,7 @@ function to256(rgb) {
   return v;
 }
 
-// Emoji y símbolos que las terminales dibujan con dos columnas.
+// Emoji and symbols that terminals draw with two columns.
 const WIDE_BMP = new Set([0x231a, 0x231b, 0x23e9, 0x23ea, 0x23eb, 0x23ec, 0x23f0, 0x23f3, 0x25fd, 0x25fe, 0x2614, 0x2615,
   0x267f, 0x2693, 0x26a1, 0x26aa, 0x26ab, 0x26bd, 0x26be, 0x26c4, 0x26c5, 0x26ce, 0x26d4, 0x26ea, 0x26f2, 0x26f3, 0x26f5,
   0x26fa, 0x26fd, 0x2705, 0x270a, 0x270b, 0x2728, 0x274c, 0x274e, 0x2753, 0x2754, 0x2755, 0x2757, 0x2795, 0x2796, 0x2797,
@@ -58,7 +58,7 @@ const WIDE_BMP = new Set([0x231a, 0x231b, 0x23e9, 0x23ea, 0x23eb, 0x23ec, 0x23f0
 for (let cp = 0x2648; cp <= 0x2653; cp++) WIDE_BMP.add(cp);
 
 export function charWidth(cp) {
-  if (cp < 0x20 || (cp >= 0x7f && cp < 0xa0)) return -1; // control: se descarta
+  if (cp < 0x20 || (cp >= 0x7f && cp < 0xa0)) return -1; // control: dropped
   if (cp === 0xfe0f || cp === 0xfe0e || cp === 0x200d || cp === 0x200b || (cp >= 0x300 && cp <= 0x36f)) return 0;
   if (cp >= 0x1f000 && cp <= 0x1faff) return 2;
   if (WIDE_BMP.has(cp)) return 2;
@@ -67,7 +67,7 @@ export function charWidth(cp) {
   return 1;
 }
 
-/** Texto seguro para la terminal: sin secuencias de control (el texto viene de procesos externos). */
+/** Terminal-safe text: no control sequences (the text comes from external processes). */
 export function clean(text) {
   let out = '';
   for (const ch of String(text ?? '').normalize('NFC')) {
@@ -84,7 +84,7 @@ export function strWidth(text) {
   return w;
 }
 
-/** Recorta a `max` columnas, con "…" si no cabe. */
+/** Trims to `max` columns, with "…" if it does not fit. */
 export function fit(text, max) {
   text = clean(text);
   if (max <= 0) return '';
@@ -98,7 +98,7 @@ export function fit(text, max) {
   return out + '…';
 }
 
-/** Parte un texto en líneas de `max` columnas (como mucho `maxLines`). */
+/** Splits a text into lines of `max` columns (at most `maxLines`). */
 export function wrap(text, max, maxLines = 99) {
   const words = clean(text).split(' ').filter(Boolean);
   const lines = [];
@@ -151,14 +151,14 @@ export class Screen {
     for (let yy = y0; yy < y1; yy++) this.px.fill(c, yy * this.cols + x0, yy * this.cols + Math.max(x0, x1));
   }
 
-  /** Quita el texto de las celdas que cubre un rectángulo de píxeles (oclusión). */
+  /** Removes the text from the cells a pixel rectangle covers (occlusion). */
   clearText(x, y, w, h) {
     for (let r = Math.floor(y / 2); r <= Math.floor((y + h - 1) / 2); r++) {
       for (let c = x; c < x + w; c++) if (c >= 0 && r >= 0 && c < this.cols && r < this.rows) this.tch[r * this.cols + c] = null;
     }
   }
 
-  /** Escribe texto en (col, row). bg = -1 deja ver los píxeles de fondo. Devuelve las columnas usadas. */
+  /** Writes text at (col, row). bg = -1 lets the background pixels show through. Returns the columns used. */
   text(col, row, str, fg, bg = -1, maxCols = Infinity) {
     if (row < 0 || row >= this.rows) return 0;
     let c = col;
@@ -168,7 +168,7 @@ export class Screen {
       if (c + w > end) break;
       if (c >= 0) {
         const i = row * this.cols + c;
-        // No dejar medio carácter ancho colgando a un lado u otro.
+        // Do not leave half a wide character hanging on either side.
         if (this.tch[i] === '' && c > 0) this.tch[i - 1] = null;
         if (w === 1 && this.tch[i + 1] === '') this.tch[i + 1] = null;
         this.tch[i] = ch; this.tfg[i] = fg; this.tbg[i] = bg;
@@ -190,7 +190,7 @@ export class Screen {
     return `${ESC}38;5;${to256(fg)};48;5;${to256(bg)}m`;
   }
 
-  /** Devuelve las secuencias para llevar la terminal al cuadro actual. */
+  /** Returns the sequences that bring the terminal to the current frame. */
   flush() {
     const { cols, rows, px, tch, tfg, tbg, prev } = this;
     let out = this.full ? `${ESC}0m${ESC}2J` : '';
@@ -210,12 +210,12 @@ export class Screen {
         const key = `${ch}\u0000${fg}\u0000${bg}`;
         if (!this.full && prev[i] === key) continue;
         prev[i] = key;
-        if (ch === '') continue; // segunda columna de un carácter ancho
+        if (ch === '') continue; // second column of a wide character
         if (cursor !== i) out += `${ESC}${r + 1};${c + 1}H`;
         if (fg !== lastFg || bg !== lastBg) { out += this.#color(fg, bg); lastFg = fg; lastBg = bg; }
         out += ch;
         cursor = i + Math.max(1, charWidth(ch.codePointAt(0)));
-        if (cursor % cols === 0) cursor = -1; // al final de la línea la posición del cursor no es fiable
+        if (cursor % cols === 0) cursor = -1; // at the end of the line the cursor position is not reliable
       }
     }
     this.full = false;

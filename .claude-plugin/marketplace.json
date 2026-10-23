@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-marketplace.json",
+  "name": "dev-office",
+  "owner": { "name": "Fabián Muñoz", "url": "https://github.com/fmunoztorrent" },
+  "description": "Dev Team Office: your coding agent as a live pixel-art development team.",
+  "plugins": [
+    {
+      "name": "dev-team-office",
+      "source": "./",
+      "description": "Live pixel-art office for Claude Code: hooks, MCP server (register projects, report phases, send tasks) and skills.",
+      "category": "productivity"
+    }
+  ]
+}

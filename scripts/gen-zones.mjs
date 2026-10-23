@@ -1,5 +1,5 @@
-// Genera public/zones.js desde zone.tab (IANA): para cada zona horaria, su país y las coordenadas
-// de su ciudad principal. Así la oficina sabe, sin conexión, en qué país y dónde está.
+// Generates public/zones.js from zone.tab (IANA): for each time zone, its country and the coordinates
+// of its main city. So the office knows, offline, which country it is in and where.
 //   node scripts/gen-zones.mjs [/usr/share/zoneinfo/zone.tab]
 import fs from 'node:fs';
 import path from 'node:path';

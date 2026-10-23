@@ -1,13 +1,12 @@
 #!/usr/bin/env node
-// dev-team-office: la oficina (una empresa con una o varias oficinas) + la API de integración.
-// Se lanza desde una terminal: ahí se ve la bitácora con la actividad de los agentes; el juego se
-// abre en esa misma terminal (g) o en el navegador, en la URL que levanta el servidor (o). Dentro de
-// herdr, el agente se abre en un pane nuevo y desde ahí orquesta su trabajo.
+// dev-team-office: the office (a company with one or more offices) + the integration API.
+// It is launched from a terminal: that is where the log with the agents' activity shows; the game
+// opens in that same terminal (g) or in the browser, at the URL the server serves (o). Inside
+// herdr, the agent opens in a new pane and orchestrates its work from there.
 
 import os from 'node:os';
 import path from 'node:path';
 import { startServer, DEFAULT_PORT, DEFAULT_HOST, VERSION, defaultSocketPath } from '../server/server.js';
-import { install } from './install.js';
 import { listTeams, installTeam } from './team.js';
 import { openStore } from '../server/store.js';
 import { detectHarness } from '../integrations/common/devteam.mjs';
@@ -20,7 +19,7 @@ function parseArgs(argv) {
   const args = { _: [], rest: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--') { args.rest = argv.slice(i + 1); break; } // lo que sigue es el comando (dev-team-office pane -- npm test)
+    if (a === '--') { args.rest = argv.slice(i + 1); break; } // what follows is the command (dev-team-office pane -- npm test)
     if (a === '-h' || a === '--help') args.help = true;
     else if (a === '-v' || a === '--version') args.version = true;
     else if (a.startsWith('--no-')) args[a.slice(5)] = false;
@@ -40,13 +39,13 @@ const args = parseArgs(process.argv.slice(2));
 const port = Number(args.port || process.env.DEV_TEAM_OFFICE_PORT) || DEFAULT_PORT;
 const host = args.host || process.env.DEV_TEAM_OFFICE_HOST || DEFAULT_HOST;
 const socket = args.socket === false ? null : typeof args.socket === 'string' ? args.socket : defaultSocketPath();
-// dentro de un pane que abrió la oficina, la URL viene en el entorno
+// inside a pane the office opened, the URL comes in the environment
 const base = !args.port && !args.host && process.env.DEV_TEAM_OFFICE_URL ? process.env.DEV_TEAM_OFFICE_URL.replace(/\/$/, '') : `http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${port}`;
 const tilde = (p) => (p && p.startsWith(os.homedir()) ? `~${p.slice(os.homedir().length)}` : p);
 const str = (v) => (typeof v === 'string' ? v : undefined);
 
-// los mensajes de la CLI, en el idioma de la oficina (el que está guardado en la base)
-try { const store = openStore(); setLanguage(store.getPrefs().lang); store.close(); } catch { /* sin base todavía: inglés */ }
+// the CLI messages, in the office's language (the one saved in the database)
+try { const store = openStore(); setLanguage(store.getPrefs().lang); store.close(); } catch { /* no database yet: English */ }
 
 function fail(msg) {
   console.error(msg);
@@ -71,9 +70,9 @@ async function runningOffice() {
 
 const colorMode = () => (args.color === '256' ? '256' : args.color === 'truecolor' ? 'truecolor' : undefined);
 
-// ---------------------------------------------------------------- la oficina
+// ---------------------------------------------------------------- the office
 
-/** Dentro de herdr: el agente, en un pane nuevo (el de --agent, o el de los ajustes). */
+/** Inside herdr: the agent, in a new pane (the one from --agent, or the one in the settings). */
 async function launchAgent(server) {
   if (!server.herdr?.available || args.launch === false) return;
   const out = await server.launchStartAgent({ cwd: str(args.cwd) || process.cwd(), agent: str(args.agent) });
@@ -81,10 +80,13 @@ async function launchAgent(server) {
   else if (!out.skipped) server.bus.emit('log', { ts: Date.now(), text: t('console.startFailed', { error: out.error }) });
 }
 
-/** Levanta la oficina y deja la bitácora en la terminal; con `game`, entra directo al juego. */
+// Inside herdr the terminal shows the activity monitor, not the game (--no-monitor: the previous one).
+const wantsMonitor = () => args._[0] === 'monitor' || (process.env.HERDR_ENV === '1' && args.monitor !== false);
+
+/** Starts the office and leaves the log in the terminal; with `game`, it goes straight into the game. */
 async function cmdOpen({ game = false } = {}) {
-  // Sin terminal interactiva (un script, un proceso en segundo plano) no hay juego en la terminal,
-  // pero la oficina sigue viva para el navegador, con la bitácora.
+  // Without an interactive terminal (a script, a background process) there is no game in the terminal,
+  // but the office stays alive for the browser, with the log.
   if (!process.stdout.isTTY || !process.stdin.isTTY) return cmdServe();
   const notes = [];
   let started = false;
@@ -96,7 +98,23 @@ async function cmdOpen({ game = false } = {}) {
     if (err.code !== 'EADDRINUSE') throw err;
     const other = await runningOffice();
     if (!other) fail(t('cli.portBusyOther', { port }));
+    if (wantsMonitor()) return cmdMonitorRemote();
     return cmdWatch(`ws://${new URL(base).host}/v1/ws`, t('console.attached'));
+  }
+  if (wantsMonitor()) {
+    const [{ runMonitor }, { localFeed }, { runTui }, { openBrowser }] = await Promise.all([import('../tui/monitor.js'), import('../tui/feeds.js'), import('../tui/app.js'), import('../tui/console.js')]);
+    const endpoints = [server.url, tilde(server.socket)].filter(Boolean);
+    const feed = localFeed(server);
+    setImmediate(() => { for (const n of notes) server.bus.emit('log', { ts: Date.now(), text: n }); });
+    launchAgent(server).catch(() => {});
+    await runMonitor({
+      feed, server, colorMode: colorMode() || (process.env.COLORTERM ? 'truecolor' : '256'), info: { version: VERSION, url: server.url, local: true },
+      onBrowser: () => openBrowser(server.url),
+      onGame: async () => { const f = localFeed(server); try { await runTui({ feed: f, endpoints, colorMode: colorMode(), quitKey: 'log' }); } finally { f.close(); } },
+    });
+    feed.close();
+    await server.close();
+    process.exit(0);
   }
   const [{ runConsole }, { localFeed }, { runTui }] = await Promise.all([import('../tui/console.js'), import('../tui/feeds.js'), import('../tui/app.js')]);
   const endpoints = [server.url, tilde(server.socket)].filter(Boolean);
@@ -108,6 +126,21 @@ async function cmdOpen({ game = false } = {}) {
   launchAgent(server).catch(() => {});
   await done;
   await server.close();
+  process.exit(0);
+}
+
+/** The monitor of an office that is already running (over WebSocket). */
+async function cmdMonitorRemote() {
+  if (!process.stdout.isTTY || !process.stdin.isTTY) fail(t('cli.needsTty'));
+  const ws = `ws://${new URL(base).host}/v1/ws`;
+  const [{ runMonitor }, { remoteFeed }, { runTui }, { openBrowser }] = await Promise.all([import('../tui/monitor.js'), import('../tui/feeds.js'), import('../tui/app.js'), import('../tui/console.js')]);
+  const feed = remoteFeed(ws);
+  await runMonitor({
+    feed, colorMode: colorMode() || (process.env.COLORTERM ? 'truecolor' : '256'), info: { version: VERSION, url: base, local: false },
+    onBrowser: () => openBrowser(base),
+    onGame: async () => { const f = remoteFeed(ws); try { await runTui({ feed: f, endpoints: [base], colorMode: colorMode(), quitKey: 'log' }); } finally { f.close(); } },
+  });
+  feed.close();
   process.exit(0);
 }
 
@@ -178,7 +211,7 @@ async function cmdTask() {
   const snap = await api('/v1/tasks');
   if (!snap) fail(t('cli.noOfficeOpen', { base }));
   if (!text || !args.agent) {
-    const name = { 'claude-code': 'claude', opencode: 'opencode', pi: 'pi' };
+    const name = { 'claude-code': 'claude', opencode: 'opencode', pi: 'pi', codex: 'codex' };
     console.log(t('cli.sessions'));
     for (const a of snap.agents) console.log(`  --agent ${name[a.agent] || a.agent} --session ${a.session}   (${tilde(a.cwd)})`);
     if (!snap.agents.length) console.log(t('cli.none'));
@@ -203,8 +236,8 @@ async function cmdTasks() {
   if (!snap.tasks.length) console.log(t('cli.noTasks'));
 }
 
-// El mantenedor de agentes: por la API si hay una oficina corriendo (así la ven al instante las
-// interfaces abiertas), si no directo en la base SQLite.
+// The agents maintainer: through the API if an office is running (so open interfaces see it
+// instantly), otherwise straight in the SQLite database.
 async function cmdAgents() {
   const [, sub, ...rest] = args._;
   const office = await runningOffice();
@@ -241,7 +274,7 @@ async function cmdAgents() {
   }
 }
 
-// Las oficinas de la empresa: por la API si hay una oficina corriendo, si no en la base.
+// The company's offices: through the API if an office is running, otherwise in the database.
 async function cmdOffices() {
   const [, sub, ...rest] = args._;
   const live = await runningOffice();
@@ -285,8 +318,8 @@ async function cmdOffices() {
   for (const o of list) console.log(t('cli.officeLine', { id: o.id, name: o.name, tz: o.timezone, country: o.country ? ` (${countryName(o.country, getLanguage())})` : '', agents: o.agents, viewing: o.id === view ? t('cli.viewing') : '' }));
 }
 
-// Los ajustes generales (dev-team-office config [clave] [valor]).
-const CONFIG_KEYS = ['lang', 'timezone', 'weather', 'herdr.launch', 'herdr.direction', 'herdr.startAgent', 'log.life', 'view.office'];
+// The general settings (dev-team-office config [key] [value]).
+const CONFIG_KEYS = ['lang', 'timezone', 'weather', 'herdr.launch', 'herdr.subagents', 'herdr.direction', 'herdr.startAgent', 'log.life', 'view.office', 'view.mode'];
 async function cmdConfig() {
   const [, key, ...rest] = args._;
   const live = await runningOffice();
@@ -301,7 +334,7 @@ async function cmdConfig() {
     }
     if (!CONFIG_KEYS.includes(key)) fail(t('cli.configUnknown', { key }));
     let value = rest.join(' ');
-    if (['weather', 'herdr.launch', 'log.life'].includes(key)) value = /^(on|true|yes|si|sí|1)$/i.test(value);
+    if (['weather', 'herdr.launch', 'herdr.subagents', 'log.life'].includes(key)) value = /^(on|true|yes|si|sí|1)$/i.test(value);
     if (key === 'timezone' && (!value || value === 'system')) value = null;
     const [a, b] = key.split('.');
     const patch = b ? { [a]: { [b]: value } } : { [a]: value };
@@ -313,9 +346,9 @@ async function cmdConfig() {
 }
 
 /**
- * Dentro de herdr, desde el pane de un agente: abre un pane junto al suyo con una actividad (un
- * comando, u otro agente con un prompt) y se lo cuenta a la oficina, que se lo asigna a alguien del
- * equipo mientras siga abierto. Imprime el pane (JSON) para seguir usándolo con `herdr pane read`.
+ * Inside herdr, from an agent's pane: opens a pane next to it with an activity (a command, or
+ * another agent with a prompt) and tells the office, which assigns it to a team member while it
+ * stays open. Prints the pane (JSON) so you can keep using it with `herdr pane read`.
  */
 async function cmdPane() {
   const text = (args.rest.length ? args.rest : args._.slice(1)).join(' ').trim();
@@ -339,6 +372,34 @@ async function cmdPane() {
   if (!reported) console.error(t('cli.paneOffline'));
 }
 
+/**
+ * Adds this folder (its project) to the office: starts it if it is not running, registers the project
+ * with its agent and shows which character plays each subagent. Same as the join_office MCP tool.
+ */
+async function cmdJoin() {
+  const { createMcp, startOfficeDetached } = await import('../server/mcp.js');
+  const mcp = createMcp({ base, socket, version: VERSION, cwd: process.cwd(), openStore, env: process.env, startOffice: () => startOfficeDetached({ port }) });
+  const harness = args.agent === 'claude' ? 'claude-code' : str(args.agent);
+  const out = await mcp.handle({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'join_office', arguments: { ...(args._[1] ? { path: args._[1] } : {}), ...(str(args.office) ? { office: str(args.office) } : {}), ...(str(args.name) ? { name: str(args.name) } : {}), ...(harness ? { harness } : {}), ...(args.open ? { open: true } : {}), ...(args.team === false ? { team: 'none' } : str(args.team) ? { team: str(args.team) } : {}) } } });
+  mcp.close();
+  const r = out.result;
+  const text = r.content[0].text.split('\n\n{')[0];
+  if (r.isError) fail(text);
+  console.log(text);
+}
+
+/** A subagent's pane: what it is doing, live (the office opens it by itself inside herdr). */
+async function cmdFollow() {
+  const session = str(args.session), sub = str(args.sub);
+  if (!session || !sub) fail(t('follow.usage'));
+  const { runFollow } = await import('../tui/follow.js');
+  const view = runFollow({ url: base, office: str(args.office) || process.env.DEV_TEAM_OFFICE_OFFICE, session, sub, colorMode: colorMode() || (process.env.COLORTERM ? 'truecolor' : '256') });
+  const stop = () => { view.close(); process.exit(0); };
+  process.on('SIGINT', stop);
+  process.on('SIGTERM', stop);
+  process.on('SIGHUP', stop);
+}
+
 async function cmdPrompt() {
   const [, id, ...rest] = args._;
   const text = rest.join(' ').trim();
@@ -352,13 +413,46 @@ async function cmdPrompt() {
   console.log(`${x.id}: ${x.status}${x.detail ? ` (${x.detail})` : ''}`);
 }
 
-async function cmdInstall() {
-  const out = install(args._.slice(1));
+// Installing = leaving everything connected: integration, hooks, MCP and skills for each agent (bin/setup.js).
+const onlyAgents = () => [...args._.slice(1), ...(str(args.only) ? args.only.split(',') : [])].map((x) => x.trim()).filter(Boolean);
+
+async function cmdSetup() {
+  const { setup } = await import('./setup.js');
+  const out = setup({ only: onlyAgents(), dry: !!args['dry-run'] });
   if (!out.ok) fail(out.error);
+  console.log(t('setup.title', { version: VERSION }));
+  for (const l of out.lines) console.log(l);
+  console.log(`\n${t(out.dry ? 'setup.dryDone' : 'setup.done')}`);
+}
+
+async function cmdUninstall() {
+  const { uninstall } = await import('./setup.js');
+  const out = uninstall({ only: onlyAgents(), dry: !!args['dry-run'], purge: !!args.purge });
   for (const l of out.lines) console.log(l);
 }
 
-// Los team packs que viajan con el paquete: se listan y se instalan en los agentes de un harness.
+async function cmdDoctor() {
+  const { doctor } = await import('./setup.js');
+  const out = await doctor({ base });
+  console.log(t('doctor.title', { version: VERSION }));
+  for (const c of out.checks) console.log(`${c.ok ? '✓' : c.optional ? '·' : '✗'} ${c.text}${c.fix ? `\n    → ${c.fix}` : ''}`);
+  console.log(`\n${t(out.ok ? 'doctor.ok' : 'doctor.fail')}`);
+  if (!out.ok) process.exitCode = 1;
+}
+
+// Updating: an installed copy is replaced by the latest version (with the same installer); a git
+// clone is updated with git.
+async function cmdUpdate() {
+  const fs = await import('node:fs');
+  const { ROOT_DIR } = await import('./setup.js');
+  if (fs.existsSync(path.join(ROOT_DIR, '.git'))) { console.log(t('cli.updateGit', { dir: tilde(ROOT_DIR) })); return; }
+  const { spawnSync } = await import('node:child_process');
+  const url = process.env.DEV_TEAM_OFFICE_INSTALLER || 'https://raw.githubusercontent.com/fmunoztorrent/dev-office/main/install.sh';
+  const r = spawnSync('sh', ['-c', `curl -fsSL ${JSON.stringify(url)} | sh`], { stdio: 'inherit' });
+  process.exitCode = r.status ?? 1;
+}
+
+// The team packs shipped with the package: they are listed and installed into a harness's agents.
 async function cmdTeam() {
   const [, sub, ...rest] = args._;
   if (!sub || sub === 'list') {
@@ -385,6 +479,33 @@ async function cmdTeam() {
   fail(t('cli.teamUsage'));
 }
 
+// btw: a side question to an office's agent on duty (like Claude Code's /btw).
+async function cmdBtw() {
+  const text = (args.rest.length ? args.rest : args._.slice(1)).join(' ').trim();
+  if (!text) fail(t('cli.btwUsage'));
+  if (!(await runningOffice())) fail(t('cli.noOfficeOpen', { base }));
+  let out = null;
+  try {
+    const res = await fetch(`${base}/v1/ask`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text, office: str(args.office) || process.env.DEV_TEAM_OFFICE_OFFICE, from: 'CLI', wait: true }), signal: AbortSignal.timeout(240_000),
+    });
+    out = await res.json();
+  } catch { /* no answer */ }
+  if (!out?.ok) fail(t('cli.couldNot', { error: out?.error || t('cli.noAnswer') }));
+  console.log(out.ask.answer);
+}
+
+// The MCP server (stdio): Claude Code, Codex, OpenCode, Gemini or Cursor register it via `setup`.
+async function cmdMcp() {
+  const { runMcp, startOfficeDetached } = await import('../server/mcp.js');
+  await runMcp({
+    base, socket: process.env.DEV_TEAM_OFFICE_SOCKET || socket, version: VERSION, openStore,
+    startOffice: () => startOfficeDetached({ port: args.port || process.env.DEV_TEAM_OFFICE_PORT }),
+  });
+  process.exit(0);
+}
+
 // ---------------------------------------------------------------- main
 
 const HELP = () => t('cli.help', { version: VERSION, port: DEFAULT_PORT, host: DEFAULT_HOST });
@@ -392,9 +513,9 @@ if (args.help) { console.log(HELP()); process.exit(0); }
 if (args.version) { console.log(VERSION); process.exit(0); }
 
 const commands = {
-  open: () => cmdOpen({ game: !!args.game }), game: () => cmdOpen({ game: true }), serve: cmdServe, watch: () => cmdWatch(args._[1]), status: cmdStatus,
-  demo: cmdDemo, send: cmdSend, task: cmdTask, tasks: cmdTasks, install: cmdInstall, agents: cmdAgents, offices: cmdOffices, config: cmdConfig,
-  pane: cmdPane, prompt: cmdPrompt, team: cmdTeam, help: () => console.log(HELP()),
+  open: () => cmdOpen({ game: !!args.game }), game: () => cmdOpen({ game: true }), monitor: () => cmdOpen(), serve: cmdServe, watch: () => cmdWatch(args._[1]), status: cmdStatus,
+  demo: cmdDemo, send: cmdSend, task: cmdTask, tasks: cmdTasks, install: cmdSetup, setup: cmdSetup, uninstall: cmdUninstall, doctor: cmdDoctor, update: cmdUpdate, agents: cmdAgents, offices: cmdOffices, config: cmdConfig,
+  pane: cmdPane, follow: cmdFollow, join: cmdJoin, prompt: cmdPrompt, team: cmdTeam, mcp: cmdMcp, btw: cmdBtw, help: () => console.log(HELP()),
 };
 const cmd = commands[args._[0] || 'open'];
 if (!cmd) fail(`${t('cli.unknownCommand', { cmd: args._[0] })}\n\n${HELP()}`);

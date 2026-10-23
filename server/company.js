@@ -1,38 +1,39 @@
-// La empresa: una instancia de la oficina puede tener varias oficinas (equipos o dominios), como
-// una empresa de verdad. Cada oficina tiene su propio estado (sesiones, bitácora, roles: Office), su
-// zona horaria y su clima; las interfaces muestran la que el usuario elige.
+// The company: one office instance can hold several offices (teams or domains), like a real
+// company. Each office has its own state (sessions, log, roles: Office), its time zone and its
+// weather; the interfaces show the one the user picks.
 //
-// Cada evento de un agente se reparte a una oficina:
-//   1. la que dice el propio evento (`office`, o `devteam_office` desde el hook de Claude Code),
-//   2. la de su sesión, si ya se conoce,
-//   3. la del pane de herdr donde corre (los panes que abrió la oficina),
-//   4. la del agente registrado cuya ruta contiene su directorio (la más específica),
-//   5. si no, la principal.
+// Each agent event is routed to an office:
+//   1. the one the event itself names (`office`, or `devteam_office` from the Claude Code hook),
+//   2. its session's, if already known,
+//   3. the one of the herdr pane it runs in (the panes the office opened),
+//   4. the one of the registered agent whose path contains its directory (the most specific),
+//   5. otherwise, the main one.
 
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
 import { Office } from './office.js';
 import { clip } from './roles.js';
 import { MAIN_OFFICE } from './store.js';
+import { insideDir } from './paths.js';
 import { t } from '../public/i18n.js';
 import { systemZone, zoneInfo } from '../public/clock.js';
 
-const inside = (dir, root) => !!dir && !!root && (dir === root || dir.startsWith(`${root}${path.sep}`));
 
 export class Company extends EventEmitter {
-  /** @param store la base (server/store.js): oficinas, agentes y ajustes */
+  /** @param store the database (server/store.js): offices, agents and settings */
   constructor({ store }) {
     super();
     this.store = store;
     this.offices = new Map();   // id → Office
-    this.sessionOffice = new Map(); // sesión de agente → oficina
-    this.paneOffice = new Map();    // pane de herdr → oficina
+    this.sessionOffice = new Map(); // agent session → office
+    this.paneOffice = new Map();    // herdr pane → office
+    this.sessionPane = new Map();   // agent session → the herdr pane it runs in (its events say so)
     this.load();
   }
 
-  // ---------------------------------------------------------------- las oficinas
+  // ---------------------------------------------------------------- the offices
 
-  /** Sincroniza con la base: crea las que faltan y saca las que se eliminaron. */
+  /** Syncs with the database: creates the missing ones and removes the deleted ones. */
   load() {
     const ids = new Set(this.store.listOffices().map((o) => o.id));
     ids.add(MAIN_OFFICE);
@@ -50,23 +51,25 @@ export class Company extends EventEmitter {
   #add(id) {
     const office = new Office();
     office.id = id;
+    // which subagent is which character according to each session's folder (set by the server)
+    office.rolesFor = (cwd) => this.rolesFor?.(cwd) || null;
     office.on('event', (ev, session) => this.emit('event', id, ev, session));
     office.on('reset', () => this.emit('reset', id));
     this.offices.set(id, office);
   }
 
   has(id) { return this.offices.has(id); }
-  /** El estado de una oficina (la principal si no existe). */
+  /** An office's state (the main one if it does not exist). */
   get(id = MAIN_OFFICE) { return this.offices.get(id) || this.offices.get(MAIN_OFFICE); }
   ids() { return [...this.offices.keys()]; }
 
-  /** La zona horaria de una oficina: la suya, la de la empresa o la del sistema. */
+  /** An office's time zone: its own, the company's or the system's. */
   zoneOf(id) {
     const own = this.store.getOffice(id)?.timezone;
     return own || this.store.getPrefs().timezone || systemZone();
   }
 
-  /** Lo que las interfaces saben de cada oficina (el selector, el reloj, el clima). */
+  /** What the interfaces know about each office (the selector, the clock, the weather). */
   info(id) {
     const o = this.store.getOffice(id);
     if (!o) return null;
@@ -81,17 +84,17 @@ export class Company extends EventEmitter {
   }
   list() { return this.store.listOffices().map((o) => this.info(o.id)).filter(Boolean); }
 
-  // ---------------------------------------------------------------- a qué oficina va cada cosa
+  // ---------------------------------------------------------------- which office each thing goes to
 
-  /** La oficina del agente registrado cuya ruta contiene `cwd` (la más específica). */
+  /** The office of the registered agent whose path contains `cwd` (the most specific). */
   officeForPath(cwd) {
     if (!cwd) return null;
     let best = null;
-    for (const a of this.store.listAgents()) if (inside(cwd, a.path) && (!best || a.path.length > best.path.length)) best = a;
+    for (const a of this.store.listAgents()) if (insideDir(cwd, a.path) && (!best || a.path.length > best.path.length)) best = a;
     return best?.office || null;
   }
 
-  /** Decide la oficina de un payload de agente (ver el orden arriba). */
+  /** Decides the office of an agent payload (see the order above). */
   route(payload = {}) {
     const p = Array.isArray(payload) ? payload[0] || {} : payload;
     const explicit = p.office || p.devteam_office;
@@ -107,15 +110,25 @@ export class Company extends EventEmitter {
   bindPane(pane, office) { if (pane && this.has(office)) this.paneOffice.set(String(pane), office); }
   officeOfSession(session) { return this.sessionOffice.get(String(session)) || null; }
 
-  /** Recibe un payload de cualquier agente, lo manda a su oficina y devuelve los eventos. */
+  /** Receives a payload from any agent, sends it to its office and returns the events. */
   ingest(source = 'generic', payload = {}) {
     const id = this.route(payload);
     const events = this.get(id).ingest(source, payload);
-    for (const ev of events) if (ev.session && ev.session !== 'office' && !this.sessionOffice.has(ev.session)) this.sessionOffice.set(ev.session, id);
+    const first = Array.isArray(payload) ? payload[0] || {} : payload;
+    const pane = first.pane || first.herdr_pane;
+    for (const ev of events) {
+      if (!ev.session || ev.session === 'office') continue;
+      if (!this.sessionOffice.has(ev.session)) this.sessionOffice.set(ev.session, id);
+      if (pane && typeof pane === 'string' && source !== 'herdr') this.sessionPane.set(ev.session, clip(pane, 40));
+    }
+    if (this.sessionPane.size > 200) this.sessionPane.delete(this.sessionPane.keys().next().value);
     return events;
   }
 
-  /** La sesión (con su oficina), esté donde esté. */
+  /** The herdr pane a session runs in (if its events said so). */
+  paneOfSession(session) { return this.sessionPane.get(String(session)) || null; }
+
+  /** The session (with its office), wherever it is. */
   session(id) {
     const office = this.officeOfSession(id);
     const s = office ? this.get(office).sessions.get(String(id)) : null;

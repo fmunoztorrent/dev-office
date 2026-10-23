@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Imita `claude -p --output-format json …` (una etapa con otro modelo que lanza el hook de Claude Code).
-//   FAKE_CLAUDE_LOG=archivo   una línea JSON por invocación ({ args, prompt, model, agent, alias })
-//   FAKE_CLAUDE_FAIL=1        termina con error
+// Mimics `claude -p --output-format json …` (a stage with another model launched by the Claude Code hook).
+//   FAKE_CLAUDE_LOG=file      one JSON line per invocation ({ args, prompt, model, agent, alias })
+//   FAKE_CLAUDE_FAIL=1        ends with an error
 import fs from 'node:fs';
 
 const args = process.argv.slice(2);

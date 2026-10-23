@@ -1,14 +1,14 @@
-// Los agentes a los que la oficina les puede mandar un prompt. La oficina es el frontend: cada
-// agente es un backend con su propio "harness engineering" (Errementari, gentle-pi, comandos,
-// pipelines de .devteam/…) y es ESE harness el que corre el pipeline.
+// The agents the office can send a prompt to. The office is the frontend: each agent is a
+// backend with its own "harness engineering" (Errementari, gentle-pi, commands, .devteam/
+// pipelines…) and it is THAT harness that runs the pipeline.
 //
-// - Registrados (⚙ › Agentes, el mantenedor): una ruta completa + el CLI que la atiende (Claude
-//   Code, OpenCode, Pi). Se guardan en la base SQLite (server/store.js).
-// - Conectados: cualquier sesión de agente abierta (Pi/OpenCode por WebSocket, Claude Code por su
-//   hook), aunque su ruta no esté registrada.
+// - Registered (⚙ › Agents, the maintainer): a full path + the CLI that serves it (Claude
+//   Code, OpenCode, Pi). Saved in the SQLite database (server/store.js).
+// - Connected: any open agent session (Pi/OpenCode over WebSocket, Claude Code through its
+//   hook), even if its path is not registered.
 //
-// Para cada uno se detecta qué trae su harness (detectHarness) y por dónde se arranca su pipeline.
-// run() manda el prompt por esa entrada: a una sesión abierta en esa ruta o a una sesión nueva.
+// For each one we detect what its harness brings (detectHarness) and where its pipeline starts.
+// run() sends the prompt through that entry: to a session open in that path or to a new session.
 
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
@@ -16,15 +16,15 @@ import { clip } from './roles.js';
 import { detectHarness, invocation, HARNESSES, which } from '../integrations/common/devteam.mjs';
 import { t as tr } from '../public/i18n.js';
 import { MAIN_OFFICE } from './store.js';
+import { insideDir as inside } from './paths.js';
 
 const DETECT_TTL = 4000;
-const AGENT_NAME = { 'claude-code': 'Claude Code', opencode: 'OpenCode', pi: 'Pi' };
-const inside = (dir, root) => !!dir && !!root && (dir === root || dir.startsWith(`${root}${path.sep}`));
+const AGENT_NAME = { 'claude-code': 'Claude Code', opencode: 'OpenCode', pi: 'Pi', codex: 'Codex' };
 
 export class AgentRegistry extends EventEmitter {
   /**
-   * @param getAgents () => los agentes registrados ([{ id, name, path, harness, office, bin?, args? }])
-   * @param office    las oficinas (server/company.js)
+   * @param getAgents () => the registered agents ([{ id, name, path, harness, office, bin?, args? }])
+   * @param office    the offices (server/company.js)
    */
   constructor({ getAgents, hub, pipelines, office }) {
     super();
@@ -37,7 +37,7 @@ export class AgentRegistry extends EventEmitter {
     pipelines.on('change', () => this.changed());
   }
 
-  // la base puede estar cerrándose (la oficina se apaga mientras se desconectan los agentes)
+  // the database may be closing (the office shuts down while the agents disconnect)
   #agents() { try { return this.getAgents(); } catch { return []; } }
 
   #detect(dir) {
@@ -49,7 +49,7 @@ export class AgentRegistry extends EventEmitter {
     return info;
   }
 
-  /** Sesiones abiertas: Pi/OpenCode conectados y sesiones de Claude Code que anunció su hook. */
+  /** Open sessions: connected Pi/OpenCode and Claude Code sessions announced by their hook. */
   #sessions() {
     const live = this.hub.liveAgents().filter((c) => c.session).map((c) => ({ agent: c.agent, session: c.session, cwd: c.cwd, live: true }));
     const hooked = this.pipelines.hosts().filter((h) => !h.live && !live.some((l) => l.session === h.session)).map((h) => ({ agent: h.agent, session: h.session, cwd: h.cwd, live: false }));
@@ -59,8 +59,8 @@ export class AgentRegistry extends EventEmitter {
   #sessionOffice(s) { return this.office?.officeOfSession?.(s.session) || this.office?.officeForPath?.(s.cwd) || MAIN_OFFICE; }
 
   /**
-   * Lo que ofrece el diálogo de la pizarra: cada agente con las entradas de su harness.
-   * @param office sólo los de esa oficina (sin oficina: todos)
+   * What the whiteboard dialog offers: each agent with its harness's entries.
+   * @param office only that office's (without an office: all)
    */
   targets(office) {
     const sessions = this.#sessions();
@@ -84,7 +84,7 @@ export class AgentRegistry extends EventEmitter {
       if (office && (a.office || MAIN_OFFICE) !== office) continue;
       out.push({ ...describe({ id: a.id, name: a.name, dir: a.path, harness: a.harness, registered: true, own, office: a.office || MAIN_OFFICE }), bin: a.bin || null, args: a.args || null });
     }
-    // sesiones abiertas fuera de las rutas registradas: también se les puede mandar un prompt
+    // sessions open outside the registered paths: they can be sent a prompt too
     for (const s of sessions) {
       if (used.has(s.session) || !s.cwd) continue;
       const where = this.#sessionOffice(s);
@@ -97,8 +97,8 @@ export class AgentRegistry extends EventEmitter {
   target(id) { return this.targets().find((t) => t.id === id) || null; }
 
   /**
-   * Manda un prompt a un agente por una entrada de su harness.
-   * msg: { target, entry, text, session?: id | null (null = sesión nueva), from }
+   * Sends a prompt to an agent through an entry of its harness.
+   * msg: { target, entry, text, session?: id | null (null = new session), from }
    */
   run({ target, entry = 'prompt', text, session, from } = {}) {
     text = String(text ?? '').trim();
@@ -109,9 +109,9 @@ export class AgentRegistry extends EventEmitter {
     if (!e) return { ok: false, error: tr('err.noEntry', { name: t.name, entry }) };
     const s = session === null ? null : t.sessions.find((x) => x.session === session) || (session === undefined ? t.sessions.find((x) => x.live) : null);
     if (session && !s) return { ok: false, error: tr('err.sessionGone') };
-    if (s) this.office?.setAgentRoles(s.session, t.roles); // qué subagente del harness es qué personaje
+    if (s) this.office?.setAgentRoles(s.session, t.roles); // which subagent of the harness is which character
 
-    // pipeline de .devteam/: lo ejecuta una sesión abierta, dentro de sí misma
+    // .devteam/ pipeline: an open session runs it, inside itself
     if (e.devteam) {
       if (!s) return { ok: false, error: tr('err.needsSession', { label: e.label, agent: AGENT_NAME[t.harness] || t.harness, path: t.path }) };
       return this.pipelines.start({ session: s.session, agent: s.agent, pipeline: e.devteam, task: text, from, meta: { agentId: t.registered ? t.id : null, entry: e.id } });
@@ -126,7 +126,10 @@ export class AgentRegistry extends EventEmitter {
     return this.hub.submit({ text: inv.text, title, agent: t.harness, mode: 'launch', cwd: t.path, command: inv.command, args: inv.args, launch: { bin: a?.bin, args: a?.args }, from, meta, office: t.office });
   }
 
-  // varios cambios seguidos (una sesión que se registra mueve tareas y pipelines) → un solo aviso
+  /** Forgets what was detected in a folder (what it brings changed: its team, its commands). */
+  forget(dir) { this.cache.delete(dir); }
+
+  // several changes in a row (a session that registers moves tasks and pipelines) → a single notice
   changed() {
     if (this.pending) return;
     this.pending = true;

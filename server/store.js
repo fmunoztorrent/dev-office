@@ -1,15 +1,15 @@
-// La base de datos de la oficina: SQLite (node:sqlite, sin dependencias), en
-// ~/.dev-team-office/office.db (o $DEV_TEAM_OFFICE_DB). Guarda todo lo que es del frontend:
+// The office's database: SQLite (node:sqlite, no dependencies), at
+// ~/.dev-team-office/office.db (or $DEV_TEAM_OFFICE_DB). It keeps everything that belongs to the frontend:
 //
-//   offices    las oficinas (equipos o dominios) de la empresa: nombre, zona horaria y ubicación
-//              para el clima. Siempre está la principal ('main').
-//   agents     el mantenedor de agentes: una ruta completa + el CLI que la atiende + su oficina. Lo
-//              que hay en esa ruta (su harness, sus pipelines) es del agente: no se guarda, se detecta.
-//   settings   los ajustes: `prefs` (idioma, zona horaria de la empresa, clima, herdr, bitácora, la
-//              oficina que se está mirando) y la apariencia de los personajes de cada oficina
-//   prompts    historial de lo que se les mandó a los agentes y cómo terminó
+//   offices    the company's offices (teams or domains): name, time zone and location for the
+//              weather. The main one ('main') is always there.
+//   agents     the agents maintainer: a full path + the CLI that serves it + its office. What is
+//              in that path (its harness, its pipelines) belongs to the agent: it is detected, not saved.
+//   settings   the settings: `prefs` (language, the company's time zone, weather, herdr, log, the
+//              office being watched) and the appearance of each office's characters
+//   prompts    history of what was sent to the agents and how it ended
 //
-// Todo se valida antes de escribir: un error devuelve { ok: false, error } y no toca nada.
+// Everything is validated before writing: an error returns { ok: false, error } and touches nothing.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -19,7 +19,8 @@ import { normRole } from './roles.js';
 import { t, isLanguage, DEFAULT_LANGUAGE } from '../public/i18n.js';
 import { validZone } from '../public/clock.js';
 
-const HARNESS_IDS = ['claude-code', 'opencode', 'pi'];
+const HARNESS_IDS = ['claude-code', 'opencode', 'pi', 'codex'];
+const ASKS_KEEP = 500;
 const AGENTS_MAX = 100;
 const OFFICES_MAX = 30;
 const PROMPTS_KEEP = 2000;
@@ -27,23 +28,23 @@ const COLOR_RX = /^#[0-9a-f]{6}$/i;
 const APPEARANCE = { name: 'text', title: 'text', shirt: 'color', pants: 'color', hair: 'color', skin: 'color', long: 'bool', beard: 'bool', glasses: 'bool' };
 export const MAIN_OFFICE = 'main';
 
-/** Los ajustes generales y sus valores por defecto. */
+/** The general settings and their defaults. */
 export const DEFAULT_PREFS = {
-  lang: DEFAULT_LANGUAGE,       // idioma del juego: en | es
-  timezone: null,               // zona horaria de la empresa (null: la del sistema); cada oficina puede tener la suya
-  weather: true,                // consultar el clima real (Open-Meteo); si no, se simula según la estación
-  herdr: { launch: true, direction: 'right', startAgent: 'auto' }, // dentro de herdr: abrir los agentes en panes
-  log: { life: false },         // la bitácora de la terminal también muestra la vida de la oficina
-  view: { office: MAIN_OFFICE }, // la oficina que se está mirando
+  lang: DEFAULT_LANGUAGE,       // the game's language: en | es
+  timezone: null,               // the company's time zone (null: the system's); each office may have its own
+  weather: true,                // query the real weather (Open-Meteo); otherwise it is simulated by season
+  herdr: { launch: true, direction: 'right', startAgent: 'auto', subagents: true }, // inside herdr: the agents (and each subagent) in panes
+  log: { life: false },         // the terminal log also shows the office's life
+  view: { office: MAIN_OFFICE, mode: 'flat' }, // the office being watched and how it looks: front (flat) or isometric top-down (iso)
 };
 
-// El idioma por defecto (mientras no se elija uno en ⚙): $DEV_TEAM_OFFICE_LANG, si no inglés.
+// The default language (until one is chosen in ⚙): $DEV_TEAM_OFFICE_LANG, otherwise English.
 const defaultLang = () => (isLanguage(process.env.DEV_TEAM_OFFICE_LANG) ? process.env.DEV_TEAM_OFFICE_LANG : DEFAULT_LANGUAGE);
 
 export const dbFile = () => process.env.DEV_TEAM_OFFICE_DB || path.join(os.homedir(), '.dev-team-office', 'office.db');
 const legacyConfig = () => process.env.DEV_TEAM_OFFICE_CONFIG || path.join(os.homedir(), '.dev-team-office', 'config.json');
 
-// Cada migración lleva la base de la versión i a la i+1 (PRAGMA user_version).
+// Each migration takes the database from version i to i+1 (PRAGMA user_version).
 const MIGRATIONS = [
   `CREATE TABLE agents (
      id         TEXT PRIMARY KEY,
@@ -75,7 +76,7 @@ const MIGRATIONS = [
      updated_at INTEGER NOT NULL
    );
    CREATE INDEX prompts_by_agent ON prompts (agent_id, created_at DESC);`,
-  // Varias oficinas (equipos o dominios) en una misma instancia, como una empresa de verdad.
+  // Several offices (teams or domains) in the same instance, like a real company.
   `CREATE TABLE offices (
      id         TEXT PRIMARY KEY,
      name       TEXT NOT NULL,               -- '' en la principal: se muestra "Oficina principal" en el idioma del juego
@@ -88,6 +89,38 @@ const MIGRATIONS = [
    INSERT INTO offices (id, name, position, created_at, updated_at)
      VALUES ('main', '', 0, CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000);
    ALTER TABLE agents ADD COLUMN office_id TEXT NOT NULL DEFAULT 'main';`,
+  // Codex as a harness (SQLite cannot change a CHECK: the table is rebuilt) and side questions (btw).
+  `CREATE TABLE agents_v3 (
+     id         TEXT PRIMARY KEY,
+     name       TEXT NOT NULL,
+     path       TEXT NOT NULL,
+     harness    TEXT NOT NULL CHECK (harness IN ('claude-code', 'opencode', 'pi', 'codex')),
+     bin        TEXT,
+     args       TEXT,
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL,
+     office_id  TEXT NOT NULL DEFAULT 'main',
+     UNIQUE (path, harness)
+   );
+   INSERT INTO agents_v3 (id, name, path, harness, bin, args, created_at, updated_at, office_id)
+     SELECT id, name, path, harness, bin, args, created_at, updated_at, office_id FROM agents;
+   DROP TABLE agents;
+   ALTER TABLE agents_v3 RENAME TO agents;
+   CREATE TABLE asks (
+     id         TEXT PRIMARY KEY,
+     office_id  TEXT NOT NULL DEFAULT 'main',
+     agent      TEXT,                        -- quién contesta: claude-code | opencode | pi | codex
+     agent_id   TEXT,                        -- el agente registrado (si lo hay)
+     session    TEXT,                        -- la sesión de turno que se bifurcó (si la había)
+     cwd        TEXT,
+     question   TEXT NOT NULL,
+     answer     TEXT,
+     status     TEXT NOT NULL,               -- asking | answered | failed
+     error      TEXT,
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL
+   );
+   CREATE INDEX asks_by_office ON asks (office_id, created_at DESC);`,
 ];
 
 class Invalid extends Error {}
@@ -96,12 +129,12 @@ const slug = (s, fallback = 'agente') => String(s).toLowerCase().normalize('NFD'
 const json = (v, fallback) => { try { return JSON.parse(v); } catch { return fallback; } };
 const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
 
-/** Abre (y crea o migra) la base. `file` ':memory:' sirve para los tests. */
+/** Opens (and creates or migrates) the database. `file` ':memory:' is for the tests. */
 export function openStore(file = dbFile()) {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   const fresh = file === ':memory:' || !fs.existsSync(file);
   const db = new DatabaseSync(file);
-  if (file !== ':memory:') fs.chmodSync(file, 0o600); // sólo tu usuario: guarda rutas y prompts
+  if (file !== ':memory:') fs.chmodSync(file, 0o600); // only your user: it stores paths and prompts
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   const version = db.prepare('PRAGMA user_version').get().user_version;
   for (let v = version; v < MIGRATIONS.length; v++) {
@@ -135,7 +168,7 @@ export class Store {
   listOffices() { return this.db.prepare('SELECT * FROM offices ORDER BY position, created_at').all().map((r) => this.#office(r)); }
   getOffice(id) { return this.#office(this.db.prepare('SELECT * FROM offices WHERE id = ?').get(String(id))); }
 
-  /** Una oficina por id, o por nombre (sin mayúsculas ni tildes). */
+  /** An office by id, or by name (case- and accent-insensitive). */
   findOffice(ref) {
     if (!ref) return null;
     return this.getOffice(ref) || this.listOffices().find((o) => slug(o.name, '') === slug(ref, '-')) || null;
@@ -176,7 +209,7 @@ export class Store {
     });
   }
 
-  /** Elimina una oficina: sus agentes pasan a la principal (sus carpetas no se tocan). */
+  /** Deletes an office: its agents move to the main one (their folders are not touched). */
   deleteOffice(id) {
     if (String(id) === MAIN_OFFICE) return { ok: false, error: t('err.mainOffice') };
     if (!this.getOffice(id)) return { ok: false, error: t('err.unknownOffice', { office: id }), status: 404 };
@@ -205,7 +238,7 @@ export class Store {
   listAgents() { return this.db.prepare('SELECT * FROM agents ORDER BY name COLLATE NOCASE, harness').all().map((r) => this.#row(r)); }
   getAgent(id) { return this.#row(this.db.prepare('SELECT * FROM agents WHERE id = ?').get(String(id))); }
 
-  /** Valida un agente: ruta completa existente, CLI conocido, nombre, ejecutable, argumentos y oficina. */
+  /** Validates an agent: an existing full path, a known CLI, name, executable, arguments and office. */
   #clean(a, current = {}) {
     const raw = String(a.path ?? current.path ?? '').trim();
     if (!raw) fail(t('err.pathMissing'));
@@ -260,7 +293,7 @@ export class Store {
   #get(key, fallback) { return json(this.db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value, fallback) ?? fallback; }
   #put(key, value) { this.db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value').run(key, JSON.stringify(value)); }
 
-  /** Los ajustes generales, con los valores por defecto para lo que no se haya guardado. */
+  /** The general settings, with the defaults for whatever has not been saved. */
   getPrefs() {
     const saved = this.#get('prefs', {});
     const out = structuredClone(DEFAULT_PREFS);
@@ -273,7 +306,7 @@ export class Store {
     return out;
   }
 
-  /** Cambia algunos ajustes (los demás quedan como están). Devuelve { ok, prefs } o { ok: false, error }. */
+  /** Changes some settings (the rest stay as they are). Returns { ok, prefs } or { ok: false, error }. */
   setPrefs(patch = {}) {
     return this.#write(() => {
       if (!isObj(patch)) fail(t('err.prefValue', { key: 'prefs' }));
@@ -288,6 +321,7 @@ export class Store {
             if (!isObj(v)) fail(t('err.prefValue', { key: k }));
             for (const [hk, hv] of Object.entries(v)) {
               if (hk === 'launch') next.herdr.launch = bool('herdr.launch', hv);
+              else if (hk === 'subagents') next.herdr.subagents = bool('herdr.subagents', hv);
               else if (hk === 'direction') next.herdr.direction = ['right', 'down'].includes(hv) ? hv : fail(t('err.prefValue', { key: 'herdr.direction' }));
               else if (hk === 'startAgent') {
                 if (hv !== null && hv !== 'auto' && hv !== 'none' && !this.getAgent(hv)) fail(t('err.unknownAgent'));
@@ -305,6 +339,7 @@ export class Store {
           case 'view':
             if (!isObj(v)) fail(t('err.prefValue', { key: k }));
             if (v.office !== undefined) next.view.office = this.getOffice(v.office)?.id || fail(t('err.unknownOffice', { office: v.office }));
+            if (v.mode !== undefined) next.view.mode = ['flat', 'iso'].includes(v.mode) ? v.mode : fail(t('err.prefValue', { key: 'view.mode' }));
             break;
           default: fail(t('err.pref', { key: k }));
         }
@@ -314,12 +349,12 @@ export class Store {
     });
   }
 
-  // ---------------------------------------------------------------- apariencia (por oficina)
+  // ---------------------------------------------------------------- appearance (per office)
 
   #appearanceKey(office) { return !office || office === MAIN_OFFICE ? 'appearance' : `appearance:${office}`; }
   getAppearance(office = MAIN_OFFICE) { return this.#get(this.#appearanceKey(office), {}) || {}; }
 
-  /** patch: { rol: { name, title, shirt, pants, hair, skin, long, beard, glasses } | null } (null = el original) */
+  /** patch: { role: { name, title, shirt, pants, hair, skin, long, beard, glasses } | null } (null = the original) */
   setAppearance(patch = {}, office = MAIN_OFFICE) {
     return this.#write(() => {
       if (!this.getOffice(office)) fail(t('err.unknownOffice', { office }));
@@ -345,9 +380,9 @@ export class Store {
     });
   }
 
-  // ---------------------------------------------------------------- historial de prompts
+  // ---------------------------------------------------------------- prompt history
 
-  /** Guarda (o actualiza) un prompt enviado. p: { id, agentId, agent, entry, text, session, mode, cwd, status, detail } */
+  /** Saves (or updates) a sent prompt. p: { id, agentId, agent, entry, text, session, mode, cwd, status, detail } */
   savePrompt(p) {
     const now = Date.now();
     this.db.prepare(`INSERT INTO prompts (id, agent_id, agent, entry, text, session, mode, cwd, status, detail, created_at, updated_at)
@@ -367,9 +402,33 @@ export class Store {
     return rows.map((r) => ({ id: r.id, agentId: r.agent_id, agent: r.agent, entry: r.entry, text: r.text, session: r.session, mode: r.mode, cwd: r.cwd, status: r.status, detail: r.detail, createdAt: r.created_at, updatedAt: r.updated_at }));
   }
 
-  // ---------------------------------------------------------------- migración desde config.json
+  // ---------------------------------------------------------------- side questions (btw)
 
-  /** La primera vez, trae lo que hubiera en ~/.dev-team-office/config.json (no lo borra). */
+  /** Saves (or updates) a btw question. q: { id, office, agent, agentId, session, cwd, question, answer, status, error } */
+  saveAsk(q) {
+    const now = Date.now();
+    this.db.prepare(`INSERT INTO asks (id, office_id, agent, agent_id, session, cwd, question, answer, status, error, created_at, updated_at)
+                     VALUES ($id, $office, $agent, $agentId, $session, $cwd, $question, $answer, $status, $error, $now, $now)
+                     ON CONFLICT (id) DO UPDATE SET agent = excluded.agent, agent_id = excluded.agent_id, session = excluded.session, cwd = excluded.cwd,
+                       answer = excluded.answer, status = excluded.status, error = excluded.error, updated_at = excluded.updated_at`)
+      .run({
+        $id: String(q.id), $office: String(q.office || MAIN_OFFICE), $agent: q.agent ?? null, $agentId: q.agentId ?? null, $session: q.session ?? null,
+        $cwd: q.cwd ?? null, $question: String(q.question ?? ''), $answer: q.answer ?? null, $status: String(q.status || 'asking'), $error: q.error ?? null, $now: now,
+      });
+    if (Math.random() < 0.05) this.db.prepare('DELETE FROM asks WHERE id NOT IN (SELECT id FROM asks ORDER BY created_at DESC LIMIT ?)').run(ASKS_KEEP);
+  }
+
+  listAsks({ office, limit = 20 } = {}) {
+    const n = Math.min(200, Number(limit) || 20);
+    const rows = office
+      ? this.db.prepare('SELECT * FROM asks WHERE office_id = ? ORDER BY created_at DESC LIMIT ?').all(String(office), n)
+      : this.db.prepare('SELECT * FROM asks ORDER BY created_at DESC LIMIT ?').all(n);
+    return rows.map((r) => ({ id: r.id, office: r.office_id, agent: r.agent, agentId: r.agent_id, session: r.session, cwd: r.cwd, question: r.question, answer: r.answer, status: r.status, error: r.error, createdAt: r.created_at, updatedAt: r.updated_at }));
+  }
+
+  // ---------------------------------------------------------------- migration from config.json
+
+  /** The first time, brings over whatever was in ~/.dev-team-office/config.json (it does not delete it). */
   importLegacy(file) {
     let raw;
     try { raw = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return; }

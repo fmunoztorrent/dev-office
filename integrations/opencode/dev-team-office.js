@@ -1,15 +1,15 @@
-// Plugin de OpenCode → Dev Team Office. OpenCode es el BACKEND: aquí se ejecuta todo; la oficina
-// sólo envía pedidos y dibuja lo que pasa.
+// OpenCode plugin → Dev Team Office. OpenCode is the BACKEND: everything runs here; the office
+// only sends requests and draws what happens.
 //
-// Instalación: `dev-team-office install opencode` (copia este plugin a ~/.config/opencode/plugin/
-// y la librería común a ~/.dev-team-office/lib/devteam.mjs).
+// Installation: `dev-team-office install opencode` (copies this plugin to ~/.config/opencode/plugin/
+// and the shared library to ~/.dev-team-office/lib/devteam.mjs).
 //
-// - Reporta eventos de la sesión a la oficina (HTTP).
-// - Se registra por WebSocket y anuncia los pipelines de su proyecto (.devteam/).
-// - task:     la manda a la sesión con el SDK (`client.session.prompt`, o `client.session.command`
-//             si es un comando de tu harness, como `/task` de Errementari) o al prompt del TUI.
-// - pipeline: ejecuta un pipeline de .devteam/ DENTRO de la sesión, etapa por etapa, con el modelo
-//             y el agente de cada etapa (`client.session.prompt`). Gates y bucles: devteam.mjs.
+// - Reports the session's events to the office (HTTP).
+// - Registers over WebSocket and announces its project's pipelines (.devteam/).
+// - task:     sends it to the session with the SDK (`client.session.prompt`, or `client.session.command`
+//             if it is a command of your harness, like Errementari's `/task`) or to the TUI prompt.
+// - pipeline: runs a .devteam/ pipeline INSIDE the session, stage by stage, with each stage's model
+//             and agent (`client.session.prompt`). Gates and loops: devteam.mjs.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -18,11 +18,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const URL_BASE = process.env.DEV_TEAM_OFFICE_URL || 'http://127.0.0.1:4317';
 const WS_URL = URL_BASE.replace(/^http/, 'ws') + '/v1/ws';
-const STAGE_MARK = '[Dev Team Office · etapa'; // así empiezan los prompts de etapa (no son tareas nuevas)
+const STAGE_MARK = '[Dev Team Office · etapa'; // stage prompts start like this (they are not new tasks)
+// the OpenCode events that tell the office something
+const TRACKED = new Set(['session.created', 'session.idle', 'session.error', 'session.compacted', 'permission.updated', 'permission.asked', 'todo.updated']);
 
 async function loadLib() {
   let here = null;
-  try { here = path.dirname(fileURLToPath(import.meta.url)); } catch { /* sin import.meta.url */ }
+  try { here = path.dirname(fileURLToPath(import.meta.url)); } catch { /* no import.meta.url */ }
   const candidates = [
     process.env.DEV_TEAM_OFFICE_LIB,
     path.join(os.homedir(), '.dev-team-office', 'lib', 'devteam.mjs'),
@@ -32,13 +34,13 @@ async function loadLib() {
   return null;
 }
 
-// La oficina (equipo) a la que pertenece esta sesión, si la abrió la oficina, y su pane de herdr.
+// The office (team) this session belongs to, if the office opened it, and its herdr pane.
 const WHERE = {
   ...(process.env.DEV_TEAM_OFFICE_OFFICE ? { office: process.env.DEV_TEAM_OFFICE_OFFICE } : {}),
   ...(process.env.HERDR_PANE_ID ? { pane: process.env.HERDR_PANE_ID } : {}),
 };
 
-// En orden: los eventos cuentan una historia (fase → herramientas → fin).
+// In order: the events tell a story (phase → tools → end).
 let chain = Promise.resolve();
 function send(event) {
   chain = chain.then(() => fetch(`${URL_BASE}/v1/events/opencode`, {
@@ -46,23 +48,25 @@ function send(event) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ ...WHERE, ...event }),
     signal: AbortSignal.timeout(1500),
-  })).catch(() => {}); // la oficina es opcional: nunca rompe al agente
+  })).catch(() => {}); // the office is optional: it never breaks the agent
 }
 
 const errText = (err) => String(err?.data?.message || err?.message || err);
-/** El SDK devuelve { data, error } (o el valor directo, según la versión). */
+/** The SDK returns { data, error } (or the value directly, depending on the version). */
 const unwrap = (res) => {
   if (res?.error) throw new Error(errText(res.error));
   return res?.data ?? res;
 };
 
 export const DevTeamOffice = async ({ client, directory }) => {
+  // a side question (btw) launched by the office: it is not the team's work, it is not reported
+  if (process.env.DEV_TEAM_OFFICE_BTW) return {};
   const cwd = directory;
   let lib = null;
   let lastSession = null;
   let ws = null;
   let run = null;        // pipeline en curso
-  let runSession = null; // sesión de OpenCode donde corre
+  let runSession = null; // the OpenCode session where it runs
 
   const wsSend = (m) => ws?.readyState === 1 && ws.send(JSON.stringify(m));
   const register = () => wsSend({
@@ -70,10 +74,28 @@ export const DevTeamOffice = async ({ client, directory }) => {
     can: lib ? ['task', 'pipeline'] : ['task'], project: lib ? lib.catalogEntry(lib.loadProject(cwd)) : null, ...WHERE,
   });
   const seen = (session) => {
-    if (!session || session === lastSession) return;
+    if (!session || session === lastSession || parentOf.get(session)) return;
     lastSession = session;
     register();
   };
+  // OpenCode's subagents (the `task` tool) run in child sessions (`parentID`): their activity goes to
+  // the parent's session marked with `child`, like Pi's, and the office draws it as the subagent's
+  // character. Their start, their prompt and their turn end are their own (the office does not count them for the team).
+  const parentOf = new Map(); // session → its parent's (null: it is a main session)
+  const learn = (info) => {
+    if (!info?.id) return;
+    parentOf.set(info.id, info.parentID || null);
+    if (parentOf.size > 200) parentOf.delete(parentOf.keys().next().value);
+  };
+  async function where(session) {
+    if (session && !parentOf.has(session)) {
+      // the session.created event usually arrives first; if not, OpenCode is asked (once, with a cap)
+      const info = await Promise.race([Promise.resolve(client.session.get?.({ path: { id: session } })).then(unwrap, () => null), new Promise((r) => setTimeout(r, 500, null))]).catch(() => null);
+      if (info?.id === session) learn(info); else parentOf.set(session, null);
+    }
+    const parent = parentOf.get(session);
+    return parent ? { session: parent, child: session } : { session };
+  }
   const ack = (id, status, error, detail) => wsSend({ type: 'task_update', id, status, error, detail });
   const toast = (message) => client.tui.showToast({ body: { message, variant: 'info' } }).catch(() => {});
 
@@ -104,9 +126,9 @@ export const DevTeamOffice = async ({ client, directory }) => {
       .catch((err) => toTui(msg.text).catch(() => ack(msg.id, 'failed', errText(err))));
   }
 
-  // ---- pipelines dentro de la sesión ----
+  // ---- pipelines inside the session ----
 
-  /** "proveedor/modelo" → { providerID, modelID }. Sin proveedor, lo busca entre los configurados. */
+  /** "provider/model" → { providerID, modelID }. Without a provider, it looks it up among the configured ones. */
   async function modelRef(spec) {
     const [providerID, ...rest] = String(spec).split('/');
     if (rest.length) return { providerID, modelID: rest.join('/') };
@@ -138,7 +160,7 @@ export const DevTeamOffice = async ({ client, directory }) => {
       }
       try {
         const res = unwrap(await client.session.prompt({ path: { id: runSession }, body }));
-        if (run !== me) break; // cancelado mientras corría
+        if (run !== me) break; // cancelled while running
         step = await run.advance(lib.textOf(res) || lib.textOf(res?.info));
       } catch (err) {
         if (run !== me) break;
@@ -155,8 +177,8 @@ export const DevTeamOffice = async ({ client, directory }) => {
     client.session.abort({ path: { id: runSession } }).catch(() => {});
   }
 
-  // ---- conexión con la oficina ----
-  // No en sesiones lanzadas por la oficina (`opencode run`): terminan solas.
+  // ---- connection to the office ----
+  // Not in sessions launched by the office (`opencode run`): they end by themselves.
   const connect = () => {
     ws = new WebSocket(WS_URL);
     ws.onopen = register;
@@ -175,33 +197,39 @@ export const DevTeamOffice = async ({ client, directory }) => {
 
   return {
     'tool.execute.before': async (input, output) => {
+      const at = await where(input.sessionID);
       seen(input.sessionID);
-      send({ session: input.sessionID, cwd, kind: 'tool_start', tool: input.tool, toolUseId: input.callID, input: output.args });
+      send({ ...at, cwd, kind: 'tool_start', tool: input.tool, toolUseId: input.callID, input: output.args });
     },
     'tool.execute.after': async (input, output) => {
       const failed = output?.metadata?.error || output?.metadata?.exit > 0;
-      send({ session: input.sessionID, cwd, kind: 'tool_end', tool: input.tool, toolUseId: input.callID, ok: !failed });
+      send({ ...(await where(input.sessionID)), cwd, kind: 'tool_end', tool: input.tool, toolUseId: input.callID, ok: !failed });
     },
     event: async ({ event }) => {
       const p = event.properties || {};
+      if (event.type === 'session.created' || event.type === 'session.updated') learn(p.info);
       const session = p.sessionID || p.info?.id || p.info?.sessionID;
-      if (event.type.startsWith('session.')) seen(session);
+      if (!session || !TRACKED.has(event.type)) return;
+      seen(session);
+      const at = await where(session);
       switch (event.type) {
-        case 'session.created': return send({ session, cwd, kind: 'session_start' });
-        // con un pipeline en curso cada etapa termina un turno: el "listo" lo da el pipeline
-        case 'session.idle': return run && session === runSession ? undefined : send({ session, cwd, kind: 'turn_end' });
-        case 'session.error': return send({ session, cwd, kind: 'error', text: p.error?.data?.message || p.error?.name });
-        case 'session.compacted': return send({ session, cwd, kind: 'compact' });
+        case 'session.created': return send({ ...at, cwd, kind: 'session_start' });
+        // with a pipeline in progress each stage ends a turn: the pipeline says when it is "done"
+        case 'session.idle': return run && session === runSession ? undefined : send({ ...at, cwd, kind: 'turn_end' });
+        case 'session.error': return send({ ...at, cwd, kind: 'error', text: p.error?.data?.message || p.error?.name });
+        case 'session.compacted': return send({ ...at, cwd, kind: 'compact' });
         case 'permission.updated':
-        case 'permission.asked': return send({ session, cwd, kind: 'waiting', text: p.title || 'OpenCode pide permiso' });
-        case 'todo.updated': return run && session === runSession ? undefined : send({ session, cwd, kind: 'todos', todos: p.todos });
+        case 'permission.asked': return send({ ...at, cwd, kind: 'waiting', text: p.title || 'OpenCode pide permiso' });
+        case 'todo.updated': return run && session === runSession ? undefined : send({ ...at, cwd, kind: 'todos', todos: p.todos });
       }
     },
-    // Mensaje del usuario → nueva tarea para el equipo (los prompts de etapa no lo son).
+    // User message → new task for the team (stage prompts are not). In a child session it is the
+    // assignment the parent gave its subagent: that is how the office knows which one it is.
     'chat.message': async (input, output) => {
+      const at = await where(input.sessionID);
       seen(input.sessionID);
       const text = output?.parts?.filter((x) => x.type === 'text').map((x) => x.text).join(' ');
-      if (text && !text.startsWith(STAGE_MARK)) send({ session: input.sessionID, cwd, kind: 'task', text });
+      if (text && !text.startsWith(STAGE_MARK)) send({ ...at, cwd, kind: 'task', text });
     },
   };
 };

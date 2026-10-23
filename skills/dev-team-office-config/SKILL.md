@@ -1,6 +1,6 @@
 ---
 name: dev-team-office-config
-description: Conecta un harness de agentes (Pi, Claude Code, OpenCode o cualquiera con archivos de agente en markdown) a Dev Team Office. Úsalo cuando el usuario pida instalar la oficina para un equipo o harness nuevo, configurarla, o hacer que los personajes de la oficina reflejen los subagentes del harness (declarar el `role:` de cada agente). También cuando los subagentes caigan siempre en el mismo personaje.
+description: Conecta un harness de agentes (Pi, Claude Code, OpenCode, Codex o cualquiera con archivos de agente) a Dev Team Office. Úsalo cuando el usuario pida instalar la oficina para un equipo o harness nuevo, configurarla, o hacer que los personajes de la oficina reflejen los subagentes del harness (declarar el `role:` de cada agente). También cuando los subagentes caigan siempre en el mismo personaje.
 ---
 
 # Dev Team Office: conectar un harness
@@ -57,8 +57,9 @@ no lo ve.
 | Pi | `<proyecto>/.pi/agents/` | `~/.pi/agent/agents/` |
 | Claude Code | `<proyecto>/.claude/agents/` | `~/.claude/agents/` |
 | OpenCode | `<proyecto>/.opencode/agents/` | `~/.config/opencode/agents/` |
+| Codex | `<proyecto>/.codex/agents/` | `~/.codex/agents/` |
 
-Sólo se leen archivos `.md`. Si el mismo nombre aparece en proyecto y usuario, gana el de
+Se leen archivos `.md` (y `.toml` en Codex, con `role = "backend"` o un comentario `# role: backend`). Si el mismo nombre aparece en proyecto y usuario, gana el de
 **proyecto**. Un harness distinto a los de la tabla sólo sirve si expone sus archivos en uno de
 estos directorios.
 
@@ -93,12 +94,14 @@ antes de dar la configuración por terminada.
 ### 4. Instala el lado de la oficina
 
 ```bash
-dev-team-office install <pi|opencode|claude>
+dev-team-office setup                 # todos los agentes que encuentre
+dev-team-office setup --only codex    # o sólo uno
 ```
 
-Esto deja la librería común, la extensión/plugin/hook del harness y los skills. En **Claude Code**
-queda un paso manual: copiar la sección `hooks` del snippet que imprime el comando a
-`~/.claude/settings.json` (o al `.claude/settings.json` del proyecto).
+Deja la librería común, la integración de cada harness (extensión de Pi, plugin de OpenCode, hooks de
+Claude Code y de Codex, ya conectados en su configuración), el servidor MCP y los skills. No quedan
+pasos a mano; en **Codex** hay que confiar una vez en los hooks nuevos (`/hooks`). Para revisar:
+`dev-team-office doctor`.
 
 ### 5. Verifica
 

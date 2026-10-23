@@ -1,10 +1,10 @@
-// ⚙ Ajustes en la vista web. La oficina es el frontend y guarda lo suyo en su base SQLite:
-//   General      idioma del juego, zona horaria de la empresa, clima real, herdr y la bitácora
-//   Oficinas     las oficinas (equipos o dominios) de la empresa: nombre, zona horaria y ubicación
-//   Agentes      el mantenedor: cada agente es una ruta completa + el CLI que la atiende + su
-//                oficina. Lo que trae su harness (Errementari, comandos, prompts, .devteam/) se
-//                detecta, y un prompt enviado desde la pizarra arranca ESE pipeline.
-//   Personajes   cómo se ven los personajes de la oficina que se está mirando.
+// ⚙ Settings in the web view. The office is the frontend and keeps its own data in its SQLite database:
+//   General      game language, the company's time zone, real weather, herdr and the log
+//   Offices      the company's offices (teams or domains): name, time zone and location
+//   Agents       the maintainer: each agent is a full path + the CLI that serves it + its
+//                office. What its harness brings (Errementari, commands, prompts, .devteam/) is
+//                detected, and a prompt sent from the whiteboard starts THAT pipeline.
+//   Characters   how the characters of the office being watched look.
 
 import { TEAM, DEFAULT_TEAM, APPEARANCE_KEYS, LOOK_PALETTES } from './sim.js';
 import { drawSprite } from './sprite.js';
@@ -12,7 +12,7 @@ import { t, LANGUAGES, getLanguage } from './i18n.js';
 import { allZones, zoneInfo, countryName } from './clock.js';
 
 const ROLE_ORDER = ['po', 'analyst', 'manager', 'tl', 'qa', 'backend', 'frontend', 'designer'];
-const HARNESS_NAME = { pi: 'Pi', 'claude-code': 'Claude Code', opencode: 'OpenCode' };
+const HARNESS_NAME = { pi: 'Pi', 'claude-code': 'Claude Code', opencode: 'OpenCode', codex: 'Codex' };
 
 const $ = (id) => document.getElementById(id);
 function el(tag, attrs = {}, ...children) {
@@ -40,7 +40,7 @@ async function api(method, path, body) {
 const emptyForm = () => ({ id: null, path: '', harness: '', name: '', bin: '', args: '', office: null, detected: null, touched: false });
 const emptyOffice = () => ({ id: null, name: '', timezone: '', location: '' });
 
-/** Un campo de zona horaria: se escribe para buscar (ciudad, región o país) entre todas las zonas. */
+/** A time zone field: type to search (city, region or country) among all zones. */
 function zoneInput({ value, placeholder, label, onPick }) {
   const id = `tz-${Math.random().toString(36).slice(2, 8)}`;
   const list = el('datalist', { id }, allZones().map((z) => option(z, countryName(zoneInfo(z).country, getLanguage()))));
@@ -59,9 +59,9 @@ function zoneInput({ value, placeholder, label, onPick }) {
 }
 
 /**
- * @param getOffices/getOffice  las oficinas y la que se está mirando
- * @param getPrefs/getHerdr     los ajustes generales y el estado de herdr (llegan por WebSocket)
- * @param onView                (id) => mirar otra oficina
+ * @param getOffices/getOffice  the offices and the one being watched
+ * @param getPrefs/getHerdr     the general settings and herdr's state (they arrive over WebSocket)
+ * @param onView                (id) => watch another office
  */
 export function createSettings({ getTargets = () => [], getOffices = () => [], getOffice = () => null, getPrefs = () => null, getHerdr = () => null, onPrompt, onView, onSaved } = {}) {
   const st = { tab: 'general', data: null, looks: null, form: emptyForm(), office: emptyOffice() };
@@ -95,7 +95,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     else { st.looks = null; renderLook(); }
   }
 
-  /** Llegó algo nuevo (agentes, oficinas, ajustes, el idioma…): se vuelve a dibujar la pestaña. */
+  /** Something new arrived (agents, offices, settings, the language…): the tab is redrawn. */
   function refresh(all = false) {
     if (!$('settings').open) return;
     if (st.tab === 'agents') return renderList();
@@ -127,9 +127,12 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       el('p', { class: 'hint' }, G('tzHint')),
       check(p.weather, `${G('weather')}: ${G(p.weather ? 'weatherOn' : 'weatherOff')}`, (e) => setPref({ weather: e.target.checked })),
       check(p.log?.life, G('life'), (e) => setPref({ log: { life: e.target.checked } })),
+      el('label', { class: 'b-field' }, el('span', {}, G('viewMode')),
+        el('select', { 'aria-label': G('viewMode'), onchange: (e) => setPref({ view: { mode: e.target.value } }) }, ['flat', 'iso'].map((m) => option(m, G(`view_${m}`), m === (p.view?.mode || 'flat'))))),
       el('h3', {}, G('herdr')),
       el('p', { class: 'hint' }, herdr.available ? G('herdrOn', { pane: herdr.pane || '?' }) : G('herdrOff')),
       check(p.herdr.launch, G('herdrLaunch'), (e) => setPref({ herdr: { launch: e.target.checked } })),
+      check(p.herdr.subagents !== false, G('herdrSubagents'), (e) => setPref({ herdr: { subagents: e.target.checked } })),
       el('label', { class: 'b-field' }, el('span', {}, G('herdrDirection')),
         el('select', { onchange: (e) => setPref({ herdr: { direction: e.target.value } }) }, ['right', 'down'].map((d) => option(d, G(d), d === p.herdr.direction)))),
       el('label', { class: 'b-field' }, el('span', {}, G('startAgent')),
@@ -189,7 +192,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     msg(t('settings.offices.deleted'), true);
   }
 
-  // ------------------------------------------------------------ Agentes (el mantenedor)
+  // ------------------------------------------------------------ Agents (the maintainer)
 
   const A = (k, v) => t(`settings.agents.${k}`, v);
 

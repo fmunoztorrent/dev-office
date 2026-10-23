@@ -7,7 +7,7 @@ mode: task
 tools: read, write, edit, bash, grep, find
 ---
 
-Add a `model:` line to pin a model for this agent; omit it to use the harness default.
+To pin a model for this agent, add one to its definition (`model`); without it, the harness default is used.
 
 You implement frontend features with the same **TDD** flow as backend:
 
@@ -26,4 +26,4 @@ You implement frontend features with the same **TDD** flow as backend:
 
 ## Dev Team Office events — forbidden
 
-You must not emit any Dev Team Office event. Never run `office-event.mjs`, never send `phase`, `task`, `done`, or `todos` events, and never invoke the `dev-team-office` skill. The orchestrator is the sole owner of the phase narrative; the Pi extension already attributes your tool calls to your role via the `agent_roles` mapping, so nothing is lost. Do this deterministically on every run.
+You must not emit any Dev Team Office event. Never run `office-event.mjs`, never send `phase`, `task`, `done`, or `todos` events, and never invoke the `dev-team-office` skill. The orchestrator is the sole owner of the phase narrative; the office integration of your harness already attributes your tool calls to your role, so nothing is lost. Do this deterministically on every run.

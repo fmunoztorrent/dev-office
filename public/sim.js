@@ -1,18 +1,18 @@
-// Simulación de la oficina, sin dibujo: personajes, rutas, reacciones a eventos y partículas.
-// La usan el render en canvas (navegador, game.js) y el render de terminal (tui/).
-// Todas las coordenadas están en un mundo de W×H.
+// The office simulation, without drawing: characters, routes, reactions to events and particles.
+// Used by the canvas renderer (browser, game.js) and the terminal renderer (tui/).
+// All coordinates are in a W×H world.
 //
-// Además de reaccionar a lo que hace el agente, cada personaje tiene su propia "cabeza"
-// (brain): necesidades que crecen con el tiempo (conversar, café, baño, consultar, soñar) y una
-// personalidad que decide qué hace cuando nadie le pide nada. Las NPC de producto (PO, analista,
-// diseñadora) se sientan juntas y cotorrean; la diseñadora sueña con unicornios y arcoíris, QA con
-// calaveras y los devs con pizza; los técnicos a veces van a consultar al TL y el TL a veces va a
-// conversar con producto; el manager reparte los requerimientos y hace rondas. La oficina también
-// tiene su vida: a las 13:00 el equipo se va a almorzar al comedor, hay un baño (de a uno, con
-// fila) y a veces el servidor se incendia y el equipo técnico lo apaga y lo repara.
-// Los textos (diálogos, bitácora) están en los idiomas del juego (i18n.js, locales/).
-// Lo que pasa "a veces" siempre tiene un factor aleatorio: la necesidad se llena y además hay que
-// ganar una tirada para que ocurra.
+// Besides reacting to what the agent does, each character has its own "brain": needs that grow
+// over time (talking, coffee, bathroom, consulting, dreaming) and a personality that decides what
+// it does when nobody asks it for anything. The product NPCs (PO, analyst, designer) sit together
+// and chit-chat; the designer dreams of unicorns and rainbows, QA of skulls and the devs of pizza;
+// the technical people sometimes go consult the TL and the TL sometimes goes to talk with product;
+// the manager hands out the requirements and makes rounds. The office also has its own life: at
+// 13:00 the team goes to lunch in the dining room, there is a bathroom (one at a time, with a
+// queue) and sometimes the server catches fire and the technical team puts it out and repairs it.
+// The texts (dialogs, log) are in the game's languages (i18n.js, locales/).
+// What happens "sometimes" always has a random factor: the need fills up and then a roll has to
+// be won for it to happen.
 
 import { daylight, simulatedWeather, strikeStart, WEATHER, WET } from './sky.js';
 import { t, ta, listOf, onLanguage } from './i18n.js';
@@ -21,9 +21,9 @@ export { daylight } from './sky.js';
 
 export const W = 960, H = 600;
 
-// Fila de arriba: el rincón de producto (diseñadora, PO y analista, juntas) y el manager.
-// Fila de abajo: el equipo técnico, con el TL un poco aparte (se le va a consultar).
-// El cargo (title) sale del idioma del juego, salvo que se personalice en ⚙ › Personajes.
+// Top row: the product corner (designer, PO and analyst, together) and the manager.
+// Bottom row: the technical team, with the TL a bit apart (people go consult them).
+// The job title comes from the game's language, unless customized in ⚙ › Characters.
 export const TEAM = {
   designer: { name: 'Camila', title: 'Diseñadora', shirt: '#c86bfa', pants: '#3a2f45', hair: '#f2d16b', skin: '#f0c8a8', long: true, seat: { x: 100, y: 228 }, prop: 'tablet' },
   po: { name: 'Sofía', title: 'Product Owner', shirt: '#e0607e', pants: '#3b3355', hair: '#5a3214', skin: '#f2c9a0', long: true, seat: { x: 210, y: 228 }, prop: 'notes' },
@@ -34,29 +34,29 @@ export const TEAM = {
   qa: { name: 'Andrés', title: 'QA', shirt: '#8ac926', pants: '#2b3a2e', hair: '#3d2817', skin: '#e0ac7e', glasses: true, seat: { x: 330, y: 418 }, prop: 'qa' },
   tl: { name: 'Tomás', title: 'Tech Lead', shirt: '#22a68e', pants: '#26313a', hair: '#2b1b12', skin: '#d9a273', beard: true, seat: { x: 560, y: 418 }, prop: 'big' },
 };
-export const PRODUCT = ['po', 'analyst', 'designer']; // NPC del negocio: conversan entre ellas y traen los requerimientos
-export const TECH = ['backend', 'frontend', 'qa'];      // trabajan y a veces consultan al TL
+export const PRODUCT = ['po', 'analyst', 'designer']; // business NPCs: they talk among themselves and bring the requirements
+export const TECH = ['backend', 'frontend', 'qa'];      // they work and sometimes consult the TL
 
-// La pizarra, en un atril frente a la pared de vidrio (con el reloj digital encima): al hacerle
-// clic se abre el diálogo para encargar una tarea.
+// The whiteboard, on an easel in front of the glass wall (with the digital clock on top): clicking
+// it opens the dialog to brief a task.
 export const BOARD = { x: 372, y: 34, w: 236, h: 98 };
-export const EASEL = { top: 22, feet: 146, legs: [[362, 348], [618, 632]] }; // patas delanteras, a los costados: x arriba → x en el piso
-export const ALARM = { x: 588, y: 6 }; // cuelga de la viga del techo, sobre el rack
-export const SIGN = { x: 308, y: 62 }; // el letrero, en vinilo en la parte baja de un panel del vidrio (bajo el HUD)
+export const EASEL = { top: 22, feet: 146, legs: [[362, 348], [618, 632]] }; // front legs, at the sides: x at the top → x on the floor
+export const ALARM = { x: 588, y: 6 }; // hangs from the ceiling beam, over the rack
+export const SIGN = { x: 308, y: 62 }; // the sign, in vinyl on the lower part of a glass panel (under the HUD)
 export const CLOCK = { x: 446, y: 3, w: 88, h: 26 };
-// La pared del fondo es de vidrio (de x 0 a GLASS.x1); el baño es un bloque sólido a la derecha.
+// The back wall is glass (from x 0 to GLASS.x1); the bathroom is a solid block on the right.
 export const GLASS = { x0: 0, x1: 704, top: 6, bottom: 108 };
 export const onBoard = (x, y) => x >= BOARD.x && x <= BOARD.x + BOARD.w && y >= BOARD.y && y <= BOARD.y + BOARD.h;
 
-// Apariencia personalizable (⚙ Ajustes › Personajes). TEAM se modifica en el sitio para que
-// los dos renderers y la simulación vean el cambio al instante.
+// Customizable appearance (⚙ Settings › Characters). TEAM is modified in place so both
+// renderers and the simulation see the change instantly.
 export const APPEARANCE_KEYS = ['name', 'title', 'shirt', 'pants', 'hair', 'skin', 'long', 'beard', 'glasses'];
 export const DEFAULT_TEAM = Object.fromEntries(Object.entries(TEAM).map(([id, c]) => {
   const look = Object.fromEntries(APPEARANCE_KEYS.filter((k) => k !== 'title').map((k) => [k, c[k] ?? false]));
   Object.defineProperty(look, 'title', { get: () => t(`team.titles.${id}`), enumerable: true });
   return [id, look];
 }));
-// Paletas para elegir colores sin escribir hex (la terminal las recorre con ◂ ▸; la web también tiene selector libre).
+// Palettes to pick colors without typing hex (the terminal cycles them with ◂ ▸; the web also has a free picker).
 export const LOOK_PALETTES = {
   shirt: ['#e0607e', '#f0a73a', '#3f73f0', '#22a68e', '#8ac926', '#6b5bd6', '#ff7a45', '#c86bfa', '#ef476f', '#118ab2', '#06d6a0', '#ffd166'],
   pants: ['#2a2d3a', '#2f3b52', '#3b3355', '#26313a', '#2b3a2e', '#22222e', '#3a2f45', '#4a3b2a'],
@@ -72,31 +72,31 @@ export function applyAppearance(overrides = {}) {
   }
 }
 applyAppearance();
-onLanguage(() => applyAppearance(appearance)); // los cargos que no se personalizaron cambian de idioma
-/** Los nombres actuales del equipo, para los diálogos ({tl}, {po}, {manager}…). */
+onLanguage(() => applyAppearance(appearance)); // titles that were not customized change language
+/** The team's current names, for the dialogs ({tl}, {po}, {manager}…). */
 export const teamNames = () => Object.fromEntries(Object.entries(TEAM).map(([id, c]) => [id, c.name]));
 
-// ------------------------------------------------------------------------------------ el mapa
+// ------------------------------------------------------------------------------------ the map
 
-// La cafetería ocupa el lado derecho, arriba: barra contra la pared (con la máquina de espresso,
-// el refrigerador y el letrero de neón) y una mesita alta. Una línea de jardineras la separa de la
-// oficina, con pasos a la altura de los pasillos.
+// The café takes the right side, at the top: a counter against the wall (with the espresso machine,
+// the fridge and the neon sign) and a high table. A line of planters separates it from the office,
+// with gaps at the height of the aisles.
 export const CAFE = {
-  x: 772,                                   // donde empieza su piso
-  counter: { x: 812, w: 144, top: 116 },    // la barra: cubierta desde `top`, frente hasta top + 32
+  x: 772,                                   // where its floor starts
+  counter: { x: 812, w: 144, top: 116 },    // the counter: top from `top`, front down to top + 32
   fridge: { x: 778, y: 54, w: 28, h: 94 },
   espresso: { x: 884, w: 42 },
-  bistro: { x: 836, y: 262 },               // la mesita alta con dos pisos
+  bistro: { x: 836, y: 262 },               // the high table with two levels
 };
-// Bajo la cafetería, el comedor: un muro bajo con una puerta los separa, y una mesa larga donde
-// almuerza todo el equipo. Producto y el manager se sientan detrás de la mesa (de frente); el
-// equipo técnico delante, de espaldas. Se entra por la puerta del muro (los de atrás) o por abajo
-// (los de adelante), para no atravesar la mesa.
+// Below the café, the dining room: a low wall with a door separates them, and a long table where
+// the whole team has lunch. Product and the manager sit behind the table (facing us); the
+// technical team in front, from behind. You enter through the wall's door (the back ones) or from
+// below (the front ones), so as not to cross the table.
 export const DINING = {
-  top: 330,                                 // el muro: de top a top + 14
-  door: { x0: 900, x1: 948 },               // la puerta del muro (cafetería ↔ comedor)
-  table: { x: 866, y: 452, w: 150 },        // y: el borde de atrás de la cubierta (donde se sientan los de atrás)
-  aisle: { back: 410, front: 566, side: 788, door: 924 }, // por dónde se llega a cada fila
+  top: 330,                                 // the wall: from top to top + 14
+  door: { x0: 900, x1: 948 },               // the wall's door (café ↔ dining room)
+  table: { x: 866, y: 452, w: 150 },        // y: the back edge of the top (where the back ones sit)
+  aisle: { back: 410, front: 566, side: 788, door: 924 }, // how each row is reached
 };
 const DINE_X = [-54, -18, 18, 54].map((dx) => DINING.table.x + dx);
 export const DINING_SEATS = {
@@ -104,34 +104,34 @@ export const DINING_SEATS = {
   front: DINE_X.map((x) => ({ x, y: DINING.table.y + 48, row: 'front' })),
 };
 const COUNTER_SPOTS = [{ x: 836, y: 150 }, { x: 872, y: 150 }, { x: 908, y: 150 }];
-export const PARTITION = [[190, 296], [340, 440], [484, 600]]; // jardineras en x = CAFE.x - 6, con pasos en los pasillos
-// El baño: una puerta en la pared, entre el reloj y la cafetería. Se entra de a uno.
+export const PARTITION = [[190, 296], [340, 440], [484, 600]]; // planters at x = CAFE.x - 6, with gaps at the aisles
+// The bathroom: a door in the wall, between the clock and the café. One at a time.
 export const BATH = { x: 714, w: 52, door: { x: 740, y: 126 }, front: { x: 740, y: 150 }, line: { x: 694, y: 154 } };
-// El rack de servidores (el que se incendia) y su extintor, en el piso a su izquierda.
+// The server rack (the one that catches fire) and its extinguisher, on the floor to its left.
 export const RACK = { x: 572, y: 150, w: 42, h: 92 };
 export const EXTINGUISHER = { x: 561, y: 242 };
 const EXT_PICK = { x: 561, y: 272 };
 const FIRE_SPOT = { backend: { x: 594, y: 276 }, tl: { x: 640, y: 286 }, frontend: { x: 546, y: 288 }, qa: { x: 684, y: 292 } };
-const FIRE_ORDER = ['backend', 'tl', 'frontend', 'qa']; // quién toma el extintor si puede
-// La sala de estar: una tele en un trípode y, delante, un sofá (se ve de espaldas: los que miran
-// la tele dan la espalda). Se llega por el costado para no atravesar la tele.
-export const TV = { x: 360, feet: 512, w: 72, h: 44 };
+const FIRE_ORDER = ['backend', 'tl', 'frontend', 'qa']; // who grabs the extinguisher if they can
+// The living room: a TV on a tripod and, in front, a sofa (seen from behind: those watching TV
+// have their backs to us). It is reached from the side so as not to cross the TV.
+export const TV = { x: 360, feet: 522, w: 96, h: 58 };
 export const SOFA = { x: 360, y: 562, seats: [320, 360, 400], side: { x: 266, y: 532 } };
 
 export const SPOT = {
   board: { x: 490, y: 148 },
   coffee: COUNTER_SPOTS[1],
   table: { x: 600, y: 515 },
-  sofa: { x: 236, y: 520 }, // junto al sofá, para conversar de pie
+  sofa: { x: 236, y: 520 }, // next to the sofa, to chat standing up
 };
 export const PLANTS = [[20, 560], [700, 400], [944, 590]];
 const TABLE_SEATS = [[-75, -40], [-25, -42], [25, -42], [75, -40], [-108, 0], [108, 0], [-100, 42], [100, 42]];
 const CORRIDOR_TOP = 148, CORRIDOR_MID = 318, CORRIDOR_LOW = 462;
-const LANES = [25, 445, 637]; // huecos entre escritorios por donde se cambia de pasillo
+const LANES = [25, 445, 637]; // gaps between desks where people switch aisles
 const DEVS = ['backend', 'frontend', 'designer'];
-const SPEED = 120; // px del mundo por segundo al caminar
-export const LUNCH = { start: 13 * 60, end: 14 * 60 }; // minutos del día
-/** Qué da la tele: última hora si se incendia el servidor; si alguien la mira, también fútbol. */
+const SPEED = 120; // world px per second when walking
+export const LUNCH = { start: 13 * 60, end: 14 * 60 }; // minutes of the day
+/** What is on TV: breaking news if the server catches fire; if someone is watching, football too. */
 export function tvChannel(sim, now) {
   if (sim.fire && sim.fire.phase !== 'done') return 'breaking';
   const watched = Object.values(sim.agents).some((a) => a.back);
@@ -141,10 +141,10 @@ export function tvChannel(sim, now) {
 
 export const STATUS_ICON = { working: '💻', thinking: '💭', blocked: '❗', waiting: '✋', done: '🎉', coffee: '☕', talking: '💬', red: '🔴', alarm: '🚨' };
 
-// ------------------------------------------------------------------------------------ sueños
+// ------------------------------------------------------------------------------------ dreams
 
-// Lo que imaginan: pixel art que dibujan los dos renderers (cada carácter es un pixel; '.' es
-// transparente). El arcoíris se calcula (rainbowPixels).
+// What they imagine: pixel art drawn by both renderers (each character is a pixel; '.' is
+// transparent). The rainbow is computed (rainbowPixels).
 export const DREAM_PALETTE = {
   W: '#ffffff', w: '#e9ecf5', k: '#2b2d42', y: '#ffd166', p: '#ff7eb6', v: '#c86bfa', h: '#8d99ae', b: '#7ad7f0',
   s: '#c9ccd6', c: '#d08c45', C: '#9c5a2a', Y: '#ffe8a3', r: '#d62828', g: '#3fb68b',
@@ -187,7 +187,7 @@ export const PIZZA = [
   '.....y.......',
 ];
 export const RAINBOW_COLORS = ['#ef476f', '#ff9f1c', '#ffd166', '#06d6a0', '#118ab2', '#8e7dbe'];
-/** Cada sueño: su sprite (o null si se calcula), el color de la nube y el del resplandor. */
+/** Each dream: its sprite (or null if computed), the cloud's color and the glow's. */
 export const DREAMS = {
   unicorn: { sprite: UNICORN, cloud: '#cfe2ff', glow: '#ff7eb6', emoji: '🦄' },
   rainbow: { sprite: null, cloud: '#ffffff', glow: '#ffd166', emoji: '🌈' },
@@ -195,10 +195,10 @@ export const DREAMS = {
   pizza: { sprite: PIZZA, cloud: '#fff3d6', glow: '#ff9f1c', emoji: '🍕' },
 };
 for (const [kind, d] of Object.entries(DREAMS)) Object.defineProperty(d, 'label', { get: () => t(`dream.${kind}`), enumerable: true });
-// Quién sueña con qué.
+// Who dreams of what.
 export const DREAMERS = { designer: ['unicorn', 'rainbow'], qa: ['skull'], backend: ['pizza'], frontend: ['pizza'] };
 
-/** Pixeles de un arcoíris de radio r (bandas de RAINBOW_COLORS hacia adentro): [[dx, dy, color]]. */
+/** Pixels of a rainbow of radius r (RAINBOW_COLORS bands going inward): [[dx, dy, color]]. */
 export function rainbowPixels(r = 9) {
   const out = [];
   const band = Math.max(1, Math.floor(r / (RAINBOW_COLORS.length + 1)));
@@ -212,8 +212,8 @@ export function rainbowPixels(r = 9) {
   return out;
 }
 
-// Fases del flujo por roles (evento `phase`). `anim` decide qué hace el personaje.
-// El nombre de cada fase está en los idiomas (i18n: phase.<id>).
+// Phases of the role flow (`phase` event). `anim` decides what the character does.
+// Each phase's name is in the languages (i18n: phase.<id>).
 export const PHASES = {
   historia: { icon: '📝', anim: 'board' },
   criterios: { icon: '📋', anim: 'board' },
@@ -256,9 +256,9 @@ export const rand = (a, b) => a + Math.random() * (b - a);
 export const pick = (arr) => arr[(Math.random() * arr.length) | 0];
 
 // ------------------------------------------------------------------------------------
-// Personalidad: cuánto le cuesta quedarse solo, cuánto café toma, de qué habla.
+// Personality: how hard it is to be alone, how much coffee they drink, what they talk about.
 
-// Segundos que tarda cada necesidad en llenarse (y que el personaje quiera hacer algo al respecto).
+// Seconds each need takes to fill up (and for the character to want to do something about it).
 const PERSONALITY = {
   po: { social: 55, coffee: 420, bladder: 1900 },
   analyst: { social: 65, coffee: 460, bladder: 2100 },
@@ -269,20 +269,20 @@ const PERSONALITY = {
   frontend: { social: 400, coffee: 460, bladder: 2000, doubt: 85, dream: 450 },
   qa: { social: 400, coffee: 460, bladder: 2300, doubt: 110, dream: 420 },
 };
-/** Necesidades de 0 a 1 (al llegar a 1, quiere actuar). Arrancan desparejas para que no actúen todos a la vez. */
+/** Needs from 0 to 1 (on reaching 1, they want to act). They start uneven so not everyone acts at once. */
 function freshMind(random) {
   const r = () => random() * 0.6;
   return { social: r(), coffee: r(), doubt: r(), dream: r() + 0.2, rounds: r(), bladder: r(), product: r(), nextThink: 0 };
 }
-/** Las necesidades que se ven en la ficha del personaje (0 = satisfecha, 1 = urgente). */
+/** The needs shown in the character's sheet (0 = satisfied, 1 = urgent). */
 export const NEEDS = ['social', 'coffee', 'bladder', 'dream', 'doubt'];
 export const needsOf = (id) => NEEDS.filter((k) => k !== 'dream' || DREAMERS[id]).filter((k) => k !== 'doubt' || PERSONALITY[id]?.doubt).map((k) => [k, t(`needs.${k}`)]);
 
 const short = (t, n = 28) => { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 
-// Los diálogos están en los idiomas del juego (locales/: sim.*); los nombres van como {variables}.
+// The dialogs are in the game's languages (locales/: sim.*); the names go as {variables}.
 const LUNCH_FOOD = { designer: '🥗', po: '🥗', analyst: '🍣', manager: '🍝', frontend: '🍕', backend: '🍕', qa: '🍔', tl: '🍜' };
-// A quién le toca un requerimiento, según de qué habla (el manager reparte).
+// Who gets a requirement, depending on what it is about (the manager hands them out).
 const ASSIGN_RULES = [
   ['designer', /dise[ñn]|design|logo|colou?r|paleta|palette|\bux\b|figma|[ií]cono|\bicons?\b|mockup|estilo|style/i],
   ['frontend', /front|\bui\b|pantalla|screen|vista|\bview|bot[oó]n|button|p[aá]gina|\bpage|css|react|vue|formulario|\bform|componente|component|\bweb\b|tema|theme|oscuro|dark/i],
@@ -291,16 +291,16 @@ const ASSIGN_RULES = [
 ];
 export function assignees(text) {
   const roles = ASSIGN_RULES.filter(([, rx]) => rx.test(String(text || ''))).map(([r]) => r).slice(0, 2);
-  return roles.length ? roles : ['tl']; // sin pistas: lo ve el Tech Lead
+  return roles.length ? roles : ['tl']; // no clues: the Tech Lead looks at it
 }
 
-// Conversaciones que se cortan si al personaje le llega trabajo de verdad (consultar al TL no).
+// Conversations that are cut short if real work reaches the character (consulting the TL is not).
 const LEISURE = new Set(['gossip', 'deskchat', 'coffee', 'lunchtalk', 'archchat', 'idea', 'rounds', 'tv']);
 
-// Cuando cambia el clima de afuera (el real, o el simulado sin conexión)
+// When the weather outside changes (the real one, or the simulated one when offline)
 const SKY_GROUP = { clear: 'fair', partly: 'fair', cloudy: 'cloudy', fog: 'fog', drizzle: 'wet', rain: 'wet', storm: 'storm', snow: 'snow' };
 
-/** El texto de la bitácora para lo que hicieron por iniciativa propia. */
+/** The log text for what they did on their own initiative. */
 function describe(kind, who, extra) {
   const name = (id) => TEAM[id]?.name || id;
   const vars = {
@@ -330,24 +330,24 @@ class Agent {
     this.stateUntil = 0;
     this.text = '';
     this.bubble = null;
-    this.badges = new Map(); // subagentes asignados: id → descripción
+    this.badges = new Map(); // assigned subagents: id → description
     this.walkT = 0;
     this.lastActive = clock() + random() * 20_000;
-    this.carry = false;      // true: una tarjeta; 'ext': el extintor
+    this.carry = false;      // true: a card; 'ext': the extinguisher
     this.jumpUntil = 0;
     this.shakeUntil = 0;
     this.handUp = false;
     this.history = [];
-    this.dream = null;     // { kind: 'unicorn' | 'rainbow' | 'skull' | 'pizza', start, until } lo que imagina
-    this.scene = null;     // la conversación en la que está
-    this.perch = false;    // sentado en una silla que no es la suya (almorzando)
-    this.hidden = false;   // dentro del baño
-    this.dance = false;    // esperando que se desocupe el baño
-    this.food = null;      // lo que está comiendo
-    this.lunch = null;     // { seat } mientras almuerza en la cafetería
-    this.back = false;     // de espaldas (en el sofá, mirando la tele)
-    this.tvSeat = null;    // el puesto del sofá que ocupa
-    this.diningSeat = null; // su silla en el comedor, mientras almuerza
+    this.dream = null;     // { kind: 'unicorn' | 'rainbow' | 'skull' | 'pizza', start, until } what they imagine
+    this.scene = null;     // the conversation they are in
+    this.perch = false;    // sitting on a chair that is not theirs (having lunch)
+    this.hidden = false;   // inside the bathroom
+    this.dance = false;    // waiting for the bathroom to be free
+    this.food = null;      // what they are eating
+    this.lunch = null;     // { seat } while having lunch at the café
+    this.back = false;     // from behind (on the sofa, watching TV)
+    this.tvSeat = null;    // the sofa spot they take
+    this.diningSeat = null; // their chair in the dining room, while having lunch
     this.mind = freshMind(random);
   }
 
@@ -362,7 +362,7 @@ class Agent {
     this.lastActive = this.clock();
   }
 
-  /** Libre para hacer algo por iniciativa propia: sentado, sin cola, sin conversación ni urgencias. */
+  /** Free to do something on their own initiative: seated, no queue, no conversation, no urgencies. */
   get free() { return this.seated && !this.queue.length && !this.scene && !this.lunch && !['blocked', 'waiting', 'red', 'alarm'].includes(this.state); }
 
   goTo(pt) {
@@ -372,11 +372,11 @@ class Agent {
   }
   wait(ms) { this.queue.push({ t: 'wait', ms }); return this; }
   until(at) { this.queue.push({ t: 'until', at }); return this; }
-  /** Espera hasta que se cumpla la condición. */
+  /** Waits until the condition holds. */
   waitFor(test) { this.queue.push({ t: 'cond', test }); return this; }
   then(fn) { this.queue.push({ t: 'fn', fn }); return this; }
   goHome() { this.goTo(this.cfg.seat); this.queue.push({ t: 'sit', end: this.cfg.seat }); return this; }
-  /** Camina en línea recta (sin pasar por los pasillos): para moverse dentro de la sala de estar. */
+  /** Walks in a straight line (without going through the aisles): to move inside the living room. */
   walk(pt) { this.queue.push({ t: 'walk', path: [{ x: pt.x, y: pt.y }], end: { x: pt.x, y: pt.y } }); return this; }
 
   update(dt, now) {
@@ -415,7 +415,7 @@ class Agent {
   }
 }
 
-// Pasillos: detrás de la fila 1, entre filas, y delante de la fila 2 (zona de la mesa).
+// Aisles: behind row 1, between rows, and in front of row 2 (the table area).
 function corridor(y) { return y < 270 ? CORRIDOR_TOP : y < 450 ? CORRIDOR_MID : CORRIDOR_LOW; }
 function route(a, b) {
   const ca = corridor(a.y), cb = corridor(b.y);
@@ -433,18 +433,18 @@ function route(a, b) {
 const pathLength = (pts, from) => pts.reduce((acc, p) => { const d = Math.hypot(p.x - from.x, p.y - from.y); from = p; return acc + d; }, 0);
 
 /**
- * @param clock  () => ms; los renderers usan performance.now (y le pasan el mismo `now` a step)
- * @param random () => [0,1); los tests usan uno con semilla
- * @param wall   () => ms de época: la hora real (para el almuerzo); los tests la fijan
- * @param zone   la zona horaria de la oficina (null: la del sistema): de ella salen la hora, la
- *               luz del día y el clima simulado
+ * @param clock  () => ms; the renderers use performance.now (and pass the same `now` to step)
+ * @param random () => [0,1); the tests use a seeded one
+ * @param wall   () => epoch ms: the real time (for lunch); the tests fix it
+ * @param zone   the office's time zone (null: the system's): it gives the time, the
+ *               daylight and the simulated weather
  */
 export function createSim({ clock = () => performance.now(), random = Math.random, wall = () => Date.now(), zone = null } = {}) {
   let simNow = clock();
   const now_ = () => simNow;
   const R = (a, b) => a + random() * (b - a);
   const P = (arr) => arr[Math.floor(random() * arr.length)];
-  // los textos, en el idioma del juego y con los nombres actuales del equipo
+  // the texts, in the game's language and with the team's current names
   const T = (key, vars) => t(key, { ...teamNames(), ...vars });
   const L = (key) => ta(key, teamNames());
   const chance = (p) => random() < p;
@@ -454,25 +454,25 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   let banner = null; // { text, tone, until }
   let celebrateUntil = 0;
   let lastDev = null;
-  let turn = null;   // rol "de turno" declarado por el agente
+  let turn = null;   // role "on duty" declared by the agent
   let turnPhase = null;
   let lastBlocked = null;
   let scenes = [];   // conversaciones en curso
-  let journal = [];  // lo que hicieron por iniciativa propia (para la terminal, los tests y curiosos)
-  let timers = [];   // cosas que pasan un rato después: { at, fn }
+  let journal = [];  // what they did on their own initiative (for the terminal, the tests and the curious)
+  let timers = [];   // things that happen a while later: { at, fn }
   let lastRequirement = { text: '', at: -Infinity };
-  const memory = { task: '', lastError: null, lastGreen: null, fails: [], work: {} }; // de qué se habla en la oficina y cómo viene el trabajo
-  // La vida de la oficina
+  const memory = { task: '', lastError: null, lastGreen: null, fails: [], work: {} }; // what the office talks about and how the work is going
+  // Office life
   let bath = { occupant: null, line: [], doorAt: -Infinity };
   let lunch = null;          // { endMin, nextTalk } mientras almuerzan
-  let lunchDay = null;       // el día en que ya almorzaron
+  let lunchDay = null;       // the day they already had lunch
   let fire = null;           // { phase: 'burning' | 'fighting' | 'repair' | 'done', start, at, level, crew, fighter, sprinklers }
   let lastFireAt = simNow - 5 * 60_000;
-  let heat = 0;              // temperatura del rack: sube con la carga del backend
+  let heat = 0;              // rack temperature: rises with the backend's load
   let extinguisher = 'floor';
   let nextOffice = 0;
-  let weather = null;        // el clima real que manda el servidor (null: se simula según la estación)
-  let skyGroup = null;       // el último clima visto (para comentar cuando cambia)
+  let weather = null;        // the real weather the server sends (null: simulated by season)
+  let skyGroup = null;       // the last weather seen (to comment when it changes)
   let lastWeatherTalk = -Infinity;
   let lastStrike = simNow;
 
@@ -483,7 +483,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   const later = (ms, fn) => timers.push({ at: simNow + ms, fn });
   let tz = validZone(zone) ? zone : null;
   const wallDate = () => zoned(wall(), tz);
-  // sin clima real, se simula en la ciudad de la zona horaria
+  // without real weather, it is simulated in the time zone's city
   const simPlace = () => { const z = zoneInfo(tz || systemZone()); return { lat: z.lat, lon: z.lon, place: z.city }; };
   const minutesOfDay = () => { const d = wallDate(); return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60; };
   const dayKey = () => { const d = wallDate(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
@@ -503,15 +503,15 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     if (particles.length > 600) particles = particles.slice(-600);
   }
 
-  /** Vacía lo que tenía pensado hacer, salvo terminar en el baño si ya entró. */
+  /** Empties what they planned to do, except finishing in the bathroom if they already went in. */
   function clearQueue(a) {
     a.queue = a.queue.filter((j) => j.bath && bath.occupant === a.id);
     if (bath.line.includes(a.id)) bath.line = bath.line.filter((id) => id !== a.id);
     a.dance = false;
     if (a.carry === 'ext') { a.carry = false; extinguisher = 'floor'; }
-    // si estaba en el sofá, sale por el costado (para no atravesar la tele)
+    // if they were on the sofa, they leave from the side (so as not to cross the TV)
     if (a.tvSeat != null) { a.tvSeat = null; a.back = false; if (a.y > TV.feet) a.walk(SOFA.side); }
-    // si estaba sentado a la mesa del comedor, sale por donde entró (para no atravesar la mesa)
+    // if they were seated at the dining table, they leave the way they came (so as not to cross the table)
     if (a.diningSeat) {
       const seat = a.diningSeat;
       a.diningSeat = null;
@@ -520,9 +520,9 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     }
   }
 
-  /** Pone a un personaje a trabajar en su escritorio (vuelve si estaba fuera). */
+  /** Puts a character to work at their desk (they come back if they were away). */
   function work(a, text, state = 'working', ms = 6000) {
-    // el trabajo de verdad manda: deja la conversación o el almuerzo y vuelve a su puesto
+    // real work comes first: they leave the conversation or lunch and go back to their spot
     if (a.lunch || LEISURE.has(a.scene?.kind)) { interrupt(a); emit(a.x, a.y - 70, 1, 'emote', null, '🏃'); }
     a.text = text;
     a.setState(state, ms);
@@ -531,9 +531,9 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     if (!a.seated && a.queue.length === 0) a.goHome();
   }
 
-  // Un personaje se acerca a otro, dice algo y vuelve a su sitio.
+  // A character walks up to another, says something and goes back to their spot.
   function visit(a, target, line, { carry = false, stay = 1600, after } = {}) {
-    if (a.queue.length > 4) { a.say(line); after?.(); return false; } // muy ocupado: lo dice de lejos
+    if (a.queue.length > 4) { a.say(line); after?.(); return false; } // very busy: says it from afar
     const s = agents[target]?.cfg.seat || target;
     a.carry = carry;
     a.goTo({ x: s.x + (s.x > 700 ? -70 : 62), y: s.y - 6 })
@@ -580,12 +580,12 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
           emit(a.x, a.y - 60, ev.role === 'qa' ? 6 : 1, 'check');
           if (ev.role === 'qa' && ev.phase !== 'red' && /^(bash|shell|exec)$/i.test(ev.tool)) a.say(T('sim.testsGreen'), 3000);
         } else if (ev.phase === 'red') {
-          // TDD: en RED el test tiene que fallar. Es buena señal, no un bug.
+          // TDD: in RED the test has to fail. It is a good sign, not a bug.
           a.setState('red', 10_000);
           a.say(T('sim.redExpected'), 3500, 'error');
           emit(a.x, a.y - 40, 6, 'spark', '#ef476f');
         } else if (ev.role === 'qa') {
-          // QA encontró un bug: va a contárselo a quien tocó el código por última vez.
+          // QA found a bug: they go tell whoever touched the code last.
           const dev = agents[lastDev] || agents.tl;
           a.setState('talking', 6000);
           a.say(T('sim.foundBug'), 2500, 'error');
@@ -617,7 +617,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         a.badges.delete(ev.subId);
         a.setState('done', 2500);
         a.say(T('sim.subDone', { text: ev.text }));
-        // nota chica de subtarea terminada: el festejo grande queda para el 'done' (merge)
+        // small note for a finished subtask: the big celebration is saved for 'done' (merge)
         emit(a.x, a.y - 60, 1, 'check');
         break;
       case 'waiting':
@@ -651,13 +651,32 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         who.say(P(L('sim.chatReplies')), 3500);
         break;
       }
+      // btw: a side question to the agent on duty. Whoever holds the turn (or the PO) stays thinking
+      // and then answers out loud; the full answer stays in the log.
+      case 'btw': {
+        const who = a || agents.po;
+        if (ev.phase === 'ask') {
+          banner = { text: `❓ btw · ${ev.from}: ${short(ev.text, 90)}`, tone: 'chat', until: now + 8000 };
+          who.setState('thinking', 120_000);
+          who.say(P(L('sim.btwThinking')), 5000);
+        } else if (ev.phase === 'answer') {
+          banner = { text: `💡 ${who.cfg.name}: ${short(ev.text, 110)}`, tone: 'chat', until: now + 12_000 };
+          who.setState('done', 2500);
+          who.jumpUntil = now + 600;
+          who.say(short(ev.text, 160), 10_000);
+        } else {
+          who.setState('idle', 1000);
+          who.say(T('sim.btwFail'), 4500);
+        }
+        break;
+      }
       case 'poke':
         if (!a) break;
         a.jumpUntil = now + 700;
         a.say(T('sim.poke', { from: ev.from }), 2500);
         break;
       case 'dispatch':
-        // Encargo enviado desde la oficina: es un requerimiento nuevo para el equipo.
+        // A brief sent from the office: it is a new requirement for the team.
         banner = { text: `📨 ${ev.text}`, tone: 'chat', until: now + 6000 };
         requirement(ev.text.replace(/^[^:]*:\s*/, ''));
         break;
@@ -669,17 +688,17 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         if (a) a.say(ev.text || T('sim.turnEnd'), 2500);
         break;
       case 'turn_end':
-        // fin de turno, sin festejo: la misma calma que el cierre de fase.
+        // end of turn, without celebration: the same calm as closing a phase.
         turn = turnPhase = null;
         if (a) a.say(ev.text || T('sim.turnEnd'), 2500);
         break;
       case 'stage_end':
-        // una etapa del pipeline terminó: pasó (o no) su gate
+        // a pipeline stage finished: it passed (or not) its gate
         if (!a) break;
         if (ev.ok) { a.jumpUntil = now + 800; a.say(ev.text || T('sim.stageOk'), 2600); emit(a.x, a.y - 60, 6, 'check'); }
         else { a.setState('blocked', 5000); a.shakeUntil = now + 600; a.say(ev.text || T('sim.stageFail'), 4000, 'error'); emit(a.x, a.y - 40, 10, 'spark', '#ff4d4d'); }
         break;
-      // un pane de herdr que abrió el agente (o la oficina): alguien del equipo se encarga
+      // a herdr pane the agent (or the office) opened: someone on the team takes care of it
       case 'pane_open': {
         if (!a) break;
         const key = `pane:${ev.pane}`;
@@ -709,14 +728,14 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         break;
     }
     correlate(ev);
-    // Cualquier evento de agente quita el aviso de espera (ya se respondió).
+    // Any agent event clears the waiting notice (it was already answered).
     if (!['waiting', 'chat', 'poke'].includes(ev.kind) && !(ev.kind === 'pane_state' && ev.state === 'blocked')) {
       if (banner?.tone === 'warn') banner = null;
       if (agents.manager.handUp) { agents.manager.handUp = false; if (agents.manager.state === 'waiting') agents.manager.state = 'idle'; }
     }
   }
 
-  /** El agente declara que un rol toma el turno en una fase del flujo (arquitecto → QA RED → backend → QA GREEN…). */
+  /** The agent declares that a role takes the turn in a phase of the flow (architect → QA RED → backend → QA GREEN…). */
   function phase(a, ev, now) {
     const ph = phaseInfo(ev.phase);
     const line = `${ph.icon} ${ph.label}${ev.text ? `: ${ev.text}` : ''}`;
@@ -724,7 +743,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     turnPhase = ev.phase;
     log(a, line);
 
-    // Traspaso: quien tenía el turno le lleva la tarjeta al siguiente (si éste trabaja en su sitio).
+    // Handover: whoever held the turn brings the card to the next one (if they are working at their spot).
     const from = agents[ev.from];
     const atDesk = !['board', 'visit', 'release'].includes(ph.anim);
     if (from && from !== a) {
@@ -806,14 +825,14 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     });
   }
 
-  // ---------------------------------------------------------------- la cabeza de cada uno
+  // ---------------------------------------------------------------- each one's brain
 
   const note = (kind, who, extra = {}) => {
     journal.push({ t: simNow, ts: wall(), kind, who, ...extra, text: describe(kind, who, extra), detail: extra.text });
     if (journal.length > 300) journal = journal.slice(-300);
   };
 
-  /** Saca a alguien de lo que estaba haciendo (conversación o almuerzo) y lo manda a su puesto. */
+  /** Pulls someone out of what they were doing (conversation or lunch) and sends them to their spot. */
   function interrupt(a) {
     const busy = a.scene || a.lunch;
     if (a.scene) {
@@ -827,8 +846,8 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   }
 
   /**
-   * Una conversación: los participantes van a `spot` (o se quedan donde están si es null) y
-   * hablan por turnos. lines: [[quién, texto], …]
+   * A conversation: the participants go to `spot` (or stay where they are if it is null) and
+   * talk in turns. lines: [[who, text], …]
    */
   function scene(kind, members, lines, { spot = null, gap = 2300, after, quiet = false } = {}) {
     let arrive = simNow;
@@ -856,7 +875,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     return sc;
   }
 
-  /** Alguien más se suma a la escena para responder; la escena dura hasta `end`. */
+  /** Someone else joins the scene to reply; the scene lasts until `end`. */
   function join(sc, id, lines, end) {
     sc.lines.push(...lines.map(([text, at]) => ({ who: id, text, at })));
     sc.end = Math.max(sc.end, end);
@@ -864,7 +883,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     for (const m of sc.members) agents[m].queue = agents[m].queue.map((j) => (j.t === 'until' ? { ...j, at: sc.end } : j));
   }
 
-  /** Lo que se dice en el cotorreo: chismes de la oficina y lo que está pasando. */
+  /** What is said in the chit-chat: office gossip and what is going on. */
   function gossipLine(id) {
     const topics = [...(PRODUCT.includes(id) ? L(`sim.gossip.${id}`) : L('sim.replies'))];
     if (memory.task) topics.push(T('sim.gossipTask', { task: short(memory.task, 22) }));
@@ -881,9 +900,9 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     const lines = [[a.id, gossipLine(a.id)], [members[1], P(L('sim.replies'))]];
     if (members[2]) lines.push([members[2], P(L('sim.replies'))]);
     if (chance(0.5)) lines.push([a.id, P([...L('sim.replies'), gossipLine(a.id)])]);
-    // sentadas juntas cotorrean desde el escritorio; a veces se juntan en la cafetería o el sofá
+    // sitting together they chit-chat from the desk; sometimes they meet at the café or the sofa
     const spot = chance(0.55) ? null : P([{ x: COUNTER_SPOTS[0].x, y: COUNTER_SPOTS[0].y + 4 }, SPOT.sofa, { x: 210, y: CORRIDOR_TOP + 4 }]);
-    // y a veces de la charla sale una idea que le llevan al manager
+    // and sometimes an idea comes out of the chat and they take it to the manager
     const idea = chance(0.2) && agents.manager.free;
     scene(spot ? 'gossip' : 'deskchat', members, lines, {
       spot,
@@ -902,13 +921,13 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     join(sc, 'manager', [[P(L('sim.pitchReplies')), at]], at + 900);
   }
 
-  /** Cuánto más rápido se le llena la imaginación según lo que pasa (pesadillas tras un error, pizza con hambre). */
+  /** How much faster their imagination fills up depending on what happens (nightmares after an error, pizza when hungry). */
   function dreamBoost(a) {
-    if (a.id === 'qa' && memory.fails.some((t) => simNow - t < 180_000)) return 2.5; // con tests fallando, pesadillas
+    if (a.id === 'qa' && memory.fails.some((t) => simNow - t < 180_000)) return 2.5; // with failing tests, nightmares
     if (DREAMERS[a.id]?.includes('pizza')) {
       const m = minutesOfDay();
       if (lunch) return 0;
-      if (m >= 11.5 * 60 && m < LUNCH.start) return 2.5; // hambre antes de almorzar
+      if (m >= 11.5 * 60 && m < LUNCH.start) return 2.5; // hungry before lunch
       if ((memory.work[a.id] || []).filter((t) => simNow - t < 5 * 60_000).length >= 8) return 2; // mucho teclear da hambre
     }
     return 1;
@@ -930,7 +949,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   function consultTL(a) {
     const tl = agents.tl;
     if (tl.scene || tl.away || tl.lunch) return false;
-    // si está haciendo algo concreto ("Editando api.js") lo cuenta: "estoy editando api.js: …"
+    // if they are doing something concrete ("Editing api.js") they say it: "I'm editing api.js: …"
     const doing = chance(0.5) ? t('sim.doing', { text: short(a.text, 26) }) : '';
     const sc = scene('consult', [a.id], [[a.id, T('sim.consultAsk', { doing, ask: P(L(`sim.ask.${a.id}`)) })]], { spot: { x: tl.cfg.seat.x + 62, y: tl.cfg.seat.y - 6 } });
     const at = sc.lines[0].at;
@@ -940,14 +959,14 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     return true;
   }
 
-  /** El arquitecto va a conversar con alguien de producto (prioridades, datos, diseños). */
+  /** The architect goes to talk with someone from product (priorities, data, designs). */
   function archChat(tl, { target: want, asks = 'sim.tlAsks' } = {}) {
     if (!tl.free) return false;
     const who = PRODUCT.filter((id) => agents[id].free);
     if (!who.length) return false;
     const target = agents[who.includes(want) ? want : P(who)];
     const s = target.cfg.seat;
-    // el TL va a su escritorio; ella le responde sin levantarse
+    // the TL goes to her desk; she answers without getting up
     const sc = scene('archchat', ['tl'], [['tl', P(L(`${asks}.${target.id}`))]], { spot: { x: s.x + 54, y: s.y - 6 }, quiet: true });
     note('archchat', 'tl', { with: [target.id] });
     const at = sc.lines[0].at + 2300;
@@ -957,7 +976,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     return true;
   }
 
-  /** Producto va donde el TL a preguntar si lo que se viene es factible. */
+  /** Product goes to the TL to ask whether what is coming is feasible. */
   function feasibility(a) {
     const tl = agents.tl;
     if (!a.free || tl.scene || tl.away || tl.lunch) return false;
@@ -980,7 +999,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     return true;
   }
 
-  /** Lo que se comenta frente a la tele (el pronóstico es el de verdad). */
+  /** What gets said in front of the TV (the forecast is the real one). */
   function tvLines() {
     const w = currentWeather(), info = WEATHER[w.kind];
     const lines = [...L('sim.tv'), T('sim.tvForecast', { label: t(`weather.${w.kind}`), temp: Number.isFinite(w.temp) ? `, ${Math.round(w.temp)}°` : '', icon: info.icon })];
@@ -988,7 +1007,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     return lines;
   }
 
-  /** Se sienta en el sofá a ver tele un rato (de espaldas a nosotros). */
+  /** Sits on the sofa to watch TV for a while (with their back to us). */
   function watchTV(a, { cause, line } = {}) {
     if (!a.free) return false;
     const taken = new Set(Object.values(agents).map((o) => o.tvSeat).filter((i) => i != null));
@@ -1016,16 +1035,16 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   }
 
   function coffee(a) {
-    if (Object.values(agents).some((o) => o !== a && o.scene?.kind === 'coffee')) return false; // de a uno al café
+    if (Object.values(agents).some((o) => o !== a && o.scene?.kind === 'coffee')) return false; // one at a time to the coffee
     const spot = P(COUNTER_SPOTS);
     scene('coffee', [a.id], [[a.id, P(L('sim.coffee'))]], { spot: { x: spot.x + R(-8, 8), y: spot.y } });
     a.state = 'coffee'; a.stateUntil = simNow + 9000;
     a.mind.coffee = -R(0, 0.4);
-    a.mind.bladder += 0.25; // el café se nota después
+    a.mind.bladder += 0.25; // the coffee kicks in later
     return true;
   }
 
-  /** Al baño: de a uno. Si está ocupado, espera afuera (inquieto). */
+  /** To the bathroom: one at a time. If it is occupied, they wait outside (restless). */
   function bathroom(a, urgent = false) {
     if (bath.line.includes(a.id) || bath.occupant === a.id || a.hidden) return false;
     bath.line.push(a.id);
@@ -1048,32 +1067,32 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   }
 
   /**
-   * Un requerimiento nuevo: las de producto lo comentan, la PO se lo lleva al manager y él se lo
-   * pasa a quien corresponda según de qué trata.
+   * A new requirement: the product people discuss it, the PO takes it to the manager and he hands
+   * it to whoever fits depending on what it is about.
    */
   function requirement(text) {
     text = String(text || '').trim();
-    // el encargo (dispatch) y el prompt que después reporta el agente (task) son el mismo pedido
+    // the brief (dispatch) and the prompt the agent reports later (task) are the same request
     if (!text || simNow - lastRequirement.at < 20_000) { if (text) memory.task = text; return; }
     lastRequirement = { text, at: simNow };
     memory.task = text;
     const po = agents.po, m = agents.manager;
     for (const id of ['po', 'manager', ...PRODUCT]) interrupt(agents[id]);
     const targets = assignees(text);
-    // en el rincón de producto: lo comentan desde sus escritorios
+    // in the product corner: they discuss it from their desks
     const pod = PRODUCT.filter((id) => id !== 'po' && agents[id].seated && !agents[id].queue.length);
     po.say(T('sim.reqArrived', { text: short(text, 40) }), 3600);
     po.setState('talking', 9000);
     if (pod[0]) agents[pod[0]].wait(900).then((x) => x.say(T(x.id === 'designer' && targets.includes('designer') ? 'sim.reqMockups' : x.id === 'analyst' ? 'sim.reqAnalyze' : 'sim.reqGo'), 2800));
     note('requirement', 'po', { with: ['manager'], text, to: targets });
-    // la PO le lleva la tarjeta a Marco
+    // the PO brings the card to Marco
     clearQueue(po);
     po.carry = true;
     po.wait(1400).goTo({ x: m.cfg.seat.x - 70, y: m.cfg.seat.y - 6 })
       .then((p) => {
         p.carry = false;
         p.say(T('sim.reqToManager', { text: short(text, 60) }), 3800);
-        // Marco lo reparte a su equipo según la tarea
+        // Marco hands it out to his team depending on the task
         clearQueue(m);
         m.wait(1800).then((x) => { x.say(T('sim.reqSplit', { names: listOf(targets.map((r) => TEAM[r].name)) }), 3000); x.setState('working', 6000); });
         for (const r of targets) {
@@ -1090,18 +1109,18 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
 
   // ---------------------------------------------------------------- almuerzo
 
-  /** ¿Está en medio de algo que le pidió el agente? Entonces almuerza en su escritorio. */
+  /** Are they in the middle of something the agent asked for? Then they have lunch at their desk. */
   const onDuty = (a) => a.badges.size > 0 || (['working', 'thinking', 'red'].includes(a.state) && simNow - a.lastActive < 20_000) || a.id === turn;
 
-  /** Hasta su silla del comedor sin atravesar la mesa: los de atrás entran por la puerta del muro
-   *  y bajan por detrás de las sillas; los de adelante llegan por abajo. */
+  /** To their dining room chair without crossing the table: the back ones come in through the wall's door
+   *  and go down behind the chairs; the front ones arrive from below. */
   function toDiningSeat(a, seat) {
     const { aisle } = DINING;
     if (seat.row === 'back') a.goTo({ x: aisle.door, y: aisle.back }).walk({ x: seat.x, y: aisle.back }).walk(seat);
     else a.goTo({ x: aisle.side, y: aisle.front }).walk({ x: seat.x, y: aisle.front }).walk(seat);
     return a;
   }
-  /** Y para irse, el mismo camino al revés. */
+  /** And to leave, the same path in reverse. */
   function fromDiningSeat(a, seat) {
     const { aisle } = DINING;
     if (seat.row === 'back') a.walk({ x: seat.x, y: aisle.back }).walk({ x: aisle.door, y: aisle.back });
@@ -1116,7 +1135,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     banner = { text: T('sim.lunchBanner'), tone: 'chat', until: simNow + 7000 };
     note('lunch', 'manager');
     (agents.manager.hidden ? agents.po : agents.manager).say(P(L('sim.lunchCall')), 3200);
-    // producto y el manager, detrás de la mesa (de frente); el equipo técnico, delante (de espaldas)
+    // product and the manager, behind the table (facing us); the technical team, in front (from behind)
     const rows = { back: ['po', 'analyst', 'designer', 'manager'], front: ['backend', 'frontend', 'qa', 'tl'] };
     let i = 0;
     for (const [row, ids] of Object.entries(rows)) ids.forEach((id, k) => {
@@ -1143,7 +1162,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   function lunchTick() {
     if (simNow >= lunch.nextTalk) {
       lunch.nextTalk = simNow + R(5000, 9000);
-      // una fila de la mesa con al menos dos sentados: uno habla, otro responde
+      // a table row with at least two seated: one talks, another replies
       const rows = ['back', 'front'].map((row) => Object.values(agents).filter((a) => a.lunch && a.perch && a.diningSeat?.row === row && !a.scene));
       const row = P(rows.filter((r) => r.length >= 2));
       if (row) {
@@ -1160,7 +1179,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     lunch = null;
     note('lunchend', 'manager');
     banner = { text: T('sim.lunchEndBanner'), tone: 'chat', until: simNow + 5000 };
-    // se van levantando de a poco
+    // they get up little by little
     let i = 0;
     for (const a of Object.values(agents)) {
       if (a.lunch) later(i++ * 600, () => { a.lunch = null; });
@@ -1169,9 +1188,9 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     if (!agents.manager.hidden) agents.manager.say(P(L('sim.lunchEnd')), 2800);
   }
 
-  // ---------------------------------------------------------------- el incendio
+  // ---------------------------------------------------------------- the fire
 
-  /** El rack se incendia: el equipo técnico va con el extintor, lo apaga y reinicia los servidores. */
+  /** The rack catches fire: the technical team goes with the extinguisher, puts it out and restarts the servers. */
   function ignite(cause) {
     if (fire) return false;
     const crew = FIRE_ORDER.filter((id) => { const a = agents[id]; return !a.hidden && !a.lunch && !bath.line.includes(id); });
@@ -1181,7 +1200,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     lastFireAt = simNow;
     banner = { text: T(cause ? 'sim.fireBannerCause' : 'sim.fireBanner'), tone: 'fire', until: simNow + 9000 };
     note('fire', fighter, { with: crew.slice(1), cause });
-    // la oficina reacciona
+    // the office reacts
     ['manager', 'po', 'designer', 'analyst'].forEach((id, i) => later(300 + i * 500, () => { const a = agents[id]; if (!a.hidden) { a.say(T(`sim.fireYell.${id}`), 2600, 'error'); a.shakeUntil = simNow + 500; } }));
     for (const id of crew) {
       const a = agents[id];
@@ -1211,14 +1230,14 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     const cx = RACK.x + RACK.w / 2;
     if (f.phase === 'burning') {
       f.level = Math.min(1, f.level + dt / 2.5);
-      // si nadie llega (todos ocupados), se activan los rociadores
+      // if nobody makes it (everyone busy), the sprinklers go off
       if (simNow - f.start > 25_000) { f.phase = 'fighting'; f.at = simNow; f.sprinklers = true; banner = { text: T('sim.sprinklers'), tone: 'fire', until: simNow + 5000 }; }
     } else if (f.phase === 'fighting') {
       f.level = Math.max(0, f.level - dt / 7);
       const fx = agents[f.fighter];
       if (f.sprinklers) { if (random() < dt * 40) emit(R(RACK.x - 30, RACK.x + RACK.w + 30), 124, 1, 'drop', '#7ad7f0'); }
       else if (fx.carry === 'ext' && random() < dt * 45) {
-        const sx = fx.x + 27, sy = fx.y - 37; // la boquilla del extintor
+        const sx = fx.x + 27, sy = fx.y - 37; // the extinguisher's nozzle
         emit(sx, sy, 1, 'foam', '#ffffff', null, () => ({ vx: (cx - sx) * 1.6 + R(-30, 30), vy: (RACK.y + 40 - sy) * 1.6 + R(-30, 30) }));
       }
       if (f.level <= 0) {
@@ -1240,24 +1259,24 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
       fire = null;
       return;
     }
-    // humo y chispas mientras quema (y algo de humo al reparar)
+    // smoke and sparks while it burns (and some smoke while repairing)
     const smoke = f.phase === 'repair' ? 1.5 : f.phase === 'done' ? 0 : 7 * f.level + 1;
     if (random() < dt * smoke) emit(R(RACK.x + 4, RACK.x + RACK.w - 4), RACK.y - 6, 1, 'smoke', '#6c6f7d');
     if (f.phase !== 'repair' && f.phase !== 'done' && random() < dt * 4 * f.level) emit(R(RACK.x, RACK.x + RACK.w), RACK.y + R(0, 40), 2, 'spark', P(['#ffd166', '#ff9f1c']));
   }
 
-  // ---------------------------------------------------------------- lo que hace el harness, en la oficina
+  // ---------------------------------------------------------------- what the harness does, in the office
   //
-  // Cada señal del agente y sus subagentes empuja una necesidad o dispara una reacción del
-  // personaje que corresponde; el azar sólo decide el momento exacto (y a veces que no pase):
-  //   tests o gates que fallan  → QA tiene pesadillas; quien falló queda con dudas (consulta al TL)
-  //   errores seguidos          → el rack se recalienta y se puede incendiar
-  //   subagente o herramienta   → ese personaje teclea; mucho teclear da hambre (sueña con pizza) y cansa (café)
-  //   fases de diseño (ux/ui)   → la diseñadora se inspira (unicornios y arcoíris)
-  //   arquitectura / ADR        → el TL va a preguntarle el alcance a producto
-  //   historia / requisitos     → producto va a preguntarle al TL si es factible
-  //   el agente espera tu OK    → los que no trabajan aprovechan de tomar café o conversar
-  //   tarea terminada           → celebración, y los devs sueñan con la pizza del festejo
+  // Each signal from the agent and its subagents pushes a need or triggers a reaction of the
+  // matching character; chance only decides the exact moment (and sometimes that it does not happen):
+  //   failing tests or gates   → QA has nightmares; whoever failed is left with doubts (consults the TL)
+  //   repeated errors          → the rack overheats and may catch fire
+  //   subagent or tool         → that character types; lots of typing makes them hungry (dreams of pizza) and tired (coffee)
+  //   design phases (ux/ui)    → the designer gets inspired (unicorns and rainbows)
+  //   architecture / ADR       → the TL goes to ask product about the scope
+  //   story / requirements     → product goes to ask the TL whether it is feasible
+  //   the agent awaits your OK → those not working take the chance for coffee or a chat
+  //   task finished            → celebration, and the devs dream of the party pizza
   const TEST_RX = /\b(tests?|jest|vitest|pytest|mocha|spec|e2e|playwright|cypress|npm t|go test|cargo test)\b/i;
   const within = (list, ms) => (list || []).filter((t) => simNow - t < ms);
 
@@ -1269,12 +1288,12 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
       case 'subagent_start':
         if (!a) break;
         memory.work[a.id] = [...within(memory.work[a.id], 5 * 60_000), simNow];
-        if (a.id === 'backend' && /bash|shell|exec/i.test(ev.tool || '')) heat = Math.min(1.2, heat + 0.04); // builds y scripts calientan el rack
-        if (a.id === 'designer') a.mind.dream += ev.kind === 'subagent_start' ? 0.4 : 0.12; // diseñar la inspira
+        if (a.id === 'backend' && /bash|shell|exec/i.test(ev.tool || '')) heat = Math.min(1.2, heat + 0.04); // builds and scripts heat up the rack
+        if (a.id === 'designer') a.mind.dream += ev.kind === 'subagent_start' ? 0.4 : 0.12; // designing inspires her
         break;
       case 'subagent_end':
         if (!a) break;
-        // terminó su subtarea: a veces se premia con pizza (en sueños), si no, con un café
+        // finished their subtask: sometimes they reward themselves with pizza (in dreams), otherwise with a coffee
         if (DREAMERS[a.id]?.includes('pizza') && chance(0.35)) later(R(1500, 3000), () => imagine(a, { kind: 'pizza', line: T('sim.pizzaReward'), cause: t('sim.cause.subtask') }));
         else a.mind.coffee = Math.max(a.mind.coffee, 0.95);
         break;
@@ -1294,7 +1313,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         break;
       }
       case 'waiting': {
-        // mientras esperan tu OK, los que no están trabajando aprovechan la pausa: café o tele
+        // while they wait for your OK, those not working take advantage of the pause: coffee or TV
         for (const id of PRODUCT) agents[id].mind.social = Math.max(agents[id].mind.social, 1);
         const idle = [...TECH, 'tl'].filter((x) => !['working', 'thinking'].includes(agents[x].state));
         if (idle[0]) agents[idle[0]].mind.coffee = Math.max(agents[idle[0]].mind.coffee, 1);
@@ -1310,16 +1329,16 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         if (assignees(ev.text).includes('designer')) agents.designer.mind.dream += 0.4;
         break;
     }
-    // Fallas y éxitos: herramientas, gates de las etapas y errores del agente.
+    // Failures and successes: tools, stage gates and agent errors.
     if (!['tool_end', 'stage_end', 'error'].includes(ev.kind)) return;
     const isTest = ev.kind === 'stage_end' || ev.role === 'qa' || TEST_RX.test(`${ev.tool || ''} ${ev.text || ''}`);
     if (ev.ok === false && !red) {
       memory.fails = [...within(memory.fails, 3 * 60_000), simNow];
-      // los tests que no pasan le quitan el sueño a QA
+      // failing tests keep QA up at night
       if (isTest) later(R(1200, 3200), () => { if (chance(0.85)) imagine(agents.qa, { kind: 'skull', line: P(L('sim.nightmares')), cause: t('sim.cause.testsFailed') }); });
-      // quien falló queda con dudas: pronto va a consultar al TL
+      // whoever failed is left with doubts: soon they go consult the TL
       if (a && PERSONALITY[a.id]?.doubt) a.mind.doubt = Math.max(a.mind.doubt, 0.95);
-      // los errores recalientan el servidor; si se acumulan, se incendia
+      // errors overheat the server; if they pile up, it catches fire
       heat = Math.min(1.3, heat + (a?.id === 'backend' || ev.kind === 'error' ? 0.3 : 0.12));
       if (memory.fails.length >= 3 && heat >= 0.9 && !fire && !lunch && simNow - lastFireAt > 4 * 60_000 && chance(0.5)) {
         later(R(1500, 4000), () => { if (!fire && !lunch) ignite(t('sim.cause.tooManyErrors')); });
@@ -1329,7 +1348,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     }
   }
 
-  /** Todo en verde: QA respira tranquilo y el rack se enfría un poco. */
+  /** All green: QA breathes easy and the rack cools down a little. */
   function calm() {
     const qa = agents.qa;
     qa.mind.dream = Math.min(qa.mind.dream, 0);
@@ -1338,9 +1357,9 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     heat = Math.max(0, heat - 0.15);
   }
 
-  // ---------------------------------------------------------------- la vida de la oficina
+  // ---------------------------------------------------------------- office life
 
-  /** Cada medio segundo: el reloj (almuerzo), el baño, la temperatura del rack y los imprevistos. */
+  /** Every half second: the clock (lunch), the bathroom, the rack temperature and the unexpected. */
   function officeTick(dt) {
     const m = minutesOfDay();
     const lunchTime = m >= LUNCH.start && m < LUNCH.end;
@@ -1348,16 +1367,16 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     else if (lunchTime && lunchDay !== dayKey() && !fire) startLunch();
     weatherTick();
     if (bath.occupant && random() < dt * 0.25) emit(BATH.door.x + R(-10, 10), BATH.door.y - 50, 1, 'emote', null, P(['🎵', '🎶', '🧻', '🚿']));
-    // el rack se calienta con la carga del backend; caliente, humea y puede prenderse
+    // the rack heats up with the backend's load; when hot, it smokes and may catch fire
     if (!fire && heat > 0.75 && random() < dt * 0.6) emit(R(RACK.x + 6, RACK.x + RACK.w - 6), RACK.y - 4, 1, 'smoke', '#9095b0');
-    const hazard = (0.5 + heat) / (18 * 60); // por segundo: ~1 cada 36 min en calma, ~1 cada 12 min con el rack al rojo
+    const hazard = (0.5 + heat) / (18 * 60); // per second: ~1 every 36 min when calm, ~1 every 12 min with the rack red-hot
     const crewHere = FIRE_ORDER.filter((id) => !agents[id].hidden && !agents[id].lunch).length;
     if (!fire && !lunch && simNow > celebrateUntil && simNow - lastFireAt > 8 * 60_000 && crewHere >= 2 && random() < dt * hazard) ignite();
   }
 
-  // ---------------------------------------------------------------- el clima de afuera
+  // ---------------------------------------------------------------- the weather outside
 
-  /** El clima que se ve por el vidrio: el real (lo manda el servidor) o uno simulado según la estación. */
+  /** The weather seen through the glass: the real one (sent by the server) or one simulated by season. */
   const currentWeather = () => weather || simulatedWeather(wallDate(), simPlace());
 
   function weatherTick() {
@@ -1365,7 +1384,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     const group = SKY_GROUP[w.kind] || 'fair';
     if (skyGroup && group !== skyGroup) weatherChanged(group, w);
     skyGroup = group;
-    // con tormenta, a veces un trueno asusta a alguien
+    // with a storm, sometimes thunder scares someone
     if (w.kind === 'storm') {
       for (let k = Math.floor(lastStrike / 5200); k <= Math.floor(simNow / 5200); k++) {
         const at = strikeStart(k);
@@ -1388,7 +1407,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     const night = daylight(wallDate(), w).night > 0.5;
     const news = t(`sim.weatherNews.${group === 'fair' && night ? 'stars' : group}`);
     note('weather', null, { text: T('sim.weatherNote', { news, label: t(`weather.${w.kind}`), temp: Number.isFinite(w.temp) ? `, ${Math.round(w.temp)}°` : '' }), sky: w.kind });
-    // con lluvia dan más ganas de café y de tele
+    // rain makes people want more coffee and TV
     if (group === 'wet' || group === 'storm') for (const id of [...TECH, 'tl']) agents[id].mind.social += 0.3;
     if (simNow - lastWeatherTalk < 5 * 60_000 || !chance(0.75)) return;
     const who = Object.values(agents).filter((a) => !a.hidden && !a.walking && a.state !== 'alarm');
@@ -1399,12 +1418,12 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     later(R(800, 2500), () => { a.say(P(L(`sim.weatherTalk.${group}`)), 3600); emit(a.x, a.y - 80, 1, 'emote', null, WEATHER[w.kind].icon); });
   }
 
-  /** Cada tanto, cada personaje decide qué hacer según sus necesidades y su personalidad. */
+  /** Every so often, each character decides what to do based on their needs and personality. */
   function brain(a, dt) {
     const mind = a.mind, pers = PERSONALITY[a.id];
-    // las necesidades crecen con el tiempo
+    // needs grow over time
     if (a.free && a.state !== 'working') mind.social += dt / pers.social;
-    mind.coffee += (dt / pers.coffee) * (a.state === 'working' ? 1.6 : 1); // trabajando se cansa más rápido
+    mind.coffee += (dt / pers.coffee) * (a.state === 'working' ? 1.6 : 1); // working tires them faster
     if (!a.hidden) mind.bladder += dt / pers.bladder;
     if (pers.doubt && a.seated && ['working', 'thinking'].includes(a.state)) mind.doubt += dt / pers.doubt;
     if (pers.dream) mind.dream += (dt / pers.dream) * dreamBoost(a);
@@ -1416,18 +1435,18 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     if (a.dream && simNow > a.dream.until) a.dream = null;
     if (simNow < celebrateUntil || a.hidden || a.state === 'alarm') return;
 
-    // sueñan despiertos (a veces): la diseñadora hasta trabajando; QA con calaveras; los devs con pizza
+    // they daydream (sometimes): the designer even while working; QA of skulls; the devs of pizza
     if (pers.dream && mind.dream >= 1 && !a.walking && !a.dream && (a.seated || a.perch) && chance(0.35)) return imagine(a);
-    // los técnicos, trabajando, a veces se paran a consultar al Tech Lead
+    // the technical people, while working, sometimes get up to consult the Tech Lead
     if (pers.doubt && mind.doubt >= 1 && a.seated && !a.queue.length && !a.scene && chance(0.6)) { if (consultTL(a)) return; }
-    // al baño: si ya no aguanta, deja lo que esté haciendo en su escritorio
+    // to the bathroom: if they cannot hold it any longer, they leave whatever they are doing at their desk
     if (mind.bladder >= 1.6 && a.seated && !a.queue.length && !a.scene && !a.lunch) { bathroom(a, true); return; }
     if (!a.free) return;
     if (mind.bladder >= 1 && chance(0.4)) { bathroom(a); return; }
     if (PRODUCT.includes(a.id) && mind.social >= 1) { if (gossip(a)) return; mind.social = 0.6; }
     if (pers.product && mind.product >= 1 && !['working', 'thinking', 'red'].includes(a.state) && chance(0.5)) { if (archChat(a)) return; mind.product = 0.7; }
     if (pers.rounds && mind.rounds >= 1 && a.state === 'idle') { if (rounds(a)) return; mind.rounds = 0.5; }
-    // los técnicos, sin nada que hacer, a veces se sientan a ver tele (con lluvia, más)
+    // the technical people, with nothing to do, sometimes sit down to watch TV (more with rain)
     if ((TECH.includes(a.id) || a.id === 'tl') && mind.social >= 1 && a.state === 'idle' && !lunch) {
       if (chance(WET.has(currentWeather().kind) ? 0.7 : 0.45) && watchTV(a)) return;
       mind.social = 0.6;
@@ -1448,7 +1467,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     scenes = scenes.filter((x) => simNow < x.end);
   }
 
-  /** Avanza la simulación `dt` segundos. Los renderers la llaman una vez por cuadro. */
+  /** Advances the simulation `dt` seconds. The renderers call it once per frame. */
   function step(dt, now = clock()) {
     simNow = now;
     for (const a of Object.values(agents)) {
@@ -1496,16 +1515,16 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     get bath() { return bath; },
     get extinguisher() { return extinguisher; },
     get heat() { return heat; },
-    /** El clima de afuera: el real si llegó del servidor, si no uno simulado según la estación. */
+    /** The weather outside: the real one if it came from the server, otherwise one simulated by season. */
     get weather() { return currentWeather(); },
-    /** La fecha y hora de la oficina, en su zona horaria (un ZonedDate). */
+    /** The office's date and time, in its time zone (a ZonedDate). */
     date: () => wallDate(),
     get zone() { return tz; },
     setZone(z) { tz = validZone(z) ? z : null; },
     setWeather(w) { weather = w && WEATHER[w.kind] ? w : null; },
     watchTV: (id, opts) => watchTV(agents[id], opts),
     setBoard(session) {
-      if (session && 'turn' in session) { turn = session.turn; turnPhase = session.phase; } // el servidor manda
+      if (session && 'turn' in session) { turn = session.turn; turnPhase = session.phase; } // the server rules
       board = session ? { title: session.title, todos: session.todos || [], status: session.status, source: session.source } : { title: '', todos: [] };
       if (board.title) memory.task = board.title;
     },
@@ -1517,7 +1536,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
       banner = null; particles = []; board = { title: '', todos: [] }; turn = turnPhase = lastDev = lastBlocked = null;
       scenes = []; timers = []; memory.task = ''; memory.lastError = memory.lastGreen = null; memory.fails = []; memory.work = {};
       bath = { occupant: null, line: [], doorAt: -Infinity };
-      // si es la hora de almuerzo, vuelven a salir en el siguiente tic
+      // if it is lunchtime, they go out again on the next tick
       lunch = null; lunchDay = null; fire = null; extinguisher = 'floor'; heat = 0; timers = [];
     },
   };

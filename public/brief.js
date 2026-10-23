@@ -1,19 +1,19 @@
-// El "encargo" que se arma al hacer clic en la pizarra: a qué agente va, por qué entrada de su
-// harness (su pipeline, un comando, el prompt tal cual), en qué sesión y el prompt. Lo comparten
-// la vista web y la terminal.
+// The "brief" put together when clicking the whiteboard: which agent it goes to, through which entry
+// of its harness (its pipeline, a command, the prompt as is), in which session, and the prompt. Shared
+// by the web view and the terminal.
 //
-// La oficina es el frontend: los agentes son los que se registran en ⚙ › Agentes (una ruta
-// completa) más las sesiones abiertas, y lo que ofrece cada uno lo trae su propio harness.
+// The office is the frontend: the agents are the ones registered in ⚙ › Agents (a full path) plus
+// the open sessions, and what each one offers comes from its own harness.
 
 import { AGENT_NAME } from './targets.js';
 import { t } from './i18n.js';
 
-const tr = t; // targetLabel usa `t` para el agente
+const tr = t; // targetLabel uses `t` for the agent
 
 const base = (p) => (p ? String(p).split('/').filter(Boolean).pop() || p : '');
 const tilde = (p) => String(p || '').replace(/^\/Users\/[^/]+/, '~');
 
-/** Agente por defecto: el de la sesión más reciente, si no el primero registrado. */
+/** Default agent: the one from the most recent session, otherwise the first registered one. */
 export function defaultTarget(targets, sessions) {
   const recent = [...sessions].sort((a, b) => b.lastAt - a.lastAt).find((s) => targets.some((t) => t.sessions.some((x) => x.session === s.id)));
   if (recent) return targets.findIndex((t) => t.sessions.some((x) => x.session === recent.id));
@@ -21,8 +21,8 @@ export function defaultTarget(targets, sessions) {
 }
 
 /**
- * Opciones del diálogo según lo elegido.
- * @param sel { target, entry, session } índices (session -1 = la de siempre: una abierta, si no una nueva)
+ * The dialog's options for what has been chosen.
+ * @param sel { target, entry, session } indexes (session -1 = the usual one: an open one, otherwise a new one)
  */
 export function briefOptions({ targets = [] }, sel) {
   const target = targets[sel.target] || null;
@@ -41,7 +41,7 @@ export function briefOptions({ targets = [] }, sel) {
   return { target, entries, entry, sessions, sessionIndex: index, session: sessions[index] || null, stages: entry?.stages || [] };
 }
 
-/** Qué falta para poder enviar (o null si está listo). */
+/** What is missing before it can be sent (or null if it is ready). */
 export function briefProblem(opts, text) {
   if (!opts.target) return t('brief.pRegister');
   if (!String(text || '').trim()) return t('brief.pWrite');
@@ -52,7 +52,7 @@ export function briefProblem(opts, text) {
   return null;
 }
 
-/** El mensaje WebSocket que dispara el encargo. */
+/** The WebSocket message that fires the brief. */
 export function briefMessage(opts, text, from) {
   return { type: 'run', target: opts.target.id, entry: opts.entry?.id || 'prompt', session: opts.session?.session ?? null, text: String(text).trim(), from };
 }
@@ -61,12 +61,12 @@ export const targetLabel = (t) => (t
   ? `${t.name} · ${AGENT_NAME[t.harness] || t.harness}${t.kinds?.length ? ` · ${t.kinds.join(' + ')}` : ''}${t.sessions?.some((s) => s.live) ? ` · ${tr('brief.open')}` : ''}${t.registered ? '' : ` ${tr('brief.unregistered')}`} — ${tilde(t.path)}`
   : '');
 
-/** Campos del diálogo, en orden (la terminal navega por ellos). */
+/** The dialog's fields, in order (the terminal navigates through them). */
 export function briefFields() {
   return ['target', 'entry', 'session', 'task'];
 }
 
-/** Cambia la opción de un campo (delta ±1) y reinicia lo que depende de él. */
+/** Changes a field's option (delta ±1) and resets what depends on it. */
 export function briefCycle(sel, field, delta, { targets, opts }) {
   const wrap = (i, n) => (n ? (i + delta + n) % n : 0);
   if (field === 'target') return { target: wrap(sel.target, targets.length), entry: 0, session: -1 };

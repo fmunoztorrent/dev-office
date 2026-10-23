@@ -1,5 +1,5 @@
-// Una sesión simulada de Claude Code, con los mismos payloads que mandan sus hooks (los textos, en
-// el idioma del juego).
+// A simulated Claude Code session, with the same payloads its hooks send (the texts, in the
+// game's language).
 
 import { t, ta } from '../public/i18n.js';
 
@@ -73,7 +73,7 @@ export function demoScript(session = `demo-${Math.random().toString(36).slice(2,
   ];
 }
 
-/** Reproduce la demo llamando a `send(payload)` con las pausas indicadas. Devuelve un cancelador. */
+/** Replays the demo by calling `send(payload)` with the given pauses. Returns a canceller. */
 export function runDemo(send, { speed = 1, onEnd, script = demoScript } = {}) {
   const steps = script();
   let i = 0;
@@ -87,7 +87,7 @@ export function runDemo(send, { speed = 1, onEnd, script = demoScript } = {}) {
   return () => { clearTimeout(timer); onEnd?.(); };
 }
 
-// Un flujo por roles como lo reportaría Pi con el skill `dev-team-office` (formato genérico).
+// A role flow as Pi would report it with the `dev-team-office` skill (generic format).
 export function piDemoScript(session = `pi-demo-${Math.random().toString(36).slice(2, 7)}`) {
   const b = { session, cwd: '/home/dev/shop', source: 'pi' };
   let n = 0;

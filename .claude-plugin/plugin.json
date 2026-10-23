@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "dev-team-office",
+  "displayName": "Dev Team Office",
+  "version": "0.6.0",
+  "license": "MIT",
+  "description": "A live pixel-art office for your coding agent: each subagent is a character of a dev team. Hooks that animate the office, an MCP server to register projects and report phases, and skills.",
+  "author": { "name": "Fabián Muñoz", "url": "https://github.com/fmunoztorrent" },
+  "homepage": "https://github.com/fmunoztorrent/dev-office",
+  "repository": "https://github.com/fmunoztorrent/dev-office",
+  "keywords": ["agents", "subagents", "visualization", "office", "pixel-art", "mcp", "herdr"],
+  "hooks": "./integrations/claude-code/plugin-hooks.json",
+  "mcpServers": {
+    "dev-team-office": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/bin/dev-team-office.js", "mcp"]
+    }
+  }
+}

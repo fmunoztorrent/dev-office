@@ -10,7 +10,7 @@
   --warn: #f4a261;
   --err: #ef476f;
   --ink: #1b1f33;
-  --phos: #7dffb0;      /* fósforo de la terminal */
+  --phos: #7dffb0;      /* terminal phosphor */
   --phos-dim: #3f9e6c;
   --amber: #ffcf6e;
   --hud: clamp(30px, 3.1vw, 46px);
@@ -27,7 +27,7 @@ body {
   overflow: hidden;
 }
 
-/* ---------- el juego a pantalla completa: 16:10 centrado, lo más grande que quepa ---------- */
+/* ---------- the full-screen game: 16:10 centered, as big as it fits ---------- */
 .stage { position: fixed; inset: 0; display: grid; place-items: center; background: radial-gradient(ellipse at center, #151829 0%, var(--bg) 70%); }
 .screen {
   position: relative; width: min(100vw, 160vh); aspect-ratio: 960 / 600; overflow: hidden;
@@ -35,7 +35,7 @@ body {
 }
 canvas#office { position: absolute; inset: 0; width: 100%; height: 100%; display: block; image-rendering: auto; }
 
-/* ---------- HUD dentro de la pantalla ---------- */
+/* ---------- HUD inside the screen ---------- */
 .hud { position: absolute; display: flex; gap: 8px; align-items: center; z-index: 2; }
 .hud-tl { top: 1.4cqi; left: 1.4cqi; }
 .hud-tr { top: 1.4cqi; right: 1.4cqi; }
@@ -55,7 +55,7 @@ canvas#office { position: absolute; inset: 0; width: 100%; height: 100%; display
 .conn { font: 18px/1 "VT323", monospace; padding: 4px 10px 3px; background: rgba(18, 20, 33, .82); color: var(--err); box-shadow: 0 0 0 2px #0b0c14, inset 0 0 0 2px #4a1f2b; }
 .conn::before { content: "● "; }
 .conn.on { color: var(--ok); box-shadow: 0 0 0 2px #0b0c14, inset 0 0 0 2px #1e5a45; text-shadow: 0 0 6px #06d6a099; }
-/* el selector de oficina: arriba a la izquierda, sólo si la empresa tiene más de una */
+/* the office selector: top left, only if the company has more than one */
 .office-pick {
   display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px 1px 10px; cursor: pointer;
   font: 18px/1 "VT323", monospace; color: #1b1f33; background: var(--accent);
@@ -69,15 +69,31 @@ canvas#office { position: absolute; inset: 0; width: 100%; height: 100%; display
 }
 .office-pick select:focus-visible { outline: 2px solid #1b1f33; outline-offset: 2px; }
 .office-pick option { color: #e8e9f1; background: #1b1f33; }
-/* en ajustes: casillas y el buscador de zonas horarias */
+/* btw: the side question and its answer, top center */
+.btw-card {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 6; width: min(560px, calc(100% - 32px));
+  padding: 8px 12px 10px; color: var(--ink); background: #f4f1e8; font: 18px/1.25 "VT323", monospace;
+  box-shadow: 0 0 0 3px var(--ink), 5px 5px 0 3px #000a;
+}
+.btw-card[hidden] { display: none; }
+.btw-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.btw-tag { padding: 1px 6px; color: var(--accent); background: var(--ink); text-transform: uppercase; letter-spacing: 1px; }
+.btw-who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #4a4f6a; }
+.btw-x { background: none; border: 0; font: 22px/1 "VT323", monospace; cursor: pointer; color: var(--ink); }
+.btw-q { margin: 0 0 6px; font-weight: 600; overflow-wrap: anywhere; }
+.btw-a { margin: 0; max-height: 9.5em; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.btw-card.asking .btw-a::after { content: ' ▍'; animation: btw-blink 1s steps(2) infinite; }
+.btw-card.failed .btw-a { color: #b3261e; }
+@keyframes btw-blink { 50% { opacity: 0; } }
+/* in settings: checkboxes and the time zone search */
 .b-check { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
 .tz-field { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 0; }
 .tz-field input { flex: 1; min-width: 0; }
 .tz-country { white-space: nowrap; }
-/* el clima de afuera (el mismo que se ve por el vidrio) */
+/* the weather outside (the same seen through the glass) */
 .wx { font: 18px/1 "VT323", monospace; padding: 4px 10px 3px; background: rgba(18, 20, 33, .82); color: #dfe6f5; box-shadow: 0 0 0 2px #0b0c14, inset 0 0 0 2px #3a3f58; white-space: nowrap; }
 
-/* el botón de la terminal: esquina inferior izquierda */
+/* the terminal button: bottom left corner */
 .term-btn { position: absolute; left: 1.4cqi; bottom: 1.4cqi; z-index: 3; color: var(--phos); }
 .term-btn:hover { filter: drop-shadow(0 0 8px #7dffb0aa); color: #c8ffe0; }
 .badge {
@@ -87,7 +103,7 @@ canvas#office { position: absolute; inset: 0; width: 100%; height: 100%; display
 }
 @keyframes pop { from { transform: scale(1); } to { transform: scale(1.15); } }
 
-/* ---------- la terminal: actividad del equipo, con fósforo verde y líneas de barrido ---------- */
+/* ---------- the terminal: the team's activity, with green phosphor and scan lines ---------- */
 .term {
   position: absolute; z-index: 3; left: 1.4cqi; bottom: calc(1.4cqi + var(--hud) + 10px);
   width: min(600px, 58cqi); height: min(440px, 62%); display: flex; flex-direction: column;
@@ -97,7 +113,7 @@ canvas#office { position: absolute; inset: 0; width: 100%; height: 100%; display
   box-shadow: 0 0 0 3px #0b0c14, inset 0 0 0 2px #1e4a33, 6px 6px 0 3px #000a, 0 0 40px #7dffb022;
   animation: crt-on .18s ease-out;
 }
-.term::after { /* líneas de barrido y un leve viñeteado de tubo */
+.term::after { /* scan lines and a slight tube vignette */
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background: repeating-linear-gradient(to bottom, #0000 0 2px, #00000038 2px 3px), radial-gradient(ellipse at center, #0000 60%, #0007 100%);
 }
@@ -176,7 +192,7 @@ canvas#office { position: absolute; inset: 0; width: 100%; height: 100%; display
 .runs .r-stage.failed { border-left-color: #ff8fa3; color: #ff8fa3; }
 .runs .sub, .runs .r-detail { color: var(--phos-dim); }
 
-/* ---------- la ficha del personaje (Los Sims) ---------- */
+/* ---------- the character sheet (The Sims) ---------- */
 .sheet {
   position: absolute; z-index: 2; top: calc(1.4cqi + 40px); left: 1.4cqi; width: min(300px, 34cqi);
   padding: 10px; color: var(--ink); background: #f4f1e8;
@@ -216,7 +232,7 @@ canvas#office { position: absolute; inset: 0; width: 100%; height: 100%; display
 .muted { color: var(--muted); margin: 0 0 6px; font-size: 12px; }
 h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
 
-/* ---------- diálogo "Nuevo encargo": un tablero de corcho con una hoja clavada ---------- */
+/* ---------- "New brief" dialog: a cork board with a pinned sheet ---------- */
 .brief {
   --ink: #2b2d42; --paper: #fdfcf6; --cork: #b9895a;
   width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 10px; border: 0;
@@ -266,7 +282,7 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
 .brief .btn:disabled { opacity: .5; }
 @media (max-width: 560px) { .b-field { grid-template-columns: 1fr; gap: 4px; } .b-desc { margin-left: 0; } }
 
-/* ---------- ⚙ Ajustes (mismo corcho que el encargo) ---------- */
+/* ---------- ⚙ Settings (same cork as the brief) ---------- */
 .settings { width: min(820px, calc(100vw - 32px)); }
 .tabs { display: flex; gap: 6px; padding: 10px 16px 0; }
 .tabs button { font: 20px/1 "VT323", monospace; padding: 6px 14px; cursor: pointer; background: #fff; color: var(--ink); border: 0; box-shadow: 0 0 0 2px var(--ink); }

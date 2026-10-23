@@ -1,10 +1,10 @@
-// De dónde saca la interfaz de terminal los eventos: del servidor en el mismo proceso,
-// o de otra oficina por WebSocket (`dev-team-office watch`).
+// Where the terminal interface gets its events from: the server in the same process,
+// or another office over WebSocket (`dev-team-office watch`).
 //
-// La interfaz mira una oficina a la vez (la que se eligió, guardada en los ajustes): el feed sólo le
-// pasa lo de esa oficina, y send({ type: 'view', office }) la cambia.
+// The interface watches one office at a time (the chosen one, saved in the settings): the feed only
+// passes it that office's data, and send({ type: 'view', office }) changes it.
 
-import WebSocket from 'ws';
+// To watch another office, Node's built-in WebSocket (≥ 22) is used: the office installs no packages.
 
 export function localFeed(server) {
   let h = null;
@@ -78,11 +78,11 @@ export function remoteFeed(wsUrl) {
   const host = new URL(wsUrl).host;
   const connect = () => {
     ws = new WebSocket(wsUrl);
-    ws.on('open', () => {
+    ws.addEventListener('open', () => {
       h.onStatus({ ok: true, key: 'conn.connectedTo', vars: { host } });
-      if (view) ws.send(JSON.stringify({ type: 'view', office: view })); // al reconectar, la misma oficina
+      if (view) ws.send(JSON.stringify({ type: 'view', office: view })); // when reconnecting, the same office
     });
-    ws.on('message', (data) => {
+    ws.addEventListener('message', ({ data }) => {
       let msg;
       try { msg = JSON.parse(data); } catch { return; }
       if (msg.type === 'snapshot') {
@@ -110,12 +110,12 @@ export function remoteFeed(wsUrl) {
       if (msg.type === 'ack' && msg.ok === false) h.onError?.(msg.error);
       if (msg.type === 'error') h.onError?.(msg.error);
     });
-    ws.on('close', () => {
+    ws.addEventListener('close', () => {
       if (closed) return;
       h.onStatus({ ok: false, key: 'conn.retrying', vars: { host } });
       retry = setTimeout(connect, 1500);
     });
-    ws.on('error', () => {}); // 'close' llega después y reintenta
+    ws.addEventListener('error', () => {}); // 'close' arrives later and retries
   };
   return {
     http: wsUrl.replace(/^ws/, 'http').replace(/\/v1\/ws$|\/ws$/, ''),
@@ -124,7 +124,7 @@ export function remoteFeed(wsUrl) {
     send(msg) {
       if (ws?.readyState !== 1) return { ok: false, error: 'offline' };
       if (msg?.type === 'view') view = msg.office;
-      // Con `ref` el servidor contesta un ack; si falla, llega por onError.
+      // With `ref` the server answers an ack; if it fails, it arrives through onError.
       ws.send(JSON.stringify(['task', 'pipeline_start', 'run'].includes(msg.type) ? { ...msg, ref: Date.now() } : msg));
       return { ok: true };
     },

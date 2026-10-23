@@ -1,10 +1,10 @@
-// Servidor de integración: API HTTP/JSON + WebSocket, en TCP (localhost) y en un socket Unix.
-// Lo usan `npm start` (sin interfaz) y el ejecutable `dev-team-office` (con la oficina en la terminal).
+// Integration server: HTTP/JSON API + WebSocket, over TCP (localhost) and a Unix socket.
+// Used by `npm start` (no interface) and the `dev-team-office` executable (with the office in the terminal).
 //
-// Una instancia es una empresa: puede tener varias oficinas (equipos o dominios). Cada visor (la
-// web, la terminal) mira una oficina a la vez y recibe sólo lo de esa oficina; la que se eligió
-// queda guardada en los ajustes. Los ajustes (idioma, zona horaria, clima, herdr…) y la apariencia
-// de cada oficina se guardan en la base SQLite.
+// One instance is a company: it can hold several offices (teams or domains). Each viewer (the
+// web, the terminal) watches one office at a time and receives only that office's data; the chosen
+// one is saved in the settings. The settings (language, time zone, weather, herdr…) and each
+// office's appearance are saved in the SQLite database.
 
 import http from 'node:http';
 import { EventEmitter } from 'node:events';
@@ -13,35 +13,40 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer } from './ws.js';
 import { Company } from './company.js';
 import { runDemo, demoScript, piDemoScript } from './demo.js';
 import { TaskHub, AGENT_LABEL } from './tasks.js';
 import { PipelineHub } from './pipeline.js';
 import { AgentRegistry } from './registry.js';
+import { AskDesk } from './asks.js';
 import { openStore, dbFile, MAIN_OFFICE } from './store.js';
 import { Weather } from './weather.js';
 import { Herdr, paneRole } from './herdr.js';
-import { detectHarness, HARNESSES, which } from '../integrations/common/devteam.mjs';
+import { SubPanes } from './subpanes.js';
+import { DEFAULT_TEAM } from '../public/sim.js';
+import { detectHarness, projectRoot, HARNESSES, which } from '../integrations/common/devteam.mjs';
 import { t, setLanguage, getLanguage } from '../public/i18n.js';
 import { zoneInfo, systemZone } from '../public/clock.js';
+import { insideDir as inside } from './paths.js';
+import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.4.0';
+export const VERSION = '0.6.0';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
-const MAX_BODY = 16 * 1024 * 1024; // PostToolUse trae el resultado completo de la herramienta
+const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
 const PUBLIC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
+const CLI = fileURLToPath(new URL('../bin/dev-team-office.js', import.meta.url));
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const WS_PATHS = new Set(['/v1/ws', '/ws']);
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
-const inside = (dir, root) => !!dir && !!root && (dir === root || dir.startsWith(`${root}${path.sep}`));
 
 export function defaultSocketPath() {
   return process.env.DEV_TEAM_OFFICE_SOCKET || path.join(os.homedir(), '.dev-team-office', 'office.sock');
 }
 
-// Una tarea pedida por la API no elige ejecutable ni argumentos: eso sólo lo define un agente
-// registrado (⚙ › Agentes), y se usa al mandarle un prompt (/v1/agents/:id/prompt).
+// A task requested through the API does not choose an executable or arguments: only a registered
+// agent (⚙ › Agents) defines that, and it is used when sending it a prompt (/v1/agents/:id/prompt).
 const publicTask = ({ launch, meta, ...task } = {}) => task;
 
 class HttpError extends Error {
@@ -49,20 +54,42 @@ class HttpError extends Error {
 }
 
 /**
- * Arranca la oficina. Rechaza con code EADDRINUSE si el puerto ya está ocupado.
- * @param db       la base SQLite: una ruta (por defecto ~/.dev-team-office/office.db), ':memory:' o un Store abierto
- * @param weather  el clima de afuera (Open-Meteo): false para no consultarlo, opciones de Weather o una
- *                 instancia (la misma para todas las oficinas)
- * @param herdr    true: si corre dentro de herdr, abre los agentes en panes (el ejecutable lo pide);
- *                 una instancia de Herdr (los tests); false/omitido: nada de herdr
+ * Starts the office. Rejects with code EADDRINUSE if the port is already taken.
+ * @param db       the SQLite database: a path (~/.dev-team-office/office.db by default), ':memory:' or an open Store
+ * @param weather  the weather outside (Open-Meteo): false to not query it, Weather options or an
+ *                 instance (the same one for every office)
+ * @param herdr    true: if running inside herdr, opens agents in panes (the executable asks for it);
+ *                 a Herdr instance (the tests); false/omitted: no herdr at all
  * @returns {Promise<{company, office, url, socket, command, handleMessage, close, …}>}
  */
-export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, herdr: herdrOpt } = {}) {
+export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, herdr: herdrOpt, asks: asksOpt = {} } = {}) {
   const ownStore = !db || typeof db === 'string';
   const store = ownStore ? openStore(db || dbFile()) : db; // oficinas, agentes, ajustes e historial
   setLanguage(store.getPrefs().lang);
   const company = new Company({ store });
-  const office = company.get(MAIN_OFFICE); // la principal (la que usaban los clientes de antes)
+  // Each session learns which subagent is which character from what its project's folder brings (the
+  // project's subagents with their `role:`, their name or their description), even if its agent does not say.
+  const rolesSeen = new Map();
+  company.rolesFor = (cwd) => {
+    if (!cwd || !fs.existsSync(cwd)) return null;
+    const reg = store.listAgents().filter((a) => inside(cwd, a.path)).sort((a, b) => b.path.length - a.path.length)[0];
+    const root = reg?.path || projectRoot(cwd);
+    const hit = rolesSeen.get(root);
+    if (hit && Date.now() - hit.at < 30_000) return hit.roles;
+    let roles = null;
+    try { roles = Object.fromEntries(detectHarness(root).subagents.filter((x) => x.scope === 'project' && x.role).map((x) => [x.name.toLowerCase(), x.role])); } catch { /* carpeta ilegible */ }
+    rolesSeen.set(root, { at: Date.now(), roles });
+    if (rolesSeen.size > 100) rolesSeen.delete(rolesSeen.keys().next().value);
+    return roles;
+  };
+  // the folder's team changed (join installed one): it is read again and the sessions open there add it
+  company.learnRoles = (dir) => {
+    for (const k of [...rolesSeen.keys()]) if (inside(k, dir) || inside(dir, k)) rolesSeen.delete(k);
+    const roles = company.rolesFor(dir) || {};
+    for (const id of company.ids()) company.get(id).learnRoles(dir, roles);
+    return roles;
+  };
+  const office = company.get(MAIN_OFFICE); // the main one (the one older clients used)
   const herdr = herdrOpt instanceof EventEmitter ? herdrOpt : herdrOpt === true ? new Herdr({ log }) : null;
   const officeUrl = () => `http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${port}`;
   let socketPath = null;
@@ -70,19 +97,22 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   hub.officeName = (id) => company.info(id)?.name || '';
   const pipelines = new PipelineHub(company, hub, { store });
   const registry = new AgentRegistry({ getAgents: () => store.listAgents(), hub, pipelines, office: company });
+  // side questions (btw) to each office's agent on duty
+  const asks = new AskDesk({ company, store, officeUrl, ...asksOpt });
+  const publicAsk = ({ id, office: o, agent, question, answer, status, error, from, forked, role, createdAt, updatedAt }) => ({ id, office: o, agent, question, answer, status, error, from, forked, role, createdAt, updatedAt });
   const startedAt = Date.now();
-  const bus = new EventEmitter(); // cambios que ven las interfaces: ajustes, apariencia, clima, oficinas, bitácora
+  const bus = new EventEmitter(); // changes the interfaces see: settings, appearance, weather, offices, log
   const prefs = () => store.getPrefs();
   const view = () => prefs().view.office;
   const valid = (id) => (id && company.has(id) ? id : view());
   const say = (text, extra = {}) => { log(text); bus.emit('log', { ts: Date.now(), kind: 'server', text, ...extra }); };
 
-  // ---------- el clima de afuera, por oficina (las que están en la misma ciudad lo comparten) ----------
+  // ---------- the weather outside, per office (the ones in the same city share it) ----------
 
   const weatherShared = weatherOpt instanceof EventEmitter ? weatherOpt : null;
   weatherShared?.on('change', (cur) => { for (const oid of company.ids()) bus.emit('weather', oid, cur); });
   weatherShared?.start();
-  const weathers = new Map(); // dónde → Weather
+  const weathers = new Map(); // where → Weather
   const weatherKey = (id) => store.getOffice(id)?.location || process.env.DEV_TEAM_OFFICE_LOCATION || company.zoneOf(id);
   function weatherOf(id) {
     if (weatherOpt === false || !prefs().weather) return null;
@@ -92,7 +122,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     if (!w) {
       const tz = company.zoneOf(id), z = zoneInfo(tz);
       const own = store.getOffice(id)?.location || process.env.DEV_TEAM_OFFICE_LOCATION;
-      // sin ubicación propia: las coordenadas de la ciudad de su zona horaria (sin geocodificar)
+      // without its own location: the coordinates of its time zone's city (no geocoding)
       w = new Weather({ log: (m) => say(m), ...(weatherOpt || {}), timezone: tz, location: own || (Number.isFinite(z.lat) ? `${z.lat},${z.lon}` : undefined), place: own ? undefined : z.city });
       w.on('change', (cur) => { for (const oid of company.ids()) if (weatherKey(oid) === key) bus.emit('weather', oid, cur); });
       weathers.set(key, w);
@@ -100,14 +130,14 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     }
     return w;
   }
-  /** Tras cambiar zonas, ubicaciones o el ajuste del clima: suelta los que ya no se usan y avisa. */
+  /** After changing zones, locations or the weather setting: drops the ones no longer used and notifies. */
   function refreshWeather() {
     const used = new Set(prefs().weather && weatherOpt !== false && !weatherShared ? company.ids().map(weatherKey) : []);
     for (const [key, w] of weathers) if (!used.has(key)) { w.stop(); weathers.delete(key); }
     for (const id of company.ids()) bus.emit('weather', id, weatherOf(id)?.current || null);
   }
 
-  /** El estado completo de una oficina, para un visor que la está mirando. */
+  /** An office's full state, for a viewer watching it. */
   const fullState = (id = view()) => {
     id = valid(id);
     const p = pipelines.snapshot(id);
@@ -115,16 +145,18 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       ...company.get(id).snapshot(), ...hub.snapshot(id), pipelines: p.runs, projects: p.projects, targets: registry.targets(id),
       appearance: store.getAppearance(id), weather: weatherOf(id)?.current || null,
       office: company.info(id), offices: company.list(), prefs: prefs(), herdr: herdr ? herdr.status() : { available: false, panes: [] },
+      asks: asks.list(id, 10),
     };
   };
   let stopDemo = null;
 
-  // ---------- herdr: los agentes en panes, y los panes que ellos abren ----------
+  // ---------- herdr: the agents in panes, and the panes they open ----------
 
   function trackPane(info) {
     if (!info?.pane) return;
     company.bindPane(info.pane, info.office || MAIN_OFFICE);
-    if (info.main) return; // el pane del agente: su actividad la cuentan sus propios eventos
+    // the agent's pane, or a subagent's: its own events tell its activity
+    if (info.main || info.kind === 'sub') return;
     company.ingest('herdr', { session: 'office', office: info.office || MAIN_OFFICE, kind: 'pane_open', pane: info.pane, role: info.role, text: info.title, agent: info.agent });
   }
   herdr?.on('open', (p) => {
@@ -133,7 +165,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     bus.emit('herdr', herdr.status());
   });
   herdr?.on('close', (p) => {
-    if (!p.main) company.ingest('herdr', { session: 'office', office: p.office || MAIN_OFFICE, kind: 'pane_close', pane: p.pane, role: p.role, text: p.title });
+    if (p.kind === 'sub') subPanes?.forget(p.pane);
+    if (!p.main && p.kind !== 'sub') company.ingest('herdr', { session: 'office', office: p.office || MAIN_OFFICE, kind: 'pane_close', pane: p.pane, role: p.role, text: p.title });
     if (p.taskId) hub.paneSettled(p.pane);
     say(t('herdr.closed', { pane: p.pane, title: p.title }), { office: p.office, pane: p.pane });
     bus.emit('herdr', herdr.status());
@@ -143,17 +176,27 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     if (!p.main) company.ingest('herdr', { session: 'office', office: p.office || MAIN_OFFICE, kind: 'pane_state', pane: p.pane, role: p.role, text: p.title, state: status });
     bus.emit('herdr', herdr.status());
   });
-  // un pane que abrió un agente por su cuenta, en la carpeta de un proyecto: la oficina lo adopta
+  // a pane an agent opened on its own, in a project's folder: the office adopts it
   herdr?.on('discover', (d) => {
     const parent = [...herdr.tracked.values()].find((x) => x.cwd && (inside(d.cwd, x.cwd) || inside(x.cwd, d.cwd)));
     herdr.track(d.pane, { office: parent?.office || company.officeForPath(d.cwd) || MAIN_OFFICE, role: paneRole({ agent: d.agent, title: d.title }), title: d.title, agent: d.agent, kind: d.agent ? 'agent' : 'command', cwd: d.cwd });
   });
   herdr?.start({ isProject: (cwd) => !!company.officeForPath(cwd) });
 
+  // each subagent, in its pane (`dev-team-office follow`): its start opens it, its end closes it
+  const subPanes = herdr ? new SubPanes({
+    herdr, company, log: say,
+    command: [process.execPath, CLI],
+    env: () => ({ DEV_TEAM_OFFICE_URL: officeUrl() }),
+    enabled: () => prefs().herdr.subagents !== false,
+    who: (id, role) => store.getAppearance(id)?.[role]?.name || DEFAULT_TEAM[role]?.name || '',
+  }) : null;
+  company.on('event', (id, event) => subPanes?.onEvent(id, event));
+
   /**
-   * Al abrir la oficina dentro de herdr: el agente, en un pane nuevo. ¿Cuál? El de los ajustes
-   * (⚙ › General); en automático, el agente registrado de la carpeta donde se abrió la oficina, o
-   * el CLI que esa carpeta trae configurado (o el primero instalado).
+   * When the office opens inside herdr: the agent, in a new pane. Which one? The one in the settings
+   * (⚙ › General); on automatic, the registered agent of the folder where the office was opened, or
+   * the CLI that folder has configured (or the first one installed).
    */
   async function launchStartAgent({ cwd = process.cwd(), agent: wanted } = {}) {
     if (!herdr?.available) return { ok: false, error: t('err.noHerdr') };
@@ -161,11 +204,11 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     if (choice === 'none') return { ok: false, skipped: true };
     const installed = (h) => !!which(h === 'claude-code' && process.env.DEV_TEAM_OFFICE_CLAUDE_BIN || HARNESSES[h].bin);
     let a = choice && choice !== 'auto' ? store.getAgent(choice) || null : null;
-    if (!a && ['claude-code', 'claude', 'pi', 'opencode'].includes(choice)) a = { name: path.basename(cwd), path: cwd, harness: choice === 'claude' ? 'claude-code' : choice };
+    if (!a && ['claude-code', 'claude', 'pi', 'opencode', 'codex'].includes(choice)) a = { name: path.basename(cwd), path: cwd, harness: choice === 'claude' ? 'claude-code' : choice };
     if (!a) a = store.listAgents().filter((x) => inside(cwd, x.path)).sort((x, y) => y.path.length - x.path.length)[0] || null;
     if (!a) {
       const d = detectHarness(cwd);
-      const harness = [...d.harnesses, 'claude-code', 'pi', 'opencode'].find(installed);
+      const harness = [...d.harnesses, 'claude-code', 'pi', 'opencode', 'codex'].find(installed);
       if (!harness) return { ok: false, error: t('herdr.noAgent') };
       a = { name: d.name || path.basename(cwd), path: cwd, harness };
     }
@@ -183,7 +226,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     }
   }
 
-  // ---------- acciones compartidas por HTTP, WebSocket y la interfaz local ----------
+  // ---------- actions shared by HTTP, WebSocket and the local interface ----------
 
   function command(action, { speed, office: id } = {}) {
     id = valid(id);
@@ -201,7 +244,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     }
   }
 
-  /** Cambia ajustes generales: los aplica (idioma, clima, zonas) y avisa a las interfaces. */
+  /** Changes general settings: applies them (language, weather, zones) and notifies the interfaces. */
   function setPrefs(patch) {
     const out = store.setPrefs(patch);
     if (!out.ok) return out;
@@ -220,8 +263,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   }
 
   /**
-   * Mensaje con la forma del protocolo WebSocket. `conn` es la conexión que lo envía
-   * (null por HTTP o desde la interfaz local). Devuelve { ok, ... }.
+   * A message shaped like the WebSocket protocol. `conn` is the connection that sends it
+   * (null over HTTP or from the local interface). Returns { ok, ... }.
    */
   function handleMessage(msg, conn = null) {
     if (!msg || typeof msg !== 'object') return { ok: false, error: t('err.invalidMessage') };
@@ -232,7 +275,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const events = company.ingest(source, msg.payload ?? {});
         return { ok: true, accepted: events.length, ids: events.map((e) => e.id) };
       }
-      // Un agente (extensión de Pi, plugin de OpenCode…) se registra para recibir tareas.
+      // An agent (Pi extension, OpenCode plugin…) registers to receive tasks.
       case 'register': {
         if (!conn) return { ok: false, error: t('err.registerWs') };
         conn.agent = String(msg.agent || 'agente');
@@ -244,16 +287,21 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         return hub.submit({ office: here, ...publicTask(msg) });
       case 'task_cancel':
         return hub.cancel(msg.id);
-      // Un prompt para un agente, por una entrada de su harness (lo que manda la pizarra).
+      // A prompt for an agent, through an entry of its harness (what the whiteboard sends).
       case 'run':
         return registry.run(msg);
       case 'pipeline_start':
         return pipelines.start(msg);
       case 'pipeline_cancel':
         return pipelines.cancel(msg.id);
-      // El agente informa cómo va el pipeline que está ejecutando.
+      // The agent reports how the pipeline it is running is going.
       case 'pipeline_update':
         return pipelines.update(msg.id, msg);
+      // btw: a side question to the office's agent on duty (it answers without being interrupted)
+      case 'ask': {
+        const out = asks.ask({ text: msg.text, office: here, from: msg.from });
+        return out.ok ? { ok: true, ask: publicAsk(out.ask) } : out;
+      }
       case 'chat':
       case 'poke': {
         const events = company.ingest('generic', { kind: msg.type, session: msg.session || 'office', office: here, text: msg.text, from: msg.from, role: msg.role });
@@ -263,7 +311,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const ok = command(msg.action, { ...msg, office: here });
         return ok ? { ok: true } : { ok: false, error: t('err.unknownCommand', { action: msg.action }) };
       }
-      // El visor elige qué oficina mirar (y queda guardado).
+      // The viewer chooses which office to watch (and it is saved).
       case 'view': {
         if (!company.has(msg.office)) return { ok: false, error: t('err.unknownOffice', { office: msg.office }) };
         if (conn) conn.view = msg.office;
@@ -301,7 +349,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const events = company.ingest(source, payload);
         return json(res, 200, { ok: true, accepted: events.length, ids: events.map((e) => e.id) });
       }
-      // ⚙ Ajustes: los generales (idioma, zona horaria, clima, herdr…) y la apariencia de una oficina
+      // ⚙ Settings: the general ones (language, time zone, weather, herdr…) and an office's appearance
       if (req.method === 'GET' && p === '/v1/settings') {
         const id = valid(q('office'));
         return json(res, 200, { office: { id, file: store.file, appearance: store.getAppearance(id), prefs: prefs() }, offices: company.list(), systemZone: systemZone(), herdr: herdr ? herdr.status() : { available: false } });
@@ -323,7 +371,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         }
         return json(res, 200, out);
       }
-      // Las oficinas de la empresa (equipos o dominios)
+      // The company's offices (teams or domains)
       if (req.method === 'GET' && p === '/v1/offices') return json(res, 200, { ok: true, offices: company.list(), view: view() });
       if (req.method === 'POST' && p === '/v1/offices') {
         const out = store.createOffice(await body(req));
@@ -345,7 +393,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
           return json(res, out.ok ? 200 : out.status || 400, out);
         }
       }
-      // herdr: los panes que la oficina sigue, y los que anuncia un agente (`dev-team-office pane`)
+      // herdr: the panes the office follows, and the ones an agent announces (`dev-team-office pane`)
       if (req.method === 'GET' && p === '/v1/panes') return json(res, 200, { ok: true, ...(herdr ? herdr.status() : { available: false, panes: [] }) });
       if (req.method === 'POST' && p === '/v1/panes') {
         const b = await body(req);
@@ -361,8 +409,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const out = await launchStartAgent({ cwd: b.cwd, agent: b.agent });
         return json(res, out.ok ? 200 : 400, out);
       }
-      // El mantenedor de agentes: una ruta completa + el CLI que la atiende + su oficina. Lo que
-      // trae su harness (pipelines, comandos) se detecta; el prompt arranca ESE pipeline.
+      // The agents maintainer: a full path + the CLI that serves it + its office. What its harness
+      // brings (pipelines, commands) is detected; the prompt starts THAT pipeline.
       if (req.method === 'GET' && p === '/v1/agents') return json(res, 200, { agents: registry.targets(q('office')) });
       if (req.method === 'POST' && p === '/v1/agents') {
         const out = store.createAgent(await body(req));
@@ -374,6 +422,16 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         if (!path.isAbsolute(dir)) return json(res, 400, { ok: false, error: t('err.fullPath') });
         const d = detectHarness(dir);
         return json(res, 200, { ok: true, exists: d.exists, name: d.name, harnesses: d.harnesses, kinds: d.kinds, entries: d.entries.map((e) => ({ id: e.id, label: e.label, harnesses: e.harnesses })) });
+      }
+      // The office team for the roles an agent lacks (`join` asks for it): { team?: pack }
+      if (req.method === 'POST' && (m = p.match(/^\/v1\/agents\/([^/]+)\/team$/))) {
+        const id = decodeURIComponent(m[1]);
+        const a = store.getAgent(id);
+        if (!a) return json(res, 404, { ok: false, error: t('err.unknownAgent') });
+        const b = await body(req);
+        const out = provisionTeam({ dir: a.path, harness: a.harness, ...(b.team ? { team: String(b.team) } : {}) });
+        if (out.installed) { company.learnRoles(a.path); registry.forget(a.path); registry.changed(); }
+        return json(res, 200, { ok: true, ...out, agent: registry.target(id) });
       }
       if ((m = p.match(/^\/v1\/agents\/([^/]+)$/)) && m[1] !== 'announce' && m[1] !== 'detect') {
         const id = decodeURIComponent(m[1]);
@@ -392,7 +450,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
           return json(res, out.ok ? 200 : out.status || 400, out);
         }
       }
-      // Mandarle un prompt: { text, entry?: la entrada de su harness, session?: id | null (sesión nueva) }
+      // Send it a prompt: { text, entry?: the entry of its harness, session?: id | null (new session) }
       if (req.method === 'POST' && (m = p.match(/^\/v1\/agents\/([^/]+)\/prompt$/))) {
         const out = registry.run({ ...(await body(req)), target: decodeURIComponent(m[1]) });
         return json(res, out.ok ? 200 : 400, out);
@@ -404,7 +462,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       if (req.method === 'GET' && p === '/v1/prompts') {
         return json(res, 200, { prompts: store.listPrompts({ agentId: q('agent'), limit: q('limit') || 50 }) });
       }
-      // Lo que anuncian los agentes: proyectos y pipelines que cada sesión puede correr.
+      // What the agents announce: projects and pipelines each session can run.
       if (req.method === 'GET' && p === '/v1/projects') return json(res, 200, { projects: pipelines.projects(q('office')) });
       if (req.method === 'POST' && p === '/v1/agents/announce') {
         const out = pipelines.announce(await body(req));
@@ -429,12 +487,12 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const out = hub.cancel(decodeURIComponent(p.split('/')[3]));
         return json(res, out.ok ? 200 : 400, out);
       }
-      // Hook de Claude Code (integrations/claude-code/hook.mjs): registra el evento y devuelve qué
-      // tiene la oficina para esa sesión. Qué hacer con eso lo decide el hook, del lado del agente.
+      // Claude Code hook (integrations/claude-code/hook.mjs): records the event and returns what the
+      // office has for that session. What to do with it is decided by the hook, on the agent's side.
       //   { task?: { id, text }, pipeline?: { id, pipeline, task }, cancel?: [id] }
       if (req.method === 'POST' && p === '/v1/hooks/claude-code') {
         const payload = await body(req);
-        // `devteam_stage`: ese Stop cierra una etapa de un pipeline, no el trabajo
+        // `devteam_stage`: that Stop closes a pipeline stage, not the work
         if (!(payload.devteam_stage && payload.hook_event_name === 'Stop')) company.ingest('claude-code', payload);
         const session = payload.session_id;
         if (session && payload.herdr_pane) hub.paneSession(String(payload.herdr_pane), session);
@@ -451,6 +509,16 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         if (cancel.length) out.cancel = cancel;
         return json(res, 200, out);
       }
+      // btw over HTTP: { text, office?, from?, wait? } (with wait, it answers when the reply arrives)
+      if (req.method === 'POST' && p === '/v1/ask') {
+        const b = await body(req);
+        const out = asks.ask({ text: b.text, office: valid(b.office), from: b.from });
+        if (!out.ok) return json(res, 400, out);
+        if (!b.wait) return json(res, 202, { ok: true, ask: publicAsk(out.ask) });
+        const done = await out.done;
+        return json(res, 200, { ok: done.status === 'answered', ask: publicAsk(done), ...(done.error ? { error: done.error } : {}) });
+      }
+      if (req.method === 'GET' && p === '/v1/asks') return json(res, 200, { ok: true, asks: asks.list(valid(q('office')), Number(q('limit')) || 20) });
       if (req.method === 'POST' && p === '/v1/messages') {
         const out = handleMessage(await body(req));
         return json(res, out.ok ? 200 : 400, out);
@@ -468,11 +536,11 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
 
   // ---------- WebSocket ----------
   //
-  // cliente → servidor: { type: 'event' | 'chat' | 'poke' | 'command' | 'view' | 'prefs', ..., id? }
-  //                     (con `id` se responde { type: 'ack', id, ... })
-  // servidor → cliente: { type: 'hello' }, { type: 'snapshot', state }, { type: 'event', event, session, office },
-  //                     { type: 'tasks' | 'pipelines' | 'targets' | 'appearance' | 'weather' | 'prefs' | 'offices', … }
-  // Cada visor recibe lo de la oficina que mira (conn.view).
+  // client → server: { type: 'event' | 'chat' | 'poke' | 'command' | 'view' | 'prefs', ..., id? }
+  //                  (with `id` it replies { type: 'ack', id, ... })
+  // server → client: { type: 'hello' }, { type: 'snapshot', state }, { type: 'event', event, session, office },
+  //                  { type: 'tasks' | 'pipelines' | 'targets' | 'appearance' | 'weather' | 'prefs' | 'offices', … }
+  // Each viewer receives what belongs to the office it watches (conn.view).
 
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_BODY });
   let connSeq = 0;
@@ -480,7 +548,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   const viewOf = (c) => valid(c.conn?.view);
   const broadcast = (msg) => { const data = JSON.stringify(msg); for (const c of viewers()) c.send(data); };
   const toOffice = (id, msg) => { const data = JSON.stringify(msg); for (const c of viewers()) if (viewOf(c) === id) c.send(data); };
-  /** A cada visor, lo de su oficina (se calcula una vez por oficina). */
+  /** To each viewer, its office's data (computed once per office). */
   const perOffice = (make) => {
     const cache = new Map();
     for (const c of viewers()) {
@@ -491,6 +559,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   };
   company.on('event', (id, event, session) => toOffice(id, { type: 'event', event, session, office: id }));
   company.on('event', (id, event) => bus.emit('activity', id, event));
+  company.on('event', (_id, event) => { if (event.kind === 'turn_end' || event.kind === 'done') hub.sessionSettled(event.session); });
   company.on('reset', (id) => toOffice(id, { type: 'snapshot', state: fullState(id) }));
   hub.on('change', () => perOffice((id) => ({ type: 'tasks', ...hub.snapshot(id) })));
   pipelines.on('change', () => perOffice((id) => ({ type: 'pipelines', ...pipelines.snapshot(id) })));
@@ -500,10 +569,13 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   bus.on('prefs', (pr) => broadcast({ type: 'prefs', prefs: pr }));
   bus.on('offices', (list) => broadcast({ type: 'offices', offices: list }));
   bus.on('herdr', (st) => broadcast({ type: 'herdr', herdr: st }));
+  asks.on('change', (a) => toOffice(a.office, { type: 'ask', ask: publicAsk(a) }));
   for (const id of company.ids()) weatherOf(id);
 
-  wss.on('connection', (ws) => {
-    const conn = ws.conn = { id: ++connSeq, agent: null, view: view(), send: (m) => ws.readyState === 1 && ws.send(JSON.stringify(m)) };
+  wss.on('connection', (ws, req) => {
+    // `?office=<id>`: a viewer that watches that office without changing the chosen one (a subagent's pane)
+    const wanted = new URL(req?.url || '/', 'http://localhost').searchParams.get('office');
+    const conn = ws.conn = { id: ++connSeq, agent: null, view: wanted && company.has(wanted) ? wanted : view(), send: (m) => ws.readyState === 1 && ws.send(JSON.stringify(m)) };
     ws.send(JSON.stringify({ type: 'hello', ...info() }));
     ws.send(JSON.stringify({ type: 'snapshot', state: fullState(conn.view) }));
     ws.on('close', () => hub.unregister(conn.id));
@@ -512,7 +584,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       try { msg = JSON.parse(data); } catch { return ws.send(JSON.stringify({ type: 'error', error: 'invalid json' })); }
       const out = handleMessage(msg, conn);
       if (msg?.type === 'view' && out.ok) ws.send(JSON.stringify({ type: 'snapshot', state: fullState(conn.view) }));
-      // `task` usa `id` para su propio id de tarea; el acuse va con `ref`.
+      // `task` uses `id` for its own task id; the ack goes with `ref`.
       const ref = ['task', 'pipeline_start', 'run'].includes(msg?.type) ? msg.ref : msg?.id;
       if (ref !== undefined) ws.send(JSON.stringify({ type: 'ack', id: ref, ...out }));
       else if (!out.ok) ws.send(JSON.stringify({ type: 'error', error: out.error }));
@@ -539,7 +611,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     tcp.once('error', reject);
     tcp.listen(port, host, () => { tcp.off('error', reject); resolve(); });
   });
-  port = tcp.address().port; // por si se pidió el 0 (puerto libre cualquiera)
+  port = tcp.address().port; // in case 0 was requested (any free port)
   hub.officeUrl = officeUrl();
 
   let unix = null;
@@ -557,7 +629,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   }
 
   say(t('server.started', { version: VERSION, url: `http://${host}:${port}` }));
-  // Desde el navegador: en un equipo local, localhost y 127.0.0.1 son la misma oficina.
+  // From the browser: on a local machine, localhost and 127.0.0.1 are the same office.
   if (LOOPBACK.has(host)) say(t('server.browser', { urls: `http://127.0.0.1:${port}  ·  http://localhost:${port}` }));
   say(t('server.api', { socket: socketPath ? `  ·  socket: ${socketPath}` : '' }));
 
@@ -567,8 +639,10 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     hub,
     pipelines,
     registry,
+    asks,
     bus,
     herdr,
+    subPanes,
     appearance: (id = view()) => store.getAppearance(id),
     weatherOf,
     get weather() { return weatherOf(view()); },
@@ -585,6 +659,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       for (const w of weathers.values()) w.stop();
       weatherShared?.stop?.();
       herdr?.stop();
+      subPanes?.stop();
       hub.stopAll();
       for (const c of wss.clients) c.terminate();
       await Promise.all([tcp, unix].filter(Boolean).map((s) => new Promise((r) => s.close(r))));
@@ -594,9 +669,9 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   };
 }
 
-// El socket Unix sólo lo puede abrir tu usuario (0600) y no choca con otros puertos.
+// Only your user can open the Unix socket (0600) and it does not clash with other ports.
 async function listenUnix(server, file) {
-  // macOS limita la ruta de un socket a 104 bytes (sun_path).
+  // macOS limits a socket path to 104 bytes (sun_path).
   if (Buffer.byteLength(file) > 103) throw new Error(t('server.socketTooLong'));
   fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   if (fs.existsSync(file)) {
@@ -605,7 +680,7 @@ async function listenUnix(server, file) {
       c.on('error', () => resolve(false));
     });
     if (alive) throw new Error(t('server.socketBusy'));
-    fs.rmSync(file, { force: true }); // quedó de una ejecución que no cerró bien
+    fs.rmSync(file, { force: true }); // left over from a run that did not close properly
   }
   await new Promise((resolve, reject) => {
     server.once('error', reject);
@@ -614,9 +689,9 @@ async function listenUnix(server, file) {
   fs.chmodSync(file, 0o600);
 }
 
-// Un sitio web abierto en tu navegador no debe poder leer ni inyectar eventos en la oficina:
-// se rechazan Host ajenos (DNS rebinding) y Origin de otros sitios. Los clientes que no son
-// navegadores (curl, hooks, plugins) no mandan Origin y pasan.
+// A website open in your browser must not be able to read or inject events into the office:
+// foreign Hosts (DNS rebinding) and Origins from other sites are rejected. Non-browser clients
+// (curl, hooks, plugins) send no Origin and pass.
 function checkBrowserAccess(req, boundHost, port) {
   const hostHeader = req.headers.host || '';
   const hostname = hostHeader.replace(/:\d+$/, '');
@@ -625,9 +700,9 @@ function checkBrowserAccess(req, boundHost, port) {
   if (!origin) return;
   try {
     const o = new URL(origin);
-    if (o.host === hostHeader) return; // la propia vista web
+    if (o.host === hostHeader) return; // the web view itself
     if (LOOPBACK.has(o.hostname) && Number(o.port || 80) === port) return;
-  } catch { /* origin inválido */ }
+  } catch { /* invalid origin */ }
   throw new HttpError(403, t('err.originDenied'));
 }
 

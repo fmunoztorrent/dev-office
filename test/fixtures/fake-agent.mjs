@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// Un agente de mentira que se comporta como la extensión de Pi: se conecta a la oficina, anuncia
-// su proyecto y ejecuta los pipelines con la librería común (integrations/common/devteam.mjs).
-// Cada etapa "trabaja" un poco (lee y escribe un archivo) y devuelve un resumen. Sirve para los
-// tests y para ver la oficina en acción sin un agente real:
+// A fake agent that behaves like the Pi extension: it connects to the office, announces its
+// project and runs the pipelines with the shared library (integrations/common/devteam.mjs).
+// Each stage "works" a bit (reads and writes a file) and returns a summary. Useful for the
+// tests and to see the office in action without a real agent:
 //
 //   node test/fixtures/fake-agent.mjs [--url http://127.0.0.1:4317] [--dir examples/tienda] [--delay 600]
 //
-// Los gates se simulan (RED falla, el resto pasa) salvo con --real-gates.
+// Gates are simulated (RED fails, the rest pass) unless --real-gates is given.
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

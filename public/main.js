@@ -9,18 +9,18 @@ import { t, setLanguage, onLanguage, getLanguage, timeOf } from './i18n.js';
 import { countryName } from './clock.js';
 
 const $ = (id) => document.getElementById(id);
-const OFFICE_SESSION = 'office'; // chat, saludos y panes: no es una sesión de agente
+const OFFICE_SESSION = 'office'; // chat, greetings and panes: not an agent session
 
 const sessions = new Map();
-let focus = null;      // sesión fijada por el usuario (null = la más reciente)
+let focus = null;      // session pinned by the user (null = the most recent)
 let selected = null;
 let ws;
 let tasks = { tasks: [], agents: [], launchers: [], defaultCwd: '' };
 let runs = [];
-let targets = []; // agentes registrados (⚙ › Agentes) y sesiones abiertas, con lo que trae su harness
-let offices = []; // las oficinas de la empresa (el selector, arriba a la izquierda)
-let office = null; // la que se está mirando: { id, name, timezone, country, city, … }
-let prefs = null;  // los ajustes generales (idioma, zona, clima, herdr, bitácora)
+let targets = []; // registered agents (⚙ › Agents) and open sessions, with what their harness brings
+let offices = []; // the company's offices (the selector, top left)
+let office = null; // the one being watched: { id, name, timezone, country, city, … }
+let prefs = null;  // the general settings (language, zone, weather, herdr, log)
 let herdr = { available: false, panes: [] };
 
 const game = createGame($('office'), { onSelect: (id) => select(id), onBoardClick: () => openBrief() });
@@ -29,7 +29,7 @@ const hhmm = (ts) => timeOf(ts, zone());
 
 // ---------------------------------------------------------------- idioma
 
-/** Los textos fijos del HTML (data-i18n, -title, -aria, -ph) en el idioma del juego. */
+/** The HTML's fixed texts (data-i18n, -title, -aria, -ph) in the game's language. */
 function applyI18n() {
   document.documentElement.lang = getLanguage();
   for (const e of document.querySelectorAll('[data-i18n]')) e.textContent = t(e.dataset.i18n);
@@ -77,6 +77,7 @@ function connect() {
     if (msg.type === 'snapshot' || msg.type === 'appearance') { applyAppearance((msg.state || msg).appearance || {}); renderTeam(); renderSheet(true); }
     if (msg.type === 'snapshot' || msg.type === 'weather') { game.sim.setWeather((msg.state ? msg.state.weather : msg.weather) || null); renderWeather(); }
     if (msg.type === 'event') onEvent(msg.event, msg.session);
+    if (msg.type === 'ask') onAsk(msg.ask);
     if (msg.type === 'tasks') onTasks(msg);
     if (msg.type === 'ack' && msg.ok === false) alertTask(msg.error);
     if (msg.type === 'ack' && msg.ok && msg.run) $('brief').close();
@@ -88,11 +89,14 @@ const send = (obj) => ws?.readyState === 1 && ws.send(JSON.stringify(obj));
 function onPrefs(p) {
   prefs = p;
   term.life = !!p.log?.life;
+  // the office view: front (the usual one) or isometric top-down, as saved in the settings
+  game.setView(p.view?.mode === 'iso' ? 'iso' : 'flat');
+  $('view-mode').setAttribute('aria-pressed', String(game.view === 'iso'));
   setLanguage(p.lang);
   settings?.refresh?.();
 }
 
-// ---------------------------------------------------------------- las oficinas
+// ---------------------------------------------------------------- the offices
 
 function onOffices(list, current) {
   offices = list || [];
@@ -105,7 +109,7 @@ function onOffices(list, current) {
   settings?.refresh?.();
 }
 
-/** El selector, arriba a la izquierda: sólo si la empresa tiene más de una oficina. */
+/** The selector, top left: only if the company has more than one office. */
 function renderOffices() {
   const box = $('office-pick'), sel = $('office-select');
   box.hidden = offices.length < 2;
@@ -129,7 +133,7 @@ function onHerdr(st) {
   renderPanes();
 }
 
-// El clima en el HUD: el mismo que se ve por la pared de vidrio (real o simulado).
+// The weather in the HUD: the same one seen through the glass wall (real or simulated).
 function renderWeather() {
   const w = game.sim.weather, now = game.sim.date();
   const icon = weatherIcon(w, daylight(now, w).night);
@@ -154,7 +158,7 @@ function onSnapshot(state) {
   game.reset();
   sessions.clear();
   for (const s of state.sessions) if (s.id !== OFFICE_SESSION) sessions.set(s.id, s);
-  $('log').querySelectorAll('li[data-ev]').forEach((li) => li.remove()); // los eventos vuelven a llegar con el snapshot
+  $('log').querySelectorAll('li[data-ev]').forEach((li) => li.remove()); // the events arrive again with the snapshot
   state.log.forEach((ev) => addLog(ev, { quiet: true }));
   if (focus && !sessions.has(focus)) focus = null;
   renderSessions();
@@ -165,7 +169,7 @@ function onSnapshot(state) {
 function onEvent(ev, session) {
   if (session && session.id !== OFFICE_SESSION) sessions.set(session.id, session);
   const current = currentSession();
-  // Los eventos de otras sesiones mueven al equipo igual, pero el tablero muestra la sesión enfocada.
+  // Events from other sessions move the team all the same, but the board shows the focused session.
   game.handle(ev);
   if (!current || ev.session === current.id) game.setBoard(currentSession());
   addLog(ev);
@@ -175,7 +179,7 @@ function onEvent(ev, session) {
   if (selected === ev.role) renderSheet();
 }
 
-// ---------------------------------------------------------------- la terminal: actividad del equipo
+// ---------------------------------------------------------------- the terminal: the team's activity
 
 const term = { open: false, tab: 'activity', unread: 0, life: true };
 
@@ -201,7 +205,7 @@ function renderBadge() {
   b.hidden = !term.unread;
   b.textContent = term.unread > 99 ? '99+' : String(term.unread);
 }
-/** Sigue el final de la bitácora, salvo que el usuario haya subido a leer. */
+/** Follows the end of the log, unless the user scrolled up to read. */
 function scrollLog(force) {
   const box = $('log').parentElement;
   if (force || box.scrollHeight - box.scrollTop - box.clientHeight < 60) box.scrollTop = box.scrollHeight;
@@ -228,17 +232,18 @@ function addLog(ev, opts) {
   }
   if (ev.kind === 'phase_end') text = t('events.turnEnd', { text: ev.text ? `: ${ev.text}` : '' });
   if (ev.kind === 'pane_open' || ev.kind === 'pane_close') text = `🪟 ${ev.pane} · ${ev.text}${ev.kind === 'pane_close' ? ' ✔' : ''}`;
-  const name = el('b', '', `${who}: `);
+  if (ev.kind === 'btw') text = ev.phase === 'ask' ? `❓ btw: ${ev.text}` : ev.phase === 'answer' ? `💡 ${ev.text}` : `✖ btw: ${ev.text}`;
+  const name = el('b', '', `${ev.kind === 'btw' && ev.phase === 'ask' ? ev.from : who}: `);
   if (cfg) name.style.color = cfg.shirt;
-  const body = el('span', ev.ok === false ? 'err' : '');
+  const body = el('span', ev.ok === false || (ev.kind === 'btw' && ev.phase === 'failed') ? 'err' : '');
   body.append(name, document.createTextNode(text), el('span', 'src', `  ${ev.source || ''}`));
   li.append(el('time', '', hhmm(ev.ts)), body);
   pushLine(li, opts);
 }
 
-// Lo que hacen por iniciativa propia (cotorreo, sueños, almuerzo, baño, incendios) también sale.
+// What they do on their own initiative (chit-chat, dreams, lunch, bathroom, fires) shows up too.
 const seenLife = new WeakSet();
-const NOISY = new Set(['deskchat', 'coffee']); // pasa muy seguido: sólo si se pide ver todo
+const NOISY = new Set(['deskchat', 'coffee']); // happens very often: only when asked to see everything
 function pollLife() {
   for (const j of game.sim.journal) {
     if (seenLife.has(j)) continue;
@@ -257,8 +262,32 @@ function sysLine(text, cls = 'sys') {
   return li;
 }
 
-// La línea de comandos de la terminal: un mensaje al equipo, o un /comando (en el idioma del juego;
-// los nombres en inglés también funcionan siempre).
+// btw: a side question to the agent on duty (about the domain, the team or the office). It answers
+// in a forked session, without interrupting it; the answer shows in a card at the top and in the log.
+let btwTimer = null;
+function askBtw(question) {
+  const q = String(question || '').trim();
+  if (!q) return sysLine(t('ui.btwUsage'));
+  if (ws?.readyState !== 1) return sysLine(t('conn.offline'));
+  send({ type: 'ask', text: q });
+}
+function onAsk(a) {
+  if (!a || (office && a.office !== office.id)) return;
+  const card = $('btw-card');
+  clearTimeout(btwTimer);
+  card.hidden = false;
+  card.classList.toggle('asking', a.status === 'asking');
+  card.classList.toggle('failed', a.status === 'failed');
+  $('btw-q').textContent = a.question;
+  const who = TEAM[a.role]?.name || '';
+  $('btw-who').textContent = [who, a.agent].filter(Boolean).join(' · ');
+  $('btw-a').textContent = a.status === 'asking' ? t('ui.btwThinking') : a.status === 'answered' ? a.answer : t('ui.btwFailed', { error: a.error || '' });
+  if (a.status !== 'asking') btwTimer = setTimeout(() => { if (!card.matches(':hover')) card.hidden = true; }, a.status === 'answered' ? 60_000 : 15_000);
+}
+$('btw-close').onclick = () => { clearTimeout(btwTimer); $('btw-card').hidden = true; };
+
+// The terminal's command line: a message to the team, or a /command (in the game's language;
+// the English names always work too).
 const COMMANDS = {
   help: () => sysLine(t('ui.help')),
   brief: () => openBrief(),
@@ -279,6 +308,7 @@ const COMMANDS = {
     sysLine(t(term.life ? 'ui.lifeOn' : 'ui.lifeOff'));
   },
   screen: () => toggleFullscreen(),
+  btw: (arg) => askBtw(arg),
 };
 const commandFor = (name) => COMMANDS[name] || COMMANDS[Object.keys(COMMANDS).find((k) => t(`ui.commands.${k}`) === name)];
 $('chat').onsubmit = (e) => {
@@ -287,6 +317,7 @@ $('chat').onsubmit = (e) => {
   $('chat-text').value = '';
   if (!text) return;
   sysLine(`$ ${text}`, 'echo');
+  if (/^btw\b/i.test(text)) return askBtw(text.replace(/^btw\b[:,]?\s*/i, ''));
   if (text.startsWith('/')) {
     const [name, ...rest] = text.slice(1).split(/\s+/);
     const cmd = commandFor(name.toLowerCase());
@@ -298,7 +329,7 @@ $('open-term').onclick = () => toggleTerm();
 $('term-close').onclick = () => toggleTerm(false);
 for (const b of document.querySelectorAll('.term-tabs [role=tab]')) b.onclick = () => setTab(b.dataset.tab);
 
-// ---------------------------------------------------------------- encargos (pestaña de la terminal)
+// ---------------------------------------------------------------- briefs (terminal tab)
 
 function currentSession() {
   if (focus && sessions.has(focus)) return sessions.get(focus);
@@ -326,7 +357,7 @@ function renderSessions() {
   renderFlow(s);
 }
 
-// Flujo por roles declarado por el agente: Tomás · Arquitectura → Andrés · RED → Diego · Implementa → …
+// Role flow declared by the agent: Tomás · Architecture → Andrés · RED → Diego · Implement → …
 function renderFlow(s) {
   const ol = $('flow');
   const flow = s?.flow || [];
@@ -371,7 +402,7 @@ function renderTeam() {
   }
 }
 
-// ---------------------------------------------------------------- la ficha del seleccionado
+// ---------------------------------------------------------------- the selected character's sheet
 
 let portraitOf = null;
 function select(id) {
@@ -382,7 +413,7 @@ function select(id) {
   renderSheet(true);
 }
 
-/** Cada necesidad como barra de "qué tan bien está" (verde lleno = satisfecha), como en Los Sims. */
+/** Each need as a "how well it is" bar (full green = satisfied), like in The Sims. */
 function renderSheet(full) {
   const box = $('sheet');
   if (!selected) { box.hidden = true; return; }
@@ -418,7 +449,7 @@ $('sheet-close').onclick = () => select(null);
 $('poke').onclick = () => selected && send({ type: 'poke', role: selected });
 $('sheet-msg').onclick = () => { toggleTerm(true); setTab('activity'); $('chat-text').focus(); };
 
-// ---------------------------------------------------------------- tareas para los agentes
+// ---------------------------------------------------------------- tasks for the agents
 
 function onTasks(snap) {
   tasks = snap;
@@ -446,7 +477,7 @@ function renderTasks() {
   }
 }
 
-// Los panes de herdr de esta oficina: las actividades que abrió el agente, y quién se encarga.
+// This office's herdr panes: the activities the agent opened, and who is in charge.
 function renderPanes() {
   let ul = $('panes');
   if (!ul) { ul = el('ul', 'tasks'); ul.id = 'panes'; $('tasks').after(ul); }
@@ -498,7 +529,7 @@ function onRuns(list) {
   }
 }
 
-// ---------------------------------------------------------------- diálogo "Nuevo encargo"
+// ---------------------------------------------------------------- "New brief" dialog
 
 const brief = { sel: { target: 0, entry: 0, session: -1 }, opts: null };
 
@@ -508,7 +539,7 @@ function onTargets(list) {
   settings.refresh?.();
 }
 
-/** @param agentId abre el diálogo con ese agente elegido (desde ⚙ › Agentes) */
+/** @param agentId opens the dialog with that agent chosen (from ⚙ › Agents) */
 function openBrief(agentId) {
   const dlg = $('brief');
   if (!dlg.open) dlg.showModal();
@@ -561,7 +592,7 @@ $('b-text').onkeydown = (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKe
 $('brief-close').onclick = $('brief-cancel').onclick = () => $('brief').close();
 $('new-brief').onclick = () => openBrief();
 
-// ⚙ Ajustes: generales, oficinas, el mantenedor de agentes y la apariencia de los personajes.
+// ⚙ Settings: general, offices, the agents maintainer and the characters' appearance.
 const settings = createSettings({
   getTargets: () => targets, getOffices: () => offices, getOffice: () => office, getPrefs: () => prefs, getHerdr: () => herdr,
   onPrompt: (id) => { $('settings').close(); openBrief(id); },
@@ -589,9 +620,9 @@ $('session').onchange = (e) => { focus = e.target.value || null; renderSessions(
 $('demo').onclick = () => COMMANDS.demo();
 $('demo-pi').onclick = () => COMMANDS.tdd();
 $('reset').onclick = () => COMMANDS.reset();
-setInterval(() => { if (term.open && term.tab === 'team') return; renderTeam(); }, 2000); // los estados caducan en el cliente
+setInterval(() => { if (term.open && term.tab === 'team') return; renderTeam(); }, 2000); // statuses expire on the client
 
-// ---------------------------------------------------------------- pantalla completa y atajos
+// ---------------------------------------------------------------- full screen and shortcuts
 
 function toggleFullscreen() {
   const doc = document;
@@ -599,6 +630,13 @@ function toggleFullscreen() {
   else { const root = doc.documentElement; (root.requestFullscreen || root.webkitRequestFullscreen)?.call(root); }
 }
 $('fullscreen').onclick = toggleFullscreen;
+// front or top-down: it switches right away and stays in the settings (the other viewers see it too)
+function toggleView() {
+  game.setView(game.view === 'iso' ? 'flat' : 'iso');
+  $('view-mode').setAttribute('aria-pressed', String(game.view === 'iso'));
+  send({ type: 'prefs', prefs: { view: { mode: game.view } } });
+}
+$('view-mode').onclick = toggleView;
 const onFs = () => $('fullscreen').setAttribute('aria-pressed', String(!!(document.fullscreenElement || document.webkitFullscreenElement)));
 document.addEventListener('fullscreenchange', onFs);
 document.addEventListener('webkitfullscreenchange', onFs);
@@ -618,6 +656,7 @@ document.addEventListener('keydown', (e) => {
   else if (k === 't') { e.preventDefault(); openBrief(); }
   else if (k === 'c') { e.preventDefault(); settings.open(); }
   else if (k === 'f') { e.preventDefault(); toggleFullscreen(); }
+  else if (k === 'v') { e.preventDefault(); toggleView(); }
   else if (k === 'o') { e.preventDefault(); nextOffice(); }
 });
 

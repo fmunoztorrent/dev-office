@@ -1,5 +1,5 @@
-// La oficina como RELAY de pipelines: los agentes anuncian lo que pueden correr, la oficina se lo
-// pide a la sesión elegida y dibuja lo que el agente reporta. No lanza procesos ni corre gates.
+// The office as a pipeline RELAY: agents announce what they can run, the office asks the chosen
+// session for it and draws what the agent reports. It does not launch processes or run gates.
 import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -36,15 +36,15 @@ test('un agente conectado anuncia sus pipelines; la oficina se lo pide y dibuja 
     const r = await call(base, 'POST', '/v1/pipelines', { session: 'pi-7', pipeline: 'feature-tdd', task: 'Cupones de descuento' });
     assert.equal(r.status, 200, r.body.error);
     assert.equal(r.body.run.status, 'sent');
-    // al agente le llega el pedido, no un plan: él lee su .devteam/ y lo ejecuta
+    // the agent gets the request, not a plan: it reads its .devteam/ and runs it
     const msg = await until(() => agent.received.find((m) => m.type === 'pipeline'));
     assert.deepEqual(msg, { type: 'pipeline', id: r.body.run.id, session: 'pi-7', pipeline: 'feature-tdd', task: 'Cupones de descuento' });
 
     const run = await until(() => server.pipelines.snapshot().runs.find((x) => x.status === 'done'));
     assert.deepEqual(run.stages.map((s) => s.status), ['done', 'done', 'done', 'done', 'done']);
-    // las etapas corrieron en la sesión del agente, con el modelo de cada rol
+    // the stages ran in the agent's session, with each role's model
     assert.deepEqual(agent.received.filter((m) => m.type === 'stage').map((m) => m.model), ['anthropic/claude-opus-5-5', 'anthropic/claude-haiku-5-5', 'anthropic/claude-sonnet-5-5', 'anthropic/claude-haiku-5-5', 'opus']);
-    // la oficina dibujó el flujo de roles con lo que reportó el agente
+    // the office drew the role flow with what the agent reported
     const s = server.office.sessionSummary('pi-7');
     assert.deepEqual(s.flow.map((f) => `${f.role}:${f.phase}`), ['tl:arquitectura', 'qa:red', 'backend:implementa', 'qa:green', 'tl:review']);
     assert.match(s.title, /Feature con TDD: Cupones de descuento/);
@@ -59,7 +59,7 @@ test('cancelar desde la oficina llega al agente; sin agente conectado no hay a q
   try {
     await agent.ready;
     await until(() => server.pipelines.projects().length);
-    const { body } = await call(base, 'POST', '/v1/pipelines', { pipeline: 'fullstack', task: 'Carrito' }); // sin sesión: el primero que lo tenga
+    const { body } = await call(base, 'POST', '/v1/pipelines', { pipeline: 'fullstack', task: 'Carrito' }); // without a session: the first one that has it
     assert.equal(body.run.session, 'pi-8');
     await until(() => server.pipelines.snapshot().runs[0].status === 'running');
     assert.equal((await call(base, 'POST', `/v1/pipelines/${body.run.id}/cancel`)).status, 200);
@@ -69,7 +69,7 @@ test('cancelar desde la oficina llega al agente; sin agente conectado no hay a q
   } finally {
     await agent.close();
   }
-  await until(() => !server.pipelines.projects().length); // se desconectó: ya no lo ofrece
+  await until(() => !server.pipelines.projects().length); // it disconnected: it no longer offers it
   const r = await call(base, 'POST', '/v1/pipelines', { pipeline: 'fullstack', task: 'x' });
   assert.equal(r.status, 400);
   assert.match(r.body.error, /ningún agente conectado tiene el pipeline/);
@@ -83,18 +83,18 @@ test('Claude Code anuncia su proyecto desde el hook y su pipeline se entrega en 
 
   const { body } = await call(base, 'POST', '/v1/pipelines', { session: 'c1', pipeline: 'feature-tdd', task: 'Login' });
   assert.equal(body.run.status, 'queued');
-  // eventos que no son Stop no lo entregan
+  // events that are not Stop do not deliver it
   let r = await call(base, 'POST', '/v1/hooks/claude-code', { session_id: 'c1', hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: {} });
   assert.deepEqual(r.body, {});
   r = await call(base, 'POST', '/v1/hooks/claude-code', { session_id: 'c1', hook_event_name: 'Stop' });
   assert.deepEqual(r.body, { pipeline: { id: body.run.id, pipeline: 'feature-tdd', task: 'Login' } });
-  // el hook reporta el estado; cancelar queda pendiente hasta su próximo evento
+  // the hook reports the state; cancelling stays pending until its next event
   await call(base, 'POST', `/v1/pipelines/${body.run.id}/update`, { status: 'running', stages: [{ id: 'diseno', status: 'running', attempts: 1 }] });
   assert.equal(server.pipelines.snapshot().runs[0].stages[0].status, 'running');
   await call(base, 'POST', `/v1/pipelines/${body.run.id}/cancel`);
   r = await call(base, 'POST', '/v1/hooks/claude-code', { session_id: 'c1', hook_event_name: 'PostToolUse', tool_name: 'Read', tool_input: {} });
   assert.deepEqual(r.body.cancel, [body.run.id]);
-  // un Stop que cierra una etapa no pone a la sesión en "listo"
+  // a Stop that closes a stage does not put the session in "done"
   await call(base, 'POST', '/v1/hooks/claude-code', { session_id: 'c1', hook_event_name: 'Stop', devteam_stage: true });
   assert.notEqual(server.office.sessionSummary('c1').status, 'done');
 }));

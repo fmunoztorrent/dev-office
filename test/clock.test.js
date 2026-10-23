@@ -1,5 +1,5 @@
-// La hora de la oficina: de su zona horaria salen la fecha, la hora, el país, la luz del día, el
-// almuerzo y el clima (public/clock.js, sky.js y sim.js).
+// The office's time: its time zone gives the date, the time, the country, the daylight, lunch and
+// the weather (public/clock.js, sky.js and sim.js).
 import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,7 +12,7 @@ const AT = Date.UTC(2026, 9, 16, 15, 30); // 16-10-2026 15:30 UTC
 test('ZonedDate: la misma hora, en cada zona', () => {
   const scl = zoned(AT, 'America/Santiago'), tyo = zoned(AT, 'Asia/Tokyo'), mad = zoned(AT, 'Europe/Madrid');
   assert.deepEqual([scl.getHours(), scl.getMinutes(), scl.getDate()], [12, 30, 16]); // verano: UTC-3
-  assert.deepEqual([tyo.getHours(), tyo.getDate(), tyo.getDay()], [0, 17, 6]); // ya es sábado en Tokio
+  assert.deepEqual([tyo.getHours(), tyo.getDate(), tyo.getDay()], [0, 17, 6]); // it is already Saturday in Tokyo
   assert.equal(mad.getHours(), 17);
   assert.equal(scl.getTimezoneOffset(), 180);
   assert.equal(tyo.getTimezoneOffset(), -540);
@@ -30,17 +30,17 @@ test('de la zona: el país y la ciudad (sin conexión), y el nombre del país en
 });
 
 test('la luz y la estación siguen la hora y el hemisferio de la oficina', () => {
-  const night = daylight(zoned(AT, 'Asia/Tokyo'));           // medianoche y media en Tokio
-  const day = daylight(zoned(AT, 'America/Santiago'));       // mediodía y media en Santiago
+  const night = daylight(zoned(AT, 'Asia/Tokyo'));           // half past midnight in Tokyo
+  const day = daylight(zoned(AT, 'America/Santiago'));       // half past noon in Santiago
   assert.equal(night.night, 1);
   assert.equal(day.night, 0);
   assert.equal(season(zoned(AT, 'Asia/Tokyo'), false), 'autumn');
-  // el amanecer y el atardecer usan el desfase de la zona (no el del sistema)
+  // sunrise and sunset use the zone's offset (not the system's)
   const s = sunTimes(zoned(AT, 'Asia/Tokyo'), { lat: 35.65, lon: 139.74 });
   assert.ok(s.sunrise > 5 && s.sunrise < 6.5 && s.sunset > 16.5 && s.sunset < 18, JSON.stringify(s));
-  // el clima simulado de la ciudad de la zona (hemisferio sur: primavera en octubre)
+  // the simulated weather of the zone's city (southern hemisphere: spring in October)
   assert.ok(simulatedWeather(zoned(AT, 'America/Santiago'), { lat: -33.45 }).temp < 40);
-  // el amanecer real (un instante) se pasa a la hora de la zona
+  // the real sunrise (an instant) is converted to the zone's time
   const w = { kind: 'clear', clouds: 0, precip: 0, sunrise: Date.UTC(2026, 9, 16, 10, 0), sunset: Date.UTC(2026, 9, 16, 22, 56) };
   const l = daylight(zoned(AT, 'America/Santiago'), w);
   assert.equal(l.sunrise, 7);
@@ -48,7 +48,7 @@ test('la luz y la estación siguen la hora y el hemisferio de la oficina', () =>
 });
 
 test('el almuerzo es a las 13:00 de la oficina, no del sistema', () => {
-  // las 13:05 en Tokio son las 04:05 UTC
+  // 13:05 in Tokyo is 04:05 UTC
   const lunchInTokyo = Date.UTC(2026, 9, 16, 4, 5);
   let now = 0;
   const run = (sim, s) => { for (let i = 0; i < s * 20; i++) { now += 50; sim.step(0.05, now); } };
@@ -58,7 +58,7 @@ test('el almuerzo es a las 13:00 de la oficina, no del sistema', () => {
   assert.ok(tokyo.lunch, 'en Tokio es hora de almorzar');
   assert.ok(!lima.lunch, 'en Lima son las 23:05');
   assert.equal(tokyo.date().getHours(), 13);
-  // y se puede cambiar la zona de una oficina en caliente
+  // and an office's zone can be changed on the fly
   lima.setZone('Asia/Tokyo');
   run(lima, 2);
   assert.ok(lima.lunch);

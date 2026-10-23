@@ -1,30 +1,29 @@
-// herdr: el multiplexor de terminales para agentes de código. Si la oficina corre dentro de herdr
-// (HERDR_ENV=1), los agentes no se lanzan en segundo plano: se abren en un pane nuevo, junto al de
-// la oficina, y quedan a la vista (y a mano) del usuario.
+// herdr: the terminal multiplexer for coding agents. If the office runs inside herdr
+// (HERDR_ENV=1), agents are not launched in the background: they open in a new pane, next to the
+// office's, and stay in sight (and at hand) for the user.
 //
-// El concepto: la oficina lanza al agente en su pane; desde ahí el agente orquesta sus propias
-// actividades (subagentes, pipelines de su harness) y también puede abrir más panes, cada uno con
-// una actividad (los tests en modo watch, un servidor, otro agente…), con `dev-team-office pane` o
-// con el propio `herdr`. Eso es del agente, no de la oficina; la oficina lo entiende y lo muestra:
-// cada pane es una actividad de la que se encarga alguien del equipo mientras siga abierto.
+// The concept: the office launches the agent in its pane; from there the agent orchestrates its own
+// activities (subagents, its harness's pipelines) and may also open more panes, each with an
+// activity (tests in watch mode, a server, another agent…), with `dev-team-office pane` or with
+// `herdr` itself. That belongs to the agent, not to the office; the office understands it and shows it:
+// each pane is an activity that someone on the team takes care of while it stays open.
 //
-// Todo pasa por la CLI de herdr (`herdr pane split|run|list|rename`, `herdr agent start|prompt`),
-// que contesta JSON. Los tests le pasan un `run` de mentira.
+// Everything goes through the herdr CLI (`herdr pane split|run|list|rename`, `herdr agent start|prompt`),
+// which answers JSON. The tests pass it a fake `run`.
 
 import { EventEmitter } from 'node:events';
 import { execFile } from 'node:child_process';
-import path from 'node:path';
 import { which } from '../integrations/common/devteam.mjs';
 import { roleForCommand, roleForText, normRole, clip } from './roles.js';
 import { t } from '../public/i18n.js';
+import { insideDir as inside } from './paths.js';
 
-// El nombre de cada CLI para `herdr agent start --kind`
-export const HERDR_KIND = { 'claude-code': 'claude', claude: 'claude', pi: 'pi', opencode: 'opencode' };
+// Each CLI's name for `herdr agent start --kind`
+export const HERDR_KIND = { 'claude-code': 'claude', claude: 'claude', pi: 'pi', opencode: 'opencode', codex: 'codex' };
 const STATUS = new Set(['idle', 'working', 'blocked', 'done']);
-const inside = (dir, root) => !!dir && !!root && (dir === root || dir.startsWith(`${root}${path.sep}`));
-const quote = (s) => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${String(s).replace(/'/g, `'\\''`)}'`);
+export const quote = (s) => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${String(s).replace(/'/g, `'\\''`)}'`);
 
-/** Qué rol de la oficina representa un pane: el que se pidió, o según su agente o su comando. */
+/** Which office role a pane stands for: the requested one, or by its agent or its command. */
 export function paneRole({ role, agent, title = '', command = '' } = {}) {
   const r = normRole(role);
   if (r) return r;
@@ -34,9 +33,9 @@ export function paneRole({ role, agent, title = '', command = '' } = {}) {
 
 export class Herdr extends EventEmitter {
   /**
-   * @param env    el entorno (HERDR_ENV, HERDR_PANE_ID, HERDR_WORKSPACE_ID)
-   * @param run    (args) => Promise<stdout>: la CLI de herdr (los tests la reemplazan)
-   * @param every  cada cuánto se miran los panes (ms)
+   * @param env    the environment (HERDR_ENV, HERDR_PANE_ID, HERDR_WORKSPACE_ID)
+   * @param run    (args) => Promise<stdout>: the herdr CLI (the tests replace it)
+   * @param every  how often the panes are checked (ms)
    */
   constructor({ env = process.env, run, bin = 'herdr', every = 2500, log = () => {} } = {}) {
     super();
@@ -49,17 +48,20 @@ export class Herdr extends EventEmitter {
       execFile(bin, args, { timeout, maxBuffer: 4 << 20, env }, (err, stdout, stderr) => {
         if (!err) return resolve(stdout);
         let msg = String(stderr || '').trim();
-        try { const j = JSON.parse(msg); msg = j.error?.message || j.message || msg; } catch { /* texto */ }
-        reject(new Error(msg || err.message));
+        let code = null;
+        try { const j = JSON.parse(msg); code = j.error?.code || null; msg = j.error?.message || j.message || msg; } catch { /* texto */ }
+        const e = new Error(msg || err.message);
+        if (code) e.code = code;
+        reject(e);
       });
     }));
-    this.tracked = new Map(); // los panes que la oficina sigue: id → { pane, office, role, title, agent, kind, taskId, name, status }
-    this.known = null;        // los panes que ya estaban (no se anuncian)
+    this.tracked = new Map(); // the panes the office follows: id → { pane, office, role, title, agent, kind, taskId, name, status }
+    this.known = null;        // the panes that were already there (not announced)
     this.timer = null;
     this.seq = 0;
   }
 
-  /** ¿Estamos dentro de herdr? */
+  /** Are we inside herdr? */
   get available() { return this.env.HERDR_ENV === '1' && (this.custom || !!which(this.bin)); }
   get pane() { return this.env.HERDR_PANE_ID || null; }
   get workspace() { return this.env.HERDR_WORKSPACE_ID || null; }
@@ -75,11 +77,12 @@ export class Herdr extends EventEmitter {
 
   // ---------------------------------------------------------------- primitivas
 
-  /** Un pane nuevo junto a `from` (por defecto, el de la oficina), sin quitarle el foco al usuario. */
-  async split({ from = this.pane, cwd, direction = 'right', env = {}, focus = false } = {}) {
+  /** A new pane next to `from` (by default, the office's), without taking the focus away from the user. */
+  async split({ from = this.pane, cwd, direction = 'right', env = {}, focus = false, ratio } = {}) {
     const args = ['pane', 'split'];
     if (from) args.push(from);
     args.push('--direction', direction === 'down' ? 'down' : 'right');
+    if (ratio > 0 && ratio < 1) args.push('--ratio', String(ratio));
     if (cwd) args.push('--cwd', cwd);
     for (const [k, v] of Object.entries(env)) if (v !== undefined && v !== null) args.push('--env', `${k}=${v}`);
     args.push(focus ? '--focus' : '--no-focus');
@@ -91,17 +94,46 @@ export class Herdr extends EventEmitter {
   runIn(pane, command) { return this.call(['pane', 'run', pane, command]); }
   async processInfo(id) { return (await this.call(['pane', 'process-info', '--pane', id])).process_info ?? {}; }
   closePane(id) { return this.call(['pane', 'close', id]); }
-  async rename(pane, label) { try { await this.call(['pane', 'rename', pane, clip(label, 60)]); } catch { /* la etiqueta es un detalle */ } }
-  prompt(target, text) { return this.call(['agent', 'prompt', target, text], 60_000); }
-  async list() { return (await this.call(['pane', 'list', ...(this.workspace ? ['--workspace', this.workspace] : [])])).panes || []; }
+  async rename(pane, label) { try { await this.call(['pane', 'rename', pane, clip(label, 60)]); } catch { /* the label is a detail */ } }
+  // The prompt counts as delivered only when herdr sees the agent switch to `working` (S1). If herdr
+  // observes no activity it answers with an error that keeps its `code` (agent_prompt_stalled, …).
+  prompt(target, text) { return this.call(['agent', 'prompt', target, text, '--wait', '--until', 'working', '--timeout', '15000'], 60_000); }
 
-  // ---------------------------------------------------------------- lo que la oficina abre
+  /** The real state herdr sees for an agent (`agent get`): working, idle, unknown… */
+  async #agentStatus(target) {
+    try {
+      const r = await this.call(['agent', 'get', target]);
+      const a = r?.agent ?? r;
+      return a?.status ?? a?.agent_status ?? a?.state ?? null;
+    } catch { return null; }
+  }
 
   /**
-   * Abre un agente en un pane nuevo y, si hay, le manda el prompt.
+   * Delivers a prompt with confirmation (S1) and, if herdr sees it stalled (agent_prompt_stalled), a
+   * single retry (S2): it checks the real state and, if it is not working, waits for it to be free and
+   * resends exactly once. There is no third send.
+   */
+  async #promptAgent(target, text) {
+    try {
+      await this.prompt(target, text);
+      return;
+    } catch (err) {
+      if (err.code !== 'agent_prompt_stalled') throw err;
+    }
+    // the request may have arrived anyway (the turn starts right after): if it is already working, it is not resent
+    if (await this.#agentStatus(target) === 'working') return;
+    await this.call(['agent', 'wait', target, '--until', 'idle', '--timeout', '15000'], 20_000).catch(() => {});
+    await this.prompt(target, text); // a single retry: if it fails, its error propagates
+  }
+  async list() { return (await this.call(['pane', 'list', ...(this.workspace ? ['--workspace', this.workspace] : [])])).panes || []; }
+
+  // ---------------------------------------------------------------- what the office opens
+
+  /**
+   * Opens an agent in a new pane and, if there is one, sends it the prompt.
    * @param harness  claude-code | pi | opencode
-   * @param bin, args  el ejecutable y los argumentos del agente registrado (si tiene)
-   * @param env      el entorno del pane (la URL de la oficina, la oficina, la sesión de Pi…)
+   * @param bin, args  the registered agent's executable and arguments (if it has them)
+   * @param env      the pane's environment (the office URL, the office, Pi's session…)
    * @returns { pane, name }
    */
   async launchAgent({ harness, cwd, prompt, bin, args = [], env = {}, direction, office, officeName = '', role = 'manager', title, taskId, label } = {}) {
@@ -111,44 +143,55 @@ export class Herdr extends EventEmitter {
     const name = `dto-${kind}-${Date.now().toString(36).slice(-4)}${++this.seq}`.toLowerCase().slice(0, 32);
     this.track(id, { office, role, title: title || label || kind, agent: harness, kind: 'agent', taskId, name, cwd });
     await this.rename(id, `🏢 ${officeName ? `${officeName} · ` : ''}${label || kind}`);
-    if (bin) {
-      // un ejecutable propio: se escribe en el pane y se espera a que herdr reconozca al agente
-      await this.runIn(id, [bin, ...args].map(quote).join(' '));
-      await this.call(['agent', 'wait', id, '--until', 'idle', '--timeout', '30000'], 40_000).catch(() => {});
-      if (prompt) await this.prompt(id, prompt);
-    } else {
-      await this.call(['agent', 'start', name, '--kind', kind, '--pane', id, ...(args.length ? ['--', ...args] : [])], 45_000);
-      if (prompt) await this.prompt(name, prompt);
+    try {
+      if (bin) {
+        // a custom executable: it is typed into the pane and we wait for herdr to recognize the agent
+        await this.runIn(id, [bin, ...args].map(quote).join(' '));
+        await this.call(['agent', 'wait', id, '--until', 'idle', '--timeout', '30000'], 40_000).catch(() => {});
+        if (prompt) await this.#promptAgent(id, prompt);
+      } else {
+        await this.call(['agent', 'start', name, '--kind', kind, '--pane', id, ...(args.length ? ['--', ...args] : [])], 45_000);
+        if (prompt) await this.#promptAgent(name, prompt);
+      }
+    } catch (err) {
+      // the pane already exists: it is attached to the error so the task knows which one to name (S3)
+      if (!err.pane) err.pane = id;
+      throw err;
     }
     return { pane: id, name };
   }
 
-  /** Abre un pane con un comando: una actividad (tests, un servidor, un build…). */
-  async launchCommand({ command, cwd, from, direction, env = {}, office, role, title } = {}) {
-    const pane = await this.split({ from, cwd, direction, env });
+  /**
+   * Opens a pane with a command: an activity (tests, a server, a build…), or with kind 'sub' a
+   * subagent's viewer (the office closes it when the subagent finishes).
+   */
+  async launchCommand({ command, cwd, from, direction, ratio, env = {}, office, role, title, kind = 'command', session, subId } = {}) {
+    const pane = await this.split({ from, cwd, direction, ratio, env });
     const id = pane.pane_id;
-    this.track(id, { office, role: paneRole({ role, command }), title: title || command, kind: 'command', command, cwd });
+    this.track(id, { office, role: kind === 'sub' ? role : paneRole({ role, command }), title: title || command, kind, command, cwd, session, subId });
     if (title) await this.rename(id, title);
     if (command) await this.runIn(id, command);
     return { pane: id };
   }
 
-  /** Sigue un pane (lo abrió la oficina, o el agente lo anunció): se avisa al abrirse y al cerrarse. */
+  /** Follows a pane (the office opened it, or the agent announced it): notifies when it opens and when it closes. */
   track(id, info = {}) {
     const prev = this.tracked.get(id);
     const p = { pane: id, office: info.office || prev?.office || null, role: info.role || prev?.role || 'tl', title: clip(info.title || prev?.title || id, 120), agent: info.agent || prev?.agent || null, kind: info.kind || prev?.kind || 'command', taskId: info.taskId ?? prev?.taskId ?? null, name: info.name || prev?.name || null, cwd: info.cwd || prev?.cwd || null, status: prev?.status || null, openedAt: prev?.openedAt || Date.now() };
+    if (info.session || prev?.session) p.session = info.session || prev.session;
+    if (info.subId || prev?.subId) p.subId = info.subId || prev.subId;
     this.tracked.set(id, p);
     this.known?.add(id);
     if (!prev) this.emit('open', p);
     return p;
   }
 
-  // ---------------------------------------------------------------- mirar los panes
+  // ---------------------------------------------------------------- watching the panes
 
   /**
-   * Cada tanto se miran los panes del workspace: los que se cerraron, los cambios de estado de los
-   * agentes y los panes nuevos que abrió un agente por su cuenta (en la carpeta de un proyecto que
-   * la oficina conoce: `isProject(cwd)`).
+   * Every so often the workspace's panes are checked: the ones that closed, the agents' state
+   * changes and the new panes an agent opened on its own (in the folder of a project the office
+   * knows: `isProject(cwd)`).
    */
   start({ isProject = () => false } = {}) {
     if (!this.available || this.timer) return this;
@@ -178,7 +221,7 @@ export class Herdr extends EventEmitter {
       const status = STATUS.has(now.agent_status) ? now.agent_status : null;
       if (now.agent && status && status !== p.status) { const was = p.status; p.status = status; if (was || status !== 'idle') this.emit('state', p, status, was); }
     }
-    // auto-close de panes de comando: cuando el proceso foreground terminó
+    // auto-close of command panes: when the foreground process finished
     for (const [id, p] of [...this.tracked]) {
       if (p.kind !== 'command') continue;
       const info = await this.processInfo(id).catch(() => null);
@@ -190,7 +233,7 @@ export class Herdr extends EventEmitter {
         this.emit('close', p);
       }
     }
-    // panes que abrió un agente en la carpeta de un proyecto: la oficina los adopta
+    // panes an agent opened in a project's folder: the office adopts them
     for (const [id, p] of live) {
       if (this.known.has(id)) continue;
       this.known.add(id);

@@ -1,5 +1,5 @@
-// Nombres de los agentes y estados de las tareas (ícono y tono; el nombre está en los idiomas:
-// taskStatus.<estado>). Lo comparten la terminal y la vista web.
+// Agent names and task statuses (icon and tone; the name is in the languages:
+// taskStatus.<status>). Shared by the terminal and the web view.
 
 export const AGENT_NAME = { 'claude-code': 'Claude', opencode: 'OpenCode', pi: 'Pi' };
 export const TASK_STATUS = {

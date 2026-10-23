@@ -24,24 +24,24 @@ test('desde la terminal: ⚙ → Personajes → renombrar a Tomás → ctrl+s gu
   const done = runTui({ feed: localFeed(server), stdin, stdout, colorMode: 'truecolor' });
   try {
     await sleep(150);
-    const { gearCell } = computeLayout(cols, rows); // el ⚙ va dentro de la escena, arriba a la derecha
-    type(`\x1b[<0;${gearCell.col + 2};${gearCell.row + 1}M`); // clics 1-based, en el centro de « ⚙ »
+    const { gearCell } = computeLayout(cols, rows); // the ⚙ goes inside the scene, top right
+    type(`\x1b[<0;${gearCell.col + 2};${gearCell.row + 1}M`); // 1-based clicks, in the middle of « ⚙ »
     await until(() => stdout.out.includes('⚙ Ajustes') && stdout.out.includes('Idioma'));
-    type('\x1b[C'); // pestañas: General → Oficinas
+    type('\x1b[C'); // tabs: General → Offices
     await until(() => stdout.out.includes('Agregar oficina'));
     type('\x1b[C'); // → Agentes
     await until(() => stdout.out.includes('Agentes registrados'));
     type('\x1b[C'); // → Personajes
     await until(() => stdout.out.includes('Pelo largo'));
-    type('\x1b[B'); // Personaje (Tomás por defecto)
+    type('\x1b[B'); // Character (Tomás by default)
     type('\x1b[B'); // Nombre
     for (let i = 0; i < 6; i++) type('\x7f');
     type('Tito');
     type('\x13'); // ctrl+s
     await until(() => server.store.getAppearance().tl?.name === 'Tito');
-    await until(() => TEAM.tl.name === 'Tito'); // aplicado en vivo a la oficina
+    await until(() => TEAM.tl.name === 'Tito'); // applied live to the office
   } finally {
-    type('\x1b'); // cierra ajustes si quedó abierto
+    type('\x1b'); // closes settings if it was left open
     type('q');
     await done;
     await server.close();

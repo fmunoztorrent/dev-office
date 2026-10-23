@@ -87,12 +87,12 @@ test('flujo por roles: el rol de turno se queda con las herramientas y RED no cu
   assert.equal(arch.role, 'tl');
   assert.equal(arch.phase, 'arquitectura');
   const [red] = pi({ kind: 'phase', role: 'qa', phase: 'red' });
-  assert.equal(red.from, 'tl'); // traspaso implícito desde quien tenía el turno
+  assert.equal(red.from, 'tl'); // implicit handover from whoever held the turn
   const [fail] = pi({ kind: 'tool_end', tool: 'bash', input: { command: 'npm test' }, ok: false });
   assert.equal(fail.role, 'qa');
   assert.equal(fail.phase, 'red');
   pi({ kind: 'phase', role: 'backend', phase: 'implement' });
-  // aunque sea un archivo de tests, lo hace quien está de turno
+  // even if it is a test file, whoever is on duty does it
   const [edit] = pi({ kind: 'tool_start', tool: 'edit', input: { path: 'tests/a.test.ts' } });
   assert.equal(edit.role, 'backend');
   pi({ kind: 'phase', role: 'qa', phase: 'green' });
@@ -114,9 +114,9 @@ test('fase con rol desconocido, llamadas al script del skill y duplicados se ign
   assert.equal(o.sessionSummary('p').turn, null);
 });
 
-// El fin de turno de un agente NO es el festejo de "listo": ese queda reservado para el merge.
-// Un `Stop` de Claude Code (y el `agent_end` / `session.idle` de las extensiones) es `turn_end`:
-// el rol queda libre (`idle`) pero la sesión sigue viva y el turno declarado se suelta.
+// An agent's end of turn is NOT the "done" celebration: that is reserved for the merge.
+// A Claude Code `Stop` (and the extensions' `agent_end` / `session.idle`) is `turn_end`:
+// the role is freed (`idle`) but the session stays alive and the declared turn is released.
 test('el fin de turno emite turn_end, no done, y no cierra la sesión', () => {
   const o = new Office();
   o.ingest('pi', { session: 'sX', kind: 'phase', role: 'backend', phase: 'implement' });
@@ -131,8 +131,8 @@ test('el fin de turno emite turn_end, no done, y no cierra la sesión', () => {
   assert.equal(s.phase, null);
 });
 
-// El `done` es el merge: cierra la sesión y el tablero entero, no sólo lo que el agente
-// alcanzó a marcar. Una tarjeta en `in_progress` al llegar el merge no puede quedar colgada.
+// `done` is the merge: it closes the session and the whole board, not just what the agent
+// managed to check off. A card `in_progress` when the merge arrives cannot be left hanging.
 test('el done marca todas las tarjetas del tablero como completed', () => {
   const o = new Office();
   const pi = (e) => o.ingest('pi', { session: 'p', ...e });
@@ -154,25 +154,192 @@ test('la demo de Pi termina con todo el flujo registrado', () => {
   assert.ok(s.flow.some((f) => f.role === 'qa' && f.phase === 'red'));
 });
 
-// El `role:` que un agente declara en su frontmatter es la fuente AUTORITATIVA del personaje.
-// El nombre del agente es neutro (`power-sync` no describe ningún rol) para que el test no sea
-// vacuo: si la oficina dedujera el rol sólo del nombre, el caso sin mapa no daría `tl`.
+// The `role:` an agent declares in its frontmatter is the AUTHORITATIVE source of the character.
+// The agent's name is neutral (`power-sync` describes no role) so the test is not vacuous:
+// if the office inferred the role only from the name, the no-map case would not give `tl`.
 test('el rol declarado por el agente manda sobre la heurística del nombre y del texto', () => {
   const rolDe = (map, task) => {
     const o = new Office();
     const pi = (e) => o.ingest('pi', { session: 'p', cwd: '/p', ...e });
     pi({ kind: 'session_start' });
-    if (map) pi({ kind: 'agent_roles', roles: map }); // la extensión aprende el mapa al registrarse
+    if (map) pi({ kind: 'agent_roles', roles: map }); // the extension learns the map when registering
     pi({ kind: 'tool_start', tool: 'subagent_run', input: { agent: 'power-sync', task } });
     return o.sessionSummary('p').subagents[0].role;
   };
 
-  // 1) sin mapa aprendido, ni el nombre ni el texto identifican un rol: cae al fallback `tl`.
-  //    Este caso es el que hace no-vacuo el test: falla si alguien deduce `backend` del nombre.
+  // 1) without a learned map, neither the name nor the text identify a role: it falls back to `tl`.
+  //    This case is what makes the test non-vacuous: it fails if someone infers `backend` from the name.
   assert.equal(rolDe(null, 'hacer una tarea'), 'tl');
-  // 2) el mapa aprendido del frontmatter resuelve el rol aunque el texto no diga nada.
+  // 2) the map learned from the frontmatter resolves the role even if the text says nothing.
   assert.equal(rolDe({ 'power-sync': 'backend' }, 'hacer una tarea'), 'backend');
-  // 3) la declaración GANA sobre la heurística del texto: `crear endpoint de pagos` clasifica
-  //    como `backend`, pero el agente se declaró `designer` y ése es el personaje que aparece.
+  // 3) the declaration WINS over the text heuristic: `crear endpoint de pagos` classifies
+  //    as `backend`, but the agent declared itself `designer` and that is the character that shows up.
   assert.equal(rolDe({ 'power-sync': 'designer' }, 'crear endpoint de pagos'), 'designer');
+});
+
+// What was seen with real Pi (gentle-pi): each subagent is another `pi` that loads the same extension and
+// reports to the parent's session with `child`. Its work is done by the subagent's character, not the
+// one the tool suggests, and its start, its task and its end of turn are not the session's.
+test('subagentes con proceso propio: su trabajo cae en su personaje y no toca la sesión del padre', () => {
+  const o = new Office();
+  const pi = (e) => o.ingest('pi', { session: 'pi-t2', cwd: '/tienda', ...e });
+  const child = (pid, e) => pi({ child: pid, ...e });
+  pi({ kind: 'session_start' });
+  pi({ kind: 'agent_roles', roles: { tester: 'qa', coder: 'backend' } });
+  pi({ kind: 'task', text: 'Agrega total() con descuento' });
+  const redTask = 'Repo: /tienda. Escribe tests de total() en test/cart.test.js y confirma que fallan.';
+  pi({ kind: 'tool_start', tool: 'subagent_run', toolUseId: 'c1', input: { agent: 'tester', label: 'RED tests for total()', task: redTask, mode: 'task' } });
+  assert.equal(child('201', { kind: 'session_start' }).length, 0);
+  assert.equal(child('201', { kind: 'task', text: `${redTask}\n\n## Allowed edit surfaces\n- test/**` }).length, 0);
+  // a `read` of src/ and a `mkdir` would be done by Backend; in the QA subagent QA does them, in RED
+  const [read] = child('201', { kind: 'tool_start', tool: 'read', input: { path: 'src/cart.js' } });
+  assert.equal(read.role, 'qa');
+  assert.equal(read.phase, 'red');
+  const [fail] = child('201', { kind: 'tool_end', tool: 'bash', input: { command: 'npm test' }, ok: false });
+  assert.equal(fail.role, 'qa');
+  assert.equal(child('201', { kind: 'turn_end' }).length, 0);
+  assert.equal(child('201', { kind: 'session_end' }).length, 0);
+  pi({ kind: 'tool_end', tool: 'subagent_run', toolUseId: 'c1', input: { agent: 'tester' } });
+
+  pi({ kind: 'tool_start', tool: 'subagent_run', toolUseId: 'c2', input: { agent: 'coder', label: 'GREEN total()', task: 'Implementa total() hasta que npm test pase.' } });
+  child('202', { kind: 'task', text: 'Implementa total() hasta que npm test pase.' });
+  const [edit] = child('202', { kind: 'tool_start', tool: 'edit', input: { path: 'test/cart.test.js' } });
+  assert.equal(edit.role, 'backend');
+  assert.equal(child('202', { kind: 'thinking' })[0].role, 'backend');
+  pi({ kind: 'tool_end', tool: 'subagent_run', toolUseId: 'c2', input: { agent: 'coder' } });
+
+  const s = o.sessionSummary('pi-t2');
+  assert.equal(s.title, 'Agrega total() con descuento', 'la tarea de un subagente no es la de la sesión');
+  assert.equal(s.status, 'active');
+  assert.equal(s.errors, 0, 'en RED que el test falle es lo esperado');
+  assert.deepEqual(s.subagents.map((x) => [x.agentType, x.role, x.child, x.open]), [['tester', 'qa', '201', false], ['coder', 'backend', '202', false]]);
+  assert.ok(s.subagents.every((x) => x.task === undefined), 'la tarea completa no viaja a los visores');
+  assert.equal(o.log.filter((e) => e.kind === 'session_start' || e.kind === 'turn_end').length, 1);
+  // when the session closes, nobody is left working in it
+  o.ingest('pi', { session: 'otra', cwd: '/otra', kind: 'tool_start', tool: 'edit', input: { path: 'src/a.css' } });
+  pi({ kind: 'session_end' });
+  assert.equal(o.roles.qa.status, 'idle');
+  assert.equal(o.roles.backend.status, 'idle');
+  assert.equal(o.roles.frontend.status, 'working', 'lo de otra sesión sigue igual');
+});
+
+test('la fase TDD de un subagente de QA sale de su etiqueta', () => {
+  const phaseOf = (label) => {
+    const o = new Office();
+    return o.ingest('pi', { session: 'p', cwd: '/p', kind: 'tool_start', tool: 'subagent_run', toolUseId: 'x', input: { agent: 'qa', label } })[0].phase;
+  };
+  assert.equal(phaseOf('RED tests for total()'), 'red');
+  assert.equal(phaseOf('write failing shipping tests'), 'red');
+  assert.equal(phaseOf('tests que fallen para el envío'), 'red');
+  assert.equal(phaseOf('confirm shipping green'), 'green');
+  assert.equal(phaseOf('confirmar en verde'), 'green');
+  assert.equal(phaseOf('revisar cobertura'), undefined);
+});
+
+test('subagentes en paralelo: cada proceso se reconoce por la tarea que recibió', () => {
+  const o = new Office();
+  const pi = (e) => o.ingest('pi', { session: 'p', cwd: '/p', ...e });
+  pi({ kind: 'agent_roles', roles: { ux: 'designer', api: 'backend' } });
+  pi({ kind: 'tool_start', tool: 'subagent_run', toolUseId: 'a', input: { agent: 'ux', task: 'Diseña la pantalla de pago', mode: 'background' } });
+  pi({ kind: 'tool_start', tool: 'subagent_run', toolUseId: 'b', input: { agent: 'api', task: 'Crea POST /payments', mode: 'background' } });
+  // in the background the tool returns right away: the subagent keeps working
+  pi({ kind: 'tool_end', tool: 'subagent_run', toolUseId: 'a', input: {} });
+  pi({ kind: 'tool_end', tool: 'subagent_run', toolUseId: 'b', input: {} });
+  pi({ child: '9', kind: 'task', text: 'Crea POST /payments' });
+  pi({ child: '8', kind: 'task', text: 'Diseña la pantalla de pago' });
+  assert.equal(pi({ child: '9', kind: 'tool_start', tool: 'read', input: { path: 'public/pay.css' } })[0].role, 'backend');
+  assert.equal(pi({ child: '8', kind: 'tool_start', tool: 'bash', input: { command: 'npm test' } })[0].role, 'designer');
+});
+
+test('la lista de todo de gentle-pi va al tablero', () => {
+  const o = new Office();
+  const pi = (e) => o.ingest('pi', { session: 'p', cwd: '/p', ...e });
+  const [ev] = pi({ kind: 'tool_start', tool: 'todo', input: { action: 'write', tasks: [{ title: 'RED', status: 'done' }, { title: 'GREEN', status: 'in_progress' }, { title: 'viejo', status: 'dropped' }] } });
+  assert.equal(ev.kind, 'todos');
+  assert.deepEqual(o.sessionSummary('p').todos.map((t) => `${t.content}:${t.status}`), ['RED:completed', 'GREEN:in_progress']);
+  assert.equal(pi({ kind: 'tool_start', tool: 'todo', input: { action: 'update', id: 2, status: 'done' } }).length, 0);
+});
+
+// Inside herdr each subagent has its pane: to show only its own activity, each subagent event
+// carries its id, together with what it did (its commands' output, its report).
+test('lo de cada subagente lleva su id, la salida de sus comandos y su informe', () => {
+  const o = new Office();
+  const pi = (e) => o.ingest('pi', { session: 'pi-9', cwd: '/tienda', ...e });
+  const task = 'Escribe tests de shipping() que fallen.\nNo toques src/.';
+  const [start] = pi({ kind: 'tool_start', tool: 'subagent_run', toolUseId: 'c1', input: { agent: 'qa', label: 'RED shipping', task } });
+  assert.equal(start.subId, 'c1');
+  assert.equal(start.task, task, 'su tarea, con sus saltos de línea, para el pane');
+  pi({ child: '31', kind: 'task', text: task });
+  const [cmd] = pi({ child: '31', kind: 'tool_start', tool: 'bash', input: { command: 'npm test' } });
+  assert.equal(cmd.subId, 'c1');
+  const out = Array.from({ length: 30 }, (_, i) => `línea ${i + 1}`).join('\n') + '\n\x1b[31mℹ fail 2\x1b[0m\n';
+  const [end] = pi({ child: '31', kind: 'tool_end', tool: 'bash', input: { command: 'npm test' }, ok: false, output: out });
+  assert.equal(end.subId, 'c1');
+  assert.match(end.output, /ℹ fail 2$/, 'el final de la salida, sin colores');
+  assert.ok(!end.output.includes('línea 1\n'), 'sólo las últimas líneas');
+  assert.equal(pi({ child: '31', kind: 'thinking' })[0].subId, 'c1');
+  // what it read is not sent (only the output of commands, or of what failed)
+  assert.equal(pi({ child: '31', kind: 'tool_end', tool: 'read', input: { path: 'src/cart.js' }, output: 'export function subtotal() {}' })[0].output, undefined);
+  assert.equal(pi({ child: '31', kind: 'tool_start', tool: 'bash', input: { command: 'cd /tienda && npm test' } })[0].text, '$ npm test', 'sin el cd del principio');
+  // the main agent's tool output is not sent (it is already visible in its pane)
+  assert.equal(pi({ kind: 'tool_end', tool: 'bash', input: { command: 'ls' }, output: 'a\nb' })[0].output, undefined);
+  const [done] = pi({ kind: 'tool_end', tool: 'subagent_run', toolUseId: 'c1', input: { agent: 'qa' }, output: 'Escribí 2 tests en test/shipping.test.js; fallan como se espera.' });
+  assert.equal(done.kind, 'subagent_end');
+  assert.equal(done.subId, 'c1');
+  assert.match(done.output, /^Escribí 2 tests/);
+});
+
+test('Claude Code: las herramientas dentro de un subagente (agent_id) son de ese subagente', () => {
+  const o = new Office();
+  const [start] = o.ingest('claude-code', cc({ hook_event_name: 'PreToolUse', tool_name: 'Task', tool_use_id: 'tu1', tool_input: { subagent_type: 'qa-engineer', description: 'Revisa los tests', prompt: 'Corre los tests' } }));
+  o.ingest('claude-code', cc({ hook_event_name: 'SubagentStart', agent_id: 'ag1', agent_type: 'qa-engineer' }));
+  const [edit] = o.ingest('claude-code', cc({ hook_event_name: 'PreToolUse', agent_id: 'ag1', tool_name: 'Edit', tool_use_id: 'tu2', tool_input: { file_path: 'src/server/db.ts' } }));
+  assert.equal(edit.subId, start.subId);
+  assert.equal(edit.role, 'qa', 'el personaje del subagente, no el que adivina el archivo');
+  const [ran] = o.ingest('claude-code', cc({ hook_event_name: 'PostToolUse', agent_id: 'ag1', tool_name: 'Bash', tool_use_id: 'tu3', tool_input: { command: 'npm test' }, tool_response: { stdout: 'ok 3 tests', stderr: '' } }));
+  assert.equal(ran.output, 'ok 3 tests');
+  const [mine] = o.ingest('claude-code', cc({ hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_use_id: 'tu4', tool_input: { file_path: 'src/server/db.ts' } }));
+  assert.equal(mine.subId, undefined, 'lo del agente principal no es del subagente');
+  assert.equal(mine.role, 'backend');
+});
+
+// S4: dispatch and pane events are announcements: they are logged but do NOT change any role's
+// state (they neither set it to working nor free it to idle if it was already busy).
+test('los anuncios (dispatch y panes) no cambian el estado de ningún rol', () => {
+  const o = new Office();
+  const pi = (e) => o.ingest('pi', { session: 'p', cwd: '/p', ...e });
+  pi({ kind: 'phase', role: 'backend', phase: 'implementa' });
+  pi({ kind: 'tool_start', tool: 'edit', input: { path: 'src/api.js' } });
+  assert.equal(o.roles.backend.status, 'working');
+
+  pi({ kind: 'dispatch', agent: 'pi', text: 'Para Pi: nueva tarea' });
+  assert.equal(o.roles.po.status, 'idle', 'dispatch no pone a la PO a trabajar');
+  assert.equal(o.roles.backend.status, 'working', 'y no toca lo que otro rol ya hace');
+
+  pi({ kind: 'pane_open', role: 'qa', pane: 'w1:p7', text: 'tests en watch' });
+  assert.equal(o.roles.qa.status, 'idle', 'abrir un pane no pone a QA a trabajar');
+
+  pi({ kind: 'waiting', text: 'aprueba el Bash' });
+  assert.equal(o.roles.manager.status, 'waiting');
+  pi({ kind: 'pane_state', role: 'manager', pane: 'w1:p7', state: 'working', text: 'tests en watch' });
+  assert.equal(o.roles.manager.status, 'waiting', 'el estado del pane no saca a Marco de waiting');
+  pi({ kind: 'pane_close', role: 'manager', pane: 'w1:p7', text: 'tests en watch' });
+  assert.equal(o.roles.manager.status, 'waiting', 'cerrar el pane tampoco lo libera');
+
+  assert.ok(o.log.some((e) => e.kind === 'dispatch'), 'el anuncio sí queda en la bitácora');
+  assert.ok(o.log.some((e) => e.kind === 'pane_open'), 'el pane abierto también queda en la bitácora');
+});
+
+// Events that are real work keep the state they already had: tool_start→working,
+// waiting→waiting, done→done and turn_end→idle (roleStatus takes nothing else with it).
+test('los eventos que sí marcan trabajo conservan su estado', () => {
+  const status = (...events) => {
+    const o = new Office();
+    for (const e of events) o.ingest('pi', { session: 'p', cwd: '/p', ...e });
+    return o.snapshot().roles;
+  };
+  assert.equal(status({ kind: 'tool_start', tool: 'edit', input: { path: 'src/a.css' } }).frontend.status, 'working');
+  assert.equal(status({ kind: 'waiting', text: 'aprueba el Bash' }).manager.status, 'waiting');
+  assert.equal(status({ kind: 'done' }).manager.status, 'done');
+  assert.equal(status({ kind: 'phase', role: 'qa', phase: 'red' }, { kind: 'turn_end' }).qa.status, 'idle');
 });

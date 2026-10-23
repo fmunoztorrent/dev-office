@@ -30,14 +30,14 @@ test('desde la TUI: t + texto + Enter manda el prompt a la sesión de Pi conecta
     term.type('t');
     term.type('Agrega paginación al listado');
     await sleep(120);
-    assert.match(term.stdout.out, /tienda · Pi · ● abierta/); // el agente de destino, visible en pantalla
+    assert.match(term.stdout.out, /tienda · Pi · ● abierta/); // the target agent, visible on screen
     term.type('\r');
     await sleep(150);
     assert.equal(received.length, 1);
     assert.equal(received[0].text, 'Agrega paginación al listado');
     assert.equal(received[0].session, 'pi-9');
   } finally {
-    term.type('\x1b'); // cierra el diálogo si quedó abierto
+    term.type('\x1b'); // closes the dialog if it was left open
     term.type('q');
     await done;
     agent.close();

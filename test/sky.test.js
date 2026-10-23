@@ -1,4 +1,4 @@
-// La pared de vidrio (public/sky.js): la estación, la luna, el sol, el clima y el paisaje.
+// The glass wall (public/sky.js): the season, the moon, the sun, the weather and the landscape.
 import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -7,7 +7,7 @@ import { season, moonPhase, sunTimes, weatherKind, fromOpenMeteo, simulatedWeath
 test('la estación depende de la fecha y del hemisferio', () => {
   const oct = new Date(2026, 9, 16), jan = new Date(2026, 0, 10), jul = new Date(2026, 6, 10), may = new Date(2026, 4, 5);
   assert.equal(season(oct, true), 'spring');   // octubre en Santiago: primavera
-  assert.equal(season(oct, false), 'autumn');  // y en Madrid, otoño
+  assert.equal(season(oct, false), 'autumn');  // and in Madrid, autumn
   assert.equal(season(jan, true), 'summer');
   assert.equal(season(jul, true), 'winter');
   assert.equal(season(may, false), 'spring');
@@ -32,9 +32,9 @@ test('el sol: días más largos en verano, y la luz según la hora', () => {
   assert.equal(at(13).night, 0);
   assert.ok(at(13).alt > 0.9 && at(13).dusk === 0);
   assert.ok(at(20).dusk > 0.9, 'a las 20:00 es el atardecer');
-  // de noche no se oscurece la oficina: sólo se enfría un poco el color
+  // at night the office does not get dark: the color only cools down a little
   assert.ok(at(2).shade.every((k) => k > 0.8));
-  // un día gris apaga un poco la luz
+  // a grey day dims the light a little
   assert.ok(daylight(new Date(2026, 9, 16, 13), { ...w, kind: 'rain', clouds: 1, precip: 0.7 }).shade[0] < at(13).shade[0]);
 });
 
@@ -82,7 +82,7 @@ test('el paisaje: todo dentro del vidrio, con lluvia, nieve o relámpagos según
   assert.ok(rainy(scene('rain')) > 50, 'llueve');
   const flakes = (s) => s.filter(([, , w, h, c]) => c === 0xffffff && w <= 2 && h <= 2).length;
   assert.ok(flakes(scene('snow', { temp: -1 })) > 30, 'nieva');
-  // con tormenta, a veces cae un rayo
+  // with a storm, lightning sometimes strikes
   let flashes = 0;
   for (let now = 0; now < 60_000; now += 40) if (lightning(now, { kind: 'storm' }).flash > 0.5) flashes++;
   assert.ok(flashes > 3);

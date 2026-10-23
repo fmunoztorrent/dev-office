@@ -29,7 +29,7 @@ test('desde la terminal: clic en la pizarra → elegir el pipeline del agente �
   }));
 
   const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
-  const agent = startFakeAgent({ url: server.url, dir, session: 'pi-tui' }); // como la extensión de Pi
+  const agent = startFakeAgent({ url: server.url, dir, session: 'pi-tui' }); // like the Pi extension
   await agent.ready;
   await until(() => server.pipelines.projects().length);
   const cols = 160, rows = 46;
@@ -42,21 +42,21 @@ test('desde la terminal: clic en la pizarra → elegir el pipeline del agente �
     const L = computeLayout(cols, rows);
     const col = L.ox + Math.round((BOARD.x + BOARD.w / 2) * L.s) + 1;
     const row = Math.floor((L.oy + Math.round((BOARD.y + BOARD.h / 2) * L.s)) / 2) + 1;
-    type(`\x1b[<0;${col};${row}M`); // clic en la pizarra
+    type(`\x1b[<0;${col};${row}M`); // click on the whiteboard
     await until(() => stdout.out.includes('Nuevo encargo') && stdout.out.includes('● abierta'));
-    // campos: Agente, Pipeline, Sesión, Prompt (el foco empieza en el prompt)
-    type('\x1b[A'); // ↑ a «Sesión»
+    // fields: Agent, Pipeline, Session, Prompt (the focus starts on the prompt)
+    type('\x1b[A'); // ↑ to «Session»
     type('\x1b[A'); // ↑ a «Pipeline»
     const target = server.registry.targets().find((t) => t.sessions.some((x) => x.session === 'pi-tui'));
     const steps = target.entries.findIndex((e) => e.id === 'devteam:a-corto');
-    for (let i = 0; i < steps; i++) type('\x1b[C'); // ▸ hasta el pipeline "Corto"
+    for (let i = 0; i < steps; i++) type('\x1b[C'); // ▸ up to the "Corto" pipeline
     await sleep(80);
     type('Endpoint de cupones');
     await sleep(120);
     assert.match(stdout.out, /Pipeline · Corto/);
     assert.match(stdout.out, /Etapas \(las corre la sesión del agente\)/);
     assert.match(stdout.out, /Diego · Implementa — api/);
-    assert.match(stdout.out, /Pi · sesión abierta/); // va a la sesión abierta en esa ruta
+    assert.match(stdout.out, /Pi · sesión abierta/); // goes to the session open in that path
     type('\r');
     const run = await until(() => server.pipelines.snapshot().runs.find((r) => r.status === 'done'));
     assert.equal(run.pipeline.name, 'Corto');
@@ -65,9 +65,9 @@ test('desde la terminal: clic en la pizarra → elegir el pipeline del agente �
     assert.deepEqual(run.stages.map((s) => s.status), ['done', 'done']);
     assert.deepEqual(agent.received.filter((m) => m.type === 'stage').map((m) => m.id), ['plan', 'api']);
     await sleep(120);
-    assert.match(stdout.out, /PIPELINES/); // el panel muestra el pipeline
+    assert.match(stdout.out, /PIPELINES/); // the panel shows the pipeline
   } finally {
-    type('\x1b'); // cierra el diálogo si quedó abierto
+    type('\x1b'); // closes the dialog if it was left open
     type('q');
     await done;
     await agent.close();

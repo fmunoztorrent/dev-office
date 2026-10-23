@@ -1,5 +1,5 @@
-// Idiomas: inglés por defecto, español disponible desde el inicio; el idioma se guarda en la base y
-// lo comparten el servidor, la terminal y la web. (Este archivo NO importa ./es.js: prueba el inglés.)
+// Languages: English by default, Spanish available from the start; the language is saved in the
+// database and shared by the server, the terminal and the web. (This file does NOT import ./es.js: it tests English.)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import WebSocket from 'ws';
@@ -41,7 +41,7 @@ test('inglés por defecto; español al elegirlo (y uno desconocido vuelve al ing
     assert.equal(describe('Edit', { file_path: 'src/api.js' }), 'Editando api.js');
     assert.equal(TEAM.designer.title, 'Diseñadora', 'el cargo que no se personalizó cambia de idioma');
     assert.equal(phaseInfo('historia').label, 'Historia');
-    // un cargo personalizado se queda como está
+    // a customized title stays as it is
     applyAppearance({ designer: { title: 'Ilustradora' } });
     setLanguage('en');
     assert.equal(TEAM.designer.title, 'Ilustradora');

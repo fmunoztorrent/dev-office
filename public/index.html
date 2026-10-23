@@ -10,13 +10,13 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <!-- Los textos van en inglés por defecto; main.js los pone en el idioma del juego (data-i18n*). -->
+  <!-- Texts are in English by default; main.js switches them to the game's language (data-i18n*). -->
   <main class="stage">
     <div class="screen" id="screen">
       <canvas id="office" width="960" height="600" data-i18n-aria="ui.canvas"></canvas>
 
-      <!-- HUD: todo va dentro de la pantalla del juego. Arriba a la izquierda, el selector de
-           oficina (sólo si la empresa tiene más de una), la conexión y el clima. -->
+      <!-- HUD: everything goes inside the game screen. Top left, the office selector (only if
+           the company has more than one), the connection and the weather. -->
       <div class="hud hud-tl">
         <label class="office-pick" id="office-pick" hidden data-i18n-title="ui.officeKey">
           <span aria-hidden="true">🏢</span>
@@ -29,12 +29,26 @@
         <button id="open-settings" class="hud-btn" type="button" data-i18n-title="ui.settingsKey" data-i18n-aria="ui.settings">
           <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><rect x="7" y="0" width="2" height="3"/><rect x="7" y="13" width="2" height="3"/><rect x="0" y="7" width="3" height="2"/><rect x="13" y="7" width="3" height="2"/><rect x="2" y="2" width="3" height="3"/><rect x="11" y="2" width="3" height="3"/><rect x="2" y="11" width="3" height="3"/><rect x="11" y="11" width="3" height="3"/><path fill-rule="evenodd" d="M5 3h6v2h2v6h-2v2H5v-2H3V5h2zM6 6v4h4V6z"/></g></svg>
         </button>
+        <button id="view-mode" class="hud-btn" type="button" data-i18n-title="ui.viewKey" data-i18n-aria="ui.view">
+          <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><rect x="7" y="1" width="2" height="2"/><rect x="5" y="3" width="2" height="2"/><rect x="9" y="3" width="2" height="2"/><rect x="3" y="5" width="2" height="2"/><rect x="11" y="5" width="2" height="2"/><rect x="1" y="7" width="2" height="2"/><rect x="13" y="7" width="2" height="2"/><rect x="3" y="9" width="2" height="2"/><rect x="11" y="9" width="2" height="2"/><rect x="5" y="11" width="2" height="2"/><rect x="9" y="11" width="2" height="2"/><rect x="7" y="13" width="2" height="2"/><rect x="7" y="7" width="2" height="2"/></g></svg>
+        </button>
         <button id="fullscreen" class="hud-btn" type="button" data-i18n-title="ui.fullscreenKey" data-i18n-aria="ui.fullscreen">
           <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><rect x="1" y="1" width="5" height="2"/><rect x="1" y="1" width="2" height="5"/><rect x="10" y="1" width="5" height="2"/><rect x="13" y="1" width="2" height="5"/><rect x="1" y="13" width="5" height="2"/><rect x="1" y="10" width="2" height="5"/><rect x="10" y="13" width="5" height="2"/><rect x="13" y="10" width="2" height="5"/></g></svg>
         </button>
       </div>
 
-      <!-- La ficha del personaje seleccionado (como en Los Sims) -->
+      <!-- btw: a side question to the agent on duty, and its answer -->
+      <aside id="btw-card" class="btw-card" hidden aria-live="polite" aria-labelledby="btw-q">
+        <header class="btw-head">
+          <span class="btw-tag">btw</span>
+          <span id="btw-who" class="btw-who"></span>
+          <button id="btw-close" class="btw-x" type="button" data-i18n-aria="ui.btwClose">✕</button>
+        </header>
+        <p id="btw-q" class="btw-q"></p>
+        <p id="btw-a" class="btw-a"></p>
+      </aside>
+
+      <!-- The selected character's sheet (like in The Sims) -->
       <aside id="sheet" class="sheet" hidden aria-labelledby="sheet-name">
         <header class="sheet-head">
           <canvas id="sheet-portrait" width="64" height="100" aria-hidden="true"></canvas>
@@ -53,7 +67,7 @@
         </footer>
       </aside>
 
-      <!-- La terminal: la actividad del equipo -->
+      <!-- The terminal: the team's activity -->
       <button id="open-term" class="hud-btn term-btn" type="button" data-i18n-title="ui.termKey" data-i18n-aria="ui.term" aria-expanded="false" aria-controls="term">
         <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><path fill-rule="evenodd" d="M1 2h14v12H1zM2 5v8h12V5z"/><rect x="4" y="7" width="1" height="1"/><rect x="5" y="8" width="1" height="1"/><rect x="6" y="9" width="1" height="1"/><rect x="5" y="10" width="1" height="1"/><rect x="4" y="11" width="1" height="1"/><rect x="8" y="11" width="4" height="1"/></g></svg>
         <span id="term-badge" class="badge" hidden></span>

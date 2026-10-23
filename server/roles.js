@@ -1,10 +1,11 @@
-// Decide qué miembro del equipo representa cada acción del agente.
+// Decides which team member stands for each of the agent's actions.
 
 import { t } from '../public/i18n.js';
+import { TEXT_RULES } from '../integrations/common/devteam.mjs';
 
 export const ROLE_IDS = ['po', 'analyst', 'manager', 'tl', 'qa', 'backend', 'frontend', 'designer'];
 
-// Nombres alternativos que un agente puede usar al declarar un rol.
+// Alternative names an agent may use when declaring a role.
 const ROLE_ALIASES = {
   arquitecto: 'tl', arquitecta: 'tl', architect: 'tl', 'tech-lead': 'tl', techlead: 'tl', lead: 'tl', reviewer: 'tl',
   tester: 'qa', test: 'qa', testing: 'qa', calidad: 'qa',
@@ -20,7 +21,7 @@ export function normRole(r) {
   return ROLE_IDS.includes(k) ? k : ROLE_ALIASES[k] || null;
 }
 
-// Fases del flujo de desarrollo (ver docs/eventos-por-rol.md). Se aceptan alias en inglés.
+// Phases of the development flow (see docs/events-by-role.md). English aliases are accepted.
 const PHASE_ALIASES = {
   story: 'historia', criteria: 'criterios', acceptance: 'criterios', prioritize: 'prioriza', accept: 'acepta', reject: 'rechaza',
   analysis: 'analiza', analizar: 'analiza', research: 'investiga', investigar: 'investiga', requirements: 'requisitos',
@@ -63,7 +64,7 @@ const AGENT_TYPES = {
   'statusline-setup': 'frontend', designer: 'designer', frontend: 'frontend', backend: 'backend',
   research: 'analyst', analyst: 'analyst', po: 'po', 'product-owner': 'po', manager: 'manager',
   qa: 'qa', tester: 'qa', 'test-runner': 'qa', 'test-writer': 'qa', e2e: 'qa',
-  // subagentes de harness conocidos: Errementari y gentle-pi / gentle-ai
+  // subagents of known harnesses: Errementari and gentle-pi / gentle-ai
   pipeline: 'manager', spec: 'analyst', architect: 'tl', researcher: 'analyst',
   'sdd-init': 'manager', 'sdd-onboard': 'manager', 'sdd-status': 'manager', 'sdd-explore': 'analyst', 'sdd-research': 'analyst',
   'sdd-proposal': 'po', 'sdd-spec': 'analyst', 'sdd-design': 'tl', 'sdd-tasks': 'manager', 'sdd-apply': 'backend',
@@ -72,16 +73,7 @@ const AGENT_TYPES = {
   'review-reliability': 'tl', 'review-resilience': 'tl', 'jd-judge-a': 'tl', 'jd-judge-b': 'tl', 'jd-fix-agent': 'backend',
 };
 
-const TEXT_RULES = [
-  ['po', /product|producto|user stor|historias? de usuario|backlog|priori|roadmap|acceptance|aceptaci[oó]n|criterios?/i],
-  ['qa', /\bqa\b|\btests?\b|testing|pruebas?\b|\be2e\b|end-to-end|regresi[oó]n|verificar|verify|calidad|quality|cobertura|coverage/i],
-  ['designer', /dise[ñn]|design|\bux\b|figma|mockup|wireframe|paleta|palette|tipograf|typograph|brand|marca|icono|icon|logo|visual/i],
-  ['frontend', /front|\bui\b|css|component|react|vue|svelte|p[aá]gina|\bpage|layout|responsive|html|browser|navegador|vista/i],
-  ['backend', /back(?!log)|\bapi\b|endpoint|server|servidor|database|base de datos|\bdb\b|sql|migra|auth|queue|cola|worker|cache/i],
-  ['tl', /review|revis|refactor|architect|arquitect|\bplan|bug|debug|security|seguridad|performance|rendimiento|lint/i],
-  ['analyst', /analy|anali|research|investig|explor|busca|search|find|requirement|requisit|negocio|business|datos|data|m[eé]trica|metric|document/i],
-  ['manager', /coordin|status|report|estado|deploy|release|schedule|agenda/i],
-];
+// the text → role rules are the shared library's (subagent detection uses them too)
 
 export function roleForText(text = '', agentType = '') {
   const t = String(agentType || '').toLowerCase();
@@ -114,7 +106,7 @@ export function roleForTool(tool = '', input = {}) {
     case 'bash': case 'shell': case 'exec': return roleForCommand(input.command || input.cmd || '');
     case 'skill': return roleForText(`${input.skill || ''} ${input.args || ''}`);
     case 'grep': case 'glob': case 'list': case 'ls': case 'find': {
-      // Buscar en el código es exploración del TL, salvo que apunte claramente a un área.
+      // Searching the code is the TL's exploration, unless it clearly points at an area.
       const hint = String(input.glob || input.path || (t === 'glob' ? input.pattern : '') || '');
       const r = hint ? roleForPath(hint) : 'tl';
       return r === 'backend' && !/server|api|db|backend|services?/i.test(hint) ? 'tl' : r;
@@ -139,7 +131,7 @@ export function describe(tool = '', input = {}) {
     case 'read': return t('events.read', { file: base(f) });
     case 'write': return t('events.write', { file: base(f) });
     case 'edit': case 'multiedit': case 'patch': case 'notebookedit': return t('events.edit', { file: base(f) });
-    case 'bash': case 'shell': case 'exec': return clip(`$ ${input.command || input.cmd || ''}`, 70);
+    case 'bash': case 'shell': case 'exec': return clip(`$ ${String(input.command || input.cmd || '').replace(/^\s*cd\s+("[^"]*"|'[^']*'|\S+)\s*&&\s*/, '')}`, 70);
     case 'grep': return clip(t('events.grep', { pattern: input.pattern || '' }));
     case 'glob': case 'list': case 'ls': return clip(t('events.glob', { pattern: input.pattern || input.path || t('events.files') }));
     case 'websearch': return clip(t('events.websearch', { query: input.query || '' }));

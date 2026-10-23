@@ -1,5 +1,5 @@
-// Varias oficinas (equipos o dominios) en una misma instancia, como una empresa de verdad: la base
-// las guarda, cada evento va a su oficina y cada visor ve sólo la oficina que eligió.
+// Several offices (teams or domains) in the same instance, like a real company: the database
+// keeps them, each event goes to its office and each viewer sees only the office it chose.
 import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -29,7 +29,7 @@ test('la base: oficinas con nombre, zona horaria y ubicación; la principal no s
   assert.equal(store.updateOffice('pagos', { timezone: null }).office.timezone, null);
   assert.equal(store.findOffice('PAGOS').id, 'pagos', 'por nombre, sin mayúsculas');
 
-  // agentes de esa oficina; al eliminarla pasan a la principal y se olvida su apariencia
+  // that office's agents; when it is deleted they move to the main one and its appearance is forgotten
   const dir = tmp();
   const a = store.createAgent({ path: dir, harness: 'pi', office: 'Pagos' });
   assert.equal(a.agent.office, 'pagos');
@@ -89,7 +89,7 @@ test('cada evento va a su oficina: la que dice, la de su sesión, la de su pane 
   company.ingest('generic', { kind: 'session_start', session: 'd', office: 'web', cwd: sub });
   company.bindPane('w1:p3', 'pagos');
   company.ingest('claude-code', { hook_event_name: 'SessionStart', session_id: 'e', cwd: '/otra', herdr_pane: 'w1:p3' });
-  // una sesión conocida sigue en su oficina aunque cambie de carpeta
+  // a known session stays in its office even if it changes folder
   company.ingest('claude-code', { hook_event_name: 'Stop', session_id: 'a', cwd: root });
   assert.deepEqual(seen, [['pagos', 'a'], ['web', 'b'], ['main', 'c'], ['web', 'd'], ['pagos', 'e'], ['pagos', 'a']]);
   assert.equal(company.session('a').office, 'pagos');
@@ -120,26 +120,26 @@ test('el servidor: cada visor recibe sólo la oficina que mira; la elección que
     assert.equal(snap.office.timezone, 'Asia/Tokyo');
     assert.equal(snap.office.country, 'JP');
     assert.equal(store.getPrefs().view.office, 'pagos', 'la oficina elegida queda guardada');
-    // un evento de Pagos sólo lo ve quien mira Pagos
+    // a Pagos event is only seen by whoever watches Pagos
     await call(server.url, 'POST', '/v1/events/generic', { session: 'p1', office: 'pagos', kind: 'task', text: 'Cobros con QR' });
     await call(server.url, 'POST', '/v1/events/generic', { session: 'm1', kind: 'task', text: 'Landing nueva' });
     await sleep(80);
     const texts = (c) => c.got.filter((m) => m.type === 'event').map((m) => m.event.text);
     assert.deepEqual(texts(a), ['Landing nueva']);
     assert.deepEqual(texts(b), ['Cobros con QR']);
-    // el chat del visor va a su oficina; /v1/state?office= muestra otra
+    // the viewer's chat goes to its office; /v1/state?office= shows another one
     b.ws.send(JSON.stringify({ type: 'chat', text: 'hola Pagos' }));
     await sleep(60);
     assert.ok(texts(b).includes('hola Pagos') && !texts(a).includes('hola Pagos'));
     r = await call(server.url, 'GET', '/v1/state?office=pagos');
     assert.deepEqual(r.body.sessions.filter((s) => s.id !== 'office').map((s) => s.title), ['Cobros con QR']);
-    // la apariencia es de cada oficina
+    // the appearance belongs to each office
     r = await call(server.url, 'PUT', '/v1/settings', { office: 'pagos', appearance: { qa: { name: 'Pilar' } } });
     assert.equal(r.status, 200, r.body.error);
     await sleep(50);
     assert.equal(b.got.filter((m) => m.type === 'appearance').at(-1)?.appearance.qa.name, 'Pilar');
     assert.ok(!a.got.some((m) => m.type === 'appearance'));
-    // renombrar y eliminar se avisa a todos (para el selector)
+    // renaming and deleting is broadcast to everyone (for the selector)
     await call(server.url, 'PUT', '/v1/offices/pagos', { name: 'Pagos LatAm' });
     await sleep(50);
     assert.equal(a.got.filter((m) => m.type === 'offices').at(-1).offices[1].name, 'Pagos LatAm');

@@ -1,5 +1,5 @@
-// Dibuja la simulación (public/sim.js) en el framebuffer de terminal.
-// El mundo de 960×600 se escala a los píxeles disponibles; el texto va en celdas encima.
+// Draws the simulation (public/sim.js) on the terminal framebuffer.
+// The 960×600 world is scaled to the available pixels; the text goes in cells on top.
 
 import { W, H, TEAM, SPOT, BOARD, PLANTS, STATUS_ICON, PHASE_COLOR, phaseInfo, DREAMS, DREAM_PALETTE, RAINBOW_COLORS, rainbowPixels, CAFE, DINING, DINING_SEATS, PARTITION, BATH, RACK, EXTINGUISHER, daylight, GLASS, EASEL, CLOCK, TV, SOFA, ALARM, SIGN, tvChannel } from '../public/sim.js';
 import { outdoor, lightning, weatherIcon } from '../public/sky.js';
@@ -12,7 +12,7 @@ const C = Object.fromEntries(Object.entries({
   appBg: '#12141f', panelBg: '#1a1d2c', headerBg: '#2b2f47', text: '#e8e9f1', muted: '#9095b0', accent: '#ffd166',
   ok: '#06d6a0', warn: '#f4a261', err: '#ef476f', blue: '#9ad1ff', purple: '#d0b0ff',
   wall: '#2e3550', wallLine: '#333b59', baseboard: '#232840', frame: '#1b1f33', sky1: '#5aa9e6', sky2: '#a7d8f5', city: '#3d5f8c', hill: '#4c7a5a',
-  floor1: '#c9b48a', floor2: '#c2ab7f', floorEdge: '#9c8660', rug1: '#6d597a', rug2: '#7f6a8c',
+  floor1: '#eef0f3', floor2: '#e7eaee', floorGrout: '#d5dae0', floorEdge: '#9aa3ae', rug1: '#6d597a', rug2: '#7f6a8c',
   wood: '#a0703f', woodFront: '#7c5230', woodEdge: '#5d3b20', chair: '#3a3f58', screenOff: '#1d2433', screenOn: '#0d1b2a', monitor: '#20232f',
   paper: '#f8f9fa', boardFrame: '#8d99ae', ink: '#2b2d42', inkMuted: '#6c757d', sticky1: '#ffe08a', sticky2: '#9ad1ff', sticky3: '#a8e6a1',
   rack: '#2b2d42', rackSlot: '#3a3f58', table: '#8c5a33', tableEdge: '#5d3b20', sofa: '#457b9d', sofaBack: '#3a6a88', pot: '#b5651d', leaf1: '#2a9d8f', leaf2: '#3fb68b',
@@ -27,7 +27,7 @@ const C = Object.fromEntries(Object.entries({
 const STATE_COLOR = { idle: C.muted, working: C.blue, thinking: C.purple, talking: C.purple, blocked: C.err, red: C.err, waiting: C.warn, done: C.ok, coffee: C.muted, lunch: C.accent, alarm: C.err };
 const STAGE_ICON = { pending: '◷', running: '▶', done: '✔', failed: '✖', skipped: '⊘', cancelled: '⊘' };
 
-/** @param panel mostrar el panel de actividad a la derecha (se oculta con el ícono >_ o la tecla a) */
+/** @param panel show the activity panel on the right (hidden with the >_ icon or the a key) */
 export function computeLayout(cols, rows, { panel = true } = {}) {
   const panelW = panel && cols >= 110 ? Math.min(54, Math.max(34, Math.floor(cols * 0.28))) : 0;
   const sceneCols = cols - panelW - (panelW ? 1 : 0);
@@ -37,8 +37,8 @@ export function computeLayout(cols, rows, { panel = true } = {}) {
   const ox = Math.max(0, Math.floor((sceneCols - pw) / 2));
   const oyRow = 1 + Math.max(0, Math.floor((sceneRows - Math.ceil(ph / 2)) / 2));
   const oy = oyRow * 2;
-  // los íconos van dentro de la escena: ⚙ arriba a la derecha, la terminal (>_) abajo a la izquierda;
-  // el selector de oficina (si hay más de una), arriba a la izquierda, en la cabecera
+  // the icons go inside the scene: ⚙ top right, the terminal (>_) bottom left;
+  // the office selector (if there is more than one), top left, in the header
   const gearCell = { col: ox + pw - 4, row: oyRow };
   const termCell = { col: ox + 1, row: Math.floor((oy + ph) / 2) - 1 };
   const officeCell = { col: 0, row: 0, w: 0 };
@@ -77,7 +77,7 @@ export function drawFrame(scr, L, sim, model, now) {
   drawLights(g, sim, now, light);
   for (const a of Object.values(sim.agents)) drawDream(g, a, now);
   if (model.selected) drawPlumbob(g, sim.agents[model.selected], now);
-  // Burbujas: las más nuevas se colocan primero; si chocan con otra, suben.
+  // Bubbles: the newest are placed first; if they collide with another, they move up.
   const placed = [];
   const withBubble = Object.values(sim.agents).filter((a) => a.bubble).sort((a, b) => b.bubble.until - a.bubble.until);
   for (const a of withBubble) drawBubble(g, a, placed);
@@ -110,15 +110,15 @@ function geometry(scr, L) {
       }
     },
     row: (wy) => Math.floor(Y(wy) / 2),
-    /** Un rectángulo semitransparente: se mezcla con lo que hay. Lo que mide menos de un píxel no se
-     *  dibuja (así las figuras chicas no se acumulan), salvo con `keep` (lluvia, estrellas, ventanas). */
+    /** A semi-transparent rectangle: it blends with what is there. Anything smaller than a pixel is not
+     *  drawn (so small shapes do not pile up), except with `keep` (rain, stars, windows). */
     blend(wx, wy, ww, wh, c, a, keep = false) {
       let x0 = X(wx), x1 = X(wx + ww), y0 = Y(wy), y1 = Y(wy + wh);
       if (keep) { x1 = Math.max(x1, x0 + 1); y1 = Math.max(y1, y0 + 1); }
       x0 = Math.max(x0, L.ox); y0 = Math.max(y0, L.oy); x1 = Math.min(x1, L.ox + L.pw); y1 = Math.min(y1, L.oy + L.ph);
       for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = y * scr.cols + x; scr.px[i] = mix(scr.px[i], c, a); }
     },
-    /** Acerca los pixeles de un círculo (en el mundo) a un color: luz o resplandor. */
+    /** Brings the pixels of a circle (in the world) closer to a color: light or glow. */
     tint(wx, wy, wr, c, amount) {
       const pcx = X(wx), pcy = Y(wy), pr = Math.max(1, wr * s);
       const x0 = Math.max(L.ox, Math.floor(pcx - pr)), x1 = Math.min(L.ox + L.pw - 1, Math.ceil(pcx + pr));
@@ -128,7 +128,7 @@ function geometry(scr, L) {
         if (d < 1) { const i = y * scr.cols + x; scr.px[i] = mix(scr.px[i], c, amount * (1 - d)); }
       }
     },
-    // texto centrado en una x del mundo, sin salirse de la escena
+    // text centered on a world x, without leaving the scene
     centered(wx, row, str, fg, bg) {
       const w = strWidth(str);
       const col = Math.max(L.ox, Math.min(L.ox + L.pw - w, X(wx) - Math.floor(w / 2)));
@@ -139,7 +139,7 @@ function geometry(scr, L) {
 
 function drawRoom(g, sim, now, light, date) {
   const { rect, scr, X, Y } = g;
-  // la pared de vidrio: el paisaje con la hora, la estación y el clima (sky.js), y su vidrio
+  // the glass wall: the landscape with the time, the season and the weather (sky.js), and its glass
   const { shapes } = outdoor({ date, weather: sim.weather, light, now, ...GLASS, lod: 'low' });
   for (const [x, y, w, h, c, a, keep] of shapes) {
     if (a >= 0.99) rect(x, y, w, h, c);
@@ -147,16 +147,16 @@ function drawRoom(g, sim, now, light, date) {
   }
   rect(GLASS.x0, 0, GLASS.x1 - GLASS.x0, GLASS.top, hex('#262c42'));
   rect(GLASS.x0, GLASS.bottom, GLASS.x1 - GLASS.x0, 116 - GLASS.bottom, hex('#3a4158'));
-  // el baño: un bloque de pared sólida entre el vidrio y la cafetería
+  // the bathroom: a block of solid wall between the glass and the café
   rect(GLASS.x1, 0, CAFE.x - GLASS.x1, 122, C.wall);
   rect(0, 116, CAFE.x, 6, C.baseboard);
-  // el letrero, en vinilo sobre el vidrio
+  // the sign, in vinyl on the glass
   rect(SIGN.x - 39, SIGN.y, 78, 44, C.frame);
   const r = g.row(SIGN.y + 22);
   const hue = Math.floor(now / 400) % 4;
   g.centered(SIGN.x, r - (g.s > 0.12 ? 1 : 0), 'DEV TEAM', [C.accent, C.ok, C.blue, C.err][hue], C.frame);
   if (g.s > 0.12) g.centered(SIGN.x, r, 'OFFICE', C.accent, C.frame);
-  // el baño: puerta (abierta un instante cuando alguien entra o sale) y su luz de libre/ocupado
+  // the bathroom: a door (open for an instant when someone goes in or out) and its vacant/occupied light
   const open = now - sim.bath.doorAt < 650;
   rect(BATH.x, 40, BATH.w, 82, C.frame);
   rect(BATH.x + 4, 44, BATH.w - 8, 78, open ? C.doorDark : C.door);
@@ -165,10 +165,10 @@ function drawRoom(g, sim, now, light, date) {
   rect(BATH.x + 8, 22, 30, 14, C.frame);
   if (g.s > 0.12) g.centered(BATH.x + 23, g.row(29), t('scene.wc'), C.white, C.frame);
   rect(BATH.x + 42, 24, 8, 8, sim.bath.occupant ? C.err : C.ok);
-  // alarma del rack, colgando de la viga
+  // the rack's alarm, hanging from the beam
   const alarm = sim.fire && ['burning', 'fighting'].includes(sim.fire.phase);
   rect(ALARM.x, ALARM.y + 3, 10, 8, alarm && Math.floor(now / 150) % 2 ? hex('#ff3b3b') : hex('#7a1f2b'));
-  // la cafetería: azulejos, neón, repisa, refrigerador, barra y máquina de espresso
+  // the café: tiles, neon, shelf, fridge, counter and espresso machine
   rect(CAFE.x, 0, W - CAFE.x, 122, C.tile);
   for (let y = 0; y < 116; y += 16) rect(CAFE.x, y, W - CAFE.x, 1, C.grout);
   rect(782, 22, 14, 14, C.neonCyan); rect(785, 25, 8, 8, C.tile);
@@ -185,18 +185,23 @@ function drawRoom(g, sim, now, light, date) {
   rect(e, 80, 42, 32, C.chrome); rect(e + 4, 90, 34, 6, C.ink); rect(e + 8, 100, 8, 6, C.ink); rect(e + 26, 100, 8, 6, C.ink);
   rect(e + 7, 92, 3, 3, Math.floor(now / 700) % 2 ? C.err : C.ok);
   rect(822, 102, 30, 14, hex('#f4a3c4')); rect(860, 104, 18, 12, hex('#f4f1de'));
-  // pisos: baldosas en la oficina, tablas de roble en la cafetería, cerámica en el comedor
+  // floors: tiles in the office, oak planks in the café, ceramic in the dining room
   const fy0 = Y(122), fy1 = Y(H), fx0 = X(0), fx1 = X(W), cafeX = X(CAFE.x), dineY = Y(DINING.top + 14);
   for (let y = fy0; y < fy1; y++) for (let x = fx0; x < fx1; x++) {
     const wx2 = (x - g.L.ox) / g.s, wy2 = (y - g.L.oy) / g.s;
-    if (x < cafeX) scr.pset(x, y, (Math.floor(wx2 / 32) + Math.floor(wy2 / 32)) % 2 ? C.floor1 : C.floor2);
+    if (x < cafeX) {
+      // white porcelain: 40-px tiles with their grout (the last pixel row of each tile)
+      const tx = Math.floor(wx2 / 40), ty = Math.floor((wy2 - 126) / 40);
+      const grout = Math.floor((wx2 + 1 / g.s) / 40) !== tx || Math.floor((wy2 - 126 + 1 / g.s) / 40) !== ty;
+      scr.pset(x, y, grout ? C.floorGrout : (tx * 3 + ty * 7) % 4 ? C.floor1 : C.floor2);
+    }
     else if (y >= dineY) scr.pset(x, y, (Math.floor(wx2 / 16) + Math.floor(wy2 / 16)) % 2 ? C.dine1 : C.dine2);
     else {
       const row = Math.floor((wy2 - 122) / 10), col = Math.floor((wx2 + (row % 3) * 22) / 66);
       scr.pset(x, y, [C.oak1, C.oak2, C.oak3][(row + col) % 3]);
     }
   }
-  // la alfombra y las lámparas del comedor
+  // the dining room's rug and lamps
   const tb = DINING.table;
   rect(tb.x - tb.w / 2 - 14, tb.y - 40, tb.w + 28, 112, C.dineRug);
   for (const lx of [tb.x - 34, tb.x + 34]) { rect(lx, DINING.top + 14, 1, tb.y - 74 - DINING.top - 14, C.ink); rect(lx - 12, tb.y - 72, 25, 7, hex('#3d405b')); }
@@ -205,11 +210,11 @@ function drawRoom(g, sim, now, light, date) {
   rect(SPOT.table.x - 122, SPOT.table.y - 44, 244, 110, C.rug2);
   rect(SOFA.x - 96, TV.feet - 10, 192, H - TV.feet + 6, hex('#5b7a8c'));
   rect(SOFA.x - 90, TV.feet - 4, 180, H - TV.feet - 6, hex('#6a8a9c'));
-  // jardineras que separan la cafetería
+  // planters that separate the café
   for (const [y0, y1] of PARTITION) { rect(CAFE.x - 13, y0, 14, y1 - y0, C.planter); rect(CAFE.x - 15, y0 + 2, 18, y1 - y0 - 6, C.leaf1); rect(CAFE.x - 11, y0 + 6, 10, y1 - y0 - 14, C.leaf2); }
 }
 
-// La mesita alta de la cafetería.
+// The café's high table.
 function drawBistro(g) {
   const { x, y } = CAFE.bistro;
   for (const sx of [x - 30, x + 30]) { g.rect(sx - 7, y - 22, 14, 4, C.ink); g.rect(sx - 1, y - 18, 2, 18, C.chrome); }
@@ -217,7 +222,7 @@ function drawBistro(g) {
   g.ellipse(x, y - 30, 20, 7, C.marble);
 }
 
-// El muro entre la cafetería y el comedor: vidrio sobre un zócalo de madera, con su puerta.
+// The wall between the café and the dining room: glass over a wooden skirting, with its door.
 function drawDiningWall(g) {
   const top = DINING.top, { x0: d0, x1: d1 } = DINING.door;
   for (const [a, b] of [[CAFE.x, d0], [d1, W]]) {
@@ -230,8 +235,8 @@ function drawDiningWall(g) {
   if (g.s > 0.12) g.centered((CAFE.x + d0) / 2, g.row(top - 16), t('scene.dining'), C.accent, -1);
 }
 
-// La mesa larga del comedor: sillas de atrás, la cubierta con mantel (y lo que comen los de atrás)
-// y las sillas de adelante, que tapan la espalda de quien se sienta.
+// The dining room's long table: back chairs, the top with its tablecloth (and what the back ones eat)
+// and the front chairs, which cover the back of whoever sits there.
 function drawDiningBackChairs(g) {
   const colors = [C.accent, C.ok, C.err, hex('#118ab2')];
   DINING_SEATS.back.forEach((s, i) => g.rect(s.x - 11, s.y - 36, 22, 24, colors[i % 4]));
@@ -253,7 +258,7 @@ function drawDiningFrontChair(g, s) {
   g.rect(s.x - 11, s.y - 20, 22, 18, C.woodFront);
 }
 
-// La pizarra en su atril, con el reloj digital rojo encima.
+// The whiteboard on its easel, with the red digital clock on top.
 function drawBoard(g, sim, date) {
   const { rect, scr, X } = g;
   const board = sim.board;
@@ -262,13 +267,13 @@ function drawBoard(g, sim, date) {
   rect(lt - 3, EASEL.top + 4, rt - lt + 6, 4, wood);
   for (const [top, foot] of EASEL.legs) for (let k = 0; k <= 12; k++) rect(top + ((foot - top) * k) / 12 - 2, EASEL.top + ((EASEL.feet - EASEL.top) * k) / 12, 5, 11, wood);
   rect(BOARD.x + BOARD.w / 2, BOARD.y + BOARD.h, 4, EASEL.feet - BOARD.y - BOARD.h - 4, woodDark);
-  // el reloj: dígitos rojos sobre negro
+  // the clock: red digits on black
   rect(CLOCK.x - 2, CLOCK.y - 2, CLOCK.w + 4, CLOCK.h + 4, hex('#0b0c14'));
   rect(CLOCK.x, CLOCK.y, CLOCK.w, CLOCK.h, hex('#160a0c'));
   const pad = (n) => String(n).padStart(2, '0');
   const blink = date.getMilliseconds() < 500 ? ':' : ' ';
   g.centered(CLOCK.x + CLOCK.w / 2, g.row(CLOCK.y + CLOCK.h / 2), `${pad(date.getHours())}${blink}${pad(date.getMinutes())}`, hex('#ff3b30'), hex('#160a0c'));
-  // el tablero
+  // the board
   rect(BOARD.x - 4, BOARD.y - 4, BOARD.w + 8, BOARD.h + 8, C.boardFrame);
   rect(BOARD.x, BOARD.y, BOARD.w, BOARD.h, C.paper);
   rect(lt + 4, BOARD.y + BOARD.h + 4, rt - lt - 8, 4, wood);
@@ -280,7 +285,7 @@ function drawBoard(g, sim, date) {
   scr.text(c0, r0, fit(title, width), C.ink, C.paper);
   const todos = board.todos || [];
   const cols = [[t('scene.todo'), 'pending', C.sticky1], [t('scene.doing'), 'in_progress', C.sticky2], [t('scene.done'), 'completed', C.sticky3]];
-  const avail = r1 - r0 - 1; // filas para columnas
+  const avail = r1 - r0 - 1; // rows for columns
   if (avail < 2) {
     if (avail >= 1) {
       const n = (st) => todos.filter((t) => t.status === st).length;
@@ -306,7 +311,7 @@ function drawBoard(g, sim, date) {
   }
 }
 
-// El sofá, de espaldas, y la tele en su trípode.
+// The sofa, from behind, and the TV on its tripod.
 function drawSofa(g) {
   const { x, y } = SOFA;
   g.rect(x - 72, y - 8, 12, 36, C.sofaBack); g.rect(x + 60, y - 8, 12, 36, C.sofaBack);
@@ -381,16 +386,16 @@ function drawDesk(g, a, now) {
   } else {
     screenPixels(g, mx, my, mw, mh, busy, hex(c.shirt), now);
   }
-  scr.rect(X(s.x + 33), my + mh + 1, 1, Math.max(1, Y(s.y - 14) - (my + mh + 1)), C.monitor); // pie del monitor
+  scr.rect(X(s.x + 33), my + mh + 1, 1, Math.max(1, Y(s.y - 14) - (my + mh + 1)), C.monitor); // monitor stand
   // carpetas = subagentes asignados
   for (let i = 0; i < Math.min(3, a.badges.size); i++) rect(s.x - 46 + i * 6, s.y - 30 - i * 4, 18, 12, C.folder);
-  // placa con el nombre
+  // name plate
   g.centered(s.x, g.row(s.y + 10), ` ${a.cfg.name} `, hex(c.shirt), C.frame);
 }
 
 function drawProps(g, sim, now) {
   const { rect, X, Y, scr } = g;
-  // rack de servidores: parpadea con el backend; en llamas, rojo; al reparar arranca de a poco
+  // server rack: blinks with the backend; on fire, red; when repaired it boots little by little
   const f = sim.fire, burning = f && ['burning', 'fighting'].includes(f.phase);
   rect(RACK.x, RACK.y, RACK.w, RACK.h, C.frame);
   rect(RACK.x + 2, RACK.y + 2, RACK.w - 4, RACK.h - 4, burning ? hex('#3a2324') : C.rack);
@@ -406,7 +411,7 @@ function drawProps(g, sim, now) {
     }
   }
   if (f && f.level > 0) {
-    // llamas: tres capas que titilan con el tiempo
+    // flames: three layers that flicker over time
     for (let i = 0; i < 9; i++) {
       const n = Math.sin(now / 90 + i * 1.7) + Math.sin(now / 53 + i * 0.9);
       const h = f.level * (30 + 10 * n) * (1 - Math.abs(i - 4) / 7);
@@ -415,9 +420,9 @@ function drawProps(g, sim, now) {
       rect(fx, RACK.y + 8 - h, 6, h, C.fire1); rect(fx + 1, RACK.y + 8 - h * 0.7, 4, h * 0.7, C.fire2); rect(fx + 1, RACK.y + 8 - h * 0.35, 4, h * 0.35, C.fire3);
     }
   }
-  // el extintor, junto al rack (si nadie lo tiene)
+  // the extinguisher, next to the rack (if nobody is holding it)
   if (sim.extinguisher === 'floor') { rect(EXTINGUISHER.x - 5, EXTINGUISHER.y - 24, 10, 24, C.ext); rect(EXTINGUISHER.x - 3, EXTINGUISHER.y - 28, 6, 4, C.ink); }
-  // plantas y mesa
+  // plants and table
   for (const [x, y] of PLANTS) {
     rect(x - 10, y - 14, 20, 16, C.pot);
     rect(x - 14, y - 34, 10, 20, C.leaf1); rect(x - 2, y - 42, 10, 28, C.leaf2); rect(x + 6, y - 30, 10, 16, C.leaf1);
@@ -426,9 +431,9 @@ function drawProps(g, sim, now) {
   g.ellipse(SPOT.table.x, SPOT.table.y, 84, 24, C.table);
 }
 
-// Sprites a escala de terminal: 5×10 (grande) o 3×6 (chico), anclados en los pies.
+// Sprites at terminal scale: 5×10 (large) or 3×6 (small), anchored at the feet.
 function drawPerson(g, a, sim, model, now) {
-  if (a.hidden) return; // en el baño
+  if (a.hidden) return; // in the bathroom
   const { scr, X, Y, L } = g;
   const c = a.cfg;
   const big = g.s >= 0.14;
@@ -440,7 +445,7 @@ function drawPerson(g, a, sim, model, now) {
   else top = Y(a.y) - sh;
   if (now < a.jumpUntil) top -= Math.round(Math.abs(Math.sin(now / 120)) * 2);
   if (now < a.shakeUntil) fx += Math.round(Math.sin(now / 25));
-  if (a.dance && !a.walking) fx += Math.round(Math.sin(now / 55)); // esperando el baño
+  if (a.dance && !a.walking) fx += Math.round(Math.sin(now / 55)); // waiting for the bathroom
   const x0 = fx - Math.floor(sw / 2);
   const P = (dx, dy, col) => scr.pset(x0 + dx, top + dy, col);
   const rowsToDraw = sitting ? (big ? 7 : 4) : sh;
@@ -450,8 +455,8 @@ function drawPerson(g, a, sim, model, now) {
   const step = walking ? Math.sin(a.walkT * 14) > 0 : false;
   const typing = a.seated && a.state === 'working' && Math.floor(now / 140) % 2;
 
-  scr.clearText(x0 - 1, top, sw + 2, rowsToDraw); // tapa el texto que quede detrás
-  if (a.back) { // de espaldas, en el sofá: el pelo y los hombros
+  scr.clearText(x0 - 1, top, sw + 2, rowsToDraw); // covers the text left behind it
+  if (a.back) { // from behind, on the sofa: the hair and the shoulders
     if (big) {
       for (const x of [1, 2, 3]) P(x, 0, hair);
       for (let y = 1; y <= 3; y++) for (let x = 0; x < 5; x++) P(x, y, hair);
@@ -475,7 +480,7 @@ function drawPerson(g, a, sim, model, now) {
     if (a.carry) { P(5, 4, a.carry === 'ext' ? C.ext : C.white); P(5, 5, a.carry === 'ext' ? C.ext : C.white); }
     if (!sitting) {
       for (const y of [7, 8]) { P(1, y, pants); P(3, y, pants); }
-      // al caminar los zapatos se alternan
+      // when walking the shoes alternate
       const [l, rr] = !walking ? [1, 3] : step ? [0, 3] : [1, 4];
       P(l, 9, C.shoe); P(rr, 9, C.shoe);
     }
@@ -489,7 +494,7 @@ function drawPerson(g, a, sim, model, now) {
   }
 
   const headRow = Math.floor(top / 2);
-  // selección: línea amarilla bajo los pies
+  // selection: a yellow line under the feet
   if (model.selected === a.id) {
     const y = sitting ? Y(a.y + 24) : top + sh;
     scr.rect(x0 - 1, y, sw + 2, 1, C.select);
@@ -507,7 +512,7 @@ function drawPerson(g, a, sim, model, now) {
   }
 }
 
-// Lo que imaginan: una nube con su pixel art (unicornio, arcoíris, calavera o pizza) que brilla.
+// What they imagine: a glowing cloud with its pixel art (unicorn, rainbow, skull or pizza).
 const RAINBOW_SMALL = rainbowPixels(6);
 function drawDream(g, a, now) {
   const d = a.dream;
@@ -520,24 +525,24 @@ function drawDream(g, a, now) {
   const sprite = info.sprite;
   const w = sprite ? sprite[0].length : 13, h = sprite ? sprite.length : 7;
   const x0 = Math.min(L.ox + L.pw - w - 3, x + 4), y0 = Math.max(L.oy + 1, head - h - 4);
-  if (!big) { // terminal chica: el sueño como emoji, junto a la cabeza
+  if (!big) { // small terminal: the dream as an emoji, next to the head
     const col = Math.min(L.ox + L.pw - 3, x + 2);
     scr.text(col, Math.max(1, Math.floor(head / 2) - 2), info.emoji, C.white, -1, L.ox + L.pw - col);
     return;
   }
-  // resplandor alrededor de la nube (el arcoíris cambia de color)
+  // glow around the cloud (the rainbow changes color)
   const glowColor = hex(d.kind === 'rainbow' ? RAINBOW_COLORS[Math.floor(now / 300) % RAINBOW_COLORS.length] : info.glow);
   const cx = (x0 + w / 2 - L.ox) / g.s, cy = (y0 + h / 2 - L.oy) / g.s;
   g.tint(cx, cy, (w + 8) / g.s * 0.75, glowColor, 0.28 + 0.04 * Math.sin(now / 420));
   const cloud = hex(info.cloud);
-  scr.rect(x0 - 1, y0 - 1, w + 2, h + 2, cloud); // la nube
-  scr.pset(x0 - 2, y0 + h - 1, cloud); scr.pset(x0 - 3, y0 + h + 1, cloud); // burbujitas hacia la cabeza
+  scr.rect(x0 - 1, y0 - 1, w + 2, h + 2, cloud); // the cloud
+  scr.pset(x0 - 2, y0 + h - 1, cloud); scr.pset(x0 - 3, y0 + h + 1, cloud); // little bubbles towards the head
   if (sprite) sprite.forEach((row, ry) => [...row].forEach((ch, rx) => { if (ch !== '.') scr.pset(x0 + rx, y0 + ry, hex(DREAM_PALETTE[ch])); }));
   else for (const [dx, dy, col] of RAINBOW_SMALL) scr.pset(x0 + 6 + dx, y0 + 6 + dy, hex(col));
 }
 
-/** Luz: de noche el color se enfría apenas (las luces siguen prendidas) y brillan tenues el neón,
- *  los monitores, el baño y el fuego. */
+/** Light: at night the color barely cools down (the lights stay on) and the neon, the monitors,
+ *  the bathroom and the fire glow faintly. */
 function drawLights(g, sim, now, light) {
   const { scr, L } = g;
   const [sr, sg, sb] = light.shade;
@@ -558,12 +563,12 @@ function drawLights(g, sim, now, light) {
   g.tint(CLOCK.x + CLOCK.w / 2, CLOCK.y + CLOCK.h / 2, 40, hex('#ff3b30'), 0.04 + n * 0.05);
   const f = sim.fire;
   if (f?.level > 0) g.tint(RACK.x + RACK.w / 2, RACK.y + 10, 70 + 120 * f.level, C.fire2, (0.25 + 0.05 * Math.sin(now / 70)) * f.level);
-  // los relámpagos iluminan la oficina un instante
+  // lightning lights up the office for an instant
   const bolt = lightning(now, sim.weather);
   if (bolt.flash > 0) g.blend(0, 0, W, H, C.white, 0.08 * bolt.flash);
 }
 
-// El seleccionado lleva un rombo verde encima, como en Los Sims.
+// The selected one wears a green diamond on top, like in The Sims.
 function drawPlumbob(g, a, now) {
   if (!a || a.hidden) return;
   const { scr, X, Y } = g;
@@ -589,7 +594,7 @@ function drawBubble(g, a, placed) {
   const h = lines.length + 1;
   const hits = (r) => placed.some((p) => col < p.col + p.w + 1 && p.col < col + w + 1 && r < p.row + p.h && p.row < r + h);
   while (hits(row0) && row0 > 1) row0--;
-  if (hits(row0)) return; // no hay sitio: se omite este cuadro
+  if (hits(row0)) return; // no room: this frame is skipped
   placed.push({ col, row: row0, w, h });
   lines.forEach((line, i) => {
     scr.fill(col, row0 + i, w, bg);
@@ -626,12 +631,12 @@ function drawBanner(g, sim, now) {
   scr.text(L.ox + Math.floor((L.pw - strWidth(text)) / 2), row, text, tone[1], pulse);
 }
 
-// ------------------------------------------------------------------ cabecera, pie y panel
+// ------------------------------------------------------------------ header, footer and panel
 
 function drawHeader(scr, L, model, sim, light) {
   scr.fill(0, 0, L.cols, C.headerBg);
   let c = 0;
-  // arriba a la izquierda, el selector de oficina (sólo si la empresa tiene más de una)
+  // top left, the office selector (only if the company has more than one)
   const offices = model.offices || [];
   if (offices.length > 1) {
     const label = ` 🏢 ${fit(model.office?.name || '', 22)} ▾ `;
@@ -642,7 +647,7 @@ function drawHeader(scr, L, model, sim, light) {
   c += scr.text(c, 0, ' ▣ DEV TEAM OFFICE ', C.accent, C.headerBg);
   const conn = model.connection;
   c += scr.text(c, 0, ` ● ${conn.key ? t(conn.key, conn.vars) : conn.label} `, conn.ok ? C.ok : C.err, C.headerBg);
-  // a la derecha: el clima de afuera (el que se ve por el vidrio) y la hora de la oficina
+  // on the right: the weather outside (the one seen through the glass) and the office's time
   const clock = timeOf(Date.now(), sim.zone, { seconds: true });
   const w = sim.weather;
   const wx = `${weatherIcon(w, light.night)} ${Number.isFinite(w.temp) ? `${Math.round(w.temp)}°` : ''}${w.place ? ` ${w.place}` : ''}  `;
@@ -653,7 +658,7 @@ function drawHeader(scr, L, model, sim, light) {
   scr.text(L.cols - clock.length - 1, 0, clock, C.text, C.headerBg);
 }
 
-/** Dentro de la escena: ⚙ Ajustes arriba a la derecha y la terminal (actividad) abajo a la izquierda. */
+/** Inside the scene: ⚙ Settings top right and the terminal (activity) bottom left. */
 function drawSceneIcons(scr, L, model) {
   const on = (x) => (x ? [C.headerBg, C.accent] : [C.accent, C.frame]);
   const [gf, gb] = on(model.settings);
@@ -675,7 +680,7 @@ function drawFooter(scr, L, model) {
     scr.text(L.cols - strWidth(hint), row, hint, C.muted, C.headerBg);
     return;
   }
-  const keys = ['t', 'c', 'a', ...((model.offices || []).length > 1 ? ['o'] : []), 'q', 'tab', 'm', 's', 'x', 'd', 'p', 'r', 'esc'];
+  const keys = ['t', 'c', 'a', ...((model.offices || []).length > 1 ? ['o'] : []), 'q', 'tab', 'm', 'b', 's', 'x', 'd', 'p', 'r', 'esc'];
   let c = 1;
   for (const k of keys) {
     const label = t(`tui.keys.${k === 'q' && model.quitKey === 'quit' ? 'quit' : k}`);
@@ -724,12 +729,12 @@ function drawPanel(scr, L, sim, model) {
   }
   r++;
 
-  // FLUJO por roles
+  // role FLOW
   const flow = s?.flow || [];
   if (flow.length && r < maxR - 10) {
     heading(t('tui.flow'));
     const parts = flow.map((f) => ({ text: `${TEAM[f.role]?.name || f.role}·${phaseInfo(f.phase).label}`, color: hex(TEAM[f.role]?.shirt || '#888888') }));
-    // de atrás hacia adelante, lo que quepa en 2 líneas
+    // from back to front, whatever fits in 2 lines
     const lines = [[]];
     let used = 0;
     for (let i = parts.length - 1; i >= 0; i--) {
@@ -750,7 +755,7 @@ function drawPanel(scr, L, sim, model) {
     r++;
   }
 
-  // PIPELINES: cada etapa con el personaje que la hace
+  // PIPELINES: each stage with the character who does it
   const runs = (model.pipelines || []).slice(-2).reverse();
   if (runs.length && r < maxR - 12) {
     heading(t('tui.pipelines'));
@@ -773,7 +778,7 @@ function drawPanel(scr, L, sim, model) {
     r++;
   }
 
-  // TAREAS enviadas a los agentes
+  // TASKS sent to the agents
   const tasks = (model.tasks?.tasks || []).slice(-4).reverse();
   if (tasks.length) {
     heading(t('tui.tasks'), t('tui.connected', { n: (model.tasks.agents || []).length }));
@@ -794,7 +799,7 @@ function drawPanel(scr, L, sim, model) {
     r++;
   }
 
-  // PANES de herdr: las actividades que abrió el agente (o la oficina), con quién se encarga
+  // herdr PANES: the activities the agent (or the office) opened, with who is in charge
   const panes = (model.herdr?.panes || []).filter((p) => !p.main && (p.office || 'main') === (model.office?.id || 'main'));
   if (panes.length && r < maxR - 10) {
     heading(t('tui.panes'));
@@ -829,7 +834,7 @@ function drawPanel(scr, L, sim, model) {
   }
   r++;
 
-  // DETALLE del seleccionado, o BITÁCORA
+  // DETAIL of the selected one, or the LOG
   if (model.selected) {
     const a = sim.agents[model.selected], cfg = TEAM[model.selected];
     heading(t('tui.detail', { name: cfg.name }), cfg.title);
@@ -849,10 +854,10 @@ function drawPanel(scr, L, sim, model) {
     const cfg = TEAM[ev.role];
     const time = timeOf(ev.ts, sim.zone);
     scr.text(x + 1, r, time, C.muted, C.panelBg);
-    const who = ev.kind === 'chat' || ev.kind === 'poke' ? ev.from : cfg?.name || t('events.office');
+    const who = ev.kind === 'chat' || ev.kind === 'poke' || (ev.kind === 'btw' && ev.phase === 'ask') ? ev.from : cfg?.name || t('events.office');
     let c = x + 7;
     c += scr.text(c, r, fit(who, 10), cfg ? hex(cfg.shirt) : C.text, C.panelBg);
-    T(` ${logText(ev)}`, ev.ok === false ? C.err : C.text, c, x + w - 1 - c);
+    T(` ${logText(ev)}`, ev.ok === false || (ev.kind === 'btw' && ev.phase === 'failed') ? C.err : C.text, c, x + w - 1 - c);
     r++;
   }
 }
@@ -863,15 +868,16 @@ export function logText(ev) {
     return `${ph.label}${ev.text ? `: ${ev.text}` : ''}`;
   }
   if (ev.kind === 'phase_end') return t('events.turnEnd', { text: ev.text ? `: ${ev.text}` : '' });
+  if (ev.kind === 'btw') return ev.phase === 'ask' ? `❓ btw: ${ev.text}` : ev.phase === 'answer' ? `💡 ${ev.text}` : `✖ btw: ${ev.text}`;
   return ev.text || ev.kind;
 }
 
-/** ¿Esa celda cae en el selector de oficina? (arriba a la izquierda, si hay más de una) */
+/** Does that cell fall on the office selector? (top left, if there is more than one) */
 export function officeAtCell(L, col, row) {
   return !!L.officeCell?.w && row === L.officeCell.row && col >= L.officeCell.col && col < L.officeCell.col + L.officeCell.w;
 }
 
-/** ¿Esa celda cae en la pizarra? (un clic abre el diálogo de encargo) */
+/** Does that cell fall on the whiteboard? (a click opens the brief dialog) */
 export function boardAtCell(L, col, row) {
   if (L.tooSmall) return false;
   const x0 = L.ox + Math.round(BOARD.x * L.s), x1 = L.ox + Math.round((BOARD.x + BOARD.w) * L.s);
@@ -879,20 +885,20 @@ export function boardAtCell(L, col, row) {
   return col >= x0 && col <= x1 && row >= r0 && row <= r1;
 }
 
-// ------------------------------------------------------------------ diálogo "Nuevo encargo"
+// ------------------------------------------------------------------ "New brief" dialog
 
 const CB = Object.fromEntries(Object.entries({
   cork: '#b9895a', corkDot: '#8f6640', paper: '#fdfcf6', note: '#ffe08a', pin: '#ef476f', gate: '#9b5d1d', err: '#c1121f', shadow: '#0a0b14', soft: '#6c757d',
 }).map(([k, v]) => [k, hex(v)]));
 
-/** El diálogo de la pizarra: un corcho con una hoja clavada, como en la vista web. */
+/** The whiteboard dialog: a cork board with a pinned sheet, as in the web view. */
 function drawBrief(scr, L, model) {
   const b = model.brief;
   const opts = briefOptions({ targets: model.targets || [] }, b.sel);
   const w = Math.min(L.cols - 2, 88);
-  const iw = w - 8; // ancho útil dentro de la hoja
+  const iw = w - 8; // usable width inside the sheet
   const labelW = 10;
-  const rows = []; // cada fila: (row, col) => void
+  const rows = []; // each row: (row, col) => void
 
   const text = (str, fg, bg = CB.paper) => (row, col) => scr.text(col, row, fit(str, iw), fg, bg);
   const field = (name, label, value) => (row, col) => {
@@ -915,7 +921,7 @@ function drawBrief(scr, L, model) {
     : t('brief.registerHint');
   for (const line of wrap(desc, iw - labelW - 3, 2)) rows.push((row, col) => scr.text(col + labelW + 3, row, line, CB.soft, CB.paper));
   rows.push(field('session', t('brief.session'), opts.session?.label));
-  // la tarea, en una nota amarilla
+  // the task, on a yellow note
   const focusTask = b.field === 'task';
   const noteW = iw - labelW;
   const noteLines = b.text ? wrap(b.text, noteW - 3, 3) : [''];
@@ -969,7 +975,7 @@ function drawBrief(scr, L, model) {
 
   const h = rows.length + 2;
   const x0 = Math.floor((L.cols - w) / 2), y0 = Math.max(1, Math.floor((L.rows - h) / 2));
-  // sombra, corcho, hoja y chinche
+  // shadow, cork, sheet and pin
   for (let r = y0 + 1; r <= y0 + h; r++) scr.fill(x0 + 1, r, w, CB.shadow);
   for (let r = y0; r < y0 + h; r++) {
     scr.fill(x0, r, w, CB.cork);
@@ -980,7 +986,7 @@ function drawBrief(scr, L, model) {
   rows.forEach((draw, i) => draw(y0 + 1 + i, x0 + 4));
 }
 
-/** Personaje más cercano a una celda (para clics del ratón). */
+/** The character closest to a cell (for mouse clicks). */
 export function agentAtCell(L, sim, col, row) {
   if (L.tooSmall) return null;
   let best = null, bestD = 4;

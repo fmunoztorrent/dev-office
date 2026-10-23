@@ -1,4 +1,4 @@
-// La oficina en la terminal: bucle de dibujo, teclado, ratón y el modelo del panel lateral.
+// The office in the terminal: draw loop, keyboard, mouse and the side panel's model.
 
 import { createSim, TEAM, applyAppearance } from '../public/sim.js';
 import { Screen, detectColorMode } from './screen.js';
@@ -7,15 +7,15 @@ import { briefOptions, briefFields, briefCycle, briefProblem, briefMessage, defa
 import { createSettings } from './settings.js';
 import { t, setLanguage } from '../public/i18n.js';
 
-const ENTER = '\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1006h'; // pantalla alternativa, sin cursor, ratón SGR
+const ENTER = '\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1006h'; // alternate screen, no cursor, SGR mouse
 const LEAVE = '\x1b[?1000l\x1b[?1006l\x1b[0m\x1b[?25h\x1b[?1049l';
-const OFFICE_SESSION = 'office'; // chat y saludos, no es una sesión de agente
+const OFFICE_SESSION = 'office'; // chat and greetings, not an agent session
 const ROLES = Object.keys(TEAM);
 const FPS = 20;
 
 /**
- * La oficina en la terminal. Termina (resuelve) con q: desde la consola, q vuelve a la bitácora.
- * @param quitKey 'log' (q vuelve a la bitácora de la consola) o 'quit' (q sale)
+ * The office in the terminal. It ends (resolves) with q: from the console, q goes back to the log.
+ * @param quitKey 'log' (q goes back to the console's log) or 'quit' (q exits)
  */
 export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), notice, stdin = process.stdin, stdout = process.stdout, quitKey = 'quit' }) {
   return new Promise((resolve) => {
@@ -24,14 +24,14 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
     const sessions = new Map();
     const model = {
       selected: null, chat: null, status: null, log: [], session: null, sessions, connection: { ok: false, key: 'conn.connecting' }, endpoints, quitKey,
-      offices: [], office: null, // las oficinas de la empresa y la que se está mirando (el selector, arriba a la izquierda)
-      herdr: null,               // los panes de herdr que la oficina sigue
+      offices: [], office: null, // the company's offices and the one being watched (the selector, top left)
+      herdr: null,               // the herdr panes the office follows
       tasks: { tasks: [], agents: [], launchers: [], defaultCwd: '' },
       pipelines: [],
-      targets: [], // agentes registrados (⚙ › Agentes) y sesiones abiertas, con lo que trae su harness
-      brief: null, // el diálogo de la pizarra mientras está abierto
-      settings: null, // ⚙ Ajustes mientras está abierto
-      panel: true, // la actividad del equipo a la derecha (>_ o la tecla a la ocultan: la oficina a pantalla completa)
+      targets: [], // registered agents (⚙ › Agents) and open sessions, with what their harness brings
+      brief: null, // the whiteboard dialog while it is open
+      settings: null, // ⚙ Settings while open
+      panel: true, // the team's activity on the right (>_ or the a key hide it: the office in full screen)
     };
     let L;
     let active = true;
@@ -87,7 +87,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       flash(out?.ok === false ? t('tui.flash.failed', { error: out.error }) : ok);
     };
 
-    // El selector de oficina (arriba a la izquierda, o la tecla o): la siguiente de la empresa.
+    // The office selector (top left, or the o key): the company's next one.
     function nextOffice(delta = 1) {
       const list = model.offices;
       if (list.length < 2) return;
@@ -101,8 +101,8 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       model.selected = ROLES[(i + delta + ROLES.length) % ROLES.length];
     }
 
-    // ---- diálogo "Nuevo encargo" (t, o clic en la pizarra) ----
-    /** @param agentId abre el diálogo con ese agente elegido (desde ⚙ › Agentes) */
+    // ---- "New brief" dialog (t, or click on the whiteboard) ----
+    /** @param agentId opens the dialog with that agent chosen (from ⚙ › Agents) */
     function openBrief(agentId) {
       const i = agentId ? model.targets.findIndex((t) => t.id === agentId) : -1;
       model.brief = { field: 'task', sel: { target: i >= 0 ? i : defaultTarget(model.targets, sessions.values()), entry: 0, session: -1 }, text: '', error: '' };
@@ -141,7 +141,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       if (k === '\x7f' || k === '\b') b.text = [...b.text].slice(0, -1).join('');
       else if (k.length <= 2 && k >= ' ' && [...b.text].length < 2000) b.text += k;
       else return;
-      b.field = 'task'; // escribir siempre va a la tarea
+      b.field = 'task'; // typing always goes to the task
       b.error = '';
     }
 
@@ -154,7 +154,12 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
         else if (k === '\r' || k === '\n') {
           const text = model.chat.trim();
           model.chat = null;
-          if (text) send({ type: 'chat', text, role: model.selected || undefined, from: 'Terminal' }, t('tui.flash.sent'));
+          // btw <question>: a side question to the agent on duty (it answers without being interrupted)
+          if (/^\/?btw\b/i.test(text)) {
+            const q = text.replace(/^\/?btw\b[:,]?\s*/i, '').trim();
+            if (q) send({ type: 'ask', text: q, from: 'Terminal' }, t('tui.flash.asked'));
+            else flash(t('ui.btwUsage'));
+          } else if (text) send({ type: 'chat', text, role: model.selected || undefined, from: 'Terminal' }, t('tui.flash.sent'));
         } else if (k === '\x7f' || k === '\b') model.chat = [...model.chat].slice(0, -1).join('');
         else if (k.length <= 2 && k >= ' ' && [...model.chat].length < 200) model.chat += k;
         return;
@@ -169,9 +174,10 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
         case 'shift-tab': case 'up': case 'left': select(-1); break;
         case 'esc': model.selected = null; break;
         case 'm': model.chat = ''; break;
+        case 'b': model.chat = 'btw '; break; // a side question to the agent on duty
         case 't': openBrief(); break;
         case 'c': openSettings(); break;
-        case 'a': model.panel = !model.panel; resize(); break; // la actividad (>_): sin ella, la oficina ocupa toda la terminal
+        case 'a': model.panel = !model.panel; resize(); break; // the activity (>_): without it, the office takes the whole terminal
         case 'x': {
           const run = [...model.pipelines].reverse().find((r) => r.status === 'running');
           if (run) { send({ type: 'pipeline_cancel', id: run.id }, t('tui.flash.cancelRun', { name: run.pipeline.name })); break; }
@@ -236,7 +242,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       resolve();
     }
 
-    // Si algo revienta, la terminal tiene que quedar usable.
+    // If something blows up, the terminal has to stay usable.
     process.once('exit', restore);
     for (const sig of ['SIGTERM', 'SIGHUP']) process.once(sig, () => { quit(); process.exit(0); });
 

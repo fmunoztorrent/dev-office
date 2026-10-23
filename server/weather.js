@@ -1,10 +1,10 @@
-// El clima de afuera, para la pared de vidrio de la oficina: Open-Meteo (gratis y sin API key).
+// The weather outside, for the office's glass wall: Open-Meteo (free, no API key).
 //
-// La ubicación sale de DEV_TEAM_OFFICE_LOCATION (una ciudad, "Valparaíso", o coordenadas,
-// "-33.45,-70.65") o, si no está, de la ciudad de la zona horaria del equipo
-// (America/Santiago → Santiago). Sólo se manda eso: el nombre de la ciudad para ubicarla y sus
-// coordenadas para pedir el clima. Con DEV_TEAM_OFFICE_WEATHER=off no se consulta nada y la
-// oficina inventa un clima según la estación (lo mismo pasa sin conexión).
+// The location comes from DEV_TEAM_OFFICE_LOCATION (a city, "Valparaíso", or coordinates,
+// "-33.45,-70.65") or, if unset, from the city of the team's time zone
+// (America/Santiago → Santiago). Only that is sent: the city's name to locate it and its
+// coordinates to ask for the weather. With DEV_TEAM_OFFICE_WEATHER=off nothing is queried and the
+// office makes up a weather by season (the same happens offline).
 
 import { EventEmitter } from 'node:events';
 import { fromOpenMeteo, localZone } from '../public/sky.js';
@@ -16,11 +16,11 @@ const COORDS = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/;
 
 export class Weather extends EventEmitter {
   /**
-   * @param location  ciudad o "lat,lon" (por defecto DEV_TEAM_OFFICE_LOCATION o la de la zona horaria)
-   * @param enabled   false: no consulta nada (por defecto, salvo DEV_TEAM_OFFICE_WEATHER=off)
-   * @param fetch     para los tests
-   * @param every     cada cuánto se actualiza (ms)
-   * @param place     el nombre del lugar cuando `location` son coordenadas (p. ej. la ciudad de la zona horaria)
+   * @param location  city or "lat,lon" (by default DEV_TEAM_OFFICE_LOCATION or the time zone's)
+   * @param enabled   false: queries nothing (the default, unless DEV_TEAM_OFFICE_WEATHER=off)
+   * @param fetch     for the tests
+   * @param every     how often it updates (ms)
+   * @param place     the place's name when `location` is coordinates (e.g. the time zone's city)
    */
   constructor({ location = process.env.DEV_TEAM_OFFICE_LOCATION, enabled = process.env.DEV_TEAM_OFFICE_WEATHER !== 'off', fetch = globalThis.fetch, timezone = localZone(), every = 15 * 60_000, retry = 3 * 60_000, log = () => {}, place = '' } = {}) {
     super();
@@ -51,7 +51,7 @@ export class Weather extends EventEmitter {
     return res.json();
   }
 
-  /** Dónde está la oficina: coordenadas directas o la ciudad buscada en el geocodificador. */
+  /** Where the office is: direct coordinates or the city looked up in the geocoder. */
   async locate() {
     const m = COORDS.exec(this.location || '');
     if (m) return { lat: Number(m[1]), lon: Number(m[2]), name: this.placeName };
@@ -59,7 +59,7 @@ export class Weather extends EventEmitter {
     if (!name) throw new Error(t('weatherMsg.noLocation'));
     const q = new URLSearchParams({ name, count: '5', language: getLanguage(), format: 'json' });
     const hits = (await this.getJson(`${GEOCODING}?${q}`)).results || [];
-    // si hay varias con ese nombre, la de nuestra zona horaria
+    // if there are several with that name, the one in our time zone
     const hit = hits.find((h) => h.timezone === this.timezone) || hits[0];
     if (!hit) throw new Error(t('weatherMsg.notFound', { name }));
     return { lat: hit.latitude, lon: hit.longitude, name: hit.name };

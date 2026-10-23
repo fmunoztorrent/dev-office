@@ -1,12 +1,12 @@
-// Pipelines en la oficina: sólo un RELAY. El juego es el frontend y el agente es el backend.
+// Pipelines in the office: only a RELAY. The game is the frontend and the agent is the backend.
 //
-// - Los agentes anuncian qué pipelines pueden correr en su proyecto: Pi y OpenCode al
-//   registrarse por WebSocket, Claude Code desde su hook (POST /v1/agents/announce).
-// - Al arrancar un pipeline desde la pizarra, la oficina se lo pide a la sesión de ese agente
-//   ({ type: 'pipeline', id, pipeline, task }); a Claude Code se lo entrega su hook Stop.
-// - El agente lo ejecuta dentro de su sesión (integrations/common/devteam.mjs) y reporta los
-//   eventos y el estado (pipeline_update). La oficina no lanza procesos, no corre gates y no
-//   lee .devteam/.
+// - Agents announce which pipelines they can run in their project: Pi and OpenCode when they
+//   register over WebSocket, Claude Code from its hook (POST /v1/agents/announce).
+// - When a pipeline is started from the whiteboard, the office asks that agent's session for it
+//   ({ type: 'pipeline', id, pipeline, task }); Claude Code gets it from its Stop hook.
+// - The agent runs it inside its session (integrations/common/devteam.mjs) and reports the
+//   events and the state (pipeline_update). The office does not launch processes, does not run
+//   gates and does not read .devteam/.
 
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
@@ -20,7 +20,7 @@ const STAGE_STATUS = new Set(['pending', 'running', 'done', 'failed', 'skipped',
 const RUN_STATUS = new Set(['queued', 'sent', 'running', 'done', 'failed', 'cancelled']);
 export const isBlocking = (issue) => /ciclo|no existe|no tiene etapas|mismo id|rol desconocido|cycle|does not exist|no stages|same id|unknown role/.test(issue);
 
-/** Lo que un agente anuncia de su proyecto, saneado (viene de otro proceso). */
+/** What an agent announces about its project, sanitized (it comes from another process). */
 export function sanitizeProject(p, cwd) {
   if (!p || typeof p !== 'object') return null;
   const stage = (s) => ({
@@ -42,19 +42,19 @@ export function sanitizeProject(p, cwd) {
 }
 
 export class PipelineHub extends EventEmitter {
-  /** @param company las oficinas (server/company.js) */
+  /** @param company the offices (server/company.js) */
   constructor(company, tasks, { store } = {}) {
     super();
     this.office = company;
     this.tasks = tasks;
-    this.store = store; // historial de prompts (server/store.js)
+    this.store = store; // prompt history (server/store.js)
     this.runs = new Map();
-    this.announced = new Map(); // sesiones de Claude Code (sin conexión permanente)
+    this.announced = new Map(); // Claude Code sessions (without a permanent connection)
     this.seq = 0;
-    tasks.on('change', () => this.changed()); // el catálogo depende de quién está conectado
+    tasks.on('change', () => this.changed()); // the catalog depends on who is connected
   }
 
-  /** El hook de Claude Code anuncia su sesión, su proyecto y sus pipelines. */
+  /** The Claude Code hook announces its session, its project and its pipelines. */
   announce({ agent, session, cwd, project, office, pane } = {}) {
     if (!session) return { ok: false, error: tr('err.noSessionField') };
     this.announced.set(String(session), { agent: agent || 'claude-code', session: clip(session, 100), cwd: clip(cwd, 300), project: sanitizeProject(project, cwd), at: Date.now() });
@@ -65,10 +65,10 @@ export class PipelineHub extends EventEmitter {
     return { ok: true };
   }
 
-  /** La oficina de una sesión (o de su ruta). */
+  /** A session's office (or its path's). */
   officeOf(h) { return this.office.officeOfSession?.(h.session) || this.office.officeForPath?.(h.cwd) || MAIN_OFFICE; }
 
-  /** Sesiones de agentes que anunciaron un proyecto. */
+  /** Agent sessions that announced a project. */
   hosts() {
     const live = this.tasks.liveAgents().filter((c) => c.project).map((c) => ({ agent: c.agent, session: c.session, cwd: c.cwd, project: c.project, live: true }));
     const now = Date.now();
@@ -78,7 +78,7 @@ export class PipelineHub extends EventEmitter {
     return [...live, ...hooked];
   }
 
-  /** Proyectos (por directorio) con sus pipelines y qué sesiones pueden correr cada uno. */
+  /** Projects (by directory) with their pipelines and which sessions can run each one. */
   projects(office) {
     const byDir = new Map();
     for (const h of this.hosts()) {
@@ -97,7 +97,7 @@ export class PipelineHub extends EventEmitter {
     return [...byDir.values()];
   }
 
-  /** Pide a una sesión de agente que corra un pipeline. */
+  /** Asks an agent session to run a pipeline. */
   start({ session, agent, pipeline, task, from, meta } = {}) {
     task = String(task ?? '').trim();
     if (!task) return { ok: false, error: tr('err.taskEmpty') };
@@ -130,7 +130,7 @@ export class PipelineHub extends EventEmitter {
     return { ok: true, run: this.#public(run) };
   }
 
-  /** Para el hook de Claude Code: el siguiente pipeline en cola de esa sesión. */
+  /** For the Claude Code hook: that session's next queued pipeline. */
   takeForClaude(session) {
     const run = [...this.runs.values()].find((r) => r.session === session && r.status === 'queued');
     if (!run) return null;
@@ -140,12 +140,12 @@ export class PipelineHub extends EventEmitter {
     return { id: run.id, pipeline: run.pipeline.id, task: run.task };
   }
 
-  /** Para el hook de Claude Code: pipelines de esa sesión que el usuario canceló. */
+  /** For the Claude Code hook: that session's pipelines the user cancelled. */
   cancelsFor(session) {
     return [...this.runs.values()].filter((r) => r.session === session && r.cancelRequested && ['sent', 'running'].includes(r.status)).map((r) => r.id);
   }
 
-  /** El agente informa el estado (pipeline_update). */
+  /** The agent reports the state (pipeline_update). */
   update(id, status = {}) {
     const run = this.runs.get(String(id));
     if (!run) return { ok: false, error: tr('err.unknownPipeline') };
@@ -171,7 +171,7 @@ export class PipelineHub extends EventEmitter {
       run.detail = tr('run.cancelledEarly');
       run.endedAt = Date.now();
     } else if (!this.tasks.sendToSession(run.session, { type: 'pipeline_cancel', id: run.id })) {
-      run.cancelRequested = true; // Claude: lo recoge su hook en el siguiente evento
+      run.cancelRequested = true; // Claude: its hook picks it up on the next event
       run.detail = tr('run.cancelling');
     }
     this.changed(run);
@@ -189,14 +189,14 @@ export class PipelineHub extends EventEmitter {
   #save(r) {
     try {
       this.store?.savePrompt({ id: `${this.tasks.boot}-${r.id}`, agentId: r.agentId, agent: r.agent, entry: r.entry, text: `${r.pipeline.name}: ${r.task}`, session: r.session, mode: 'pipeline', cwd: r.project.dir, status: r.status, detail: r.detail });
-    } catch { /* el historial no puede romper el pipeline */ }
+    } catch { /* the history cannot break the pipeline */ }
   }
 
   changed(run) {
     if (run) this.#save(run);
     this.emit('change', this.snapshot());
   }
-  /** @param office sólo lo de esa oficina (sin oficina: todo) */
+  /** @param office only that office's (without an office: everything) */
   snapshot(office) {
     return { runs: [...this.runs.values()].filter((r) => !office || (r.office || MAIN_OFFICE) === office).slice(-10).map((r) => this.#public(r)), projects: this.projects(office) };
   }

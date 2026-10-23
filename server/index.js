@@ -1,4 +1,4 @@
-// `npm start`: la oficina sin interfaz de terminal (API + vista web en el navegador).
+// `npm start`: the office without the terminal interface (API + web view in the browser).
 import { startServer, DEFAULT_PORT, DEFAULT_HOST } from './server.js';
 import { t } from '../public/i18n.js';
 

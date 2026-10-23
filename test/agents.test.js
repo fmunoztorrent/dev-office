@@ -1,5 +1,5 @@
-// El mantenedor de agentes por la API: registrar una ruta, ver lo que trae su harness y mandarle
-// un prompt que arranca SU pipeline (a la sesión abierta en esa ruta o a una sesión nueva).
+// The agents maintainer through the API: register a path, see what its harness brings and send it
+// a prompt that starts ITS pipeline (to the session open in that path or to a new session).
 import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -38,7 +38,7 @@ test('mantenedor: detectar, registrar, listar, editar y eliminar por la API', ()
   assert.equal(agent.id, 'erre-claude-code');
   assert.deepEqual(agent.kinds, ['Errementari 2.1.0', 'Dev Team Office']);
   assert.ok(agent.entries.some((e) => e.id === 'errementari:feature' && e.stages.length === 7));
-  assert.ok(!agent.entries.some((e) => e.id.startsWith('opencode:'))); // sólo lo que sirve para Claude Code
+  assert.ok(!agent.entries.some((e) => e.id.startsWith('opencode:'))); // only what works for Claude Code
 
   assert.equal((await call(base, 'POST', '/v1/agents', { path: dir, harness: 'claude-code' })).status, 400);
   assert.equal((await call(base, 'POST', '/v1/agents', { path: 'relativa', harness: 'pi' })).status, 400);
@@ -64,14 +64,14 @@ test('prompt sin sesión abierta: la oficina abre el CLI del agente en su ruta c
     const t = await until(() => server.hub.snapshot().tasks.find((x) => x.status === 'done'));
     assert.equal(t.text, 'Errementari · bugfix: el SSE no reconecta');
     const run = JSON.parse(fs.readFileSync(log, 'utf8'));
-    // `claude -p "/task bug: …"` en la ruta del agente: es Errementari el que corre su pipeline
+    // `claude -p "/task bug: …"` in the agent's path: Errementari is the one running its pipeline
     assert.deepEqual(run.args, ['-p', '/task bug: el SSE no reconecta', '--permission-mode', 'acceptEdits']);
     assert.equal(fs.realpathSync(run.cwd), fs.realpathSync(dir));
     assert.equal(run.launched, '1');
-    // queda en el historial del agente
+    // it stays in the agent's history
     const detail = await call(base, 'GET', `/v1/agents/${body.agent.id}`);
     assert.deepEqual(detail.body.prompts.map((p) => [p.entry, p.status, p.mode]), [['errementari:bugfix', 'done', 'launch']]);
-    // un pipeline de .devteam/ necesita una sesión abierta
+    // a .devteam/ pipeline needs an open session
     const dt = await call(base, 'POST', `/v1/agents/${body.agent.id}/prompt`, { entry: 'devteam:mini', text: 'x' });
     assert.match(dt.body.error, /lo corre una sesión abierta/);
     assert.match((await call(base, 'POST', `/v1/agents/${body.agent.id}/prompt`, { entry: 'nada', text: 'x' })).body.error, /no tiene la entrada/);
@@ -82,7 +82,7 @@ test('prompt sin sesión abierta: la oficina abre el CLI del agente en su ruta c
 
 test('prompt con sesión abierta en esa ruta: le llega a esa sesión (comando, o pipeline de .devteam)', () => withServer(async (server, base) => {
   const dir = errementariProject();
-  // una sesión de OpenCode abierta en la ruta del agente
+  // an OpenCode session open in the agent's path
   const ws = new WebSocket(base.replace('http', 'ws') + '/v1/ws');
   const got = [];
   ws.on('message', (d) => { const m = JSON.parse(d); if (m.type === 'task') { got.push(m); ws.send(JSON.stringify({ type: 'task_update', id: m.id, status: 'accepted' })); } });
@@ -95,11 +95,11 @@ test('prompt con sesión abierta en esa ruta: le llega a esa sesión (comando, o
   const msg = await until(() => got[0]);
   assert.deepEqual([msg.session, msg.text, msg.command, msg.args], ['ses_1', '/task feature: Login con Google', 'task', 'feature: Login con Google']);
   await until(() => server.hub.snapshot().tasks[0].status === 'running');
-  // sin sesión abierta en la ruta (null = sesión nueva) también se puede forzar
+  // without an open session in the path (null = new session) it can be forced too
   assert.equal(server.registry.target(agent.id).sessions[0].session, 'ses_1');
   ws.close();
 
-  // un pipeline de .devteam/ va a una sesión que lo pueda correr (Pi de mentira en la misma ruta)
+  // a .devteam/ pipeline goes to a session that can run it (a fake Pi in the same path)
   const pi = startFakeAgent({ url: base, dir, session: 'pi-h' });
   await pi.ready;
   const piAgent = (await call(base, 'POST', '/v1/agents', { path: dir, harness: 'pi' })).body.agent;
@@ -109,6 +109,25 @@ test('prompt con sesión abierta en esa ruta: le llega a esa sesión (comando, o
   await until(() => server.pipelines.snapshot().runs.find((x) => x.status === 'done'));
   assert.deepEqual(pi.received.filter((m) => m.type === 'stage').map((m) => m.id), ['plan', 'api']);
   await pi.close();
+}));
+
+// What was seen with Pi in herdr: the agent registered as /tmp/… and its session says /private/tmp/…
+// (macOS). It is the same folder: the prompt goes to the open session, not to a new one.
+test('prompt: la sesión abierta en la ruta real (o por un enlace) es la del agente', () => withServer(async (server, base) => {
+  const dir = errementariProject();
+  const link = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dto-link-')), 'proyecto');
+  fs.symlinkSync(dir, link);
+  const ws = new WebSocket(base.replace('http', 'ws') + '/v1/ws');
+  const got = [];
+  ws.on('message', (d) => { const m = JSON.parse(d); if (m.type === 'task') got.push(m); });
+  await new Promise((r) => ws.on('open', r));
+  ws.send(JSON.stringify({ type: 'register', agent: 'opencode', session: 'ses_real', cwd: fs.realpathSync(dir), can: ['task'] }));
+  const { body } = await call(base, 'POST', '/v1/agents', { path: link, harness: 'opencode' });
+  await until(async () => (await call(base, 'GET', `/v1/agents/${body.agent.id}`)).body.agent.sessions.some((s) => s.live));
+  const r = await call(base, 'POST', `/v1/agents/${body.agent.id}/prompt`, { text: 'Sube la cobertura' });
+  assert.equal(r.body.task.mode, 'session');
+  assert.equal((await until(() => got[0])).session, 'ses_real');
+  ws.close();
 }));
 
 test('las sesiones abiertas fuera de las rutas registradas también reciben prompts', () => withServer(async (server, base) => {

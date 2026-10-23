@@ -1,5 +1,5 @@
-// La parte del AGENTE (integrations/common/devteam.mjs): proyecto, pipelines y su ejecución
-// dentro de la sesión. La oficina no participa.
+// The AGENT's part (integrations/common/devteam.mjs): project, pipelines and their execution
+// inside the session. The office does not take part.
 import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -22,31 +22,31 @@ test('frontmatter de agentes (Pi, Claude, OpenCode)', () => {
 });
 
 test('rol declarado en el frontmatter: el harness manda sobre las tablas heredadas', () => {
-  // el archivo de agente puede declarar su rol; sin rol declarado queda undefined
+  // the agent file may declare its role; without a declared role it stays undefined
   const conRol = lib.parseAgentFile('---\nname: custom-reviewer\nrole: qa\n---\nRevisa.\n', 'custom-reviewer.md');
   const sinRol = lib.parseAgentFile('---\nname: custom-reviewer\n---\nRevisa.\n', 'custom-reviewer.md');
   assert.equal(conRol.role, 'qa');
   assert.equal(sinRol.role, undefined);
 
-  // el rol declarado gana sobre la tabla heredada
+  // the declared role wins over the legacy table
   assert.equal(lib.roleOfAgent('custom-reviewer', 'qa'), 'qa');
   assert.equal(lib.roleOfAgent('architect', 'designer'), 'designer'); // no 'tl'
-  // sin rol declarado se sigue usando la tabla heredada (segundo parámetro opcional)
+  // without a declared role the legacy table is still used (optional second parameter)
   assert.equal(lib.roleOfAgent('architect'), 'tl');
   assert.equal(lib.roleOfAgent('custom-reviewer'), null);
-  // un rol declarado que no se puede normalizar devuelve null: no se reemplaza por la tabla
+  // a declared role that cannot be normalized returns null: it is not replaced by the table
   assert.equal(lib.roleOfAgent('architect', 'not-a-role'), null);
   assert.equal(lib.roleOfAgent('power-sync', 'not-a-role'), null);
   assert.equal(lib.roleOfAgent('custom-reviewer', 'not-a-role'), null);
 });
 
 test('roleOfAgent: un rol declarado gana, y uno que no se puede normalizar NO cae en la heurística', () => {
-  // declarado y normalizable: gana aunque el nombre no diga nada del rol
+  // declared and normalizable: it wins even if the name says nothing about the role
   assert.equal(lib.roleOfAgent('power-sync', 'backend'), 'backend');
-  // declarado pero roto (mal escrito): null, sin adivinar por el nombre ni por las tablas
+  // declared but broken (misspelled): null, without guessing from the name or the tables
   assert.equal(lib.roleOfAgent('power-sync', 'bakend'), null);
-  assert.equal(lib.roleOfAgent('backend', 'bakend'), null); // un nombre descriptivo tampoco lo rescata
-  // sin declaración: la heurística heredada sigue aplicando
+  assert.equal(lib.roleOfAgent('backend', 'bakend'), null); // a descriptive name does not rescue it either
+  // without a declaration: the legacy heuristic still applies
   assert.equal(lib.roleOfAgent('architect'), 'tl');
   assert.equal(lib.roleOfAgent('power-sync'), null);
 });
@@ -61,7 +61,7 @@ test('detectHarness: los roles declarados en los agentes llegan al mapa de roles
 });
 
 test('detectHarness: un rol declarado roto queda fuera del mapa y se reporta en roleIssues', () => {
-  // aísla el home: os.homedir() respeta $HOME, así no entran los agentes del usuario real
+  // isolates home: os.homedir() honors $HOME, so the real user's agents do not get in
   const previousHome = process.env.HOME;
   process.env.HOME = tmp();
   try {
@@ -70,14 +70,14 @@ test('detectHarness: un rol declarado roto queda fuera del mapa y se reporta en 
     fs.writeFileSync(path.join(dir, '.claude', 'agents', 'power-sync.md'), '---\nname: power-sync\nrole: bakend\n---\nSincroniza.\n');
     fs.writeFileSync(path.join(dir, '.claude', 'agents', 'signal-relay.md'), '---\nname: signal-relay\nrole: backend\n---\nRetransmite.\n');
     const { roles, roleIssues } = lib.detectHarness(dir);
-    // el roto no se adivina: ni por su nombre ni por las tablas heredadas
+    // the broken one is not guessed: neither by its name nor by the legacy tables
     assert.equal(roles['power-sync'], undefined);
-    // el hermano bien declarado sí entra, mapeado a su personaje
+    // the well-declared sibling does get in, mapped to its character
     assert.equal(roles['signal-relay'], 'backend');
-    // y se reporta exactamente una vez, mencionando el valor declarado
+    // and it is reported exactly once, mentioning the declared value
     assert.equal(roleIssues.length, 1);
     assert.match(roleIssues[0], /bakend/);
-    // limpio: roleIssues siempre es un array, aunque no haya nada que reportar
+    // clean: roleIssues is always an array, even if there is nothing to report
     assert.ok(Array.isArray(lib.detectHarness(tmp()).roleIssues));
     assert.deepEqual(lib.detectHarness(tmp()).roleIssues, []);
   } finally {
@@ -91,12 +91,12 @@ test('hasDeclaredRole: sólo un valor real cuenta como rol declarado', () => {
 
 test('parseAgentFile: distingue rol ausente, en blanco y con valor', () => {
   const role = (fm) => lib.parseAgentFile(`---\n${fm}\n---\nx\n`, 'power-sync.md').role;
-  // sin la clave: no hay declaración
+  // without the key: there is no declaration
   assert.equal(role('name: power-sync'), undefined);
-  // clave presente pero vacía: un intento sin valor queda '' (no undefined)
+  // key present but empty: an attempt without a value stays '' (not undefined)
   assert.equal(role('name: power-sync\nrole:'), '');
   assert.equal(role('name: power-sync\nrole: ""'), '');
-  // con valor: se devuelve tal cual
+  // with a value: returned as is
   assert.equal(role('name: power-sync\nrole: qa'), 'qa');
 });
 
@@ -106,7 +106,7 @@ test('detectHarness: un rol en blanco cae en la heurística y se reporta en role
   try {
     const dir = tmp();
     fs.mkdirSync(path.join(dir, '.claude', 'agents'), { recursive: true });
-    // el rol en blanco no reemplaza la heurística: el nombre la resuelve, pero se reporta
+    // the blank role does not replace the heuristic: the name resolves it, but it is reported
     fs.writeFileSync(path.join(dir, '.claude', 'agents', 'architect.md'), '---\nname: architect\nrole:\n---\nDiseña.\n');
     const { roles, roleIssues } = lib.detectHarness(dir);
     assert.equal(roles.architect, 'tl');
@@ -125,12 +125,12 @@ test('el proyecto de ejemplo: equipo, agentes de cada harness y pipelines resuel
   assert.deepEqual(tdd.issues, []);
   const [diseno, , , , review] = tdd.stages;
   assert.equal(diseno.agent, 'architect');
-  assert.equal(diseno.model, 'anthropic/claude-opus-5-5'); // del rol en team.json
-  assert.match(diseno.agentPrompt, /\S/); // la persona sale de .pi/agents/architect.md
+  assert.equal(diseno.model, 'anthropic/claude-opus-5-5'); // from the role in team.json
+  assert.match(diseno.agentPrompt, /\S/); // the persona comes from .pi/agents/architect.md
   assert.deepEqual([review.harness, review.agent, review.native, review.model], ['claude-code', 'code-reviewer', true, 'opus']);
-  // "model": false = el modelo de la sesión
+  // "model": false = the session's model
   assert.ok(p.pipelines.find((x) => x.id === 'subagentes-pi').stages.every((s) => s.model === null));
-  // lo que se anuncia a la oficina no lleva prompts ni personas
+  // what is announced to the office carries no prompts or personas
   const entry = lib.catalogEntry(p);
   assert.equal(entry.pipelines.length, 3);
   assert.equal(JSON.stringify(entry).includes('agentPrompt'), false);
@@ -148,7 +148,7 @@ test('valida dependencias, ciclos, roles y bucles', () => {
   assert.deepEqual(lib.resolvePipeline('y', { stages: [] }).issues, ['el pipeline no tiene etapas']);
 });
 
-/** Corre un pipeline como lo haría un agente: cada etapa devuelve outputs[id] (o "<id> ok"). */
+/** Runs a pipeline as an agent would: each stage returns outputs[id] (or "<id> ok"). */
 async function drive(pipelineRaw, { outputs = {}, gates = {}, onPrompt } = {}) {
   const pipeline = lib.resolvePipeline('p', pipelineRaw);
   const events = [], statuses = [], prompts = [];
@@ -175,11 +175,11 @@ test('PipelineRun: orden por dependencias, contexto entre etapas y fases para la
   assert.deepEqual(prompts.map((p) => p.id), ['plan', 'api', 'qa']);
   assert.match(prompts[0].prompt, /^\[Dev Team Office · etapa 1\/3\]/);
   assert.match(prompts[1].prompt, /Implementa Cupones según:\nusar tabla coupons/);
-  assert.match(prompts[2].prompt, /### API \(Backend\)\napi ok/); // lo de la etapa anterior
-  // la oficina ve: la tarea, quién es cada subagente, cada fase con su traspaso y el final
+  assert.match(prompts[2].prompt, /### API \(Backend\)\napi ok/); // the previous stage's output
+  // the office sees: the task, who each subagent is, each phase with its handover and the end
   assert.deepEqual(events.filter((e) => e.kind === 'phase').map((e) => [e.role, e.phase, e.from]), [['tl', 'arquitectura', undefined], ['backend', 'implementa', 'tl'], ['qa', 'verifica', 'backend']]);
   assert.deepEqual(events.find((e) => e.kind === 'agent_roles').roles, { architect: 'tl' });
-  assert.equal(events.at(-1).kind, 'done'); // el final va último (después del tablero)
+  assert.equal(events.at(-1).kind, 'done'); // the end goes last (after the board)
   assert.deepEqual(statuses.at(-1).stages.map((s) => s.status), ['done', 'done', 'done']);
   assert.equal(statuses.at(-1).status, 'done');
 });
@@ -196,7 +196,7 @@ test('PipelineRun: RED debe fallar, GREEN debe pasar y si no vuelve a implementa
   assert.match(prompts[0].prompt, /debe FALLAR/);
   assert.deepEqual(events.filter((e) => e.kind === 'stage_end').map((e) => e.ok), [true, true, false, true, true]);
   assert.equal(run.stage('impl').attempts, 2);
-  // el gate se ve como un Bash del rol de turno
+  // the gate shows up as a Bash by the role on duty
   assert.ok(events.some((e) => e.kind === 'tool_start' && e.tool === 'Bash' && e.role === 'qa'));
 });
 
@@ -218,7 +218,7 @@ test('PipelineRun: sin más reintentos falla; un RED que pasa no sirve; cancelar
   assert.match(r.events.at(-1).text, /cancelado/);
 
   r = await drive({ stages: [{ id: 'a', needs: ['a'] }] });
-  assert.equal(r.step.action, 'failed'); // un pipeline con errores no arranca
+  assert.equal(r.step.action, 'failed'); // a pipeline with errors does not start
   assert.equal(r.prompts.length, 0);
 });
 
@@ -276,13 +276,13 @@ test('detectHarness: el pipeline que trae el harness del proyecto (Errementari, 
   assert.deepEqual(d.harnesses, ['claude-code', 'opencode']);
   const ids = d.entries.map((e) => e.id);
   for (const id of ['prompt', 'errementari:auto', 'errementari:feature', 'errementari:bugfix', 'errementari:chore', 'errementari:debug', 'claude-code:/release', 'devteam:mini']) assert.ok(ids.includes(id), id);
-  assert.ok(!ids.includes('claude-code:/task') && !ids.includes('opencode:/task')); // /task ya es la entrada de Errementari
+  assert.ok(!ids.includes('claude-code:/task') && !ids.includes('opencode:/task')); // /task is already Errementari's entry
   const feature = d.entries.find((e) => e.id === 'errementari:feature');
   assert.deepEqual(feature.stages.map((s) => `${s.role}:${s.phase}`), ['analyst:analiza', 'tl:arquitectura', 'qa:red', 'backend:implementa', 'qa:green', 'tl:refactor', 'manager:release']);
   assert.equal(d.entries.find((e) => e.id === 'devteam:mini').needsSession, true);
-  // qué subagente es qué personaje
+  // which subagent is which character
   assert.deepEqual([d.roles.pipeline, d.roles.spec, d.roles.architect, d.roles.qa], ['manager', 'analyst', 'tl', 'qa']);
-  // una carpeta sin harness: sólo el prompt directo
+  // a folder without a harness: only the direct prompt
   assert.deepEqual(lib.detectHarness(tmp()).entries.filter((e) => !e.id.startsWith('pi:')).map((e) => e.id), ['prompt']);
 });
 
@@ -293,7 +293,7 @@ test('invocation y expandClaudeCommand: cómo se arranca cada entrada', () => {
   assert.deepEqual(lib.invocation(by('prompt'), ' Agrega login '), { text: 'Agrega login' });
   assert.deepEqual(lib.invocation(by('errementari:bugfix'), 'el SSE no reconecta'), { text: '/task bug: el SSE no reconecta', command: 'task', args: 'bug: el SSE no reconecta' });
   assert.deepEqual(lib.invocation(by('errementari:auto'), 'Agrega login'), { text: '/task Agrega login', command: 'task', args: 'Agrega login' });
-  // a una sesión de Claude ya abierta se le pasa el comando expandido
+  // an already open Claude session gets the expanded command
   assert.equal(lib.expandClaudeCommand(dir, 'task', 'bug: x'), 'Classify and run the corresponding pipeline for:\n\nbug: x');
   assert.equal(lib.expandClaudeCommand(dir, 'no-existe', 'x'), null);
 });

@@ -64,6 +64,8 @@ export default {
     subDone: '✔ Done: {text}',
     needOk: 'We need your OK! ✋',
     chatReplies: ['Noted! 📝', "Let's cover it at the daily 👍", 'Got it 🙌', 'Good idea!'],
+    btwThinking: ['Hmm, good question… 🤔', 'Let me check… 🔍', 'One sec, looking it up 📚'],
+    btwFail: "I couldn't find out 🤷",
     poke: '{from} says hi 👋',
     turnEnd: '✔ My turn is done',
     stageOk: '✔ Stage done',
@@ -194,7 +196,7 @@ export default {
     updateBoard: 'Updates the board', newCard: 'New card: {text}', moveCard: 'Moves a card', failed: 'Failed: {text}{detail}',
     thinking: 'Thinking…', waiting: 'The agent is waiting for your approval', error: 'Something went wrong', compact: 'Tidies up the notes (compacts the context)',
     done: 'Task done!', sessionStart: 'New work session', sessionEnd: 'Session closed', you: 'You', office: 'Office', subtask: 'Subtask',
-    permission: 'Permission for {tool}', turnEnd: 'ends the turn{text}',
+    permission: 'Permission for {tool}', interrupted: 'Interrupted', turnEnd: 'ends the turn{text}',
     read: 'Reading {file}', write: 'Creating {file}', edit: 'Editing {file}', grep: 'Searching "{pattern}"', glob: 'Looking through {pattern}', files: 'files',
     websearch: 'Researching: {query}', webfetch: 'Reading {host}', web: 'Reading a web page', ask: 'Asks the user something',
     plan: 'Presents the plan', planning: 'Planning', skill: 'Using skill {skill}', mcp: 'Using {tool}', working: 'Working',
@@ -205,6 +207,7 @@ export default {
     failedDefault: 'the agent could not do the task', failedEvent: '{agent} could not do the task: {detail}', claudeTook: 'Claude took it when its turn ended',
     cancelled: 'cancelled', dispatch: 'For {agent}: {title}', dispatchNew: 'New {agent} session: {title}', inPane: '{agent} in pane {pane} (herdr)',
     paneIdle: 'the agent in pane {pane} finished its turn',
+    paneNoTurn: 'the agent did not start its turn in pane {pane} (herdr: {code})',
   },
   run: {
     sent: 'sent to the agent', claudeTook: 'Claude took it when its turn ended', dispatch: 'Pipeline “{name}” for {agent}: {task}',
@@ -246,11 +249,24 @@ export default {
     launched: '🪟 {agent} opened in pane {pane} ({office})', notInside: 'Not inside herdr: agents run in the background.',
     startTitle: 'the office agent', noPane: 'herdr did not return the new pane',
   },
+  // the activity monitor (inside herdr, instead of the game)
+  monitor: {
+    agents: '{n} active agent(s)', waiting: '{n} waiting for you', subagents: '{n} subagent(s) running', working: '{n} of the team working',
+    panes: '{n} pane(s)', tasks: '{n} task(s) running', agentsTitle: 'AGENTS', subDone: 'finished', teamIdle: 'everyone is free', more: '{n} more',
+    none: 'No agents yet: open one (pi, claude, opencode…) in another pane, or ask for something from the game in the browser (o).',
+    noHerdr: 'outside herdr', keys: 'o browser · g game · ←→ office · q {quit}', quit: 'quit', quitOffice: 'close the office',
+  },
+  // a subagent's pane (dev-team-office follow)
+  follow: {
+    waiting: 'waiting for the subagent…', thinking: 'thinking…', red: 'fails, as expected in RED', done: 'finished ({time})',
+    closes: 'this pane closes by itself in a few seconds', offline: 'lost connection to the office, retrying…', gone: 'the office closed',
+    usage: 'Usage: dev-team-office follow --session <session> --sub <subagent id> [--office <id>]',
+  },
   // ---------------------------------------------------------------- terminal and web
   conn: { live: 'live', offline: 'offline', connecting: 'connecting…', connectingTo: 'connecting to {host}…', connectedTo: 'connected to {host}', retrying: 'lost connection to {host}, retrying…' },
   tui: {
     msgTo: ' Message for {name}: ', msgTeam: ' Message to the team: ', msgHint: '  Enter send · Esc cancel ',
-    keys: { t: 'brief (or click the board)', c: 'settings ⚙', a: 'activity >_', q: 'log', tab: 'pick', m: 'message', s: 'say hi', x: 'cancel', d: 'demo', p: 'TDD demo', r: 'reset', esc: 'deselect', o: 'office', quit: 'quit' },
+    keys: { t: 'brief (or click the board)', c: 'settings ⚙', a: 'activity >_', q: 'log', tab: 'pick', m: 'message', b: 'btw (ask)', s: 'say hi', x: 'cancel', d: 'demo', p: 'TDD demo', r: 'reset', esc: 'deselect', o: 'office', quit: 'quit' },
     task: 'TASK', noTaskYet: 'Session without a task yet', waitingAgent: 'Waiting for events from an agent…',
     stats: '{tools} actions · {errors} errors · {subs} sub · {status}', flow: 'FLOW', pipelines: 'PIPELINES', tasks: 'TASKS',
     connected: '{n} agent(s) connected', team: 'TEAM', noActivity: 'No activity', detail: 'DETAIL · {name}', nothingYet: 'Has not done anything yet.',
@@ -258,7 +274,7 @@ export default {
     flash: {
       demo: 'Claude Code demo running', demoPi: 'TDD demo (Pi) running', reset: 'Office reset', sent: 'Message sent', failed: 'Could not: {error}',
       cancelRun: 'Cancelling the pipeline “{name}”', cancelTask: 'Cancelling: {text}', noTasks: 'No tasks in progress', poked: 'You said hi to {name}', pickSomeone: 'Pick someone with tab or a click',
-      newSession: ' (new session)', office: 'Viewing: {name}',
+      newSession: ' (new session)', office: 'Viewing: {name}', asked: 'Asked the agent on duty (btw)',
     },
   },
   brief: {
@@ -282,7 +298,7 @@ export default {
     general: {
       language: 'Language', timezone: 'Time zone', tzSystem: 'the system one ({tz})', tzHint: 'The time zone gives the date, the time, the country and the weather. Each office can have its own (⚙ › Offices).',
       tzSearch: 'type to search (e.g. Madrid)', country: 'Country', weather: 'Real weather', weatherOn: 'yes (Open-Meteo, free)', weatherOff: 'no (simulated for the season)',
-      herdr: 'herdr', herdrLaunch: 'Agents in panes', herdrDirection: 'New pane', right: 'to the right', down: 'below', startAgent: 'Agent on start', auto: 'automatic (the folder’s)', none: 'none',
+      herdr: 'herdr', viewMode: 'Office view', view_flat: 'Front (the classic one)', view_iso: 'Top-down (isometric)', herdrLaunch: 'Agents in panes', herdrSubagents: 'Each subagent in its own pane', herdrDirection: 'New pane', right: 'to the right', down: 'below', startAgent: 'Agent on start', auto: 'automatic (the folder’s)', none: 'none',
       herdrOn: 'Inside herdr (pane {pane}): agents open in a new pane and can open more from there.', herdrOff: 'Not inside herdr: agents run in the background.',
       life: 'Office life in the log',
     },
@@ -317,7 +333,7 @@ export default {
   },
   ui: {
     canvas: 'The office: click a character to see their card, the board for a new brief',
-    settings: 'Settings', settingsKey: 'Settings (c)', fullscreen: 'Fullscreen', fullscreenKey: 'Fullscreen (f)',
+    settings: 'Settings', settingsKey: 'Settings (c)', fullscreen: 'Fullscreen', fullscreenKey: 'Fullscreen (f)', view: 'Front or top-down view', viewKey: 'Front or top-down view (v)',
     office: 'Office', officeKey: 'Pick which office to view (o)',
     sheetClose: 'Close card', poke: '👋 Say hi', message: '✉ Message', subagents: '{n} subagent(s)', nothingYet: 'Has not done anything in this session yet.',
     mood: { bath: 'in the bathroom 🚻', bathWait: 'waiting for the bathroom 😣', dream: 'dreaming of {dream} {emoji}', lunch: 'having lunch {food}', fire: 'putting out the fire! 🧯', talking: 'chatting 💬' },
@@ -328,8 +344,9 @@ export default {
     stats: { tools: 'actions', errors: 'errors', subs: 'subagents', status: 'status' },
     newBrief: '📋 New brief', demo: '▶ Demo', demoTdd: '▶ TDD demo', reset: '⟲ Reset', connected: '{n} agent(s) connected',
     cancel: 'Cancel', cancelRun: '✕ cancel', runBy: 'Run by {agent}: {task}', isNew: ' (new)', flow: 'Flow by role', noActivity: 'no activity',
-    help: 'commands: /brief · /demo · /tdd · /reset · /settings · /office <name> · /life (show or hide office life) · /clear · /screen. Without a slash: a message to the team (or to the selected one).',
-    commands: { help: 'help', brief: 'brief', demo: 'demo', tdd: 'tdd', reset: 'reset', settings: 'settings', office: 'office', life: 'life', clear: 'clear', screen: 'screen' },
+    help: 'commands: /brief · /demo · /tdd · /reset · /settings · /office <name> · /life (show or hide office life) · /clear · /screen · btw <question> (a side question to the agent on duty). Without a slash: a message to the team (or to the selected one).',
+    commands: { help: 'help', brief: 'brief', demo: 'demo', tdd: 'tdd', reset: 'reset', settings: 'settings', office: 'office', life: 'life', clear: 'clear', screen: 'screen', btw: 'btw' },
+    btwUsage: 'btw <question>: a side question to the agent on duty about the team, the domain or the office', btwThinking: 'thinking…', btwFailed: 'no answer: {error}', btwClose: 'Close',
     unknownCommand: 'unknown command · /help', lifeOn: 'office life: shown', lifeOff: 'office life: hidden', noOffice: 'there is no office “{name}”',
     welcome: 'dev-team-office · the team activity shows up here · /help for the commands',
     viewing: '🏢 Viewing: {name} ({tz})',
@@ -351,8 +368,16 @@ export default {
 Usage:
   dev-team-office                 Starts the office: the API, the web view and, in the terminal, the log with
                                   what the agents are doing (g opens the game here, o in the browser, q quits).
-                                  Inside herdr it opens the agent in a new pane (--agent, --no-launch).
-  dev-team-office game            The same, but goes straight into the game (q goes back to the log).
+                                  Inside herdr, instead of the log, the activity monitor (--no-monitor: the log),
+                                  and it opens the agent in a new pane (--agent, --no-launch).
+  dev-team-office monitor         The activity monitor: how many agents and subagents are running, what each one is
+                                  doing, the team and the log (o browser, g game, ←→ office, q quit).
+  dev-team-office game            The same as the first one, but goes straight into the game (q goes back to the log).
+  dev-team-office join [path] [--agent <cli>] [--office <office>] [--team <pack>|--no-team] [--open]
+                                  Adds this folder to the game: starts the office if needed, registers the repo root
+                                  with its agent and shows which character plays each subagent (MCP: join_office).
+                                  The roles its subagents do not cover are filled with the office team, in the
+                                  project and in the agent's format (--team picks another pack; --no-team, none).
   dev-team-office serve           Just the API and the log, no keys (to leave it in the background).
   dev-team-office watch [url]     Watch an office that is already running (the local one by default).
   dev-team-office status          Is an office running? Shows the version and endpoints.
@@ -363,24 +388,36 @@ Usage:
   dev-team-office offices rm <id>
   dev-team-office config [key] [value]
                                   The settings (in the SQLite database): lang en|es, timezone <zone>|system,
-                                  weather on|off, herdr.launch on|off, herdr.direction right|down,
-                                  herdr.startAgent auto|none|<id>, log.life on|off, view.office <id>.
+                                  weather on|off, herdr.launch on|off, herdr.subagents on|off, herdr.direction right|down,
+                                  herdr.startAgent auto|none|<id>, log.life on|off, view.office <id>, view.mode flat|iso.
   dev-team-office agents          The agent maintainer: the registered ones and what their harness brings.
-  dev-team-office agents add <full path> --agent claude|opencode|pi [--name <name>] [--office <id>]
+  dev-team-office agents add <full path> --agent claude|opencode|pi|codex [--name <name>] [--office <id>]
   dev-team-office agents rm <id>
   dev-team-office prompt <id> "<text>" [--pipeline <entry>] [--new]
                                   Sends a prompt to a registered agent through an entry of its harness.
   dev-team-office task "<text>" --agent pi|opencode|claude [--session <id>] [--launch [--cwd <dir>]]
   dev-team-office tasks           Lists the tasks sent and their status.
-  dev-team-office pane [--role qa] [--title "tests"] [--direction right|down] [--agent pi|claude|opencode] -- <command or prompt>
+  dev-team-office pane [--role qa] [--title "tests"] [--direction right|down] [--agent pi|claude|opencode|codex] -- <command or prompt>
                                   Inside herdr (the agent uses it): opens a pane next to its own with an
                                   activity (a command, or another agent with a prompt) and tells the office.
-  dev-team-office install [pi|opencode|claude]
-                                  Installs each agent's integration (all of them by default).
+  dev-team-office follow --session <id> --sub <id>
+                                  What a subagent is doing, live. Inside herdr the office opens it by itself,
+                                  one pane per subagent (⚙ › herdr › Each subagent in its own pane).
+  dev-team-office setup [--only claude,codex,…] [--dry-run]
+                                  Connects every coding agent found (Pi, Claude Code, OpenCode, Codex, Gemini,
+                                  Cursor): its live integration, hooks, the MCP server and the skills.
+  dev-team-office doctor          Checks the installation (Node, launcher, office, each agent).
+  dev-team-office uninstall [--only …] [--purge]
+                                  Undoes setup (--purge also deletes the database).
+  dev-team-office update          Updates to the latest version.
+  dev-team-office mcp             The MCP server (stdio) that setup registers in each agent.
+  dev-team-office btw "<question>" [--office <id>]
+                                  A side question to the agent on duty about the team (like /btw).
   dev-team-office team [--from <packsRoot>]
                                   The shipped teams (installable agent packs) and their roles.
-  dev-team-office team install <team> --agent pi [--project <dir>] [--from <packsRoot>]
-                                  Installs the team's agents into the harness's agent directory.
+  dev-team-office team install <team> --agent <cli> [--project <dir>] [--from <packsRoot>]
+                                  Installs the team's agents into the harness's agent folder (pi, claude, opencode
+                                  or codex), each one in its format.
                                   --from points at an external packs root (same layout as teams/).
   dev-team-office send <kind> [--text …] [--role …] [--phase …] [--tool …] [--file …] [--command …] [--source …] [--session …] [--office …]
 
@@ -391,6 +428,7 @@ Options:
   --no-socket       Do not open the Unix socket
   --agent <id|cli>  The agent opened in herdr on start (default: the one in the settings)
   --no-launch       Do not open any agent in herdr on start
+  --no-monitor      Inside herdr, the log instead of the monitor
   --no-herdr        Do not use herdr even when inside it
   --color <mode>    truecolor | 256 (detected automatically)
   -v, --version     Version
@@ -409,24 +447,70 @@ API: docs/api.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
     sessions: 'Connected sessions (they get the task right away):', none: '  (none)', launchers: 'New runs (--launch, in {dir} or --cwd):',
     notFound: '(cannot find "{cmd}")', claudeHint: 'Claude Code: --agent claude --session <id> queues the task until its turn ends.', noTasks: '(no tasks)',
     registered: 'Registered: {id}  ({path})', removed: 'Deleted: {id} (its folder is not touched)', unknownSub: 'Unknown subcommand: {cmd} {sub}',
-    noAgents: '(no registered agents)  →  dev-team-office agents add <full path> --agent claude|opencode|pi', openSession: ' · ● session open',
+    noAgents: '(no registered agents)  →  dev-team-office agents add <full path> --agent claude|opencode|pi|codex', openSession: ' · ● session open',
     promptUsage: 'Usage: dev-team-office prompt <id> "<text>" [--pipeline <entry>] [--new]   (the ids: dev-team-office agents)',
     unknownCommand: 'Unknown command: {cmd}',
     offices: 'Offices:', officeLine: '  {id}  {name}  · {tz}{country}  · {agents} agent(s){viewing}', viewing: '  ← the one being viewed',
     officeAdded: 'Office created: {id}  ({name}, {tz})', officeSaved: 'Office updated: {id}', officeRemoved: 'Office deleted: {id} (its agents moved to the main one)',
     officesUsage: 'Usage: dev-team-office offices [add "<name>" | set <id> | rm <id>] [--name …] [--timezone …] [--location …]',
     config: 'Settings (in {file}):', configSaved: '{key} = {value}', configUnknown: 'Unknown setting: {key}. See: dev-team-office config',
-    paneUsage: 'Usage: dev-team-office pane [--role qa] [--title "tests"] [--agent pi|claude|opencode] -- <command or prompt>',
+    paneUsage: 'Usage: dev-team-office pane [--role qa] [--title "tests"] [--agent pi|claude|opencode|codex] -- <command or prompt>',
     teams: 'Teams:', teamNone: '(no team packs shipped)',
-    teamUsage: 'Usage: dev-team-office team [list] | dev-team-office team install <team> --agent pi [--project <dir>] [--from <packsRoot>]',
+    teamUsage: 'Usage: dev-team-office team [list] | dev-team-office team install <team> --agent <pi|claude|opencode|codex> [--project <dir>] [--from <packsRoot>]',
+    btwUsage: 'Usage: dev-team-office btw "<question>" [--office <id>]', btwAsking: '❓ asking {agent}…',
+    updateGit: 'This is a git clone ({dir}): update it with git pull',
     paneOpened: '{pane}', paneOffline: '(the office is not running: the pane opened, but it does not show up in the game)',
   },
   install: {
-    unknown: 'unknown: {names} (use pi, opencode or claude)', lib: 'Shared library at {path}', configSkill: 'Configuration skill at {path}',
+    unknown: 'unknown: {names} (use pi, opencode, claude or codex)', lib: 'Shared library at {path}', configSkill: 'Configuration skill at {path}',
     configSkillFail: 'Could not copy the configuration skill: {error} · the rest installs anyway',
-    pi: 'Pi: extension at {ext} and skill at {skill}/', piHint: '    Open pi in your project: it connects to the office by itself.',
+    skill: 'Skill at {path}', skillFail: 'Could not copy a skill: {error} · the rest installs anyway',
+    pi: 'Pi: extension at {ext} and skill at {skill}/', piHint: '    Open pi in your project: it starts the office if needed and registers the project (/office in Pi).',
     opencode: 'OpenCode: plugin at {plugin}', opencodeHint: '    Open opencode in your project: it connects to the office by itself.',
     claude: 'Claude Code: hook at {hook}', claudeStep: '    One step left for you: copy the "hooks" section of {snippet}', claudeWhere: '    into ~/.claude/settings.json (or the project\'s .claude/settings.json).',
+    codex: 'Codex: hook at {hook}',
+  },
+  btw: {
+    empty: 'btw what? Write the question after btw', busy: 'The agent on duty is still answering the previous question',
+    noAgent: 'No agent on duty in this office: open a session or register a project (⚙ › Agents)',
+    timeout: 'It took too long to answer', noAnswer: 'The agent did not answer (exit {code})',
+    ctxOffice: 'Office (team/domain): {office}', ctxTask: 'Current task: {task}', ctxTurn: 'On duty now: {role}', ctxRecent: 'Latest activity:',
+    promptHead: '[btw] A side question from the Dev Team Office game. Do not change any file and do not continue your current task: just answer.',
+    promptQuestion: 'Question: {question}',
+    promptRules: 'Answer briefly (at most 3 short sentences, plain text, no markdown headings), in {lang}.',
+  },
+  setup: {
+    title: 'Dev Team Office {version} · setup',
+    unknown: 'unknown agent: {names} (use {known})',
+    badJson: '{file} is not valid JSON ({error}): left untouched',
+    manualMcp: 'Could not add the MCP server to {file} safely: add "dev-team-office" under "mcp" by hand (see docs/mcp.md)',
+    piMcp: 'Pi uses the MCP server from 1.0 on (or with pi-mcp-adapter); an older Pi just needs the extension.',
+    codexTrust: 'Codex asks you to trust new hooks once: open codex and run /hooks.',
+    appCopied: 'App installed at {path}',
+    launcher: 'Launcher at {path} (the hooks and the MCP server use it)',
+    linked: 'Command `dev-team-office` at {path}',
+    linkedNotInPath: 'Command `dev-team-office` at {path} · add {dir} to your PATH (e.g. export PATH="{dir}:$PATH")',
+    otherOnPath: 'Another `dev-team-office` comes first in your PATH ({path}): that one is what your terminal runs',
+    agentLine: '✓ {agent}: {what}',
+    viaPlugin: 'installed as a Claude Code plugin (hooks, MCP and skills come with it)',
+    noAgents: 'No coding agents found (Pi, Claude Code, OpenCode, Codex, Gemini, Cursor). Install one and run `dev-team-office setup` again.',
+    removedLine: '✓ {agent}: removed {what}',
+    removedPath: '✓ removed {path}',
+    keptData: '· kept your data in {path} (projects, offices, settings): --purge deletes it too',
+    nothing: 'Nothing to remove.',
+    done: 'Ready. Open the office with: dev-team-office   ·   check it with: dev-team-office doctor',
+    dryDone: 'Dry run: nothing was written.',
+    part: { integration: 'integration', hooks: 'hooks', mcp: 'MCP server', skills: 'skills' },
+  },
+  doctor: {
+    title: 'Dev Team Office {version} · doctor',
+    node: 'Node.js {v}', nodeFix: 'Node.js >= 22.13 is needed (it brings SQLite): https://nodejs.org',
+    launcher: 'Launcher {path}', onPath: '`dev-team-office` in the PATH ({path})', notOnPath: '`dev-team-office` is not in the PATH',
+    pathFix: 'add {dir} to your PATH, or run: dev-team-office setup',
+    running: 'The office is running at {url} ({version})', stopped: 'The office is not running ({url}) · open it with `dev-team-office`',
+    herdr: 'herdr available (agents open in panes)', noHerdr: 'herdr not found (optional: agents in panes)',
+    agent: '{agent}: {what}',
+    ok: 'All good.', fail: 'Something is missing: run the suggested command.',
   },
   demo: {
     claude: {

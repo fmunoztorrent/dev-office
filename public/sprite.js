@@ -1,5 +1,5 @@
-// El sprite de un personaje, de pie y quieto (el mismo de la oficina, game.js), para retratos:
-// la ficha del seleccionado y ⚙ Ajustes › Personajes.
+// A character's sprite, standing still (the same as in the office, game.js), for portraits:
+// the selected character's sheet and ⚙ Settings › Characters.
 export function drawSprite(canvas, c, { P = 4, bg = '#c9b48a' } = {}) {
   const ctx = canvas.getContext('2d');
   canvas.width = 16 * P; canvas.height = 25 * P;

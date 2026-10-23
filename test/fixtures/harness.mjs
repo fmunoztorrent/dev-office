@@ -1,6 +1,6 @@
-// Un proyecto con un harness como Errementari (https://github.com/fmunoztorrent/errementari):
-// orquestador `pipeline`, subagentes spec/architect/qa/backend, el comando /task para Claude Code
-// y OpenCode, y un pipeline de Dev Team Office en .devteam/.
+// A project with a harness like Errementari (https://github.com/fmunoztorrent/errementari):
+// a `pipeline` orchestrator, spec/architect/qa/backend subagents, the /task command for Claude Code
+// and OpenCode, and a Dev Team Office pipeline in .devteam/.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

@@ -1,4 +1,4 @@
-// El clima de afuera (server/weather.js): Open-Meteo con un fetch de mentira, sin salir a la red.
+// The weather outside (server/weather.js): Open-Meteo with a fake fetch, without going to the network.
 import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -41,7 +41,7 @@ test('ubica la ciudad de la zona horaria (la de esa zona, si hay varias) y trae 
   assert.equal(out.kind, 'rain');
   assert.equal(out.place, 'Santiago de Chile');
   assert.equal(changes.length, 1);
-  // la segunda vez no vuelve a geocodificar, y si nada cambió no avisa
+  // the second time it does not geocode again, and if nothing changed it does not notify
   await w.refresh();
   assert.equal(calls.filter((c) => c.includes('geocoding')).length, 1);
   assert.equal(changes.length, 1);
