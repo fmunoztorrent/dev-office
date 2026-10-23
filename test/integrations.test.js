@@ -97,7 +97,8 @@ test('extensión de Pi: corre el pipeline en su sesión, con setModel por etapa,
       assert.match(sent[1].text, /respuesta 1/); // the RED summary reaches the implementation
       // QA with haiku; backend without its own model: the session's; at the end, the session's
       assert.deepEqual(models.map((m) => m.id), ['claude-haiku-5-5', 'claude-opus-5-5', 'claude-haiku-5-5', 'claude-opus-5-5']);
-      const s = server.office.sessionSummary('pi-int');
+      // the run's status arrives over WebSocket and the phases over HTTP: wait for the last phase too
+      const s = await until(() => { const x = server.office.sessionSummary('pi-int'); return x.flow.length >= 3 && x; });
       assert.deepEqual(s.flow.map((f) => `${f.role}:${f.phase}`), ['qa:red', 'backend:implementa', 'qa:green']);
       assert.equal(s.title, 'TDD: Cupones'); // stage prompts do not count as new tasks
       await until(() => server.office.sessionSummary('pi-int').status === 'done');
