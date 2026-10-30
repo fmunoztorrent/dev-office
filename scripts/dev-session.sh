@@ -88,7 +88,7 @@ install_checkout() {
 
 case "$CMD" in
   up)
-    [ -e "$E" ] && die "$E already exists: scripts/dev-session.sh update (or down)"
+    [ -e "$E" ] && die "$E already exists: scripts/dev-session.sh update (or down; macOS may have emptied it)"
     command -v herdr >/dev/null 2>&1 || die "herdr is required: https://herdr.dev"
     command -v node >/dev/null 2>&1 || die "Node.js >= 22.13 is required"
     [ -n "$AGENTS" ] || AGENTS=pi
@@ -135,7 +135,7 @@ EOF
     ;;
   update)
     need
-    say "Installing this checkout again in $H…"
+    say "Installing this checkout again in ${H}…"
     install_checkout
     say "Restart the office in its pane (q, then dev-team-office) so it runs the new code."
     ;;
@@ -164,7 +164,8 @@ EOF
   down)
     [ -d "$E" ] || { say "There is no $E."; exit 0; }
     case "$E" in /tmp/dto-*) ;; *) die "refusing to delete $E" ;; esac
-    (. "$E/env.sh" && herdr --session "$SESSION" server stop >/dev/null 2>&1) || true
+    # (macOS empties /tmp of files unused for 3 days: env.sh may be gone)
+    [ -f "$E/env.sh" ] && { (. "$E/env.sh" && herdr --session "$SESSION" server stop >/dev/null 2>&1) || true; }
     pids=$(lsof -ti "tcp:$PORT" -sTCP:LISTEN 2>/dev/null || true)
     [ -n "$pids" ] && kill $pids 2>/dev/null || true
     # the links to your real logins go first, so deleting never follows them

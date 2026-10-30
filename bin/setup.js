@@ -385,7 +385,9 @@ export const agentId = (n) => (AGENTS[n] ? n : ALIASES[n] || null);
 
 /** Is it running from a transient copy (npx, a temp folder)? Then a stable copy is installed. */
 const real = (p) => { try { return fs.realpathSync(p); } catch { return p; } };
-export const ephemeral = (root = ROOT) => /[\\/]_npx[\\/]/.test(root) || real(root).startsWith(`${real(os.tmpdir())}${path.sep}`);
+// The installed copy (~/.dev-team-office/app) is never transient, even if that HOME lives in the temp
+// folder (CI, a container): paths are compared resolved (/tmp is /private/tmp on macOS).
+export const ephemeral = (root = ROOT) => real(root) !== real(path.join(officeDir(), 'app')) && (/[\\/]_npx[\\/]/.test(root) || real(root).startsWith(`${real(os.tmpdir())}${path.sep}`));
 
 export const shimPath = () => path.join(officeDir(), 'bin', 'dev-team-office');
 
@@ -407,7 +409,7 @@ exec "$NODE" ${sq(path.join(root, 'bin', 'dev-team-office.js'))} "$@"
 /** Copies the app to ~/.dev-team-office/app (when running from npx or a temp folder). */
 function installApp(ctx) {
   const to = path.join(officeDir(), 'app');
-  if (path.resolve(ROOT) === path.resolve(to)) return to;
+  if (real(ROOT) === real(to)) return to;
   if (!ctx.dry) {
     fs.rmSync(to, { recursive: true, force: true });
     for (const f of APP_FILES) {
@@ -435,6 +437,7 @@ function ensureLauncher(ctx) {
   const link = path.join(binDir, 'dev-team-office');
   // the command in ~/.local/bin: if there is no other one on the PATH, or if the one there is ours (it is renewed)
   const ours = !onPath || real(onPath) === real(shim) || path.resolve(onPath) === path.resolve(link) || !!process.env.DEV_TEAM_OFFICE_BIN_DIR;
+  let bin = null;
   if (!ours) lines.push(t('setup.otherOnPath', { path: tilde(onPath) }));
   else {
     if (!ctx.dry) {
@@ -442,9 +445,57 @@ function ensureLauncher(ctx) {
       try { fs.rmSync(link, { force: true }); fs.symlinkSync(shim, link); } catch { fs.copyFileSync(shim, link); }
     }
     const inPath = (process.env.PATH || '').split(path.delimiter).includes(binDir);
-    lines.push(t(inPath ? 'setup.linked' : 'setup.linkedNotInPath', { path: tilde(link), dir: binDir.startsWith(home()) ? `$HOME${binDir.slice(home().length)}` : binDir }));
+    lines.push(t(inPath ? 'setup.linked' : 'setup.linkedNotInPath', { path: tilde(link), dir: homeVar(binDir) }));
+    bin = { dir: binDir, link, onPath: inPath };
   }
-  return { shim, root, lines };
+  return { shim, root, lines, bin };
+}
+
+// ---------------------------------------------------------------- the PATH of the next terminals
+
+export const PROFILE_MARK = '# Dev Team Office: the dev-team-office command';
+const homeVar = (dir) => (dir.startsWith(home()) ? `$HOME${dir.slice(home().length)}` : dir);
+
+/** The file the user's shell reads when a terminal opens (by $SHELL). */
+export function shellProfile(shell = process.env.SHELL || '', platform = process.platform) {
+  const name = path.basename(shell);
+  if (name === 'zsh') return { file: path.join(process.env.ZDOTDIR || home(), '.zshrc'), fish: false };
+  // Terminal.app opens login shells (~/.bash_profile); Linux terminals, interactive ones (~/.bashrc)
+  if (name === 'bash') return { file: path.join(home(), platform === 'darwin' ? '.bash_profile' : '.bashrc'), fish: false };
+  if (name === 'fish') return { file: path.join(home(), '.config', 'fish', 'conf.d', 'dev-team-office.fish'), fish: true };
+  return { file: path.join(home(), '.profile'), fish: false };
+}
+
+/** Does the shell's profile already put `dir` on the PATH (ours or the user's own line)? */
+export function profileHasPath(dir, profile = shellProfile()) {
+  const text = readText(profile.file) || '';
+  const rel = dir.startsWith(home()) ? dir.slice(home().length) : null;
+  return text.includes(PROFILE_MARK) || text.includes(dir) || (!!rel && ['$HOME', '${HOME}', '~'].some((h) => text.includes(`${h}${rel}`)));
+}
+
+/** Adds `dir` to the PATH in the shell's profile (once). Returns the file. */
+export function addPathToProfile(dir, { profile = shellProfile(), dry = false } = {}) {
+  if (profileHasPath(dir, profile)) return profile.file;
+  const text = readText(profile.file) || '';
+  const line = profile.fish ? `fish_add_path -g ${homeVar(dir)}` : `export PATH="${homeVar(dir)}:$PATH"`;
+  const sep = !text ? '' : text.endsWith('\n') ? '\n' : '\n\n';
+  if (!dry) { fs.mkdirSync(path.dirname(profile.file), { recursive: true }); fs.writeFileSync(profile.file, `${text}${sep}${PROFILE_MARK}\n${line}\n`); }
+  return profile.file;
+}
+
+/** Takes our lines out of every profile (uninstall). Returns the files it changed. */
+export function removePathFromProfiles({ dry = false } = {}) {
+  const files = ['.zshrc', '.bashrc', '.bash_profile', '.profile'].map((f) => path.join(f === '.zshrc' ? process.env.ZDOTDIR || home() : home(), f));
+  const changed = [];
+  for (const file of files) {
+    const text = readText(file);
+    if (!text?.includes(PROFILE_MARK)) continue;
+    if (!dry) fs.writeFileSync(file, text.replace(new RegExp(`\\n*${PROFILE_MARK.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n[^\\n]*\\n?`, 'g'), '\n').replace(/^\n/, ''));
+    changed.push(file);
+  }
+  const fish = shellProfile('fish').file;
+  if (readText(fish)?.includes(PROFILE_MARK)) { if (!dry) fs.rmSync(fish, { force: true }); changed.push(fish); }
+  return changed;
 }
 
 // ---------------------------------------------------------------- setup · uninstall · doctor
@@ -499,7 +550,7 @@ export function setup({ only = [], dry = false, cli = process.env.DEV_TEAM_OFFIC
     for (const n of def.notes?.() || []) lines.push(`    ${n}`);
   }
   if (!found.length) lines.push(t('setup.noAgents'));
-  return { ok: true, dry, lines, agents: report, shim: launcher.shim, root: launcher.root };
+  return { ok: true, dry, lines, agents: report, shim: launcher.shim, root: launcher.root, bin: launcher.bin };
 }
 
 /** Undoes setup. With `purge` it also deletes the database (projects, offices, settings). */
@@ -518,6 +569,7 @@ export function uninstall({ only = [], dry = false, purge = false, cli = process
     for (const s of SKILLS) if (exists(path.join(shared, s))) { if (!dry) fs.rmSync(path.join(shared, s), { recursive: true, force: true }); lines.push(t('setup.removedPath', { path: tilde(path.join(shared, s)) })); }
     const link = path.join(process.env.DEV_TEAM_OFFICE_BIN_DIR || path.join(home(), '.local', 'bin'), 'dev-team-office');
     try { if (fs.readlinkSync(link) === shimPath()) { if (!dry) fs.rmSync(link); lines.push(t('setup.removedPath', { path: tilde(link) })); } } catch { /* not ours */ }
+    for (const f of removePathFromProfiles({ dry })) lines.push(t('setup.removedProfile', { file: tilde(f) }));
     for (const p of ['bin', 'lib', 'claude-code', 'codex', 'app', ...(purge ? ['office.db', 'office.db-wal', 'office.db-shm', 'office.log', 'claude-runs'] : [])]) {
       const full = path.join(officeDir(), p);
       if (exists(full)) { if (!dry) fs.rmSync(full, { recursive: true, force: true }); lines.push(t('setup.removedPath', { path: tilde(full) })); }

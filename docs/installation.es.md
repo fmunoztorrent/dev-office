@@ -21,6 +21,17 @@ node -v
 
 Con **Pi** y **gentle-pi** se necesita Pi ≥ 1.2. Las versiones anteriores no cargan gentle-pi 4.x.
 
+### El login de tu agente
+
+La oficina no usa ningún modelo: el trabajo lo hace tu agente, con su propio login. Sin él la oficina igual muestra las sesiones del agente, pero el agente no puede hacer nada.
+
+| Agente | Cómo iniciar sesión |
+|---|---|
+| Claude Code | Abre `claude` y corre `/login` |
+| Pi | Abre `pi`, corre `/login` (o define la API key de tu proveedor) y elige un modelo con `/model` |
+| OpenCode | Sus modelos gratuitos funcionan tal como se instala; `opencode auth login` agrega tus propios proveedores |
+| Codex | `codex login` |
+
 ## 2. Instalar
 
 La forma recomendada es el instalador de una línea:
@@ -31,9 +42,22 @@ curl -fsSL https://raw.githubusercontent.com/fmunoztorrent/dev-office/main/insta
 
 Al terminar tienes:
 
-- **la oficina** en `~/.dev-team-office/app`;
-- **el comando** `dev-team-office` en `~/.local/bin`, que tiene que estar en tu `PATH`;
+- **la última versión publicada** de la oficina en `~/.dev-team-office/app`. Su primera línea dice cuál (`Downloading fmunoztorrent/dev-office@v0.7.0…`), así que todos los que instalan reciben la misma versión;
+- **el comando** `dev-team-office` en `~/.local/bin`;
 - **tus agentes conectados**, porque el instalador corre `dev-team-office setup` (ver el paso 3).
+
+**La única pregunta.** Si `~/.local/bin` no está en tu `PATH` (un Mac nuevo no lo tiene), el instalador ofrece agregarlo al perfil de tu shell. Aprieta Enter para aceptar y **abre una terminal nueva**: ésa encuentra `dev-team-office`. En la terminal donde instalaste, `~/.local/bin/dev-team-office` funciona de inmediato.
+
+| Tu shell | El perfil que usa |
+|---|---|
+| zsh (la de macOS) | `~/.zshrc` |
+| bash en macOS · en Linux | `~/.bash_profile` · `~/.bashrc` |
+| fish | `~/.config/fish/conf.d/dev-team-office.fish` |
+| cualquier otra | `~/.profile` |
+
+Es una sola línea marcada, y `dev-team-office uninstall` la quita.
+
+Si algo falla en el camino, el instalador dice `the install did not finish` y sale con error. Nunca termina como si hubiera funcionado. El mismo comando se puede correr de nuevo siempre.
 
 Otras formas:
 
@@ -48,8 +72,9 @@ El instalador acepta estas variables:
 
 - `DEV_TEAM_OFFICE_HOME`: dónde vive la oficina.
 - `DEV_TEAM_OFFICE_BIN_DIR`: dónde va el comando.
-- `DEV_TEAM_OFFICE_REF`: qué rama o tag instalar.
+- `DEV_TEAM_OFFICE_REF`: qué tag o rama instalar. Por defecto, la última versión publicada; `main` es el código más nuevo: `curl -fsSL … | DEV_TEAM_OFFICE_REF=main sh`.
 - `DEV_TEAM_OFFICE_NO_SETUP=1`: sólo instala, sin conectar los agentes.
+- `DEV_TEAM_OFFICE_MODIFY_PATH=1`: agrega `~/.local/bin` al perfil de tu shell sin preguntar; `0` no lo toca nunca.
 
 ## 3. Conectar los agentes (`setup`)
 
@@ -208,7 +233,7 @@ En el navegador, `http://127.0.0.1:4317` muestra la oficina. Dos atajos útiles:
 
 ```bash
 dev-team-office update                 # o el mismo curl de arriba
-dev-team-office uninstall              # quita lo que agregó setup y restaura tus archivos
+dev-team-office uninstall              # quita lo que agregó setup (y la línea del PATH) y restaura tus archivos
 dev-team-office uninstall --purge      # además borra ~/.dev-team-office (tu base incluida)
 ```
 
@@ -216,7 +241,9 @@ dev-team-office uninstall --purge      # además borra ~/.dev-team-office (tu ba
 
 | Síntoma | Qué hacer |
 |---|---|
-| `dev-team-office: command not found` | Agrega `~/.local/bin` a tu `PATH`, o corre `dev-team-office doctor` con la ruta completa |
+| `dev-team-office: command not found` | Abre una terminal nueva: el instalador agregó `~/.local/bin` al perfil de tu shell. Si dijiste que no, agrégale `export PATH="$HOME/.local/bin:$PATH"`, o usa `~/.local/bin/dev-team-office` |
+| `the install did not finish` | Las líneas de arriba dicen qué falló (sin Node ≥ 22.13, sin red…). Corrígelo y corre el mismo comando de nuevo |
+| El agente se conecta pero no hace nada | No tiene login o no tiene modelo: ver [El login de tu agente](#el-login-de-tu-agente) |
 | El puerto 4317 está ocupado | `dev-team-office --port 4318`, o `DEV_TEAM_OFFICE_PORT=4318` |
 | Pi no muestra nada | `dev-team-office doctor`; revisa que la extensión esté en `~/.pi/agent/extensions/` y que Pi sea ≥ 1.2 si usas gentle-pi |
 | Codex no reporta | Confía en los hooks nuevos con `/hooks` |

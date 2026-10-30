@@ -1,5 +1,6 @@
 # Runs the test suite on every push and pull request, on the platforms and Node versions the
-# package supports (package.json: "os" darwin/linux, "engines" node >= 22.13).
+# package supports (package.json: "os" darwin/linux, "engines" node >= 22.13), and a new user's
+# install with each agent.
 name: test
 
 on:
@@ -23,3 +24,25 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+
+  # A new user's install, once per agent (scripts/install-check.mjs): the installer, the command in a
+  # new terminal, doctor, the MCP server, a real run of the agent reaching the office, reinstalling
+  # and uninstalling. The agents are installed with npm; no login is needed.
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm install -g --no-audit --no-fund @anthropic-ai/claude-code @earendil-works/pi-coding-agent opencode-ai
+      - run: node scripts/install-check.mjs --json install-check.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-check-${{ matrix.os }}
+          path: install-check.json

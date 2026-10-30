@@ -39,6 +39,7 @@ Dev Team Office es una oficina en pixel art que muestra en vivo lo que hacen los
 | `docs/` | API, MCP, instalación, uso, convenciones, eventos por rol, pipelines, cómo conectar un harness |
 | `test/` | `node --test`, con fixtures (`fake-agent.mjs`, `fake-claude.mjs`…) |
 | `scripts/dev-session.sh` | El flujo real, aislado, para probar como un usuario: instala el checkout en un `HOME` en `/tmp`, con un agente real y su sesión de herdr |
+| `scripts/install-check.mjs` | Las pruebas de instalación: un usuario nuevo por agente (Claude Code, Pi, OpenCode), del instalador al `uninstall`; `--container` en un Linux limpio |
 
 ## Comandos
 
@@ -49,6 +50,7 @@ node bin/dev-team-office.js --help         # la CLI desde el código
 PORT=4320 DEV_TEAM_OFFICE_DB=/tmp/dto-demo.db DEV_TEAM_OFFICE_WEATHER=off node server/index.js   # oficina de prueba
 node test/fixtures/fake-agent.mjs --url http://127.0.0.1:4320 --delay 450                         # un agente de mentira
 scripts/dev-session.sh up --agent pi       # el flujo real, aislado (ver «Probar como un usuario»)
+node scripts/install-check.mjs             # la instalación de un usuario nuevo, con cada agente (--container: Linux limpio)
 ```
 
 ## Reglas

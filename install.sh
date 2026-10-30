@@ -10,20 +10,27 @@
 #
 # Environment:
 #   DEV_TEAM_OFFICE_REPO     owner/repo on GitHub        (default fmunoztorrent/dev-office)
-#   DEV_TEAM_OFFICE_REF      branch or tag               (default main)
+#   DEV_TEAM_OFFICE_REF      branch or tag               (default: the latest release; main for the newest code)
 #   DEV_TEAM_OFFICE_SOURCE   a local folder or .tar.gz to install instead of downloading
 #   DEV_TEAM_OFFICE_HOME     where it lives              (default ~/.dev-team-office)
 #   DEV_TEAM_OFFICE_BIN_DIR  where the command goes      (default ~/.local/bin)
 #   DEV_TEAM_OFFICE_NO_SETUP=1  only install, do not connect the agents
+#   DEV_TEAM_OFFICE_MODIFY_PATH=1|0  add ~/.local/bin to your shell's PATH without asking (1) or never (0)
 
 set -eu
 
 REPO="${DEV_TEAM_OFFICE_REPO:-fmunoztorrent/dev-office}"
-REF="${DEV_TEAM_OFFICE_REF:-main}"
+REF="${DEV_TEAM_OFFICE_REF:-}"
 DTO_HOME="${DEV_TEAM_OFFICE_HOME:-$HOME/.dev-team-office}"
 APP="$DTO_HOME/app"
 
 say() { printf '%s\n' "$*"; }
+# The latest release's tag (vX.Y.Z), so everyone installing gets the same published version.
+latest_release() {
+  command -v curl >/dev/null 2>&1 || return 1
+  u=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/${REPO}/releases/latest" 2>/dev/null) || return 1
+  case "$u" in */releases/tag/?*) printf '%s' "${u##*/}" ;; *) return 1 ;; esac
+}
 die() { printf 'dev-team-office: %s\n' "$*" >&2; exit 1; }
 
 # --- Node.js >= 22.13 (it brings SQLite and WebSocket: nothing else to install)
@@ -32,7 +39,10 @@ node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a
   || die "Node.js $(node -v) is too old: 22.13 or newer is required (https://nodejs.org)"
 
 TMP=$(mktemp -d 2>/dev/null || mktemp -d -t dto)
-trap 'rm -rf "$TMP"' EXIT INT TERM
+# A failure must never look like success: macOS's sh can stop on an error and still exit with 0.
+# Leaving before the end says so, and exits with 1.
+FINISHED=0
+trap 'rm -rf "$TMP"; [ "$FINISHED" = 1 ] || { printf "dev-team-office: the install did not finish\n" >&2; exit 1; }' EXIT INT TERM
 
 # --- the files
 if [ -n "${DEV_TEAM_OFFICE_SOURCE:-}" ]; then
@@ -45,8 +55,9 @@ if [ -n "${DEV_TEAM_OFFICE_SOURCE:-}" ]; then
     mv "$TMP/x"/* "$TMP/src"
   fi
 else
-  URL="https://codeload.github.com/$REPO/tar.gz/$REF"
-  say "Downloading $REPO@$REF…"
+  [ -n "$REF" ] || REF=$(latest_release) || REF=main
+  URL="https://codeload.github.com/${REPO}/tar.gz/${REF}"
+  say "Downloading ${REPO}@${REF}…"
   if command -v curl >/dev/null 2>&1; then curl -fsSL "$URL" -o "$TMP/app.tgz" || die "could not download $URL"
   elif command -v wget >/dev/null 2>&1; then wget -qO "$TMP/app.tgz" "$URL" || die "could not download $URL"
   else die "curl or wget is required"; fi
@@ -68,6 +79,8 @@ say "Dev Team Office $VERSION installed at $APP"
 # --- connect the agents (and the `dev-team-office` command)
 if [ "${DEV_TEAM_OFFICE_NO_SETUP:-}" = 1 ]; then
   say "Next: $APP/bin/dev-team-office.js setup"
+  FINISHED=1
   exit 0
 fi
 DEV_TEAM_OFFICE_FROM_INSTALLER=1 node "$APP/bin/dev-team-office.js" setup
+FINISHED=1

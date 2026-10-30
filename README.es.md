@@ -12,16 +12,20 @@ Se lanza desde una terminal (`dev-team-office`): ahí corre la **bitácora** con
 
 ## Instalación en un minuto
 
-Necesitas **Node.js ≥ 22.13** (macOS o Linux). Nada más: la oficina no tiene dependencias.
+Necesitas **Node.js ≥ 22.13** (macOS o Linux) y un agente de código. Nada más: la oficina no tiene dependencias.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/fmunoztorrent/dev-office/main/install.sh | sh
-dev-team-office
 ```
 
-Paso a paso, con cada forma de arrancar y cómo sumar tu proyecto: [docs/installation.es.md](docs/installation.es.md).
+1. **El instalador** baja la última versión publicada a `~/.dev-team-office/app` y deja el comando `dev-team-office` en `~/.local/bin`. Después **conecta solo cada agente que encuentre** (Claude Code, Codex, OpenCode, Pi, Gemini CLI, Cursor): su integración en vivo, el **servidor MCP** y los **skills**.
+2. **Su única pregunta:** si `~/.local/bin` no está en tu `PATH`, ofrece agregarlo al perfil de tu shell. Aprieta Enter.
+3. **Abre una terminal nueva** y arranca la oficina: `dev-team-office`.
+4. **Tu agente necesita su propio login.** La oficina no usa ningún modelo. Claude Code: `/login`. Pi: `/login` y un modelo. OpenCode funciona con sus modelos gratuitos tal como se instala.
 
-El instalador deja la oficina en `~/.dev-team-office/app`, el comando `dev-team-office` en `~/.local/bin` y corre `dev-team-office setup`, que **conecta solo cada agente que encuentre** (Claude Code, Codex, OpenCode, Pi, Gemini CLI, Cursor): su integración en vivo, el **servidor MCP** y los **skills**. Sin pasos a mano. Para revisar o deshacer: `dev-team-office doctor` · `dev-team-office uninstall`. Para actualizar: `dev-team-office update` (o el mismo `curl`).
+Para revisar o deshacer: `dev-team-office doctor` · `dev-team-office uninstall`. Para actualizar: `dev-team-office update` (o el mismo `curl`). Para el código más nuevo en vez de la última versión publicada: `curl … | DEV_TEAM_OFFICE_REF=main sh`.
+
+Paso a paso, con cada forma de arrancar y cómo sumar tu proyecto: [docs/installation.es.md](docs/installation.es.md).
 
 Otras formas:
 

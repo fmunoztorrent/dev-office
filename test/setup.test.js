@@ -16,7 +16,7 @@ process.env.DEV_TEAM_OFFICE_BIN_DIR = BIN_DIR;
 process.env.PATH = path.join(HOME, 'nada'); // no agent "installed": they are detected by their folder
 assert.equal(os.homedir(), HOME, 'os.homedir() ignoró $HOME');
 
-const { setup, uninstall, doctor, parseJsonc, shimPath, MARK } = await import('../bin/setup.js');
+const { setup, uninstall, doctor, parseJsonc, shimPath, ephemeral, shellProfile, addPathToProfile, profileHasPath, removePathFromProfiles, PROFILE_MARK, MARK } = await import('../bin/setup.js');
 await import('./es.js');
 
 after(() => {
@@ -46,6 +46,14 @@ write(GEMINI, '{"theme":"dark"}');
 fs.mkdirSync(P('.cursor'), { recursive: true });
 write(P('.pi', 'agent', 'mcp.json'), JSON.stringify({ mcpServers: { engram: { command: 'engram', args: ['mcp'], lifecycle: 'lazy' } } }));
 const before = { claude: read(CLAUDE), toml: read(CODEX_TOML), opencode: read(OPENCODE), gemini: read(GEMINI), claudeJson: read(P('.claude.json')), piMcp: read(P('.pi', 'agent', 'mcp.json')) };
+
+test('la copia instalada nunca es temporal, aunque el HOME viva en la carpeta temporal (CI, un contenedor)', () => {
+  // this HOME is under os.tmpdir(): the installed copy must not be "reinstalled" over itself
+  assert.equal(ephemeral(path.join(HOME, '.dev-team-office', 'app')), false);
+  const loose = fs.mkdtempSync(path.join(os.tmpdir(), 'dto-descarga-'));
+  try { assert.equal(ephemeral(loose), true, 'una copia suelta en la carpeta temporal sí'); } finally { fs.rmSync(loose, { recursive: true, force: true }); }
+  assert.equal(ephemeral('/home/yo/.npm/_npx/abc/node_modules/dev-team-office'), true, 'npx también');
+});
 
 test('parseJsonc: comentarios y comas finales, sin tocar las barras dentro de los textos', () => {
   assert.deepEqual(parseJsonc('{ "a": "http://x//y", /* b */ "c": [1, 2,], // fin\n }'), { a: 'http://x//y', c: [1, 2] });
@@ -161,4 +169,45 @@ test('un JSON roto no se pisa: se avisa y lo demás sigue; con el plugin de Clau
   assert.equal(JSON.stringify(json(CLAUDE).hooks).includes('dev-team-office'), false, 'el plugin ya trae los hooks');
   assert.deepEqual(by.codex.failed, []);
   uninstall({ cli: false });
+});
+
+test('el PATH de las terminales nuevas: una vez en el perfil de su shell, y uninstall lo quita sin tocar lo demás', () => {
+  const dir = path.join(HOME, '.local', 'bin');
+  assert.equal(shellProfile('/bin/zsh', 'darwin').file, path.join(process.env.ZDOTDIR || HOME, '.zshrc'));
+  assert.equal(shellProfile('/bin/bash', 'darwin').file, P('.bash_profile'), 'Terminal.app abre shells de login');
+  assert.equal(shellProfile('/usr/bin/bash', 'linux').file, P('.bashrc'));
+  assert.equal(shellProfile('/bin/sh', 'linux').file, P('.profile'));
+  const zsh = shellProfile('/bin/zsh', 'darwin');
+  write(zsh.file, '# mío\nalias ll="ls -l"\n');
+  addPathToProfile(dir, { profile: zsh });
+  addPathToProfile(dir, { profile: zsh }); // twice is once
+  const text = read(zsh.file);
+  assert.equal(text.split(PROFILE_MARK).length - 1, 1);
+  assert.match(text, /export PATH="\$HOME\/\.local\/bin:\$PATH"\n$/);
+  assert.ok(profileHasPath(dir, zsh));
+  assert.deepEqual(removePathFromProfiles(), [zsh.file]);
+  assert.equal(read(zsh.file), '# mío\nalias ll="ls -l"\n', 'lo del usuario queda igual');
+  // the user's own line already puts it there: nothing to add
+  const bash = shellProfile('/bin/bash', 'linux');
+  write(bash.file, 'export PATH="$HOME/.local/bin:$PATH"\n');
+  assert.ok(profileHasPath(dir, bash));
+  fs.rmSync(zsh.file);
+  fs.rmSync(bash.file);
+});
+
+test('`setup` termina diciendo cómo abrir la oficina: en una terminal nueva si agregó el PATH, o con la ruta completa', () => {
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dto-setup-path-')));
+  const cli = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'bin', 'dev-team-office.js');
+  const env = (yes) => ({ HOME: home, PATH: path.dirname(process.execPath), SHELL: '/bin/zsh', DEV_TEAM_OFFICE_LANG: 'en', DEV_TEAM_OFFICE_SETUP_CLI: '0', DEV_TEAM_OFFICE_MODIFY_PATH: yes ? '1' : '0' });
+  try {
+    const no = execFileSync(process.execPath, [cli, 'setup'], { env: env(false), encoding: 'utf8' });
+    assert.match(no, /Open the office with: ~\/\.local\/bin\/dev-team-office .*add ~\/\.local\/bin to your PATH/);
+    assert.ok(!fs.existsSync(path.join(home, '.zshrc')), 'sin permiso no toca el perfil');
+    const yes = execFileSync(process.execPath, [cli, 'setup'], { env: env(true), encoding: 'utf8' });
+    assert.match(yes, /new terminals will find `dev-team-office`/);
+    assert.match(yes, /Open a new terminal and run: dev-team-office .*right now, in this one: ~\/\.local\/bin\/dev-team-office/);
+    assert.match(fs.readFileSync(path.join(home, '.zshrc'), 'utf8'), /\.local\/bin/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });

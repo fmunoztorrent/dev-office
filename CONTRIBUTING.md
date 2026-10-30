@@ -41,6 +41,12 @@ And open `http://127.0.0.1:4320`. `dev-team-office demo --pi --port 4320` runs t
    - after each change, `scripts/dev-session.sh update` and restart the office; when done, `scripts/dev-session.sh down`.
 
    Never use your real configuration or your default herdr session.
+5. **The install:** if you touched `install.sh`, `bin/setup.js` or an integration, run `node scripts/install-check.mjs`. It installs the office the way a new user would, once per agent (Claude Code, Pi, OpenCode), each in an empty `HOME` with only Node and that agent, and checks every step:
+   - the installer finishes, the command is on the `PATH` (or the installer says how to add it) and `doctor` sees the agent;
+   - the agent lists the MCP server, and a headless run of the agent reaches the office;
+   - installing again duplicates nothing, and `uninstall` leaves the user's own settings as they were.
+
+   Options: `--container` (a clean Linux, with podman or docker), `--source github` (the README's one-liner as published) or `--source download` (your installer, downloading from GitHub), and `--login` (your agents' logins, so the model answers). CI runs it on Linux and macOS on every push.
 
 ## What a change is expected to bring
 

@@ -4,6 +4,7 @@
 // opens in that same terminal (g) or in the browser, at the URL the server serves (o). Inside
 // herdr, the agent opens in a new pane and orchestrates its work from there.
 
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { startServer, DEFAULT_PORT, DEFAULT_HOST, VERSION, defaultSocketPath } from '../server/server.js';
@@ -430,12 +431,47 @@ async function cmdPrompt() {
 const onlyAgents = () => [...args._.slice(1), ...(str(args.only) ? args.only.split(',') : [])].map((x) => x.trim()).filter(Boolean);
 
 async function cmdSetup() {
-  const { setup } = await import('./setup.js');
+  const { setup, shellProfile, profileHasPath, addPathToProfile } = await import('./setup.js');
   const out = setup({ only: onlyAgents(), dry: !!args['dry-run'] });
   if (!out.ok) fail(out.error);
   console.log(t('setup.title', { version: VERSION }));
   for (const l of out.lines) console.log(l);
-  console.log(`\n${t(out.dry ? 'setup.dryDone' : 'setup.done')}`);
+  if (out.dry) { console.log(`\n${t('setup.dryDone')}`); return; }
+  const bin = out.bin;
+  if (!bin || bin.onPath) { console.log(`\n${t('setup.done')}`); return; }
+  // the command is not on this terminal's PATH: the next terminals can have it (the shell's profile)
+  const profile = shellProfile();
+  let inProfile = profileHasPath(bin.dir, profile);
+  if (!inProfile && wantsPath(t('setup.profileAsk', { dir: tilde(bin.dir), file: tilde(profile.file) }))) {
+    addPathToProfile(bin.dir, { profile });
+    console.log(t('setup.profileAdded', { file: tilde(profile.file) }));
+    inProfile = true;
+  }
+  console.log(`\n${t(inProfile ? 'setup.doneNewTerminal' : 'setup.doneFullPath', { cmd: tilde(bin.link), dir: tilde(bin.dir) })}`);
+}
+
+/**
+ * Add the command's folder to the shell's profile? DEV_TEAM_OFFICE_MODIFY_PATH=1 or 0 answers it;
+ * from the installer the terminal asks (Enter is yes); `setup` by hand only says how.
+ */
+function wantsPath(question) {
+  const env = String(process.env.DEV_TEAM_OFFICE_MODIFY_PATH || '').toLowerCase();
+  if (['1', 'yes', 'y', 'true'].includes(env)) return true;
+  if (['0', 'no', 'n', 'false'].includes(env)) return false;
+  if (!process.env.DEV_TEAM_OFFICE_FROM_INSTALLER) return false;
+  const reply = askTty(`\n${question} [Y/n] `);
+  return reply !== null && !/^\s*n/i.test(reply);
+}
+
+/** A question in the terminal, even when stdin is the installer itself (curl | sh). null without a terminal. */
+function askTty(question) {
+  let fd;
+  try { fd = fs.openSync('/dev/tty', 'r+'); } catch { return null; }
+  try {
+    fs.writeSync(fd, question);
+    const buf = Buffer.alloc(256);
+    return buf.toString('utf8', 0, fs.readSync(fd, buf, 0, buf.length, null));
+  } catch { return null; } finally { fs.closeSync(fd); }
 }
 
 async function cmdUninstall() {
@@ -456,7 +492,6 @@ async function cmdDoctor() {
 // Updating: an installed copy is replaced by the latest version (with the same installer); a git
 // clone is updated with git.
 async function cmdUpdate() {
-  const fs = await import('node:fs');
   const { ROOT_DIR } = await import('./setup.js');
   if (fs.existsSync(path.join(ROOT_DIR, '.git'))) { console.log(t('cli.updateGit', { dir: tilde(ROOT_DIR) })); return; }
   const { spawnSync } = await import('node:child_process');
