@@ -67,7 +67,7 @@ The task arrives like this:
   - Inside herdr, the agent opens in a new pane with the prompt.
   - Outside herdr, it runs in the background.
 
-In a pane, the office **confirms that the agent started its turn** (it asks herdr). If it does not start, it waits for the agent to be free and retries once; if that fails too, the task is marked **failed** with the reason —`the agent did not start its turn in pane w3:p9 (herdr: agent_prompt_stalled)`— instead of staying "in progress" forever.
+In a pane, the office **confirms that the agent started its turn** (it asks herdr). If it does not start, it waits for the agent to be free and retries once. If the freshly opened pane is already busy (`agent_pane_busy`, you are using it), the office leaves that pane alone —it does not close it, it stops following it— and opens another one, a few times at most (three attempts in all). Only when that fails too is the task marked **failed** with the reason —`the agent did not start its turn in pane w3:p9 (herdr: agent_prompt_stalled | agent_pane_busy)`— instead of staying "in progress" forever.
 
 ## herdr: one pane per agent and per subagent
 

@@ -21,6 +21,9 @@ import { insideDir as inside } from './paths.js';
 // Each CLI's name for `herdr agent start --kind`
 export const HERDR_KIND = { 'claude-code': 'claude', claude: 'claude', pi: 'pi', opencode: 'opencode', codex: 'codex' };
 const STATUS = new Set(['idle', 'working', 'blocked', 'done']);
+// A pane the user is already using answers `agent_pane_busy`: it is left alone and the agent tries a
+// fresh pane, this many times at most.
+const MAX_PANE_ATTEMPTS = 3;
 export const quote = (s) => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${String(s).replace(/'/g, `'\\''`)}'`);
 
 /** Which office role a pane stands for: the requested one, or by its agent or its command. */
@@ -136,7 +139,20 @@ export class Herdr extends EventEmitter {
    * @param env      the pane's environment (the office URL, the office, Pi's session…)
    * @returns { pane, name }
    */
-  async launchAgent({ harness, cwd, prompt, bin, args = [], env = {}, direction, office, officeName = '', role = 'manager', title, taskId, label } = {}) {
+  async launchAgent(opts = {}) {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await this.#openInPane(opts);
+      } catch (err) {
+        // the pane is busy: the user is using it, so it is neither closed nor followed; a fresh one is tried
+        if (err.code !== 'agent_pane_busy' || attempt >= MAX_PANE_ATTEMPTS) throw err;
+        this.tracked.delete(err.pane);
+      }
+    }
+  }
+
+  /** Opens the agent in a new pane (one attempt): the pane, its tracking and the prompt. */
+  async #openInPane({ harness, cwd, prompt, bin, args = [], env = {}, direction, office, officeName = '', role = 'manager', title, taskId, label } = {}) {
     const kind = HERDR_KIND[harness] || harness;
     const pane = await this.split({ cwd, direction, env });
     const id = pane.pane_id;

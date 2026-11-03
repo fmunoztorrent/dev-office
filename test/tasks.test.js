@@ -126,3 +126,49 @@ test('dentro de herdr: si el prompt no arranca el turno ni con reintento, la tar
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// fake herdr whose pane is always busy: in the bin path the office types the agent's executable
+// into the new pane (pane run), and that is where herdr refuses with agent_pane_busy
+function busyPaneHerdr() {
+  const calls = [];
+  const panes = new Map([['w1:p1', { pane_id: 'w1:p1', workspace_id: 'w1', agent_status: 'unknown' }]]);
+  let n = 1;
+  const ok = (result = {}) => JSON.stringify({ id: 'cli', result });
+  const run = async (args) => {
+    calls.push(args);
+    const [group, cmd, ...rest] = args;
+    if (group === 'pane' && cmd === 'split') {
+      const id = `w1:p${++n}`;
+      panes.set(id, { pane_id: id, workspace_id: 'w1', agent_status: 'idle' });
+      return ok({ pane: panes.get(id) });
+    }
+    if (group === 'pane' && cmd === 'list') return ok({ panes: [...panes.values()] });
+    if (group === 'pane' && cmd === 'rename') return ok();
+    if (group === 'pane' && cmd === 'run') throw Object.assign(new Error('el pane está ocupado'), { code: 'agent_pane_busy' });
+    if (group === 'agent') return ok();
+    throw new Error(`herdr ${args.join(' ')}: no lo conozco`);
+  };
+  return { run, calls };
+}
+
+test('dentro de herdr: si el pane está ocupado en cada intento, la tarea falla con el último pane y libera el rol', async () => {
+  const fake = busyPaneHerdr();
+  const herdr = new Herdr({ env: { HERDR_ENV: '1', HERDR_PANE_ID: 'w1:p1' }, run: fake.run, every: 60_000 });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dto-pane-busy-'));
+  try {
+    await withServer({ herdr }, async (server) => {
+      const res = server.hub.submit({ agent: 'opencode', mode: 'launch', text: 'Reembolsos parciales', cwd: dir, launch: { bin: process.execPath } });
+      assert.equal(res.ok, true, res.error);
+      const task = await until(() => server.hub.snapshot().tasks.find((x) => x.status === 'failed'));
+      // three attempts, three panes: the task fails naming the pane of the last attempt
+      assert.equal(task.pane, 'w1:p4');
+      assert.equal(task.detail, t('task.paneNoTurn', { pane: 'w1:p4', code: 'agent_pane_busy' }));
+      // S4: the pane's role (manager) goes back to idle, it is not left "working"
+      assert.equal(server.company.get('main').roles.manager.status, 'idle');
+      assert.equal(fake.calls.filter((c) => c[1] === 'split').length, 3);
+      assert.equal(fake.calls.filter((c) => c[1] === 'run').length, 3);
+    });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

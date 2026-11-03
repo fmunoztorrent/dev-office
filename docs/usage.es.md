@@ -69,9 +69,11 @@ La tarea llega así:
   - Fuera de herdr, corre en segundo plano.
 
 En un pane, la oficina **confirma que el agente arrancó su turno** (se lo pregunta a herdr). Si no
-arranca, espera a que el agente quede libre y lo reintenta una sola vez; si tampoco, la tarea queda
-**fallida** con el motivo —`el agente no arrancó su turno en el pane w3:p9 (herdr:
-agent_prompt_stalled)`— en vez de quedar «en curso» para siempre.
+arranca, espera a que el agente quede libre y lo reintenta una sola vez. Si el pane recién abierto ya
+está ocupado (`agent_pane_busy`, lo estás usando vos), la oficina lo deja como está —no lo cierra,
+deja de seguirlo— y abre otro, pocas veces: tres intentos en total. Solo cuando eso también falla la
+tarea queda **fallida** con el motivo —`el agente no arrancó su turno en el pane w3:p9 (herdr:
+agent_prompt_stalled | agent_pane_busy)`— en vez de quedar «en curso» para siempre.
 
 ## herdr: un pane por agente y por subagente
 
