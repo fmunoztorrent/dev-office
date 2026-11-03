@@ -198,7 +198,8 @@ test('el PATH de las terminales nuevas: una vez en el perfil de su shell, y unin
 test('`setup` termina diciendo cómo abrir la oficina: en una terminal nueva si agregó el PATH, o con la ruta completa', () => {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dto-setup-path-')));
   const cli = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'bin', 'dev-team-office.js');
-  const env = (yes) => ({ HOME: home, PATH: path.dirname(process.execPath), SHELL: '/bin/zsh', DEV_TEAM_OFFICE_LANG: 'en', DEV_TEAM_OFFICE_SETUP_CLI: '0', DEV_TEAM_OFFICE_MODIFY_PATH: yes ? '1' : '0' });
+  // Use an empty dir under the temp HOME instead of path.dirname(process.execPath): the node bin may contain a global `dev-team-office` from npm that would mask isolation.
+  const env = (yes) => ({ HOME: home, PATH: path.join(home, 'empty-bin'), SHELL: '/bin/zsh', DEV_TEAM_OFFICE_LANG: 'en', DEV_TEAM_OFFICE_SETUP_CLI: '0', DEV_TEAM_OFFICE_MODIFY_PATH: yes ? '1' : '0' });
   try {
     const no = execFileSync(process.execPath, [cli, 'setup'], { env: env(false), encoding: 'utf8' });
     assert.match(no, /Open the office with: ~\/\.local\/bin\/dev-team-office .*add ~\/\.local\/bin to your PATH/);
