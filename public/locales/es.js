@@ -252,6 +252,15 @@ export default {
     waiting: 'Esperando su salida…', noLog: 'Su log ya no está (puede que el agente lo haya borrado).',
     openPane: '⧉ Abrir en herdr', paneOpened: 'Sus logs están en el pane {pane} de herdr.', keyPick: 'elegir',
   },
+  // what the agents ask you on their screens (inside herdr), and your answer
+  prompts: {
+    title: 'Tus agentes te preguntan', empty: 'Nada pendiente: ya se respondió.', theAgent: 'el agente',
+    asks: '{agent} te pregunta', pane: 'pane {pane}', options: 'Opciones',
+    cancel: 'Cancelar la pregunta (Esc)', hint: 'Tu respuesta se aprieta en el pane de herdr del agente, como si estuvieras ahí.',
+    sending: 'Respondiendo…', sent: 'Respondido: «{answer}».', cancelledMsg: 'Se apretó Esc en su pane.', failed: 'No se pudo responder.',
+    chip: '{agent} te pregunta', chipMany: '{n} preguntas para ti',
+    waiting: '{agent} te pregunta: {summary}', answered: '✋ respondiste «{answer}» en el pane {pane}', cancelled: '✋ cancelaste la pregunta del pane {pane}',
+  },
   err: {
     pathMissing: 'falta la ruta', pathRelative: '{path}: usa la ruta completa (p. ej. ~/Workspace/mi-proyecto)', pathNotFound: '{path}: no existe esa carpeta',
     harness: 'elige el agente que atiende esa ruta: claude-code, opencode o pi', args: '{name}: args debe ser una lista de textos',
@@ -271,6 +280,7 @@ export default {
     invalidMessage: 'mensaje inválido', registerWs: 'register sólo por WebSocket', updateWs: 'task_update sólo por WebSocket', unknownCommand: 'comando no disponible: {action}',
     unknownType: 'tipo desconocido: {type}', notFound: 'ruta no encontrada', fullPath: 'usa la ruta completa', hostDenied: 'host no permitido', originDenied: 'origen no permitido',
     tooLarge: 'payload demasiado grande', noHerdr: 'no estás dentro de herdr (HERDR_ENV=1)', unknownService: 'no existe ese servicio', serviceNoLog: 'ese servicio no tiene un log que seguir', herdrFailed: 'herdr: {error}', paneMissing: 'falta el pane',
+    promptGone: 'esa pregunta ya no está', promptChanged: 'la pregunta cambió en la pantalla del agente: ésta es la que muestra ahora', promptOption: 'esa opción no existe',
   },
   server: {
     started: 'Dev Team Office {version} en {url}', browser: '  Ábrela en el navegador: {urls}', api: '  API: POST /v1/events/<source> · GET /v1/state · WS /v1/ws{socket}',
@@ -294,6 +304,7 @@ export default {
     noHerdr: 'fuera de herdr', keys: 'o navegador · g juego · ←→ oficina · q {quit}', quit: 'salir', quitOffice: 'cerrar la oficina',
     services: '{n} servicio(s) corriendo', servicesTitle: 'SERVICIOS', svcUp: 'corriendo · {ago}', svcDown: 'se detuvo hace {ago}', keysServices: '1-9 los logs de un servicio',
     svcPane: 'Logs de {name} en el pane {pane}', svcNone: 'no hay un servicio con ese número',
+    promptsTitle: 'TE ESPERAN', keysPrompts: 'r responder', answerKeys: '1-{n} responder · x cancelar la pregunta · esc volver', promptNone: 'ningún agente te está preguntando nada',
   },
   // a subagent's pane (dev-team-office follow)
   follow: {

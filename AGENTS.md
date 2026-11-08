@@ -27,6 +27,7 @@ Dev Team Office es una oficina en pixel art que muestra en vivo lo que hacen los
 | `server/adapters.js` | El payload de cada agente → el formato genérico |
 | `server/roles.js` · `server/humanize.js` | Qué personaje hace cada herramienta, archivo o comando, y qué hace dicho en palabras («Corriendo los tests»: nunca el comando) |
 | `server/tasks.js` · `server/pipeline.js` · `server/registry.js` | Las tareas, los pipelines y los agentes registrados |
+| `server/prompts.js` | Lo que un agente te pregunta en su pantalla (un permiso, elegir una opción): se lee de su pane de herdr y tu respuesta se aprieta ahí |
 | `server/services.js` | Los servicios que los agentes dejan corriendo en segundo plano: de dónde salen, si siguen vivos (`lsof`) y sus logs |
 | `server/herdr.js` · `server/subpanes.js` | herdr: un agente por pane, y un pane por subagente |
 | `server/mcp.js` | El servidor MCP: `join_office`, `register_project`, `report_activity`, `send_task`… y el prompt `join` |

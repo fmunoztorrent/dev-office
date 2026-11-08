@@ -224,13 +224,14 @@ If you launch the office **inside herdr** (`HERDR_ENV=1`), the agent does not ru
 - **When the office opens**, the agent opens in a **new pane** next to the office's (without taking your focus), with its label (`🏢 Payments · Claude Code · shop`). Which one? The one from `--agent` or from **⚙ › General › Agent on open**: on automatic, the registered agent of the folder where you launched the office, or the CLI that folder has configured (or the first one installed). `--no-launch` opens none.
 - **New sessions** (a prompt from the whiteboard without an open session) also open in a pane, interactive: the agent gets the prompt there and the task ends when its turn ends. Turn it off in ⚙ › General.
 - **The agent orchestrates its own work from its pane** —subagents, its harness's pipelines— and **may open more panes** for other activities: tests in watch mode, a server, a build or another agent with its own prompt, with `dev-team-office pane` (Pi's skill explains it) or with `herdr` itself. That belongs to the agent, not to the office; the office **understands** it: each pane is an activity someone on the team takes care of (tests, QA; the dev server, frontend; another agent, by its role) while it stays open. Panes an agent opens in its project's folder are adopted by the office automatically; if an agent gets blocked in its pane, the manager raises his hand.
+- **When an agent asks you something** on its screen (a permission, "Allow?", a choice between options), the office reads it from its pane: the **✋ chip** shows up in the game ("Pi is asking you") and the monitor lists it under **WAITING FOR YOU**. Answer there with a click (or `r`): the office presses the same keys you would in the agent's pane.
 
 ```bash
 dev-team-office pane --role qa --title "tests in watch" -- npm test -- --watch
 dev-team-office pane --agent claude --role tl --title review -- "Review the diff and report only what is actionable"
 ```
 
-Outside herdr everything works as before (new agents run in the background). The office talks to herdr only through its CLI (`herdr pane split|run|list|rename`, `herdr agent start|prompt`).
+Outside herdr everything works as before (new agents run in the background). The office talks to herdr only through its CLI (`herdr pane split|run|list|rename|read|send-keys`, `herdr agent start|prompt`).
 
 ## Agents: each one with its harness engineering
 

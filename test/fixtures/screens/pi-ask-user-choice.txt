@@ -1,0 +1,26 @@
+
+  ✿ Gentle Shell
+
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+10000 centavos? (5000 centavos,
+10000 centavos)
+
+ ⠏ Working
+
+────────────────────────────────────
+ ¿A partir de qué monto el envío es
+ gratis: 5000 o 10000 centavos?
+ → 5000 centavos
+    El envío gratis empieza en 5000
+ centavos ($50). Es lo que el
+ código sin commitear ya hace:
+ `subtotal >= 5000 ? 0 : 490`.
+   10000 centavos
+    El envío gratis empieza en
+ 10000 centavos ($100). Requiere
+ cambiar la condición y los tests
+ existentes (4999/5000/7500).
+ ↑↓ navigate • Enter select • Esc
+ cancel
+────────────────────────────────────
+✎ 5 files · +50 −1   /gentle:changes

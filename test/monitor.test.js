@@ -90,3 +90,33 @@ test('monitor: los servicios que quedaron corriendo, numerados para abrir sus lo
   assert.match(lines.at(-1), /1-9 los logs de un servicio/);
   assert.equal(lines.length, 24);
 });
+
+test('monitor: lo que te pregunta un agente va arriba, y con r se ven sus opciones para responder', () => {
+  const mon = createMonitor();
+  mon.prompts([{ id: 'q-w1:p2', rev: 1, pane: 'w1:p2', agent: 'pi', project: 'tienda', summary: '⚠️ Dangerous command: … Allow?', question: 'Allow?', options: [{ label: 'Yes', detail: '' }, { label: 'No', detail: '' }], cursor: 0 }]);
+  let lines = renderMonitor(mon, { cols: 120, rows: 24, color: false });
+  let text = lines.join('\n');
+  assert.match(text, /TE ESPERAN/);
+  assert.match(text, /✋ Pi · tienda +⚠️? Dangerous command: … Allow\?/);
+  assert.match(lines.at(-1), /r responder/);
+  assert.doesNotMatch(text, /1 → Yes/);
+  // r: its options, numbered (→ the one marked on the agent's screen)
+  mon.model.answering = 'q-w1:p2';
+  lines = renderMonitor(mon, { cols: 120, rows: 24, color: false });
+  text = lines.join('\n');
+  assert.match(text, /1 → Yes\n +2 {3}No/);
+  assert.match(lines.at(-1), /1-2 responder · x cancelar la pregunta · esc volver/);
+  assert.equal(lines.length, 24);
+  // in a narrow pane (next to the agent's): the question on its own line, without the details
+  const narrow = renderMonitor(mon, { cols: 44, rows: 24, color: false }).join('\n');
+  assert.match(narrow, /✋ Pi · tienda\n +⚠️? Dangerous command: … Allow\?/);
+  assert.match(narrow, /1 → Yes\n +2 {3}No\n/);
+  // what just happened goes before the keys, so a narrow pane shows it
+  mon.model.flash = 'Respondido: «No».';
+  assert.match(renderMonitor(mon, { cols: 44, rows: 24, color: false }).at(-1), /^ {2}Respondido: «No»\. {3}1-2 resp/);
+  mon.model.flash = null;
+  // answered from elsewhere: it is no longer there, and neither is the answering mode
+  mon.prompts([]);
+  assert.equal(mon.model.answering, null);
+  assert.doesNotMatch(renderMonitor(mon, { cols: 120, rows: 24, color: false }).join('\n'), /TE ESPERAN/);
+});

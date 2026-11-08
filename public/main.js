@@ -5,6 +5,7 @@ import { briefOptions, briefProblem, briefMessage, defaultTarget, targetLabel } 
 import { createSettings } from './settings-ui.js';
 import { createServices } from './services-ui.js';
 import { createBoardView } from './board-ui.js';
+import { createPrompts } from './prompts-ui.js';
 import { drawSprite } from './sprite.js';
 import { season, isSouth, daylight, weatherIcon } from './sky.js';
 import { t, setLanguage, onLanguage, getLanguage, timeOf } from './i18n.js';
@@ -25,9 +26,11 @@ let office = null; // the one being watched: { id, name, timezone, country, city
 let prefs = null;  // the general settings (language, zone, weather, herdr, log)
 let herdr = { available: false, panes: [] };
 let services = []; // the services the agents left running in the background (the rack, the ▶ chip)
+let asking = [];   // what the agents ask you on their screens (inside herdr): the ✋ chip
 
 // the whiteboard: with tickets it expands to show them as post-its; without them, a new brief
-const game = createGame($('office'), { onSelect: (id) => select(id), onBoardClick: () => (boardView.hasTickets() ? boardView.open() : openBrief()), onRackClick: () => servicesUi.open() });
+// the PO is you: with a question pending, clicking it (or the manager, hand up) opens the questions
+const game = createGame($('office'), { onSelect: (id) => ((id === 'po' || id === 'manager') && asking.length ? promptsUi.open() : select(id)), onBoardClick: () => (boardView.hasTickets() ? boardView.open() : openBrief()), onRackClick: () => servicesUi.open() });
 const boardView = createBoardView({
   getBoard: () => game.sim.board,
   onBrief: () => openBrief(),
@@ -65,6 +68,8 @@ onLanguage(() => {
   settings.refresh?.(true);
   renderServicesChip();
   servicesUi.refresh();
+  renderAskChip();
+  promptsUi.refresh();
 });
 
 // ---------------------------------------------------------------- socket
@@ -86,6 +91,7 @@ function connect() {
       onRuns(st.pipelines || []);
       onTargets(st.targets);
       onServices(st.services || []);
+      onPrompts(st.prompts || []);
     }
     if (msg.type === 'prefs') onPrefs(msg.prefs);
     if (msg.type === 'offices') onOffices(msg.offices, msg.offices.find((o) => o.id === office?.id));
@@ -93,6 +99,7 @@ function connect() {
     if (msg.type === 'pipelines') onRuns(msg.runs);
     if (msg.type === 'targets') onTargets(msg.targets);
     if (msg.type === 'services' && msg.office === office?.id) onServices(msg.services);
+    if (msg.type === 'prompts' && msg.office === office?.id) onPrompts(msg.prompts);
     if (msg.type === 'snapshot' || msg.type === 'appearance') { applyAppearance((msg.state || msg).appearance || {}); renderTeam(); renderSheet(true); }
     if (msg.type === 'snapshot' || msg.type === 'weather') { game.sim.setWeather((msg.state ? msg.state.weather : msg.weather) || null); renderWeather(); }
     if (msg.type === 'event') onEvent(msg.event, msg.session);
@@ -127,6 +134,33 @@ function renderServicesChip() {
   chip.setAttribute('aria-label', chip.title);
 }
 $('svc-chip').onclick = () => servicesUi.open();
+
+// ---------------------------------------------------------------- what the agents ask you
+
+const promptsUi = createPrompts({
+  getPrompts: () => asking,
+  agentName: (a) => AGENT_NAME[a] || a,
+  answer: (id, choice) => fetch(`/v1/prompts/${encodeURIComponent(id)}/answer`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(choice) }).then((r) => r.json()),
+});
+
+function onPrompts(list) {
+  asking = list || [];
+  renderAskChip();
+  promptsUi.refresh();
+}
+
+/** The ✋ chip in the HUD: it shows up while an agent is waiting for your answer. */
+function renderAskChip() {
+  const chip = $('ask-chip');
+  const first = asking[0];
+  chip.hidden = !first;
+  if (!first) return;
+  const agent = AGENT_NAME[first.agent] || first.agent || t('prompts.theAgent');
+  chip.textContent = `✋ ${asking.length > 1 ? t('prompts.chipMany', { n: asking.length }) : t('prompts.chip', { agent })}`;
+  chip.title = `${first.summary || ''} (r)`;
+  chip.setAttribute('aria-label', `${chip.textContent}: ${chip.title}`);
+}
+$('ask-chip').onclick = () => promptsUi.open();
 
 function onPrefs(p) {
   prefs = p;
@@ -287,6 +321,9 @@ function renderContext() {
   bar.classList.toggle('low', pct <= 25);
   $('ctx-ko').hidden = pct > 10;
 }
+
+// the bar goes up while the game shows a notice along the bottom (a permission, a celebration…)
+setInterval(() => $('ctx-bar').classList.toggle('lifted', !!game.sim.banner), 250);
 
 // An office can hold several projects (a few backends and their BFFs…): each session's project is
 // its folder, and when more than one is active the log says which one each line is about.
@@ -757,6 +794,7 @@ document.addEventListener('keydown', (e) => {
   else if (k === 'v') { e.preventDefault(); toggleView(); }
   else if (k === 'o') { e.preventDefault(); nextOffice(); }
   else if (k === 'l') { e.preventDefault(); servicesUi.open(); }
+  else if (k === 'r') { if (promptsUi.open()) e.preventDefault(); }
 });
 
 applyI18n();

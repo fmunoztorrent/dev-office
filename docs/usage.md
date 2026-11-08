@@ -38,6 +38,8 @@ Keys: `o` opens the game in the browser, `g` opens it in the terminal (`q` goes 
 
 When an agent leaves a service running in the background (a dev server, a watcher…), a **SERVICES** section lists them, numbered: `1`–`9` open that service's log in a herdr pane below its agent's (`tail -F`), and `l` the newest one running.
 
+When an agent asks you something, a **WAITING FOR YOU** section shows it on top: `r` lists its options, `1`–`9` answer, `x` cancels the question and `esc` goes back (see [When an agent asks you something](#when-an-agent-asks-you-something)).
+
 "Of the team working" counts real work: announcements (a task handed out, a pane opening or closing) do not move it.
 
 ### The game's views (browser)
@@ -95,6 +97,15 @@ Inside herdr:
 
 The subagent is still run by its harness; the pane only **shows** it, with `dev-team-office follow`. Turn it off in ⚙ › General › "Each subagent in its pane", or with `dev-team-office config herdr.subagents off`.
 
+## When an agent asks you something
+
+An agent may stop to ask you: a permission ("Allow?"), a choice between options, a question. Inside herdr you answer without going to its pane:
+
+- **In the game (browser):** the **✋** chip at the top left ("Pi is asking you") opens the question, with a button per option. Also `r`, or a click on the PO (you) or on the manager while he waits with his hand up. `1`–`9` choose, and "Cancel the question" presses Esc.
+- **In the monitor:** the **WAITING FOR YOU** section. `r` lists the options, `1`–`9` answer, `x` cancels and `esc` goes back.
+
+Your answer is pressed in the agent's pane, as if you were there: the arrows to the option, and Enter. If the question changed or was already answered in the pane, nothing is pressed and the office shows what the screen says now. The office reads the questions from the screen (Claude Code's permissions, Pi's and OpenCode's questions, an extension's "Allow?"), so it works with any agent. Outside herdr it cannot see the agents' screens: you answer in the agent's terminal.
+
 ## Adding projects and teams
 
 - **`join`** adds a project in a single step: it starts the office, registers the repo root with its agent and tells you which character plays each subagent. It is available as an MCP prompt (`/mcp__dev-team-office__join`), as an MCP tool (`join_office`), in Pi (`/office`) and in the terminal (`dev-team-office join`).
@@ -137,7 +148,7 @@ The subagent is still run by its harness; the pane only **shows** it, with `dev-
 
 | Where | Keys |
 |---|---|
-| Monitor | `o` browser · `g` game · `←→` office · `1`–`9`/`l` a service's logs · `q` quit |
+| Monitor | `o` browser · `g` game · `←→` office · `r` answer the agent's question · `1`–`9`/`l` a service's logs · `q` quit |
 | Log | `g` game · `o` browser · `h` help · `q` close |
 | Game (terminal) | `t` brief · click the whiteboard: its tasks (with tickets) or a brief · `c` settings · `o` office · `a` activity · `tab`/arrows pick · `m` message · `b` btw · `s` greet · `x` cancel · `l` services (or click the rack) · `d`/`p` demos · `r` restart · `q` back |
-| Game (browser) | `t` brief · `c` settings · `o` office · `a` activity terminal · `f` full screen · `v` front or top-down view · `l` services (or click the rack) · `esc` close |
+| Game (browser) | `t` brief · `c` settings · `o` office · `a` activity terminal · `f` full screen · `v` front or top-down view · `l` services (or click the rack) · `r` answer the agent's question (or the ✋ chip) · `esc` close |

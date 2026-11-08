@@ -83,6 +83,18 @@ The services an agent leaves running (a dev server, a watcher, a queue…). The 
 - **Is it still running?** Whoever holds its log open is the service (`lsof`); when nobody does, it ended. `KillShell`/`TaskStop` end it too. Without `lsof` it counts as running until the agent stops it or (Claude Code's) its session ends. An ended one stays on the list for 30 minutes.
 - **Live:** the list reaches whoever watches that office as `{ type: "services", services, office }`, and it is in the snapshot (`state.services`). The log tells it with `service_up` and `service_down` events (`{ role, service, text }`).
 
+## What the agents ask you (inside herdr)
+
+When an agent asks you something on its screen (a permission, a question with options), the office reads it from the agent's herdr pane, and your answer is pressed there: the same keys you would press.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| `GET` | `/v1/prompts?office=<id>` | | `{ ok, prompts }`: each `{ id, rev, pane, agent, project, office, question, summary, options: [{ label, detail }], cursor, since }`, the oldest first. `cursor` is the option marked on the screen; `summary`, the question in one line |
+| `POST` | `/v1/prompts/<id>/answer` | `{ rev, option }` or `{ rev, cancel: true }` | `{ ok, pane, keys, answer }`. `option` counts from 0; `cancel` presses Esc. Before pressing anything the office reads the screen again: if the question is no longer there or `rev` is not the one on it, `409` and nothing is pressed. Outside herdr, `409` |
+
+- **How it is read:** every round (2.5 s) the office reads the bottom of each agent's pane (`herdr pane read`). A question is a cursor (`→`, `❯`, `›`) on one of several options, with the agent's "↑↓ … enter" hint or numbered options. A list while you type (autocomplete) is not one.
+- **Live:** `{ type: "prompts", prompts, office }` to whoever watches that office, and in the snapshot (`state.prompts`). A new question also reaches the log as a `waiting` event ("Pi is asking you: …"), unless the agent's own (Claude Code's permission hook) has just arrived.
+
 ## herdr: panes
 
 | Method | Path | Body | Response |

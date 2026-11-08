@@ -38,6 +38,8 @@ Teclas: `o` abre el juego en el navegador, `g` lo abre en la terminal (`q` vuelv
 
 Cuando un agente deja un servicio corriendo en segundo plano (un servidor de desarrollo, un watcher…), una sección **SERVICIOS** los lista, numerados: `1`–`9` abren el log de ese servicio en un pane de herdr debajo del de su agente (`tail -F`), y `l` el más nuevo que esté corriendo.
 
+Cuando un agente te pregunta algo, una sección **TE ESPERAN** lo muestra arriba: `r` lista sus opciones, `1`–`9` responden, `x` cancela la pregunta y `esc` vuelve (ver [Cuando un agente te pregunta algo](#cuando-un-agente-te-pregunta-algo)).
+
 «Del equipo trabajando» cuenta trabajo de verdad: los anuncios (una tarea repartida, un pane que se
 abre o se cierra) no lo mueven.
 
@@ -101,6 +103,15 @@ Dentro de herdr:
 
 El subagente lo sigue corriendo su harness; el pane sólo lo **muestra**, con `dev-team-office follow`. Se apaga en ⚙ › General › «Cada subagente en su pane», o con `dev-team-office config herdr.subagents off`.
 
+## Cuando un agente te pregunta algo
+
+Un agente puede detenerse a preguntarte: un permiso («Allow?»), elegir entre opciones, una pregunta. Dentro de herdr respondes sin ir a su pane:
+
+- **En el juego (navegador):** el chip **✋** arriba a la izquierda («Pi te pregunta») abre la pregunta, con un botón por opción. También `r`, o un clic en la PO (tú) o en el manager mientras espera con la mano levantada. `1`–`9` eligen, y «Cancelar la pregunta» aprieta Esc.
+- **En el monitor:** la sección **TE ESPERAN**. `r` lista las opciones, `1`–`9` responden, `x` cancela y `esc` vuelve.
+
+Tu respuesta se aprieta en el pane del agente, como si estuvieras ahí: las flechas hasta la opción, y Enter. Si la pregunta cambió o ya se respondió en el pane, no se aprieta nada y la oficina muestra lo que dice la pantalla ahora. La oficina lee las preguntas de la pantalla (los permisos de Claude Code, las preguntas de Pi y de OpenCode, el «Allow?» de una extensión), así que sirve con cualquier agente. Fuera de herdr no puede ver las pantallas de los agentes: respondes en la terminal del agente.
+
 ## Sumar proyectos y equipos
 
 - **`join`** suma un proyecto en un solo paso: levanta la oficina, registra la raíz del repo con su agente y te dice qué personaje hace cada subagente. Está como prompt MCP (`/mcp__dev-team-office__join`), como herramienta MCP (`join_office`), en Pi (`/office`) y en la terminal (`dev-team-office join`).
@@ -143,7 +154,7 @@ El subagente lo sigue corriendo su harness; el pane sólo lo **muestra**, con `d
 
 | Dónde | Teclas |
 |---|---|
-| Monitor | `o` navegador · `g` juego · `←→` oficina · `1`–`9`/`l` los logs de un servicio · `q` salir |
+| Monitor | `o` navegador · `g` juego · `←→` oficina · `r` responder la pregunta del agente · `1`–`9`/`l` los logs de un servicio · `q` salir |
 | Bitácora | `g` juego · `o` navegador · `h` ayuda · `q` cerrar |
 | Juego (terminal) | `t` encargo · clic en la pizarra: sus tareas (con tickets) o un encargo · `c` ajustes · `o` oficina · `a` actividad · `tab`/flechas elegir · `m` mensaje · `b` btw · `s` saludar · `x` cancelar · `l` servicios (o clic en el rack) · `d`/`p` demos · `r` reiniciar · `q` volver |
-| Juego (navegador) | `t` encargo · `c` ajustes · `o` oficina · `a` terminal de actividad · `f` pantalla completa · `v` vista frontal o cenital · `l` servicios (o clic en el rack) · `esc` cerrar |
+| Juego (navegador) | `t` encargo · `c` ajustes · `o` oficina · `a` terminal de actividad · `f` pantalla completa · `v` vista frontal o cenital · `l` servicios (o clic en el rack) · `r` responder la pregunta del agente (o el chip ✋) · `esc` cerrar |

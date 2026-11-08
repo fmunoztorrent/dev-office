@@ -21,6 +21,7 @@ export function localFeed(server) {
   const onOffices = (list) => h?.onOffices?.(list, server.company.info(view));
   const onHerdr = (st) => h?.onHerdr?.(st);
   const onServices = (id) => { if (mine(id)) h?.onServices?.(server.services.list(view)); };
+  const onPrompts = (id) => { if (mine(id)) h?.onPrompts?.(server.promptsOf(view)); };
   const snapshot = () => {
     const st = server.fullState(view);
     h.onPrefs?.(st.prefs);
@@ -33,6 +34,7 @@ export function localFeed(server) {
     h.onWeather?.(st.weather);
     h.onHerdr?.(st.herdr);
     h.onServices?.(st.services || []);
+    h.onPrompts?.(st.prompts || []);
   };
   return {
     http: server.url,
@@ -52,6 +54,7 @@ export function localFeed(server) {
       server.bus.on('offices', onOffices);
       server.bus.on('herdr', onHerdr);
       server.services.on('change', onServices);
+      server.prompts?.on('change', onPrompts);
     },
     send(msg) {
       if (msg?.type === 'view') {
@@ -73,6 +76,7 @@ export function localFeed(server) {
       server.bus.off('offices', onOffices);
       server.bus.off('herdr', onHerdr);
       server.services.off('change', onServices);
+      server.prompts?.off('change', onPrompts);
     },
   };
 }
@@ -102,6 +106,7 @@ export function remoteFeed(wsUrl) {
         h.onWeather?.(st.weather || null);
         h.onHerdr?.(st.herdr || null);
         h.onServices?.(st.services || []);
+        h.onPrompts?.(st.prompts || []);
       }
       if (msg.type === 'appearance') h.onAppearance?.(msg.appearance);
       if (msg.type === 'weather') h.onWeather?.(msg.weather);
@@ -109,6 +114,7 @@ export function remoteFeed(wsUrl) {
       if (msg.type === 'offices') h.onOffices?.(msg.offices, (msg.offices || []).find((o) => o.id === view));
       if (msg.type === 'herdr') h.onHerdr?.(msg.herdr);
       if (msg.type === 'services' && msg.office === view) h.onServices?.(msg.services || []);
+      if (msg.type === 'prompts' && msg.office === view) h.onPrompts?.(msg.prompts || []);
       if (msg.type === 'pipelines') h.onPipelines(msg.runs);
       if (msg.type === 'targets') h.onTargets?.(msg.targets);
       if (msg.type === 'event') h.onEvent(msg.event, msg.session);

@@ -26,6 +26,7 @@ import { Herdr, paneRole, quote } from './herdr.js';
 import { clip } from './roles.js';
 import { SubPanes } from './subpanes.js';
 import { ServiceHub } from './services.js';
+import { PromptHub } from './prompts.js';
 import { DEFAULT_TEAM } from '../public/sim.js';
 import { detectHarness, projectRoot, HARNESSES, which } from '../integrations/common/devteam.mjs';
 import { t, setLanguage, getLanguage } from '../public/i18n.js';
@@ -150,7 +151,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       ...company.get(id).snapshot(), ...hub.snapshot(id), pipelines: p.runs, projects: p.projects, targets: registry.targets(id),
       appearance: store.getAppearance(id), weather: weatherOf(id)?.current || null,
       office: company.info(id), offices: company.list(), prefs: prefs(), herdr: herdr ? herdr.status() : { available: false, panes: [] },
-      asks: asks.list(id, 10), services: services.list(id),
+      asks: asks.list(id, 10), services: services.list(id), prompts: promptsOf(id),
     };
   };
   let stopDemo = null;
@@ -209,6 +210,43 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     herdr.track(d.pane, { office: parent?.office || company.officeForPath(d.cwd) || MAIN_OFFICE, role: paneRole({ agent: d.agent, title: d.title }), title: d.title, agent: d.agent, kind: d.agent ? 'agent' : 'command', cwd: d.cwd });
   });
   herdr?.start({ isProject: (cwd) => !!company.officeForPath(cwd) });
+
+  // ---------- what the agents ask you on their screens: permissions and questions (server/prompts.js) ----------
+
+  const prompts = new PromptHub({
+    herdr: herdr?.available ? herdr : null,
+    officeOf: (pane, cwd) => herdr?.tracked.get(pane)?.office || company.route({ pane, cwd }),
+  });
+  herdr?.on('screens', (screens) => prompts.round(screens));
+  // herdr names Claude Code `claude`; the office, `claude-code`
+  const harnessOf = (agent) => (agent === 'claude' ? 'claude-code' : agent || null);
+  const publicPrompt = ({ id, rev, pane, agent, cwd, office: o, question, summary, options, cursor, since }) => ({ id, rev, pane, agent: harnessOf(agent), project: cwd ? path.basename(cwd) : null, office: o, question, summary, options, cursor, since });
+  const promptsOf = (id) => prompts.list(valid(id)).map(publicPrompt);
+  // a new question: the manager goes to your desk (the PO's) to ask, unless the agent's own event
+  // (Claude Code's permission hook) has just sent him
+  const lastWaiting = new Map(); // office → when its last 'waiting' came
+  company.on('event', (id, ev) => { if (ev.kind === 'waiting') lastWaiting.set(id, Date.now()); });
+  prompts.on('new', (q) => {
+    if (Date.now() - (lastWaiting.get(q.office) || 0) < 20_000) return;
+    // the session of that pane's agent (if its events said which pane it is in) waits for you
+    const session = [...company.sessionPane].find(([, pane]) => pane === q.pane)?.[0] || 'office';
+    const agent = AGENT_LABEL[harnessOf(q.agent)] || q.agent || t('prompts.theAgent');
+    company.ingest('herdr', { session, office: q.office, kind: 'waiting', text: t('prompts.waiting', { agent, summary: q.summary || '' }) });
+  });
+
+  /** Your answer, pressed in the agent's pane: `option` (its number from 0) or `cancel`, for the question `rev` you saw. */
+  async function answerPrompt(id, { rev, option, cancel } = {}) {
+    if (!herdr?.available) return { ok: false, status: 409, error: t('err.noHerdr') };
+    if (!prompts.get(id)) return { ok: false, status: 404, error: t('err.promptGone') };
+    try {
+      const out = await prompts.answer(id, { rev, option: option === undefined ? undefined : Number(option), cancel: !!cancel });
+      if (out.ok) say(t(out.answer ? 'prompts.answered' : 'prompts.cancelled', { answer: out.answer || '', pane: out.pane }), { pane: out.pane });
+      if (!out.ok) return { ...out, error: t(out.reason === 'option' ? 'err.promptOption' : out.status === 404 ? 'err.promptGone' : 'err.promptChanged') };
+      return out;
+    } catch (err) {
+      return { ok: false, status: 500, error: t('err.herdrFailed', { error: err.message }) };
+    }
+  }
 
   // each subagent, in its pane (`dev-team-office follow`): its start opens it, its end closes it
   const subPanes = herdr ? new SubPanes({
@@ -385,6 +423,13 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
             return json(res, out.ok ? 200 : out.status, out);
           } catch (err) { return json(res, 500, { ok: false, error: err.message }); }
         }
+      }
+      // what the agents ask you on their screens, and your answer (pressed in the agent's pane)
+      if (req.method === 'GET' && p === '/v1/prompts') return json(res, 200, { ok: true, prompts: promptsOf(q('office')) });
+      const pm = p.match(/^\/v1\/prompts\/([^/]+)\/answer$/);
+      if (pm && req.method === 'POST') {
+        const out = await answerPrompt(decodeURIComponent(pm[1]), await body(req));
+        return json(res, out.ok ? 200 : out.status || 400, out);
       }
       // the city picker: the cities of a time zone's country that start with what was typed
       if (req.method === 'GET' && p === '/v1/places') {
@@ -618,6 +663,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   company.on('event', (_id, event) => { if (event.kind === 'turn_end' || event.kind === 'done') hub.sessionSettled(event.session); });
   company.on('reset', (id) => toOffice(id, { type: 'snapshot', state: fullState(id) }));
   services.on('change', (id) => toOffice(id, { type: 'services', services: services.list(id), office: id }));
+  prompts.on('change', (id) => toOffice(id, { type: 'prompts', prompts: promptsOf(id), office: id }));
   hub.on('change', () => perOffice((id) => ({ type: 'tasks', ...hub.snapshot(id) })));
   pipelines.on('change', () => perOffice((id) => ({ type: 'pipelines', ...pipelines.snapshot(id) })));
   registry.on('change', () => perOffice((id) => ({ type: 'targets', targets: registry.targets(id) })));
@@ -701,6 +747,9 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     herdr,
     subPanes,
     services,
+    prompts,
+    promptsOf,
+    answerPrompt,
     appearance: (id = view()) => store.getAppearance(id),
     weatherOf,
     get weather() { return weatherOf(view()); },

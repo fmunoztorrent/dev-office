@@ -83,6 +83,18 @@ Los servicios que un agente deja corriendo (un servidor de desarrollo, un watche
 - **¿Sigue corriendo?** Quien tiene su log abierto es el servicio (`lsof`); cuando nadie lo tiene, terminó. `KillShell`/`TaskStop` también lo terminan. Sin `lsof` cuenta como corriendo hasta que el agente lo detiene o (los de Claude Code) termina su sesión. Uno terminado sigue en la lista 30 minutos.
 - **En vivo:** la lista le llega a quien mira esa oficina como `{ type: "services", services, office }`, y viene en el snapshot (`state.services`). La bitácora lo cuenta con los eventos `service_up` y `service_down` (`{ role, service, text }`).
 
+## Lo que te preguntan los agentes (dentro de herdr)
+
+Cuando un agente te pregunta algo en su pantalla (un permiso, una pregunta con opciones), la oficina lo lee del pane de herdr del agente, y tu respuesta se aprieta ahí: las mismas teclas que apretarías tú.
+
+| Método | Ruta | Cuerpo | Respuesta |
+|---|---|---|---|
+| `GET` | `/v1/prompts?office=<id>` | | `{ ok, prompts }`: cada una `{ id, rev, pane, agent, project, office, question, summary, options: [{ label, detail }], cursor, since }`, la más antigua primero. `cursor` es la opción marcada en la pantalla; `summary`, la pregunta en una línea |
+| `POST` | `/v1/prompts/<id>/answer` | `{ rev, option }` o `{ rev, cancel: true }` | `{ ok, pane, keys, answer }`. `option` cuenta desde 0; `cancel` aprieta Esc. Antes de apretar nada la oficina vuelve a leer la pantalla: si la pregunta ya no está o `rev` no es la que muestra, `409` y no se aprieta nada. Fuera de herdr, `409` |
+
+- **Cómo se lee:** en cada vuelta (2,5 s) la oficina lee el final del pane de cada agente (`herdr pane read`). Una pregunta es un cursor (`→`, `❯`, `›`) sobre una de varias opciones, con la ayuda «↑↓ … enter» del agente u opciones numeradas. Una lista mientras escribes (autocompletar) no lo es.
+- **En vivo:** `{ type: "prompts", prompts, office }` a quien mira esa oficina, y en el snapshot (`state.prompts`). Una pregunta nueva también llega a la bitácora como evento `waiting` («Pi te pregunta: …»), salvo que acabe de llegar el del propio agente (el hook de permisos de Claude Code).
+
 ## herdr: panes
 
 | Método | Ruta | Cuerpo | Respuesta |

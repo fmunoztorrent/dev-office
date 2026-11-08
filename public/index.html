@@ -25,6 +25,7 @@
         <span id="conn" class="conn off">offline</span>
         <span id="wx" class="wx" hidden></span>
         <button id="svc-chip" class="svc-chip" type="button" hidden data-i18n-title="ui.servicesKey"></button>
+        <button id="ask-chip" class="ask-chip" type="button" hidden></button>
       </div>
       <!-- Bottom center: the agent's context, as a fighting game's health bar (it empties as the
            context fills up). It shows up when the session's agent reports it. -->
@@ -153,6 +154,23 @@
           <pre id="svc-out" class="svc-out" tabindex="0"></pre>
           <p id="svc-msg" class="svc-msg" role="status"></p>
         </section>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- What the agents ask you on their screens (a permission, a choice) and your answer, pressed in
+       the agent's herdr pane (prompts-ui.js). -->
+  <dialog id="agent-ask" class="brief prompt" aria-labelledby="pr-title">
+    <div class="pr-sheet">
+      <header class="brief-head">
+        <span class="pin" aria-hidden="true"></span>
+        <h2 id="pr-title" data-i18n="prompts.title">Your agents are asking</h2>
+        <button type="button" class="brief-x" id="pr-close" data-i18n-aria="settings.close">✕</button>
+      </header>
+      <div class="brief-body">
+        <p id="pr-empty" class="pr-empty" data-i18n="prompts.empty" hidden></p>
+        <div id="pr-list" class="pr-list"></div>
+        <p id="pr-msg" class="pr-msg" role="status" aria-live="polite"></p>
       </div>
     </div>
   </dialog>

@@ -1,8 +1,9 @@
 // The activity monitor: what the terminal shows inside herdr, instead of the game. At the top, how
 // many agents, subagents, panes and tasks are running; in the middle, each agent (each session) with
 // its task and what it is doing, and its subagents below; then the services the agents left running
-// in the background (1-9 or l: their logs in a herdr pane); at the end, the log. The game is still
-// at hand: in the browser (o) or in this terminal (g).
+// in the background (1-9 or l: their logs in a herdr pane); at the end, the log. When an agent asks
+// you something on its screen (a permission, a choice), it shows up on top and `r` answers it from
+// here (server/prompts.js). The game is still at hand: in the browser (o) or in this terminal (g).
 //
 // It works with the office in the same process (localFeed) or watching one that is already running (remoteFeed).
 
@@ -37,6 +38,8 @@ export function createMonitor() {
     office: null, offices: [], sessions: new Map(), roles: {}, tasks: [], herdr: null, appearance: {},
     log: [], last: new Map(), subLast: new Map(), connection: { ok: false, key: 'conn.connecting' }, flash: null,
     services: [], // the ones left running in the background (server/services.js)
+    prompts: [],  // what the agents ask you on their screens (server/prompts.js)
+    answering: null, // the question being answered from here (r): its id
   };
   const person = (role) => ({ ...DEFAULT_TEAM[role], ...(m.appearance?.[role] || {}) });
 
@@ -85,6 +88,10 @@ export function createMonitor() {
     tasks(snap) { m.tasks = snap?.tasks || []; },
     herdr(st) { m.herdr = st; },
     services(list) { m.services = Array.isArray(list) ? list : []; },
+    prompts(list) {
+      m.prompts = Array.isArray(list) ? list : [];
+      if (m.answering && !m.prompts.some((p) => p.id === m.answering)) m.answering = null;
+    },
     log(entry) { m.log.push({ ts: entry.ts || Date.now(), who: '', text: entry.text, tone: 'dim' }); if (m.log.length > LOG_MAX) m.log.shift(); },
     /** The sessions shown: the ones still going (or that finished recently), the most recent on top. */
     visible(now = Date.now()) {
@@ -206,9 +213,27 @@ export function renderMonitor(mon, { cols = 100, rows = 30, color = true, colorM
     );
   });
 
+  // ---- what the agents ask you on their screens: r answers from here ----
+  // (in a narrow pane, next to the agent's, the question goes on its own line and without the details)
+  const narrow = cols < 90;
+  const askRows = [];
+  for (const p of m.prompts.slice(0, 3)) {
+    const who = `${AGENT_NAME[p.agent] || p.agent || '?'}${p.project ? ` · ${p.project}` : ''}`;
+    if (narrow) askRows.push(row(['  ✋ ', paint(TONE.warn)], [who, B]), row(['     ', ''], [p.summary || '', paint(TONE.warn)]));
+    else askRows.push(row(['  ✋ ', paint(TONE.warn)], [fit(who, 24).padEnd(25), B], [p.summary || '', paint(TONE.warn)]));
+    if (m.answering === p.id) {
+      p.options.forEach((o, i) => askRows.push(row([`      ${i + 1} `, B], [i === p.cursor ? '→ ' : '  ', paint(TONE.accent)], [o.label, ''], [o.detail && !narrow ? `  ${o.detail}` : '', D])));
+    }
+  }
+  const answering = m.prompts.find((p) => p.id === m.answering);
+
   // ---- splitting the height ----
-  const keys = `${t('monitor.keys', { quit: info.local ? t('monitor.quitOffice') : t('monitor.quit') })}${m.services.length ? ` · ${t('monitor.keysServices')}` : ''}`;
-  const footer = row(['  ', ''], [keys, D], ...(m.flash ? [[`   ${m.flash}`, paint(TONE.accent)]] : []));
+  const keys = answering
+    ? t('monitor.answerKeys', { n: answering.options.length })
+    : `${t('monitor.keys', { quit: info.local ? t('monitor.quitOffice') : t('monitor.quit') })}${m.prompts.length ? ` · ${t('monitor.keysPrompts')}` : ''}${m.services.length ? ` · ${t('monitor.keysServices')}` : ''}`;
+  // what just happened goes first: in a narrow pane the keys are the ones cut off
+  const footer = m.flash ? row(['  ', ''], [m.flash, paint(TONE.accent)], [`   ${keys}`, D]) : row(['  ', ''], [keys, D]);
+  if (askRows.length) lines.push(rule(t('monitor.promptsTitle')), ...askRows);
   const fixed = lines.length + 1 /* regla agentes */ + 1 /* equipo */ + 1 /* log rule */ + 1 /* pie */;
   const room = Math.max(0, rows - fixed);
   const svcMax = svcRows.length ? Math.min(svcRows.length, Math.max(1, Math.floor(room * 0.25))) : 0;
@@ -264,6 +289,7 @@ export function runMonitor({ feed, stdin = process.stdin, stdout = process.stdou
       onPipelines() {},
       onHerdr(st) { mon.herdr(st); dirty = true; },
       onServices(list) { mon.services(list); dirty = true; },
+      onPrompts(list) { mon.prompts(list); dirty = true; },
       onAppearance(a) { mon.model.appearance = a || {}; dirty = true; },
       onOffices(list, current) { mon.model.offices = list || []; if (current) mon.model.office = current; dirty = true; },
       onPrefs(p) { if (p?.lang) setLanguage(p.lang); dirty = true; },
@@ -282,13 +308,33 @@ export function runMonitor({ feed, stdin = process.stdin, stdout = process.stdou
         }
         return;
       }
+      // answering a question (r): its number, x cancels it, Esc goes back
+      const asked = mon.model.prompts.find((p) => p.id === mon.model.answering);
+      if (asked) {
+        if (s === '\x03') return quit();
+        if (s === '\x1b') { mon.model.answering = null; dirty = true; return; }
+        if (s === 'x' || s === 'X') return answer(asked, { cancel: true });
+        if (/^[1-9]$/.test(s) && Number(s) <= asked.options.length) return answer(asked, { option: Number(s) - 1 });
+        return;
+      }
       for (const k of s) {
         if (k === '\x03' || k === 'q' || k === 'Q') return quit();
+        if (k === 'r' || k === 'R') { if (mon.model.prompts.length) { mon.model.answering = mon.model.prompts[0].id; dirty = true; } else flash(t('monitor.promptNone')); return; }
         if ((k === 'o' || k === 'O') && onBrowser) { onBrowser(); flash(t('console.opening', { url: info.url || '' })); }
         if ((k === 'g' || k === 'G') && onGame) return game();
         if (k >= '1' && k <= '9') openLogs(mon.model.services[Number(k) - 1]);
         if (k === 'l' || k === 'L') openLogs(mon.model.services.find((x) => x.status === 'running') || mon.model.services[0]);
       }
+    }
+
+    /** Your answer, pressed in the agent's herdr pane. */
+    async function answer(p, choice) {
+      mon.model.answering = null;
+      dirty = true;
+      try {
+        const r = await (await fetch(`${feed.http}/v1/prompts/${encodeURIComponent(p.id)}/answer`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ rev: p.rev, ...choice }) })).json();
+        flash(r.ok ? (r.answer ? t('prompts.sent', { answer: r.answer }) : t('prompts.cancelledMsg')) : `✖ ${r.error}`);
+      } catch (err) { flash(`✖ ${err.message}`); }
     }
 
     /** A service's logs, in a herdr pane below its agent's (`tail -F`). */

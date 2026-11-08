@@ -252,6 +252,15 @@ export default {
     waiting: 'Waiting for its output…', noLog: 'Its log is gone (the agent may have cleaned it up).',
     openPane: '⧉ Open in herdr', paneOpened: 'Its logs are in herdr pane {pane}.', keyPick: 'choose',
   },
+  // what the agents ask you on their screens (inside herdr), and your answer
+  prompts: {
+    title: 'Your agents are asking', empty: 'Nothing pending: it was answered.', theAgent: 'the agent',
+    asks: '{agent} is asking you', pane: 'pane {pane}', options: 'Options',
+    cancel: 'Cancel the question (Esc)', hint: 'Your answer is pressed in the agent’s herdr pane, as if you were there.',
+    sending: 'Answering…', sent: 'Answered: “{answer}”.', cancelledMsg: 'Esc pressed in its pane.', failed: 'It could not be answered.',
+    chip: '{agent} is asking you', chipMany: '{n} questions for you',
+    waiting: '{agent} is asking you: {summary}', answered: '✋ answered “{answer}” in pane {pane}', cancelled: '✋ question cancelled in pane {pane}',
+  },
   err: {
     pathMissing: 'the path is missing', pathRelative: '{path}: use the full path (e.g. ~/Workspace/my-project)', pathNotFound: '{path}: that folder does not exist',
     harness: 'choose the agent for that path: claude-code, opencode or pi', args: '{name}: args must be a list of strings',
@@ -271,6 +280,7 @@ export default {
     invalidMessage: 'invalid message', registerWs: 'register only over WebSocket', updateWs: 'task_update only over WebSocket', unknownCommand: 'command not available: {action}',
     unknownType: 'unknown type: {type}', notFound: 'route not found', fullPath: 'use the full path', hostDenied: 'host not allowed', originDenied: 'origin not allowed',
     tooLarge: 'payload too large', noHerdr: 'you are not inside herdr (HERDR_ENV=1)', unknownService: 'there is no such service', serviceNoLog: 'that service has no log to follow', herdrFailed: 'herdr: {error}', paneMissing: 'the pane is missing',
+    promptGone: 'that question is no longer there', promptChanged: 'the question changed on the agent’s screen: this is the one it shows now', promptOption: 'that option does not exist',
   },
   server: {
     started: 'Dev Team Office {version} at {url}', browser: '  Open it in your browser: {urls}', api: '  API: POST /v1/events/<source> · GET /v1/state · WS /v1/ws{socket}',
@@ -294,6 +304,7 @@ export default {
     noHerdr: 'outside herdr', keys: 'o browser · g game · ←→ office · q {quit}', quit: 'quit', quitOffice: 'close the office',
     services: '{n} service(s) running', servicesTitle: 'SERVICES', svcUp: 'running · {ago}', svcDown: 'stopped {ago} ago', keysServices: '1-9 a service’s logs',
     svcPane: 'Logs of {name} in pane {pane}', svcNone: 'no service with that number',
+    promptsTitle: 'WAITING FOR YOU', keysPrompts: 'r answer', answerKeys: '1-{n} answer · x cancel the question · esc back', promptNone: 'no agent is asking you anything',
   },
   // a subagent's pane (dev-team-office follow)
   follow: {

@@ -129,6 +129,10 @@ export class Herdr extends EventEmitter {
     await this.prompt(target, text); // a single retry: if it fails, its error propagates
   }
   async list() { return (await this.call(['pane', 'list', ...(this.workspace ? ['--workspace', this.workspace] : [])])).panes || []; }
+  /** What a pane shows: its last lines, without the terminal's wrapping (plain text). */
+  read(pane, lines = 50) { return this.run(['pane', 'read', pane, '--source', 'recent-unwrapped', '--lines', String(lines)]); }
+  /** Presses keys in a pane (Up, Down, Enter, Escape…), as if typed there. */
+  keys(pane, keys) { return this.run(['pane', 'send-keys', pane, ...keys]); }
 
   // ---------------------------------------------------------------- what the office opens
 
@@ -248,6 +252,16 @@ export class Herdr extends EventEmitter {
         this.tracked.delete(id);
         this.emit('close', p);
       }
+    }
+    // what each agent shows on its screen: whether it is asking you something (prompts.js)
+    if (this.listenerCount('screens')) {
+      const screens = [];
+      for (const [id, p] of live) {
+        if (!p.agent || id === this.pane) continue;
+        const text = await this.read(id).catch(() => null);
+        if (text !== null) screens.push({ pane: id, agent: p.agent, cwd: p.foreground_cwd || p.cwd, text: String(text) });
+      }
+      this.emit('screens', screens);
     }
     // panes an agent opened in a project's folder: the office adopts them
     for (const [id, p] of live) {

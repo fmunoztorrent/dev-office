@@ -1,0 +1,26 @@
+
+  ✿ Gentle Shell
+
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+
+
+────────────────────────────────────
+
+ ⚠️ Dangerous command:
+
+   cd /private/tmp/dto-dev/tienda
+ && rm -rf build && echo "exit=$?"
+ && echo "--- LS ---" && ls -la &&
+ echo "--- BUILD EXISTE? ---" &&
+ (test -e build && echo "sigue
+ existiendo" || echo "no existe")
+ && echo "--- STATUS ---" && git
+ status --short
+
+ Allow?
+
+ → Yes
+   No
+
+ ↑↓ navigate  enter select
+ escape/ctrl+c cancel
