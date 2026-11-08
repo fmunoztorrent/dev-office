@@ -42,7 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/fmunoztorrent/dev-office/main/insta
 
 Al terminar tienes:
 
-- **la última versión publicada** de la oficina en `~/.dev-team-office/app`. Su primera línea dice cuál (`Downloading fmunoztorrent/dev-office@v0.7.0…`), así que todos los que instalan reciben la misma versión;
+- **la versión más nueva (el tag de versión más alto)** de la oficina en `~/.dev-team-office/app`. Su primera línea dice cuál (`Downloading fmunoztorrent/dev-office@v0.7.0…`), así que todos los que instalan reciben la misma versión;
 - **el comando** `dev-team-office` en `~/.local/bin`;
 - **tus agentes conectados**, porque el instalador corre `dev-team-office setup` (ver el paso 3).
 
@@ -72,7 +72,7 @@ El instalador acepta estas variables:
 
 - `DEV_TEAM_OFFICE_HOME`: dónde vive la oficina.
 - `DEV_TEAM_OFFICE_BIN_DIR`: dónde va el comando.
-- `DEV_TEAM_OFFICE_REF`: qué tag o rama instalar. Por defecto, la última versión publicada; `main` es el código más nuevo: `curl -fsSL … | DEV_TEAM_OFFICE_REF=main sh`.
+- `DEV_TEAM_OFFICE_REF`: qué tag o rama instalar. Por defecto, la versión más nueva (el tag de versión más alto); `main` es el código más nuevo: `curl -fsSL … | DEV_TEAM_OFFICE_REF=main sh`.
 - `DEV_TEAM_OFFICE_NO_SETUP=1`: sólo instala, sin conectar los agentes.
 - `DEV_TEAM_OFFICE_MODIFY_PATH=1`: agrega `~/.local/bin` al perfil de tu shell sin preguntar; `0` no lo toca nunca.
 
@@ -236,6 +236,8 @@ dev-team-office update                 # o el mismo curl de arriba
 dev-team-office uninstall              # quita lo que agregó setup (y la línea del PATH) y restaura tus archivos
 dev-team-office uninstall --purge      # además borra ~/.dev-team-office (tu base incluida)
 ```
+
+`update` nunca baja de versión: avisa cuando ya tienes la versión más nueva, y solo instala una más vieja si defines `DEV_TEAM_OFFICE_REF`.
 
 ## Si algo no anda
 
