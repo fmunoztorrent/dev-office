@@ -11,6 +11,7 @@ import { drawSprite } from './sprite.js';
 import { t, LANGUAGES, getLanguage } from './i18n.js';
 import { allZones, zoneInfo, countryName } from './clock.js';
 import { parsePlace } from './sky.js';
+import { MODEL_ROLES, PROFILE_HARNESSES } from './models.js';
 
 const ROLE_ORDER = ['po', 'analyst', 'manager', 'tl', 'qa', 'backend', 'frontend', 'designer'];
 const HARNESS_NAME = { pi: 'Pi', 'claude-code': 'Claude Code', opencode: 'OpenCode', codex: 'Codex' };
@@ -128,11 +129,12 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     st.tab = tab;
     for (const b of document.querySelectorAll('#settings .tabs button')) b.setAttribute('aria-selected', String(b.dataset.tab === tab));
     for (const p of document.querySelectorAll('#settings .s-panel')) p.hidden = p.dataset.panel !== tab;
-    $('settings-save').hidden = tab !== 'look';
+    $('settings-save').hidden = tab !== 'look' && tab !== 'models';
     $('s-file').textContent = st.data ? t('settings.file', { file: tilde(st.data.office.file) }) : '';
     if (tab === 'general') renderGeneral();
     else if (tab === 'offices') renderOffices();
     else if (tab === 'agents') renderAgents();
+    else if (tab === 'models') { st.models = null; renderModels(); }
     else { st.looks = null; renderLook(); }
   }
 
@@ -400,11 +402,54 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     onSaved?.();
   }
 
+  // ------------------------------------------------------------ Models (profiles: public/models.js)
+
+  function renderModels() {
+    const panel = document.querySelector('[data-panel="models"]');
+    const p = getPrefs() || st.data?.office.prefs;
+    if (!p?.models) return;
+    st.models ||= structuredClone(p.models);
+    const m = st.models;
+    const M = (k, v) => t(`settings.models.${k}`, v);
+    const roleName = (role) => (role === 'default' ? M('default') : `${TEAM[role]?.name || role} · ${t(`team.titles.${role}`)}`);
+    const card = ([id, prof]) => el('fieldset', { class: 's-profile' },
+      el('legend', {}, `${prof.label} · ${id}`),
+      el('label', { class: 'b-field' }, el('span', {}, M('label')),
+        el('input', { type: 'text', value: prof.label, maxlength: 30, oninput: (e) => { prof.label = e.target.value; } })),
+      el('div', { class: 'toggles' }, el('span', { class: 'hint' }, M('for')),
+        PROFILE_HARNESSES.map((h) => el('label', {}, el('input', {
+          type: 'checkbox', checked: prof.harnesses.includes(h) ? true : undefined,
+          onchange: (e) => { prof.harnesses = e.target.checked ? [...new Set([...prof.harnesses, h])] : prof.harnesses.filter((x) => x !== h); },
+        }), HARNESS_NAME[h] || h))),
+      el('div', { class: 's-roles' }, MODEL_ROLES.map((role) => el('label', { class: 'b-field' }, el('span', {}, roleName(role)),
+        el('input', {
+          type: 'text', value: prof.roles[role] || '', spellcheck: 'false',
+          placeholder: role === 'default' ? 'provider/model' : M('same', { model: prof.roles.default || '' }),
+          oninput: (e) => { const v = e.target.value.trim(); if (v) prof.roles[role] = v; else delete prof.roles[role]; },
+        })))),
+      el('button', { type: 'button', class: 'btn ghost', disabled: Object.keys(m.profiles).length < 2 ? true : undefined,
+        onclick: () => { delete m.profiles[id]; if (m.active === id) m.active = null; renderModels(); } }, M('remove')));
+    const add = () => {
+      let n = 1;
+      while (m.profiles[`perfil-${n}`]) n++;
+      const base = Object.values(m.profiles)[0];
+      m.profiles[`perfil-${n}`] = { label: M('newLabel', { n }), harnesses: [...PROFILE_HARNESSES], roles: { default: base?.roles.default || '' } };
+      renderModels();
+    };
+    put(panel,
+      el('p', { class: 'hint' }, M('hint')),
+      el('label', { class: 'b-field' }, el('span', {}, M('active')),
+        el('select', { onchange: (e) => { m.active = e.target.value === 'none' ? null : e.target.value; } },
+          option('none', t('brief.ownModel'), !m.active), Object.entries(m.profiles).map(([id, prof]) => option(id, prof.label, id === m.active)))),
+      el('div', { class: 's-profiles' }, Object.entries(m.profiles).map(card)),
+      el('button', { type: 'button', class: 'btn ghost', onclick: add }, M('add')));
+  }
+
   // ------------------------------------------------------------ eventos
 
   for (const b of document.querySelectorAll('#settings .tabs button')) b.onclick = () => { msg(''); show(b.dataset.tab); };
   $('settings-close').onclick = $('settings-cancel').onclick = () => $('settings').close();
-  $('settings-save').onclick = () => st.tab === 'look' && saveLook();
+  $('settings-save').onclick = () => (st.tab === 'look' ? saveLook() : st.tab === 'models' ? setPref({ models: st.models }) : null);
   $('settings-form').onsubmit = (e) => e.preventDefault();
 
   return { open, refresh };

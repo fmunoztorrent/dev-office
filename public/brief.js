@@ -7,6 +7,7 @@
 
 import { AGENT_NAME } from './targets.js';
 import { t } from './i18n.js';
+import { profilesFor } from './models.js';
 
 const tr = t; // targetLabel uses `t` for the agent
 
@@ -24,7 +25,7 @@ export function defaultTarget(targets, sessions) {
  * The dialog's options for what has been chosen.
  * @param sel { target, entry, session } indexes (session -1 = the usual one: an open one, otherwise a new one)
  */
-export function briefOptions({ targets = [] }, sel) {
+export function briefOptions({ targets = [], models = null }, sel) {
   const target = targets[sel.target] || null;
   const entries = target?.entries || [];
   const entry = entries[sel.entry] || entries[0] || null;
@@ -38,7 +39,14 @@ export function briefOptions({ targets = [] }, sel) {
     if (index < 0) index = sessions.findIndex((s) => s.session === null);
     if (index < 0) index = 0;
   }
-  return { target, entries, entry, sessions, sessionIndex: index, session: sessions[index] || null, stages: entry?.stages || [] };
+  // the model profile: the agent's own, or one made for its harness (by default, the active one)
+  const harness = sessions[index]?.agent || target?.harness;
+  const profiles = [{ id: 'none', label: t('brief.ownModel') }, ...profilesFor(models, harness).map(([id, p]) => ({ id, label: p.label }))];
+  let pi = sel.profile ?? -1;
+  if (pi < 0 || pi >= profiles.length) pi = Math.max(0, profiles.findIndex((p) => p.id === models?.active));
+  // an open session keeps its model: the profile only counts for a new one, or for a pipeline's stages
+  const profileNote = pi > 0 && sessions[index]?.session && !entry?.devteam ? t('brief.profileOpen') : '';
+  return { target, entries, entry, sessions, sessionIndex: index, session: sessions[index] || null, stages: entry?.stages || [], profiles, profileIndex: pi, profile: profiles[pi], profileNote };
 }
 
 /** What is missing before it can be sent (or null if it is ready). */
@@ -54,7 +62,7 @@ export function briefProblem(opts, text) {
 
 /** The WebSocket message that fires the brief. */
 export function briefMessage(opts, text, from) {
-  return { type: 'run', target: opts.target.id, entry: opts.entry?.id || 'prompt', session: opts.session?.session ?? null, text: String(text).trim(), from };
+  return { type: 'run', target: opts.target.id, entry: opts.entry?.id || 'prompt', session: opts.session?.session ?? null, text: String(text).trim(), from, profile: opts.profile?.id || 'none' };
 }
 
 export const targetLabel = (t) => (t
@@ -62,8 +70,8 @@ export const targetLabel = (t) => (t
   : '');
 
 /** The dialog's fields, in order (the terminal navigates through them). */
-export function briefFields() {
-  return ['target', 'entry', 'session', 'task'];
+export function briefFields(opts) {
+  return ['target', 'entry', 'session', ...(opts?.profiles?.length > 1 ? ['profile'] : []), 'task'];
 }
 
 /** Changes a field's option (delta ±1) and resets what depends on it. */
@@ -72,5 +80,6 @@ export function briefCycle(sel, field, delta, { targets, opts }) {
   if (field === 'target') return { target: wrap(sel.target, targets.length), entry: 0, session: -1 };
   if (field === 'entry') return { ...sel, entry: wrap(opts.entries.indexOf(opts.entry), opts.entries.length) };
   if (field === 'session') return { ...sel, session: wrap(opts.sessionIndex, opts.sessions.length) };
+  if (field === 'profile') return { ...sel, profile: wrap(opts.profileIndex, opts.profiles.length) };
   return sel;
 }

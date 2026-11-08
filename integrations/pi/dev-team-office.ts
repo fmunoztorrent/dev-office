@@ -248,14 +248,27 @@ export default function (pi: ExtensionAPI) {
     const output = nested || sub ? resultText(event, sub) : '';
     report({ kind: 'tool_end', tool: event.toolName, toolUseId: event.toolCallId, input: event.input, ok: !event.isError, ...(output ? { output } : {}) });
   });
-  pi.on('message_end', async (event: any) => {
+  // How full the context is (Pi says it: getContextUsage), after each answer, when it moved.
+  // A nested subagent's context is its own: it is not the session's bar.
+  let lastContext = '';
+  const reportContext = (c: any) => {
+    if (nested) return;
+    const u = c?.getContextUsage?.();
+    if (!u || u.tokens == null || !u.contextWindow) return;
+    const key = `${Math.round(u.tokens / 1000)}/${u.contextWindow}`;
+    if (key === lastContext) return;
+    lastContext = key;
+    report({ kind: 'context', context: { used: u.tokens, max: u.contextWindow } });
+  };
+  pi.on('message_end', async (event: any, c: any) => {
+    if (event.message?.role === 'assistant') reportContext(c || ctx);
     if (event.message?.role !== 'assistant' || !lib) return;
     const t = lib.textOf(event.message);
     if (t) lastText = t;
   });
   pi.on('session_compact', async () => report({ kind: 'compact' }));
   // with a pipeline in progress each stage ends a turn: the pipeline says "done" at the end
-  pi.on('agent_end', async (_e: any, c: any) => { ctx = c; if (!run) report({ kind: 'turn_end' }); });
+  pi.on('agent_end', async (_e: any, c: any) => { ctx = c; reportContext(c); if (!run) report({ kind: 'turn_end' }); });
   pi.on('agent_settled', async (event: any, c: any) => {
     ctx = c;
     if (!run || !waiting) return;
@@ -311,7 +324,7 @@ export default function (pi: ExtensionAPI) {
     const project = lib.loadProject(cwd);
     const pipeline = project.pipelines.find((p: any) => p.id === msg.pipeline);
     if (!pipeline) return update({ status: 'failed', detail: `no hay un pipeline "${msg.pipeline}" en ${project.dir}/.devteam/` });
-    run = new lib.PipelineRun({ id: msg.id, project, pipeline, task: msg.task, report, onStatus: update });
+    run = new lib.PipelineRun({ id: msg.id, project, pipeline, task: msg.task, report, onStatus: update, models: msg.models || null });
     await apply(run.start());
   }
 

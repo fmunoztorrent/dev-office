@@ -58,8 +58,11 @@ What you see in the office:
 
 - A **kanban whiteboard** on an easel, with the agent's todos (to do / in progress / done) and a progress bar. On top there is a **red-dot digital clock** with the office's time (its time zone).
 - **A new requirement:** you (the PO) announce it in the product corner and take it to the manager, and he hands it to whoever fits depending on what it is about (screens → frontend, endpoints → backend, bugs → QA, colors and logos → design; if unclear, the Tech Lead).
-- **A subagent (`Task`/`Agent`):** the manager walks a card to the right desk and leaves a folder there for as long as the subtask lasts.
-- **Tool use:** the character types, their monitor shows code and glyphs pop out. The server rack blinks when backend is working.
+- **A subagent (`Task`/`Agent`):** a **newcomer** of that role comes in, translucent like a ghost, with a name of their own and their role's shirt, and sits at one of the **hot desks** (more of them, at the meeting table). The manager brings them the card, they do the subagent's work, and when it ends they say goodbye and fade away.
+- **Tool use:** the character types, their monitor shows code and glyphs pop out, and their bubble says **what they are doing in words** ("Running the tests", "Committing: “…”"), never the command line. The server rack blinks when backend is working.
+- **The chit-chat follows the work:** while there is a task they talk about who is doing what, how the board is going, who got stuck or that they are waiting for your OK.
+- **The whiteboard, expanded:** with tickets on it, clicking it grows it over the office and shows the tasks as **post-its** in three columns (to do, doing, done). Without tickets, the click opens a new brief.
+- **The context bar:** at the bottom center, like a fighting game's health bar, how much context the focused session's agent has left (Claude Code, Pi and OpenCode report it). It turns orange, then red, and says KO when it is almost full.
 - **An error:** the character shakes with red sparks and the Tech Lead comes over to help.
 - **A pending permission:** the manager goes to your desk (the PO's) to ask for your OK, raises his hand and an orange banner shows up. If the agent asks you something (`AskUserQuestion`), he brings you the question.
 - **`Stop`:** confetti, and the whole team celebrates at the meeting table.
@@ -260,10 +263,13 @@ When the orchestrator delegates, the character that moves is that subagent's:
 
 Clicking the office's whiteboard, in the terminal or on the web (in the terminal also with `t`), opens the **New brief** dialog. There you choose:
 
-- **Agent:** the registered ones and the open sessions.
+- **Agent:** the registered ones and the open sessions, **grouped by project** (an office can hold several: a few backends and their BFFs, a web app…).
 - **Pipeline:** the entries its harness brings (see above).
 - **Session:** one open in that path, or a new one.
+- **Models:** the agent's own model, or a **model profile** (⚙ › Models: Anthropic's and OpenCode's come ready, and you can add yours). A new session starts with the profile's model; a pipeline's stages that set none take their role's.
 - **The prompt**, on a sticky note.
+
+The brief goes with its scope in front: the agent works **only inside its project's folder**, and only on what was asked (OpenCode also gets it as a rule: reading or changing files outside the folder is denied). The **stay-focused** skill, which `setup` installs, says the same to any agent.
 
 Before sending, the dialog shows the pipeline's stages and which character does each one. **✉ Send prompt** in ⚙ › Agents opens it with that agent already chosen.
 

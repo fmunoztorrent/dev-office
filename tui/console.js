@@ -15,7 +15,7 @@ import { AGENT_NAME } from '../public/targets.js';
 
 const DIM = '\x1b[2m', BOLD = '\x1b[1m', RESET = '\x1b[0m';
 const rgb = (hexStr) => { const n = parseInt(String(hexStr).replace('#', ''), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
-const NOISY = new Set(['todos', 'poke', 'pane_state']);
+const NOISY = new Set(['todos', 'poke', 'pane_state', 'context']);
 
 /**
  * An office event as a log line: { text, tone, speaker? } (speaker: who talks, if it is not a

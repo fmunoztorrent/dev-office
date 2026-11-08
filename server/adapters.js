@@ -25,7 +25,8 @@ function outputOf(resp) {
 // Claude Code hooks: the JSON the hook receives on stdin. Inside a subagent, each event
 // carries its `agent_id`: that is how its tools belong to the subagent.
 function fromClaudeCode(p) {
-  const b = { session: p.session_id, cwd: p.cwd, ...(p.agent_id ? { agentId: p.agent_id } : {}) };
+  // devteam_context: how full the context is, which the hook reads from the transcript
+  const b = { session: p.session_id, cwd: p.cwd, ...(p.agent_id ? { agentId: p.agent_id } : {}), ...(p.devteam_context && !p.agent_id ? { context: p.devteam_context } : {}) };
   switch (p.hook_event_name) {
     case 'SessionStart': return { ...b, kind: 'session_start', text: p.source };
     case 'UserPromptSubmit': return { ...b, kind: 'task', text: p.prompt };

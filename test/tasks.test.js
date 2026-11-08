@@ -35,7 +35,7 @@ test('una tarea llega a la sesión de Pi conectada y queda en curso al aceptarla
   const res = await (await post(base, '/v1/tasks', { agent: 'pi', text: 'Agrega validación de email' })).json();
   assert.equal(res.ok, true);
   await until(() => got.length === 1);
-  assert.equal(got[0].text, 'Agrega validación de email');
+  assert.equal(got[0].text, '📁 Trabaja sólo dentro de /proj: no leas ni cambies archivos fuera de esa carpeta. Haz exactamente lo que se pide (o el paso del plan acordado), sin irte por la tangente ni agregar ideas que nadie pidió.\n\nAgrega validación de email');
   assert.equal(got[0].session, 'pi-1');
   await until(() => server.hub.snapshot().tasks[0].status === 'running');
   // the Pi session gets the task as its new request
@@ -125,4 +125,20 @@ test('dentro de herdr: si el prompt no arranca el turno ni con reintento, la tar
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('un encargo nuevo limita al agente a su carpeta: la nota va delante y en OpenCode es una regla de verdad', async () => {
+  const { scoped, fenced } = await import('../server/tasks.js');
+  const { Office } = await import('../server/office.js');
+  const text = scoped('Agrega envío gratis', '/proj');
+  assert.match(text, /^📁 Trabaja sólo dentro de \/proj: .*sin irte por la tangente.*\n\nAgrega envío gratis$/);
+  assert.equal(scoped('/task algo', null), '/task algo', 'sin carpeta, tal cual');
+  // the agent reports the prompt it got: the board's title is only the request
+  const o = new Office();
+  o.ingest('pi', { session: 'p1', cwd: '/proj', kind: 'task', text });
+  assert.equal(o.sessionSummary('p1').title, 'Agrega envío gratis');
+  // OpenCode: reading or changing files outside the folder is denied (keeping its own config)
+  const env = fenced('opencode', { OPENCODE_CONFIG_CONTENT: JSON.stringify({ model: 'x', permission: { bash: 'ask' } }) });
+  assert.deepEqual(JSON.parse(env.OPENCODE_CONFIG_CONTENT), { model: 'x', permission: { bash: 'ask', external_directory: 'deny' } });
+  assert.deepEqual(fenced('pi', { A: '1' }), { A: '1' });
 });

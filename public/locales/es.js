@@ -25,6 +25,7 @@ export default {
   // ---------------------------------------------------------------- office life (sim.js)
   sim: {
     journal: {
+      newcomer: '{name} llega a dar una mano en {role}: {text}', farewell: '{name} terminó su parte y se va',
       deskchat: '{names} cotorrean desde sus escritorios 💬',
       gossip: '{names} se juntan a conversar 💬',
       idea: '{who} le cuenta una idea a {manager} 💡',
@@ -82,6 +83,14 @@ export default {
       po: ['Ojalá esto salga hoy 🤞', 'Todo es urgente, como siempre 😅', '¿Almorzamos en grupo hoy? 🥗', '{manager} va por su quinto café ☕😂', 'El roadmap quedó precioso 📌'],
       analyst: ['Los números de ayer… ¡subieron! 📈', 'Encontré un dato buenísimo 🤓', '¿Vieron el dashboard nuevo? 📊', '{backend} juró que no era un bug 👀', 'Hice una planilla de las planillas 😂'],
       designer: ['¿Y si todo fuera violeta? 💜', 'Ese botón me quita el sueño 😱', 'Le falta aire a esa pantalla ✨', 'Les traje una paleta nueva 🎨', '¿Quién usó Comic Sans? 😤'],
+    },
+    // the chit-chat about what is going on (sim.js liveTopics)
+    newcomer: { welcome: '¡Bienvenido, {name}! 👋', bye: '¡Listo, me voy! 👋', hotDesk: 'Puesto libre' },
+    live: {
+      board: 'Vamos {done} de {total} en el tablero 📋', doing: '{name} anda {action} 👀', stuck: '{name} se trabó {action} 😬',
+      waitingYou: 'Estamos esperando el OK de {po} ✋', newcomer: 'Llegó {name} a dar una mano con {role} 👋',
+      rounds: '{name}, ¿cómo vas? Te veo {action}',
+      replies: ['¡Vamos que sale! 💪', 'Ojalá quede listo hoy 🤞', 'Va avanzando 👍', 'Bien ahí 🙌', 'Yo le doy una mano si hace falta', 'A ver cómo termina 👀'],
     },
     gossipTask: '¿Ya vieron «{task}»? 👀',
     gossipError: '{name} se peleó con un error 😬',
@@ -180,18 +189,39 @@ export default {
   },
 
   // ---------------------------------------------------------------- what is seen in the scene
+  // the whiteboard, expanded (board-ui.js)
+  board: { untitled: 'La pizarra', progress: '{done} de {total} hechas', empty: 'No hay tareas en la pizarra.', newBrief: '✚ Nuevo encargo' },
   scene: {
     taskTitle: 'TAREA: {title}',
     noTask: 'Sin tarea — esperando al agente…',
     todo: 'POR HACER', doing: 'EN CURSO', done: 'HECHO',
     todoShort: 'hacer {todo} · curso {doing} · hecho {done}',
-    boardTip: '✎ clic: nuevo encargo',
+    boardTip: '✎ clic: nuevo encargo', boardTipTickets: '🔍 clic: ver las tareas',
     cafe: 'CAFÉ', wc: 'WC', dining: 'COMEDOR', menu: 'MENÚ', menuToday: ['sopa', 'pasta', 'postre'],
     tvBreaking: 'ÚLTIMA HORA', tvServer: 'SERVIDOR', tvNews: 'NOTICIAS', tvWeather: 'CLIMA',
     tvLive: 'EN VIVO: el equipo trabaja en «{title}»', tvQuiet: 'Todo tranquilo en la oficina',
     resize: 'Agranda la terminal (mínimo 60×18) · q para salir',
   },
   // ---------------------------------------------------------------- what the agent does (server)
+  // what a command or a tool does, in words (server/humanize.js): never the command itself
+  act: {
+    tests: 'Corriendo los tests', testsOf: 'Corriendo los tests de {target}', build: 'Compilando el proyecto', dev: 'Levantando el servidor de desarrollo',
+    lint: 'Revisando el estilo del código', format: 'Ordenando el formato del código', typecheck: 'Revisando los tipos', script: 'Corriendo el script «{name}»',
+    install: 'Instalando dependencias', installPkgs: 'Instalando {pkgs}', uninstall: 'Quitando dependencias', publish: 'Publicando el paquete', tool: 'Usando {prog}',
+    gitStatus: 'Revisando qué cambió', gitDiff: 'Mirando los cambios', gitLog: 'Repasando el historial', gitShow: 'Mirando un commit', gitAdd: 'Preparando los cambios para el commit',
+    gitCommit: 'Haciendo commit: «{msg}»', gitCommitPlain: 'Haciendo un commit', gitPush: 'Subiendo los cambios', gitPull: 'Trayendo cambios del repositorio',
+    gitCheckout: 'Cambiándose a {ref}', gitBranch: 'Revisando las ramas', gitStash: 'Guardando cambios a un lado', gitMerge: 'Uniendo ramas', gitRebase: 'Reordenando commits',
+    gitRestore: 'Deshaciendo cambios', gitTag: 'Marcando una versión', gitClone: 'Clonando {repo}', gitInit: 'Creando el repositorio', gitWorktree: 'Abriendo otra copia del repo', gitOther: 'Usando git',
+    gh: 'Consultando GitHub', ghPr: 'Revisando pull requests', ghRun: 'Mirando el CI', ghIssue: 'Revisando issues', ghRelease: 'Preparando una versión en GitHub',
+    list: 'Mirando qué archivos hay', listIn: 'Mirando qué hay en {dir}', find: 'Buscando archivos', read: 'Leyendo {file}', readSome: 'Leyendo un archivo',
+    search: 'Buscando «{pattern}»', editText: 'Retocando texto', mkdir: 'Creando la carpeta {dir}', remove: 'Borrando {file}', move: 'Moviendo {file}', copy: 'Copiando {file}',
+    touch: 'Creando {file}', link: 'Enlazando archivos', chmod: 'Cambiando permisos de {file}', fetch: 'Consultando {host}', web: 'Consultando la web',
+    run: 'Ejecutando {file}', snippet: 'Probando un fragmento de código', containers: 'Trabajando con contenedores', make: 'Corriendo «{target}»',
+    kill: 'Deteniendo un proceso', ps: 'Mirando qué procesos corren', sleep: 'Esperando un momento', echo: 'Anotando algo en la terminal', env: 'Revisando el entorno',
+    process: 'Procesando datos', open: 'Abriendo {file}', archive: 'Empaquetando archivos', disk: 'Mirando el espacio en disco', remote: 'Trabajando en otro equipo',
+    panes: 'Ordenando los paneles', office: 'Hablando con la oficina', agent: 'Pidiéndole algo a {agent}', other: 'Usando {prog}', shell: 'Trabajando en la terminal',
+    cd: 'Entrando a {dir}', background: '{what} (en segundo plano)', mcp: 'Usando {server}: {what}', toolUse: 'Usando {tool}',
+  },
   events: {
     updateBoard: 'Actualiza el tablero', newCard: 'Nueva tarjeta: {text}', moveCard: 'Mueve una tarjeta', failed: 'Falló: {text}{detail}',
     thinking: 'Pensando…', waiting: 'El agente espera tu aprobación', error: 'Algo salió mal', compact: 'Ordena las notas (compacta el contexto)',
@@ -202,6 +232,7 @@ export default {
     plan: 'Presenta el plan', planning: 'Planificando', skill: 'Usando skill {skill}', mcp: 'Usando {tool}', working: 'Trabajando',
   },
   task: {
+    scope: 'Trabaja sólo dentro de {dir}: no leas ni cambies archivos fuera de esa carpeta. Haz exactamente lo que se pide (o el paso del plan acordado), sin irte por la tangente ni agregar ideas que nadie pidió.',
     queuedClaude: 'se entrega cuando Claude termine su turno', runningIn: '{exe} en {dir}', finished: 'terminada', killed: 'cortada ({signal})',
     exitCode: 'salió con código {code}{last}', disconnected: 'el agente se desconectó', sentTo: 'enviada a {agent}', accepted: 'el agente la está haciendo',
     failedDefault: 'el agente no pudo con la tarea', failedEvent: '{agent} no pudo con la tarea: {detail}', claudeTook: 'Claude la tomó al terminar su turno',
@@ -286,6 +317,7 @@ export default {
     },
   },
   brief: {
+    models: 'Modelos', ownModel: 'El modelo del agente', profileOpen: 'La sesión abierta sigue con su modelo: el perfil cuenta para una sesión nueva o para las etapas de un pipeline.',
     title: 'Nuevo encargo', close: 'esc ✕', agent: 'Agente', pipeline: 'Pipeline', session: 'Sesión', prompt: 'Prompt',
     noAgent: 'ninguno: regístralo en ⚙ › Agentes', noAgentWeb: 'Ningún agente: regístralo en ⚙ › Agentes',
     registerHint: 'Registra un agente con su ruta completa (c › Agentes): el prompt arranca el pipeline de su harness.',
@@ -299,8 +331,12 @@ export default {
     pNotInstalled: 'No encuentro {agent} instalado (su CLI no está en el PATH)', failed: 'No se pudo: {error}',
   },
   settings: {
+    models: {
+      hint: 'Un perfil dice qué modelo usa cada rol. Se usa al abrir una sesión nueva desde un encargo (el agente arranca con el modelo por defecto) y en las etapas de un pipeline que no fijan modelo. Puedes agregar los tuyos.',
+      active: 'Perfil por defecto', label: 'Nombre', for: 'Para:', default: 'Por defecto', same: 'igual que el por defecto ({model})', remove: 'Quitar este perfil', add: '✚ Nuevo perfil', newLabel: 'Perfil {n}',
+    },
     title: '⚙ Ajustes', loading: 'Cargando…', close: 'Cerrar', save: 'Guardar', saved: 'Guardado: ya se está usando.', file: 'se guarda en {file}',
-    tabs: { general: 'General', offices: 'Oficinas', agents: 'Agentes', look: 'Personajes' },
+    tabs: { general: 'General', offices: 'Oficinas', agents: 'Agentes', look: 'Personajes', models: 'Modelos' },
     keys: { field: 'campo', change: 'cambia', action: 'acción', save: 'guardar', close: 'cerrar', tabs: '◂ ▸ cambia de pestaña' },
     yes: 'sí', no: 'no',
     general: {
@@ -342,6 +378,7 @@ export default {
     },
   },
   ui: {
+    context: 'Contexto · {agent}', contextLeft: '{pct}% libre', contextAria: 'Contexto: queda {pct}% libre ({used} de {max} usados)',
     canvas: 'La oficina: clic en un personaje para ver su ficha, en la pizarra para un nuevo encargo',
     settings: 'Ajustes', settingsKey: 'Ajustes (c)', fullscreen: 'Pantalla completa', fullscreenKey: 'Pantalla completa (f)', view: 'Vista frontal o cenital', viewKey: 'Vista frontal o cenital (v)', servicesKey: 'Servicios en segundo plano: {n} corriendo (l)',
     office: 'Oficina', officeKey: 'Elige qué oficina ver (o)',

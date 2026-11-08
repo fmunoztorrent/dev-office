@@ -109,7 +109,7 @@ An agent is a full path + the CLI that serves it (`claude-code`, `opencode`, `pi
 | `DELETE` | `/v1/agents/<id>` | | `{ ok }` (its folder is not touched) |
 | `POST` | `/v1/agents/<id>/prompt` | `{ text, entry?, session? }` | `{ ok, task }` or `{ ok, run }` |
 | `POST` | `/v1/agents/<id>/team` | `{ team? }` (the pack; `example` by default) | Installs in its folder (in the harness's format) the pack's agents whose roles no subagent of its harness covers, and the sessions open there learn it: `{ ok, installed: true, team, dir, files, agents, whole, fresh, agent }`. With everything covered: `{ ok, installed: false, reason: "has-team", have }`. Used by `join` and Pi's `/office` |
-| `POST` | `/v1/run` | `{ target, entry?, text, session? }` | Same, for any agent in `/v1/agents` (also an unregistered session: `session:<id>`) |
+| `POST` | `/v1/run` | `{ target, entry?, text, session?, profile? }` | Same, for any agent in `/v1/agents` (also an unregistered session: `session:<id>`). `profile`: a model profile's id, or `none` (the agent's own model); without it, `prefs.models.active` |
 | `GET` | `/v1/prompts?agent=<id>&limit=` | | `{ prompts }`: the history |
 
 Each agent in `/v1/agents` carries:
@@ -163,6 +163,7 @@ Format and protocol with the agents: [pipelines.md](pipelines.md).
 | `lang` | `en` (default) or `es` |
 | `timezone` | the company's IANA zone, or `null` (the system's) |
 | `city` | the company's city (as `location` above), or `null` (the time zone's). Changing `timezone` without `city` clears it |
+| `models` | the model profiles: `{ active, profiles: { <id>: { label, harnesses, roles: { default, tl, qa… } } } }`. `active` is the one a brief uses (`null`: each agent's own model). `{ models: { active } }` only picks one. A new session starts with the profile's `default`; a pipeline's stages without a model take their role's |
 | `weather` | `true` / `false` (real or simulated weather) |
 | `view` | `{ office: <id>, mode: "flat" \| "iso" }`: the office being watched and how it looks in the browser (front, the default, or isometric top-down) |
 | `herdr` | `{ launch: bool, subagents: bool, direction: "right" \| "down", startAgent: "auto" \| "none" \| <agent id> }` (`subagents`: one pane per subagent) |
@@ -272,6 +273,7 @@ it received, or the oldest open one) and its work is done by that subagent's cha
 | `error` | A general error | The character gets stuck |
 | `compact` | Context compaction | The manager tidies up notes |
 | `done` | End of the task | Celebration at the table |
+| `context` | How full the agent's context is: `context: { used, max }` (tokens). Any event can also carry `context` | The context bar, at the bottom center. It is not logged |
 
 Roles: `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`. Aliases like `architect`, `arquitecto`, `tester` or `ux` are accepted too. The PO is the user: a `role` of `po` sent by an agent is drawn as the analyst.
 

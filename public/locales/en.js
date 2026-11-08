@@ -25,6 +25,7 @@ export default {
   // ---------------------------------------------------------------- office life (sim.js)
   sim: {
     journal: {
+      newcomer: '{name} comes in to help with {role}: {text}', farewell: '{name} finished their part and leaves',
       deskchat: '{names} chat from their desks 💬',
       gossip: '{names} get together to chat 💬',
       idea: '{who} pitches an idea to {manager} 💡',
@@ -82,6 +83,14 @@ export default {
       po: ['Hope this ships today 🤞', 'Everything is urgent, as usual 😅', 'Lunch together today? 🥗', '{manager} is already on coffee number five ☕😂', 'The roadmap looks gorgeous 📌'],
       analyst: ["Yesterday's numbers… went up! 📈", 'I found a great data point 🤓', 'Have you seen the new dashboard? 📊', '{backend} swore it was not a bug 👀', 'I made a spreadsheet of spreadsheets 😂'],
       designer: ['What if everything were purple? 💜', 'That button keeps me up at night 😱', 'That screen needs some air ✨', 'I brought you a new palette 🎨', 'Who used Comic Sans? 😤'],
+    },
+    // the chit-chat about what is going on (sim.js liveTopics)
+    newcomer: { welcome: 'Welcome, {name}! 👋', bye: 'Done, heading out! 👋', hotDesk: 'Free desk' },
+    live: {
+      board: "We're {done} of {total} on the board 📋", doing: '{name} is {action} 👀', stuck: '{name} got stuck {action} 😬',
+      waitingYou: "We're waiting for {po}'s OK ✋", newcomer: '{name} came to help with {role} 👋',
+      rounds: "{name}, how's it going? I see you're {action}",
+      replies: ["Let's get it done! 💪", 'Hope it ships today 🤞', "It's moving along 👍", 'Nice 🙌', "I'll help if needed", "Let's see how it ends 👀"],
     },
     gossipTask: 'Have you seen “{task}”? 👀',
     gossipError: '{name} had a fight with an error 😬',
@@ -180,18 +189,39 @@ export default {
   },
 
   // ---------------------------------------------------------------- what the scene shows
+  // the whiteboard, expanded (board-ui.js)
+  board: { untitled: 'The whiteboard', progress: '{done} of {total} done', empty: 'There are no tasks on the whiteboard.', newBrief: '✚ New brief' },
   scene: {
     taskTitle: 'TASK: {title}',
     noTask: 'No task — waiting for the agent…',
     todo: 'TO DO', doing: 'DOING', done: 'DONE',
     todoShort: 'to do {todo} · doing {doing} · done {done}',
-    boardTip: '✎ click: new brief',
+    boardTip: '✎ click: new brief', boardTipTickets: '🔍 click: see the tasks',
     cafe: 'CAFÉ', wc: 'WC', dining: 'DINING', menu: 'MENU', menuToday: ['soup', 'pasta', 'dessert'],
     tvBreaking: 'BREAKING', tvServer: 'SERVER', tvNews: 'NEWS', tvWeather: 'WEATHER',
     tvLive: 'LIVE: the team is working on “{title}”', tvQuiet: 'All quiet at the office',
     resize: 'Make the terminal bigger (at least 60×18) · q to quit',
   },
   // ---------------------------------------------------------------- what the agent does (server)
+  // what a command or a tool does, in words (server/humanize.js): never the command itself
+  act: {
+    tests: 'Running the tests', testsOf: 'Running the tests of {target}', build: 'Building the project', dev: 'Starting the dev server',
+    lint: 'Checking the code style', format: 'Formatting the code', typecheck: 'Checking the types', script: 'Running the “{name}” script',
+    install: 'Installing dependencies', installPkgs: 'Installing {pkgs}', uninstall: 'Removing dependencies', publish: 'Publishing the package', tool: 'Using {prog}',
+    gitStatus: 'Checking what changed', gitDiff: 'Looking at the changes', gitLog: 'Going over the history', gitShow: 'Looking at a commit', gitAdd: 'Staging the changes',
+    gitCommit: 'Committing: “{msg}”', gitCommitPlain: 'Making a commit', gitPush: 'Pushing the changes', gitPull: 'Pulling changes from the repo',
+    gitCheckout: 'Switching to {ref}', gitBranch: 'Checking the branches', gitStash: 'Setting changes aside', gitMerge: 'Merging branches', gitRebase: 'Reordering commits',
+    gitRestore: 'Undoing changes', gitTag: 'Tagging a version', gitClone: 'Cloning {repo}', gitInit: 'Creating the repository', gitWorktree: 'Opening another copy of the repo', gitOther: 'Using git',
+    gh: 'Checking GitHub', ghPr: 'Going over pull requests', ghRun: 'Looking at the CI', ghIssue: 'Going over issues', ghRelease: 'Preparing a release on GitHub',
+    list: 'Looking at the files', listIn: 'Looking inside {dir}', find: 'Looking for files', read: 'Reading {file}', readSome: 'Reading a file',
+    search: 'Searching for “{pattern}”', editText: 'Touching up text', mkdir: 'Creating the {dir} folder', remove: 'Deleting {file}', move: 'Moving {file}', copy: 'Copying {file}',
+    touch: 'Creating {file}', link: 'Linking files', chmod: 'Changing permissions of {file}', fetch: 'Checking {host}', web: 'Checking the web',
+    run: 'Running {file}', snippet: 'Trying a bit of code', containers: 'Working with containers', make: 'Running “{target}”',
+    kill: 'Stopping a process', ps: 'Looking at what is running', sleep: 'Waiting a moment', echo: 'Noting something in the terminal', env: 'Checking the environment',
+    process: 'Crunching data', open: 'Opening {file}', archive: 'Packing files', disk: 'Checking the disk space', remote: 'Working on another machine',
+    panes: 'Arranging the panes', office: 'Talking to the office', agent: 'Asking {agent} for something', other: 'Using {prog}', shell: 'Working in the terminal',
+    cd: 'Going into {dir}', background: '{what} (in the background)', mcp: 'Using {server}: {what}', toolUse: 'Using {tool}',
+  },
   events: {
     updateBoard: 'Updates the board', newCard: 'New card: {text}', moveCard: 'Moves a card', failed: 'Failed: {text}{detail}',
     thinking: 'Thinking…', waiting: 'The agent is waiting for your approval', error: 'Something went wrong', compact: 'Tidies up the notes (compacts the context)',
@@ -202,6 +232,7 @@ export default {
     plan: 'Presents the plan', planning: 'Planning', skill: 'Using skill {skill}', mcp: 'Using {tool}', working: 'Working',
   },
   task: {
+    scope: 'Work only inside {dir}: do not read or change files outside that folder. Do exactly what is asked (or the agreed plan step), without going off on tangents or adding ideas nobody asked for.',
     queuedClaude: 'delivered when Claude finishes its turn', runningIn: '{exe} in {dir}', finished: 'finished', killed: 'killed ({signal})',
     exitCode: 'exited with code {code}{last}', disconnected: 'the agent disconnected', sentTo: 'sent to {agent}', accepted: 'the agent is on it',
     failedDefault: 'the agent could not do the task', failedEvent: '{agent} could not do the task: {detail}', claudeTook: 'Claude took it when its turn ended',
@@ -286,6 +317,7 @@ export default {
     },
   },
   brief: {
+    models: 'Models', ownModel: "The agent's own model", profileOpen: 'The open session keeps its model: the profile counts for a new session or for a pipeline\'s stages.',
     title: 'New brief', close: 'esc ✕', agent: 'Agent', pipeline: 'Pipeline', session: 'Session', prompt: 'Prompt',
     noAgent: 'none: register one in ⚙ › Agents', noAgentWeb: 'No agent: register one in ⚙ › Agents',
     registerHint: 'Register an agent with its full path (c › Agents): the prompt starts the pipeline of its harness.',
@@ -299,8 +331,12 @@ export default {
     pNotInstalled: 'Cannot find {agent} installed (its CLI is not in the PATH)', failed: 'Could not: {error}',
   },
   settings: {
+    models: {
+      hint: 'A profile says which model each role uses. It is used when a brief opens a new session (the agent starts with the default model) and by a pipeline\'s stages that set no model. You can add your own.',
+      active: 'Default profile', label: 'Name', for: 'For:', default: 'Default', same: 'same as the default ({model})', remove: 'Remove this profile', add: '✚ New profile', newLabel: 'Profile {n}',
+    },
     title: '⚙ Settings', loading: 'Loading…', close: 'Close', save: 'Save', saved: 'Saved: already in use.', file: 'stored in {file}',
-    tabs: { general: 'General', offices: 'Offices', agents: 'Agents', look: 'Characters' },
+    tabs: { general: 'General', offices: 'Offices', agents: 'Agents', look: 'Characters', models: 'Models' },
     keys: { field: 'field', change: 'change', action: 'action', save: 'save', close: 'close', tabs: '◂ ▸ switch tab' },
     yes: 'yes', no: 'no',
     general: {
@@ -342,6 +378,7 @@ export default {
     },
   },
   ui: {
+    context: 'Context · {agent}', contextLeft: '{pct}% free', contextAria: 'Context: {pct}% free ({used} of {max} used)',
     canvas: 'The office: click a character to see their card, the board for a new brief',
     settings: 'Settings', settingsKey: 'Settings (c)', fullscreen: 'Fullscreen', fullscreenKey: 'Fullscreen (f)', view: 'Front or top-down view', viewKey: 'Front or top-down view (v)', servicesKey: 'Background services: {n} running (l)',
     office: 'Office', officeKey: 'Pick which office to view (o)',

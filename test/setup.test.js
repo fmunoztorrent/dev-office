@@ -102,6 +102,8 @@ test('setup conecta cada agente encontrado sin pisar lo que había', () => {
   assert.match(json(CODEX_HOOKS).hooks.PostToolUse[0].hooks[0].command, /hook codex$/);
   assert.ok(fs.existsSync(P('.dev-team-office', 'codex', 'hook.mjs')));
   assert.ok(fs.existsSync(P('.agents', 'skills', 'dev-team-office-config', 'SKILL.md')));
+  assert.ok(fs.existsSync(P('.agents', 'skills', 'stay-focused', 'SKILL.md')), 'el skill para no irse por la tangente');
+  assert.ok(fs.existsSync(P('.claude', 'skills', 'stay-focused', 'SKILL.md')));
 
   // OpenCode: the .jsonc with comments is edited as text (the comments stay)
   const oc = read(OPENCODE);

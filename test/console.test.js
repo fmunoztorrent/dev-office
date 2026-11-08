@@ -33,7 +33,7 @@ test('la bitácora: la actividad de los agentes, con la oficina si hay varias, y
     server.company.ingest('generic', { session: 's1', kind: 'tool_end', role: 'qa', tool: 'Bash', input: { command: 'npm test' }, ok: false });
     assert.match(out, /Tomás {2}🏛\uFE0F? Arquitectura: Estado CANCELLED/u);
     assert.match(out, /Diego {2}Editando api\.js/);
-    assert.match(out, /Andrés {2}✖ Falló: \$ npm test/);
+    assert.match(out, /Andrés {2}✖ Falló: Corriendo los tests/); // in words, never the command
     assert.ok(!/\x1b\[/.test(out), 'sin colores');
     assert.equal(out.split('\n').filter(Boolean).length, 3, 'un tool_end que salió bien no ensucia la bitácora');
     // with two offices, each line says which one it belongs to

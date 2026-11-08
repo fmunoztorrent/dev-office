@@ -44,7 +44,8 @@ test('desde la terminal: clic en la pizarra → elegir el pipeline del agente �
     const row = Math.floor((L.oy + Math.round((BOARD.y + BOARD.h / 2) * L.s)) / 2) + 1;
     type(`\x1b[<0;${col};${row}M`); // click on the whiteboard
     await until(() => stdout.out.includes('Nuevo encargo') && stdout.out.includes('● abierta'));
-    // fields: Agent, Pipeline, Session, Prompt (the focus starts on the prompt)
+    // fields: Agent, Pipeline, Session, Models, Prompt (the focus starts on the prompt)
+    type('\x1b[A'); // ↑ to «Models»
     type('\x1b[A'); // ↑ to «Session»
     type('\x1b[A'); // ↑ a «Pipeline»
     const target = server.registry.targets().find((t) => t.sessions.some((x) => x.session === 'pi-tui'));

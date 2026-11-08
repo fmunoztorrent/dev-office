@@ -39,6 +39,20 @@ canvas#office { position: absolute; inset: 0; width: 100%; height: 100%; display
 .hud { position: absolute; display: flex; gap: 8px; align-items: center; z-index: 2; }
 .hud-tl { top: 1.4cqi; left: 1.4cqi; }
 .hud-tr { top: 1.4cqi; right: 1.4cqi; }
+/* the context, as a fighting game's health bar: bottom center, it empties as the context fills up */
+.ctx-bar { bottom: 1.6cqi; left: 50%; transform: translateX(-50%); width: min(46cqi, 520px); flex-direction: column; align-items: stretch; gap: 2px; pointer-events: none; font-family: "VT323", monospace; }
+.ctx-label { display: flex; justify-content: space-between; gap: 10px; color: #fff; font-size: max(13px, 1.7cqi); line-height: 1; text-shadow: 2px 0 #000, -2px 0 #000, 0 2px #000, 0 -2px #000; letter-spacing: 1px; text-transform: uppercase; }
+.ctx-label span { color: #ffe066; }
+.ctx-track { position: relative; height: max(14px, 2.2cqi); background: #2a0c0c; box-shadow: 0 0 0 2px #000, 0 0 0 4px #e9ecef, 0 0 0 6px #000, 4px 6px 0 6px #00000055; overflow: hidden; }
+.ctx-trail, .ctx-fill { position: absolute; inset: 0 auto 0 0; width: 100%; }
+.ctx-trail { background: #e63946; transition: width 900ms ease-out 450ms; }
+.ctx-fill { background: linear-gradient(#fff6a8 0 22%, #ffd400 22% 70%, #e0a800 70%); transition: width 260ms steps(8), background 300ms; }
+.ctx-bar.mid .ctx-fill { background: linear-gradient(#ffd8a8 0 22%, #ff922b 22% 70%, #d9480f 70%); }
+.ctx-bar.low .ctx-fill { background: linear-gradient(#ffb3b3 0 22%, #f03e3e 22% 70%, #a51111 70%); }
+.ctx-pct { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: max(12px, 1.5cqi); color: #fff; text-shadow: 1px 0 #000, -1px 0 #000, 0 1px #000, 0 -1px #000; text-transform: uppercase; }
+.ctx-ko { position: absolute; left: 50%; bottom: max(18px, 2.8cqi); transform: translateX(-50%); font: max(22px, 3.6cqi)/1 "VT323", monospace; color: #ff3b30; text-shadow: 2px 2px #000, -2px -2px #000, 2px -2px #000, -2px 2px #000; animation: ctx-ko 600ms steps(2) infinite; }
+@keyframes ctx-ko { 50% { opacity: .2; } }
+@media (prefers-reduced-motion: reduce) { .ctx-trail, .ctx-fill { transition: none; } .ctx-ko { animation: none; } }
 .hud-btn {
   position: relative; width: var(--hud); height: var(--hud); padding: calc(var(--hud) * .2); cursor: pointer;
   display: grid; place-items: center; color: var(--accent);
@@ -270,6 +284,46 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
 .svc-out:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
 .svc-msg { margin: 0; padding: 0 8px 6px; color: var(--amber); }
 .svc-msg:empty { display: none; }
+
+/* ⚙ › Models: one card per profile, a model per role */
+.s-profiles { display: grid; gap: 12px; margin: 10px 0; }
+.s-profile { border: 2px solid var(--ink, #1b1f33); padding: 8px 10px 10px; }
+.s-profile legend { font-weight: bold; padding: 0 4px; }
+.s-roles { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 4px 12px; margin: 6px 0; }
+.s-roles input { font-family: ui-monospace, monospace; font-size: 13px; }
+
+/* ---------- the whiteboard, expanded: the tasks as post-its (board-ui.js) ---------- */
+.board-view { width: min(1040px, calc(100vw - 32px)); padding: 0; border: 0; background: transparent; overflow: visible; }
+.board-view::backdrop { background: rgba(10, 12, 20, .55); }
+.bv-board { background: #f8fafc; border: 10px solid #c9ced6; outline: 3px solid #6b7280; box-shadow: inset 0 0 0 2px #e5e7eb, 0 18px 40px #00000066; display: flex; flex-direction: column; max-height: calc(100vh - 64px); font: 20px/1.15 "VT323", monospace; color: #1f2937; }
+.bv-board.bv-grow { animation: bv-grow 360ms cubic-bezier(.2, .8, .2, 1); }
+@keyframes bv-grow { from { transform: translate(var(--bv-dx, 0), var(--bv-dy, -30vh)) scale(var(--bv-s, .3)); opacity: .5; } to { transform: none; opacity: 1; } }
+.bv-head { display: flex; align-items: baseline; gap: 14px; padding: 12px 16px 6px; border-bottom: 2px dashed #cbd5e1; }
+.bv-head h2 { margin: 0; font: 28px/1.1 "VT323", monospace; color: #1e3a8a; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bv-progress { color: #475569; white-space: nowrap; }
+.bv-x { font: 22px/1 "VT323", monospace; background: none; border: 0; cursor: pointer; color: #475569; }
+.bv-empty { margin: 18px; color: #64748b; }
+.bv-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; overflow: auto; min-height: 280px; }
+.bv-col { padding: 10px 12px 16px; border-right: 2px solid #e2e8f0; }
+.bv-col:last-child { border-right: 0; }
+.bv-col h3 { margin: 0 0 10px; font: 22px/1 "VT323", monospace; color: #334155; letter-spacing: 1px; }
+.bv-col h3 b { font-weight: normal; color: #94a3b8; }
+.bv-col ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; align-content: flex-start; }
+.bv-postit { width: calc(50% - 6px); min-height: 92px; padding: 10px 9px 8px; box-sizing: border-box; transform: rotate(var(--tilt, 0deg)); box-shadow: 2px 3px 0 #00000026, inset 0 -10px 12px -12px #00000040; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; word-break: break-word; position: relative; }
+.bv-postit::before { content: ""; position: absolute; top: -4px; left: 50%; width: 36px; height: 10px; margin-left: -18px; background: #ffffff99; box-shadow: 0 0 0 1px #0000000d; transform: rotate(-3deg); }
+.bv-pending { background: #fef08a; }
+.bv-in_progress { background: #fdba74; box-shadow: 2px 3px 0 #00000026, 0 0 0 2px #f97316; }
+.bv-completed { background: #bbf7d0; color: #166534; opacity: .85; }
+.bv-completed::after { content: "✓"; position: absolute; right: 6px; bottom: 2px; font-size: 26px; color: #16a34a; }
+.bv-foot { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px 10px; border-top: 6px solid #d1d5db; background: #e5e7eb; }
+.bv-tray { display: flex; gap: 8px; }
+.bv-tray i { width: 34px; height: 8px; border-radius: 4px; background: #1d4ed8; }
+.bv-tray i:nth-child(2) { background: #dc2626; }
+.bv-tray i:nth-child(3) { background: #16a34a; }
+.log .proj, #log .proj { color: #9ad1ff; }
+.bv-brief { font: 20px/1 "VT323", monospace; padding: 6px 12px 5px; background: var(--ink, #1b1f33); color: #fff; border: 0; cursor: pointer; box-shadow: 3px 3px 0 #00000040; }
+@media (max-width: 640px) { .bv-cols { grid-template-columns: 1fr; } .bv-col { border-right: 0; border-bottom: 2px solid #e2e8f0; } .bv-postit { width: 100%; } }
+@media (prefers-reduced-motion: reduce) { .bv-board.bv-grow { animation: none; } }
 
 /* ---------- "New brief" dialog: a cork board with a pinned sheet ---------- */
 .brief {

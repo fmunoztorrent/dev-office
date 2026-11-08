@@ -25,7 +25,7 @@ Dev Team Office es una oficina en pixel art que muestra en vivo lo que hacen los
 | `server/office.js` | El estado de una oficina: sesiones, subagentes (con `subId`), turnos, la pizarra y la bitácora |
 | `server/company.js` | Las oficinas de la empresa y a cuál va cada evento |
 | `server/adapters.js` | El payload de cada agente → el formato genérico |
-| `server/roles.js` | Qué personaje hace cada herramienta, archivo o comando |
+| `server/roles.js` · `server/humanize.js` | Qué personaje hace cada herramienta, archivo o comando, y qué hace dicho en palabras («Corriendo los tests»: nunca el comando) |
 | `server/tasks.js` · `server/pipeline.js` · `server/registry.js` | Las tareas, los pipelines y los agentes registrados |
 | `server/services.js` | Los servicios que los agentes dejan corriendo en segundo plano: de dónde salen, si siguen vivos (`lsof`) y sus logs |
 | `server/herdr.js` · `server/subpanes.js` | herdr: un agente por pane, y un pane por subagente |
@@ -35,6 +35,8 @@ Dev Team Office es una oficina en pixel art que muestra en vivo lo que hacen los
 | `public/game.js` · `public/iso.js` | El juego en canvas: la vista frontal y la cenital (cámara isométrica) |
 | `tui/` | La terminal: `app.js`/`view.js` (el juego), `console.js` (la bitácora), `monitor.js` (el monitor), `follow.js` (un subagente), `settings.js` |
 | `integrations/` | Lo que corre del lado del agente, más la librería común `integrations/common/devteam.mjs` (detección de proyectos y subagentes, pipelines, gates) |
+| `public/models.js` | Los perfiles de modelos (Anthropic, OpenCode y los que se agreguen): qué modelo usa cada rol |
+| `public/board-ui.js` | La pizarra expandida: las tareas como post-its |
 | `public/locales/{en,es}.js` | Todos los textos de la interfaz |
 | `docs/` | API, MCP, instalación, uso, convenciones, eventos por rol, pipelines, cómo conectar un harness |
 | `test/` | `node --test`, con fixtures (`fake-agent.mjs`, `fake-claude.mjs`…) |
@@ -105,6 +107,9 @@ Más detalle en [docs/conventions.es.md](docs/conventions.es.md) y [CONTRIBUTING
   - Un agente nunca la juega: `agentRole` (`server/roles.js` e `integrations/common/devteam.mjs`) convierte en `analyst` el `po` que declare un agente, un subagente o una etapa.
   - Lo que hace el usuario es de la PO (`task`, `dispatch`, la pregunta de un `btw`), y las preguntas y permisos del agente van a su escritorio.
   - En la simulación cotorrea, pero no decide nada sola: no lleva ideas al backlog ni contesta alcances.
+- **Cada subagente es alguien nuevo** en la simulación (`sim.ghosts`): un extra translúcido de su rol en un puesto temporal (`HOT_DESKS`). Los eventos con `subId` son suyos, no del personaje fijo del rol.
+- **Un encargo lleva su alcance delante:** una línea que empieza con `📁` (`server/tasks.js`, `scoped`): sólo la carpeta del proyecto y sólo lo pedido. La oficina la saca del título de la pizarra; a OpenCode además le llega como regla (`fenced`).
+- **El contexto** llega como evento `context` (o el campo `context` de cualquier evento): sólo actualiza `session.context`, no va a la bitácora ni mueve a nadie.
 - **Los roles de los subagentes** salen de, en este orden:
   1. su `role:`;
   2. su nombre (`SUBAGENT_ROLES`);

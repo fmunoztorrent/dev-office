@@ -19,7 +19,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { clip } from './roles.js';
 import { sanitizeProject } from './pipeline.js';
-import { agentCommand, HARNESSES, which } from '../integrations/common/devteam.mjs';
+import { agentCommand, modelArgs, HARNESSES, which } from '../integrations/common/devteam.mjs';
 import { t as tr } from '../public/i18n.js';
 import { MAIN_OFFICE } from './store.js';
 
@@ -42,6 +42,22 @@ const HARNESS_IDS = ['claude-code', 'opencode', 'pi', 'codex'];
 const TASKS_MAX = 50;
 const TEXT_MAX = 4000;
 const OUTPUT_LINES = 40;
+
+// A brief starts with its scope: the agent works only inside its project's folder, and only on what
+// is asked (the stay-focused skill). The 📁 line is the office's: it is taken out of the board's title.
+export const SCOPE_MARK = '📁 ';
+export const scoped = (text, dir) => (dir ? `${SCOPE_MARK}${tr('task.scope', { dir: String(dir).replace(os.homedir(), '~') })}\n\n${text}` : text);
+/** OpenCode also gets the rule for real: reading or changing files outside the folder is denied. */
+/** The agent's arguments plus the profile's model (unless the registered agent already sets one). */
+const withModel = (agent, args, model) => (model && !args.some((a) => a === '--model' || a === '-m') ? [...args, ...modelArgs(agent, model)] : args);
+
+export function fenced(agent, env = {}) {
+  if (agent !== 'opencode') return env;
+  let cfg = {};
+  try { cfg = JSON.parse(env.OPENCODE_CONFIG_CONTENT || '{}') || {}; } catch { cfg = {}; }
+  const permission = cfg.permission && typeof cfg.permission === 'object' ? cfg.permission : cfg.permission ? { '*': cfg.permission } : {};
+  return { ...env, OPENCODE_CONFIG_CONTENT: JSON.stringify({ ...cfg, permission: { ...permission, external_directory: 'deny' } }) };
+}
 
 export class TaskHub extends EventEmitter {
   /**
@@ -124,7 +140,7 @@ export class TaskHub extends EventEmitter {
    * @param launch  { bin, args } of the registered agent, for a new session (mode: 'launch')
    * @param meta    { agentId, entry } for the history: which registered agent and through which entry
    */
-  submit({ text, title, agent, session, mode, cwd, from, command, args, launch, meta, office } = {}) {
+  submit({ text, title, agent, session, mode, cwd, from, command, args, launch, meta, office, model } = {}) {
     text = String(text ?? '').trim();
     if (!text) return { ok: false, error: tr('err.taskEmpty') };
     if (text.length > TEXT_MAX) return { ok: false, error: tr('err.taskTooLong', { n: TEXT_MAX }) };
@@ -145,7 +161,10 @@ export class TaskHub extends EventEmitter {
       if (!HARNESS_IDS.includes(agent)) return { ok: false, error: tr('err.cantLaunch', { agent }) };
       task.cwd = path.resolve(String(cwd || this.defaultCwd).replace(/^~(?=$|\/)/, os.homedir()));
       if (!fs.statSync(task.cwd, { throwIfNoEntry: false })?.isDirectory()) return { ok: false, error: tr('err.noDir', { dir: task.cwd }) };
-      const cmd = agentCommand(agent, { text, command: task.command, args: task.args }, launch || {});
+      // the agent works in its project's folder, and only on what is asked (a harness command goes as is)
+      task.prompt = task.command ? text : scoped(text, task.cwd);
+      task.model = model ? clip(model, 80) : null; // the model profile's (null: the agent's own)
+      const cmd = agentCommand(agent, { text: task.prompt, command: task.command, args: task.args, model: task.model }, launch || {});
       if (cmd.error) return { ok: false, error: cmd.code === 'missing' ? tr('err.notInstalled', { bin: cmd.bin }) : tr('err.cantLaunch', { agent }) };
       this.#add(task);
       this.#dispatchEvent(task);
@@ -180,7 +199,7 @@ export class TaskHub extends EventEmitter {
     try {
       const prefs = this.prefs() || {};
       const { pane } = await this.herdr.launchAgent({
-        harness: task.agent, cwd: task.cwd, prompt: task.text, bin, args: Array.isArray(args) ? args : [], env,
+        harness: task.agent, cwd: task.cwd, prompt: task.prompt || task.text, bin, args: withModel(task.agent, Array.isArray(args) ? args : [], task.model), env: fenced(task.agent, env),
         direction: prefs.herdr?.direction, office: task.office, officeName: this.officeName?.(task.office) || '',
         role: 'manager', title: task.title, taskId: task.id, label: `${label} · ${path.basename(task.cwd)}`,
       });
@@ -239,6 +258,7 @@ export class TaskHub extends EventEmitter {
     delete env.DEV_TEAM_OFFICE_SESSION_ALIAS;
     // the Pi extension adopts this session id: so the task knows which session is doing it
     if (task.agent === 'pi') { env.DEV_TEAM_OFFICE_SESSION = `pi-${task.id}`; task.session = env.DEV_TEAM_OFFICE_SESSION; } else delete env.DEV_TEAM_OFFICE_SESSION;
+    Object.assign(env, fenced(task.agent, env));
     let child;
     try {
       child = spawn(exe, argv, { cwd: task.cwd, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
@@ -276,7 +296,7 @@ export class TaskHub extends EventEmitter {
     task.connId = conn.id;
     task.session ||= conn.session;
     this.#set(task, 'sent', tr('task.sentTo', { agent: AGENT_LABEL[conn.agent] || conn.agent }));
-    conn.send({ type: 'task', id: task.id, text: task.text, session: task.session, ...(task.command ? { command: task.command, args: task.args } : {}) });
+    conn.send({ type: 'task', id: task.id, text: task.command ? task.text : scoped(task.text, conn.cwd), session: task.session, ...(task.command ? { command: task.command, args: task.args } : {}) });
   }
 
   /** The agent's answer: accepted | done | failed | rejected. */

@@ -18,6 +18,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { normRole } from './roles.js';
 import { t, isLanguage, DEFAULT_LANGUAGE } from '../public/i18n.js';
 import { validZone } from '../public/clock.js';
+import { DEFAULT_MODELS, normalizeModels } from '../public/models.js';
 
 const HARNESS_IDS = ['claude-code', 'opencode', 'pi', 'codex'];
 const ASKS_KEEP = 500;
@@ -37,6 +38,7 @@ export const DEFAULT_PREFS = {
   herdr: { launch: true, direction: 'right', startAgent: 'auto', subagents: true }, // inside herdr: the agents (and each subagent) in panes
   log: { life: false },         // the terminal log also shows the office's life
   view: { office: MAIN_OFFICE, mode: 'flat' }, // the office being watched and how it looks: front (flat) or isometric top-down (iso)
+  models: DEFAULT_MODELS,       // the model profiles (public/models.js) and the one used by default
 };
 
 // The default language (until one is chosen in ⚙): $DEV_TEAM_OFFICE_LANG, otherwise English.
@@ -347,6 +349,15 @@ export class Store {
             if (v.office !== undefined) next.view.office = this.getOffice(v.office)?.id || fail(t('err.unknownOffice', { office: v.office }));
             if (v.mode !== undefined) next.view.mode = ['flat', 'iso'].includes(v.mode) ? v.mode : fail(t('err.prefValue', { key: 'view.mode' }));
             break;
+          case 'models': {
+            // a whole set ({ active, profiles }) or just which one is active ({ active })
+            const merged = isObj(v) && !v.profiles ? { ...next.models, ...v } : v;
+            if (isObj(v) && v.active && v.active !== 'none' && !(merged.profiles || {})[v.active]) fail(t('err.prefValue', { key: 'models.active' }));
+            const out = normalizeModels(merged);
+            if (!out.ok) fail(t('err.prefValue', { key: out.error }));
+            next.models = out.models;
+            break;
+          }
           default: fail(t('err.pref', { key: k }));
         }
       }

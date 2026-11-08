@@ -58,14 +58,18 @@ test('la vida de la oficina habla el idioma del juego (con los nombres actuales 
   const said = new Set();
   const run = (s) => { for (let i = 0; i < s * 20; i++) { now += 50; sim.step(0.05, now); for (const a of Object.values(sim.agents)) if (a.bubble) said.add(a.bubble.text); } };
   run(1);
+  sim.handle({ kind: 'pane_open', role: 'backend', pane: 'w1:p2', text: 'API' });
+  run(12);
+  assert.ok(said.has('Diego, pane w1:p2 is yours: API'), [...said].join(' | '));
+  // a subagent is a newcomer: the card goes to them, by their name
   sim.handle({ kind: 'subagent_start', role: 'backend', subId: 's1', text: 'API' });
   run(12);
-  assert.ok(said.has('Diego, this one is yours: API'), [...said].join(' | '));
+  assert.ok(said.has(`${sim.ghosts[0].cfg.name}, this one is yours: API`), [...said].join(' | '));
   applyAppearance({ backend: { name: 'Bruno' } });
   try {
-    sim.handle({ kind: 'subagent_start', role: 'backend', subId: 's2', text: 'DB' });
-    run(12);
-    assert.ok(said.has('Bruno, this one is yours: DB'), [...said].join(' | '));
+    sim.handle({ kind: 'pane_open', role: 'backend', pane: 'w1:p3', text: 'DB' });
+    run(30); // Marco first comes back from the newcomer's desk
+    assert.ok(said.has('Bruno, pane w1:p3 is yours: DB'), [...said].join(' | '));
     sim.handle({ kind: 'waiting', text: 'Bash?' });
     run(15);
     assert.ok(said.has('Sofía, can I have your OK? ✋'), [...said].join(' | ')); // at your desk: the PO is you

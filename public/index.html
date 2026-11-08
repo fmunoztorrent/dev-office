@@ -26,6 +26,17 @@
         <span id="wx" class="wx" hidden></span>
         <button id="svc-chip" class="svc-chip" type="button" hidden data-i18n-title="ui.servicesKey"></button>
       </div>
+      <!-- Bottom center: the agent's context, as a fighting game's health bar (it empties as the
+           context fills up). It shows up when the session's agent reports it. -->
+      <div class="hud ctx-bar" id="ctx-bar" hidden>
+        <div class="ctx-label"><b id="ctx-who"></b><span id="ctx-tokens"></span></div>
+        <div class="ctx-track" id="ctx-meter" role="meter" aria-valuemin="0" aria-valuemax="100">
+          <div class="ctx-trail" id="ctx-trail"></div>
+          <div class="ctx-fill" id="ctx-fill"></div>
+          <span class="ctx-pct" id="ctx-pct"></span>
+        </div>
+        <span class="ctx-ko" id="ctx-ko" hidden>KO</span>
+      </div>
       <div class="hud hud-tr">
         <button id="open-settings" class="hud-btn" type="button" data-i18n-title="ui.settingsKey" data-i18n-aria="ui.settings">
           <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><rect x="7" y="0" width="2" height="3"/><rect x="7" y="13" width="2" height="3"/><rect x="0" y="7" width="3" height="2"/><rect x="13" y="7" width="3" height="2"/><rect x="2" y="2" width="3" height="3"/><rect x="11" y="2" width="3" height="3"/><rect x="2" y="11" width="3" height="3"/><rect x="11" y="11" width="3" height="3"/><path fill-rule="evenodd" d="M5 3h6v2h2v6h-2v2H5v-2H3V5h2zM6 6v4h4V6z"/></g></svg>
@@ -146,6 +157,27 @@
     </div>
   </dialog>
 
+  <!-- The whiteboard, expanded: the agent's tasks as post-its in three columns (board-ui.js). -->
+  <dialog id="board-view" class="board-view" aria-labelledby="bv-title">
+    <div class="bv-board">
+      <header class="bv-head">
+        <h2 id="bv-title"></h2>
+        <span id="bv-progress" class="bv-progress"></span>
+        <button type="button" class="bv-x" id="bv-close" data-i18n-aria="settings.close">✕</button>
+      </header>
+      <p id="bv-empty" class="bv-empty" data-i18n="board.empty" hidden></p>
+      <div class="bv-cols">
+        <section class="bv-col" data-col="pending"><h3><span data-i18n="scene.todo">TO DO</span> <b class="bv-count"></b></h3><ul></ul></section>
+        <section class="bv-col" data-col="in_progress"><h3><span data-i18n="scene.doing">DOING</span> <b class="bv-count"></b></h3><ul></ul></section>
+        <section class="bv-col" data-col="completed"><h3><span data-i18n="scene.done">DONE</span> <b class="bv-count"></b></h3><ul></ul></section>
+      </div>
+      <footer class="bv-foot">
+        <span class="bv-tray" aria-hidden="true"><i></i><i></i><i></i></span>
+        <button type="button" id="bv-brief" class="bv-brief" data-i18n="board.newBrief">✚ New brief</button>
+      </footer>
+    </div>
+  </dialog>
+
   <dialog id="brief" class="brief" aria-labelledby="brief-title">
     <form id="brief-form" method="dialog">
       <header class="brief-head">
@@ -158,6 +190,8 @@
         <label class="b-field"><span data-i18n="brief.pipeline">Pipeline</span><select id="b-pipeline"></select></label>
         <p id="b-desc" class="b-desc"></p>
         <label class="b-field"><span data-i18n="brief.session">Session</span><select id="b-session"></select></label>
+        <label class="b-field"><span data-i18n="brief.models">Models</span><select id="b-profile"></select></label>
+        <p id="b-profile-note" class="b-desc"></p>
         <label class="note"><span data-i18n="brief.prompt">Prompt</span><textarea id="b-text" rows="3" maxlength="4000" data-i18n-ph="brief.placeholder"></textarea></label>
         <div id="b-stages" class="b-stages"></div>
         <p id="b-problem" class="b-problem" role="status"></p>
@@ -181,12 +215,14 @@
         <button type="button" role="tab" data-tab="offices" aria-selected="false" data-i18n="settings.tabs.offices">Offices</button>
         <button type="button" role="tab" data-tab="agents" aria-selected="false" data-i18n="settings.tabs.agents">Agents</button>
         <button type="button" role="tab" data-tab="look" aria-selected="false" data-i18n="settings.tabs.look">Characters</button>
+        <button type="button" role="tab" data-tab="models" aria-selected="false" data-i18n="settings.tabs.models">Models</button>
       </nav>
       <div class="brief-body">
         <section data-panel="general" class="s-panel"></section>
         <section data-panel="offices" class="s-panel" hidden></section>
         <section data-panel="agents" class="s-panel" hidden></section>
         <section data-panel="look" class="s-panel" hidden></section>
+        <section data-panel="models" class="s-panel" hidden></section>
         <p id="s-msg" class="b-problem" role="status"></p>
       </div>
       <footer class="brief-foot">

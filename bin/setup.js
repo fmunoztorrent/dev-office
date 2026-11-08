@@ -21,7 +21,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const MARK = 'dev-team-office';
 // what the agent reads from the server before connecting (Pi puts it in its system prompt)
 const MCP_DESCRIPTION = 'Dev Team Office: register projects, report which role and phase of the team you are in, send tasks to other agents';
-const SKILLS = ['dev-team-office', 'dev-team-office-config'];
+const SKILLS = ['dev-team-office', 'dev-team-office-config', 'stay-focused'];
 const APP_FILES = ['bin', 'server', 'tui', 'public', 'integrations', 'skills', 'teams', 'docs', 'package.json', 'README.md', 'install.sh', '.claude-plugin'];
 
 // Everything is computed when called (not on import): the tests change $HOME.

@@ -133,6 +133,11 @@ Copies the hook to `~/.dev-team-office/codex/hook.mjs`, adds it to `~/.codex/hoo
 
 Any agent with MCP (Gemini CLI, Cursor…) can use the [MCP server](mcp.md) to register projects and report phases. And any process can integrate through the generic API (HTTP or WebSocket, see [`api.md`](api.md)): it reports its events and, if it wants subagents to land on the right character, emits an `agent_roles` event with its `name → role` map and declares `role:` in its agents' frontmatter.
 
+Two more things a harness can tell the office:
+
+- **How full its context is**, for the context bar: `{ kind: "context", context: { used, max } }` (tokens), after each answer, or `context` on any event. Pi reports it with `ctx.getContextUsage()`, OpenCode from each message's tokens and its model's `limit.context`, and Claude Code's hook from the transcript.
+- **Its model on start:** when a brief opens a new session with a model profile, the office adds the harness's own flag (`--model`, or `-m` in OpenCode and Codex). A pipeline run may bring `models` (role → model) for the stages that set none.
+
 ## How the role map reaches the office
 
 ### 1. Discovery from the harness's files

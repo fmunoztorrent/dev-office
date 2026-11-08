@@ -221,7 +221,7 @@ export function resolvePipeline(id, raw, team = {}, agents = {}) {
       agent,
       native: !!def?.native,
       agentPrompt: def?.prompt || '',
-      model: s.model === false ? null : s.model || roleCfg.model || def?.model || null, // false: the session's
+      model: s.model === false ? false : s.model || roleCfg.model || def?.model || null, // false: the session's; null: the profile's, or the session's
       thinking: s.thinking || roleCfg.thinking || null,
       prompt: typeof s.prompt === 'string' ? s.prompt : null,
       needs: [].concat(s.needs || []).map(String),
@@ -464,9 +464,20 @@ export function expandClaudeCommand(dir, name, args = '') {
   return null;
 }
 
+/** How each agent CLI is told which model to start with ("provider/model"; Claude takes it without the provider). */
+export function modelArgs(harness, model) {
+  const m = String(model || '').trim();
+  if (!m) return [];
+  const h = harnessId(harness);
+  if (h === 'claude-code') return ['--model', m.replace(/^anthropic\//, '')];
+  if (h === 'opencode') return ['-m', m];
+  if (h === 'codex') return ['-m', m.replace(/^openai\//, '')];
+  return ['--model', m]; // pi: provider/model
+}
+
 /**
  * Executable and arguments for a new agent session, without a shell (the task goes as a single
- * argument). opts: { bin, args } of the registered agent.
+ * argument). opts: { bin, args } of the registered agent; inv.model, the model profile's (if any).
  */
 export function agentCommand(harness, inv, { bin, args } = {}) {
   const h = harnessId(harness);
@@ -474,10 +485,11 @@ export function agentCommand(harness, inv, { bin, args } = {}) {
   const exe = which(expandHome(bin || (h === 'claude-code' ? process.env.DEV_TEAM_OFFICE_CLAUDE_BIN : '') || HARNESSES[h].bin));
   if (!exe) return { error: `no encuentro "${bin || HARNESSES[h].bin}" en el PATH`, code: 'missing', bin: bin || HARNESSES[h].bin };
   const extra = Array.isArray(args) ? args.map(String) : null;
-  if (h === 'claude-code') return { exe, argv: ['-p', inv.text, ...(extra ?? ['--permission-mode', 'acceptEdits'])] };
-  if (h === 'opencode') return { exe, argv: inv.command ? ['run', '--command', inv.command, ...(extra ?? []), inv.args] : ['run', ...(extra ?? []), inv.text] };
-  if (h === 'codex') return { exe, argv: ['exec', ...(extra ?? ['--sandbox', 'workspace-write']), inv.text] };
-  return { exe, argv: ['-p', ...(extra ?? []), inv.text] };
+  const model = modelArgs(h, inv.model);
+  if (h === 'claude-code') return { exe, argv: ['-p', inv.text, ...model, ...(extra ?? ['--permission-mode', 'acceptEdits'])] };
+  if (h === 'opencode') return { exe, argv: inv.command ? ['run', '--command', inv.command, ...model, ...(extra ?? []), inv.args] : ['run', ...model, ...(extra ?? []), inv.text] };
+  if (h === 'codex') return { exe, argv: ['exec', ...model, ...(extra ?? ['--sandbox', 'workspace-write']), inv.text] };
+  return { exe, argv: ['-p', ...model, ...(extra ?? []), inv.text] };
 }
 
 /**
@@ -531,7 +543,8 @@ function sequence(stages) {
  * the pipeline's state for its panel.
  */
 export class PipelineRun {
-  constructor({ id, project, pipeline, task, report = () => {}, onStatus = () => {}, exec = runGate }) {
+  /** models: the model profile's role → model, for the stages that do not set one (see public/models.js). */
+  constructor({ id, project, pipeline, task, report = () => {}, onStatus = () => {}, exec = runGate, models = null }) {
     this.id = id;
     this.project = { dir: project.dir, name: project.name };
     this.pipeline = pipeline;
@@ -543,7 +556,8 @@ export class PipelineRun {
     this.detail = '';
     this.current = null;
     this.lastRole = null;
-    this.stages = pipeline.stages.map((s) => ({ ...s, status: 'pending', attempts: 0, loops: 0, output: '', failure: '' }));
+    const fromProfile = (s) => (s.model == null && models ? models[s.role] || models.default || null : s.model || null);
+    this.stages = pipeline.stages.map((s) => ({ ...s, model: fromProfile(s), status: 'pending', attempts: 0, loops: 0, output: '', failure: '' }));
     this.order = sequence(this.stages);
   }
 

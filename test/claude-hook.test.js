@@ -142,3 +142,22 @@ test('a una sesión de Claude ya abierta, el /task de Errementari le llega expan
     await server.close();
   }
 });
+
+test('el hook manda cuánto contexto lleva la sesión (del transcript) y sigue sin escribir nada', async () => {
+  const ctx = setup();
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
+  try {
+    const usage = { input_tokens: 2, cache_creation_input_tokens: 4000, cache_read_input_tokens: 80_000, output_tokens: 998 };
+    fs.writeFileSync(ctx.transcript, `${JSON.stringify({ type: 'user', message: { content: 'hola' } })}\n${JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-5-5', usage, content: [{ type: 'text', text: 'listo' }] } })}\n`);
+    const r = await hook(ctx, server.url, { hook_event_name: 'PostToolUse', tool_name: 'Read', tool_input: { file_path: 'a.js' }, tool_response: {} });
+    assert.deepEqual(r, { code: 0, out: '' });
+    const c = server.office.sessionSummary('c1').context;
+    assert.deepEqual([c.used, c.max], [85_000, 200_000]);
+    // past 200k it is a 1M window
+    fs.appendFileSync(ctx.transcript, `${JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-5-5', usage: { ...usage, cache_read_input_tokens: 400_000 }, content: [] } })}\n`);
+    await hook(ctx, server.url, { hook_event_name: 'Stop' });
+    assert.equal(server.office.sessionSummary('c1').context.max, 1_000_000);
+  } finally {
+    await server.close();
+  }
+});

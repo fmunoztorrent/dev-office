@@ -54,3 +54,27 @@ test('flush sólo reescribe lo que cambió', () => {
   drawFrame(scr, L, sim, m, now);
   assert.ok(scr.flush().length < first / 20);
 });
+
+test('en la terminal también llegan los nuevos: un puesto temporal con su nombre, y el otro libre', () => {
+  let now = 0;
+  const sim = createSim({ clock: () => now });
+  sim.handle({ kind: 'subagent_start', role: 'backend', subId: 's1', text: 'pagos' });
+  for (let i = 0; i < 400; i++) { now += 50; sim.step(0.05, now); }
+  const [nuevo] = sim.ghosts;
+  const scr = new Screen();
+  scr.resize(200, 60);
+  drawFrame(scr, computeLayout(200, 60), sim, model(), now);
+  const text = rowsText(scr).join('\n');
+  assert.ok(nuevo.seated && text.includes(nuevo.cfg.name), 'su placa');
+  assert.ok(text.includes('Puesto libre'), 'el otro puesto');
+});
+
+test('en la terminal la pizarra con tareas se expande: los post-its en tres columnas', () => {
+  const sim = createSim();
+  sim.setBoard({ title: 'Envío gratis', todos: [{ content: 'Escribir los tests', status: 'completed' }, { content: 'Implementar shipping()', status: 'in_progress' }, { content: 'Mostrarlo en el carrito', status: 'pending' }] });
+  const scr = new Screen();
+  scr.resize(160, 46);
+  drawFrame(scr, computeLayout(160, 46), sim, { ...model(), boardView: true }, performance.now());
+  const text = rowsText(scr).join('\n');
+  for (const s of ['TAREA: Envío gratis', '1 de 3 hechas', 'POR HACER', 'EN CURSO', 'HECHO', 'Implementar shipping()', 'Mostrarlo en el carrito']) assert.ok(text.includes(s), s);
+});

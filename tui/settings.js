@@ -186,6 +186,10 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
       const starts = ['auto', 'none', ...s.targets.filter((x) => x.registered).map((x) => x.id)];
       const startLabel = (id) => (id === 'auto' || id === 'none' ? t(`settings.general.${id}`) : s.targets.find((x) => x.id === id)?.name || id);
       f.push({ type: 'select', label: t('settings.general.startAgent'), value: () => startLabel(p.herdr.startAgent), cycle: (d) => setPref({ herdr: { startAgent: cycle(starts, p.herdr.startAgent, d) } }) });
+      // the default model profile (⚙ › Models in the web edits them): none = each agent's own model
+      const profiles = ['none', ...Object.keys(p.models?.profiles || {})];
+      const profileLabel = (id) => (id === 'none' ? t('brief.ownModel') : p.models.profiles[id]?.label || id);
+      f.push({ type: 'select', label: t('settings.models.active'), value: () => profileLabel(p.models?.active || 'none'), cycle: (d) => setPref({ models: { active: cycle(profiles, p.models?.active || 'none', d) } }) });
       f.push({ type: 'info', text: `  ${t('settings.file', { file: tilde(s.data.office.file) })}` });
     } else if (s.tab === 'offices') {
       f.push({ type: 'info', text: `  ${t('settings.offices.hint')}` });

@@ -16,6 +16,7 @@ import { clip } from './roles.js';
 import { detectHarness, invocation, HARNESSES, which } from '../integrations/common/devteam.mjs';
 import { t as tr } from '../public/i18n.js';
 import { MAIN_OFFICE } from './store.js';
+import { profilesFor, profileModel } from '../public/models.js';
 import { insideDir as inside } from './paths.js';
 
 const DETECT_TTL = 4000;
@@ -26,9 +27,10 @@ export class AgentRegistry extends EventEmitter {
    * @param getAgents () => the registered agents ([{ id, name, path, harness, office, bin?, args? }])
    * @param office    the offices (server/company.js)
    */
-  constructor({ getAgents, hub, pipelines, office }) {
+  constructor({ getAgents, hub, pipelines, office, prefs = () => ({}) }) {
     super();
     this.getAgents = getAgents;
+    this.prefs = prefs;
     this.office = office;
     this.hub = hub;
     this.pipelines = pipelines;
@@ -100,7 +102,18 @@ export class AgentRegistry extends EventEmitter {
    * Sends a prompt to an agent through an entry of its harness.
    * msg: { target, entry, text, session?: id | null (null = new session), from }
    */
-  run({ target, entry = 'prompt', text, session, from } = {}) {
+  /**
+   * The model profile for a brief: the one chosen (`profile`), otherwise the active one; 'none', or a
+   * profile not made for that agent: the agent's own model (null).
+   */
+  profileFor(profile, harness) {
+    const models = this.prefs()?.models;
+    const id = profile === undefined || profile === null || profile === '' ? models?.active : profile;
+    if (!id || id === 'none') return null;
+    return profilesFor(models, harness).find(([pid]) => pid === id)?.[1] || null;
+  }
+
+  run({ target, entry = 'prompt', text, session, from, profile } = {}) {
     text = String(text ?? '').trim();
     if (!text) return { ok: false, error: tr('err.promptEmpty') };
     const t = this.targets().find((x) => x.id === target);
@@ -114,7 +127,8 @@ export class AgentRegistry extends EventEmitter {
     // .devteam/ pipeline: an open session runs it, inside itself
     if (e.devteam) {
       if (!s) return { ok: false, error: tr('err.needsSession', { label: e.label, agent: AGENT_NAME[t.harness] || t.harness, path: t.path }) };
-      return this.pipelines.start({ session: s.session, agent: s.agent, pipeline: e.devteam, task: text, from, meta: { agentId: t.registered ? t.id : null, entry: e.id } });
+      const prof = this.profileFor(profile, s.agent);
+      return this.pipelines.start({ session: s.session, agent: s.agent, pipeline: e.devteam, task: text, from, models: prof?.roles || null, meta: { agentId: t.registered ? t.id : null, entry: e.id } });
     }
     const inv = invocation(e, text);
     const title = clip(`${e.id === 'prompt' ? '' : `${e.label}: `}${text}`, 300);
@@ -123,7 +137,9 @@ export class AgentRegistry extends EventEmitter {
     if (!t.registered) return { ok: false, error: tr('err.sessionGone') };
     if (!t.exists) return { ok: false, error: tr('err.noPath', { path: t.path }) };
     const a = this.#agents().find((x) => x.id === t.id);
-    return this.hub.submit({ text: inv.text, title, agent: t.harness, mode: 'launch', cwd: t.path, command: inv.command, args: inv.args, launch: { bin: a?.bin, args: a?.args }, from, meta, office: t.office });
+    // a new session starts with the profile's model (an open one keeps its own)
+    const model = profileModel(this.profileFor(profile, t.harness), 'default');
+    return this.hub.submit({ text: inv.text, title, agent: t.harness, mode: 'launch', cwd: t.path, command: inv.command, args: inv.args, launch: { bin: a?.bin, args: a?.args }, model, from, meta, office: t.office });
   }
 
   /** Forgets what was detected in a folder (what it brings changed: its team, its commands). */

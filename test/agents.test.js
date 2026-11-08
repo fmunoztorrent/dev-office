@@ -140,6 +140,37 @@ test('las sesiones abiertas fuera de las rutas registradas también reciben prom
   assert.equal(t.registered, false);
   const r = await call(base, 'POST', '/v1/run', { target: t.id, entry: 'prompt', text: 'Hola' });
   assert.equal(r.status, 200, r.body.error);
-  assert.equal((await until(() => got[0])).text, 'Hola');
+  assert.match((await until(() => got[0])).text, /^📁 Trabaja sólo dentro de .*\n\nHola$/, 'con su alcance delante');
   ws.close();
+}));
+
+test('perfiles de modelos: por defecto cada agente usa su modelo; con un perfil, la sesión nueva arranca con el suyo', async () => {
+  const { openStore } = await import('../server/store.js');
+  const store = openStore(':memory:');
+  assert.equal(store.getPrefs().models.active, null, 'por defecto, el modelo de cada agente');
+  assert.deepEqual(Object.keys(store.getPrefs().models.profiles), ['anthropic', 'opencode']);
+  assert.equal(store.setPrefs({ models: { active: 'opencode' } }).prefs.models.active, 'opencode');
+  assert.equal(store.setPrefs({ models: { active: 'nada' } }).ok, false);
+  // one more profile, kept with the others
+  const mine = { label: 'Mío', harnesses: ['pi'], roles: { default: 'openai/gpt-x', qa: 'openai/gpt-x-mini' } };
+  const r = store.setPrefs({ models: { active: 'mio', profiles: { ...store.getPrefs().models.profiles, mio: mine } } });
+  assert.deepEqual([r.ok, r.prefs.models.active, r.prefs.models.profiles.mio.roles.qa], [true, 'mio', 'openai/gpt-x-mini']);
+  assert.equal(store.setPrefs({ models: { profiles: { roto: { roles: {} } } } }).ok, false, 'sin modelo por defecto no vale');
+});
+
+test('un encargo con perfil: Claude abre con el modelo del perfil, en su carpeta y con su alcance delante', () => withServer(async (server, base) => {
+  const dir = errementariProject();
+  const log = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dto-log-')), 'claude.log');
+  process.env.FAKE_CLAUDE_LOG = log;
+  try {
+    const { body } = await call(base, 'POST', '/v1/agents', { path: dir, harness: 'claude-code', bin: FAKE_CLAUDE });
+    const r = await call(base, 'POST', `/v1/agents/${body.agent.id}/prompt`, { entry: 'prompt', text: 'arregla el SSE', profile: 'anthropic' });
+    assert.equal(r.status, 200, r.body.error);
+    await until(() => server.hub.snapshot().tasks.find((x) => x.status === 'done'));
+    const run = JSON.parse(fs.readFileSync(log, 'utf8'));
+    assert.match(run.args[1], /^📁 Trabaja sólo dentro de .*\n\narregla el SSE$/);
+    assert.deepEqual(run.args.slice(2, 4), ['--model', 'claude-sonnet-5-5']);
+    // a profile not made for the agent (OpenCode's for Claude): the agent's own model
+    assert.equal(server.registry.profileFor('opencode', 'claude-code'), null);
+  } finally { delete process.env.FAKE_CLAUDE_LOG; }
 }));

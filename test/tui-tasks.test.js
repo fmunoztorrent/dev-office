@@ -34,7 +34,7 @@ test('desde la TUI: t + texto + Enter manda el prompt a la sesión de Pi conecta
     term.type('\r');
     await sleep(150);
     assert.equal(received.length, 1);
-    assert.equal(received[0].text, 'Agrega paginación al listado');
+    assert.match(received[0].text, /^📁 Trabaja sólo dentro de \/Users\/yo\/tienda: .*\n\nAgrega paginación al listado$/);
     assert.equal(received[0].session, 'pi-9');
   } finally {
     term.type('\x1b'); // closes the dialog if it was left open

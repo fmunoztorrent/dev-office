@@ -20,7 +20,7 @@ const URL_BASE = process.env.DEV_TEAM_OFFICE_URL || 'http://127.0.0.1:4317';
 const WS_URL = URL_BASE.replace(/^http/, 'ws') + '/v1/ws';
 const STAGE_MARK = '[Dev Team Office · etapa'; // stage prompts start like this (they are not new tasks)
 // the OpenCode events that tell the office something
-const TRACKED = new Set(['session.created', 'session.idle', 'session.error', 'session.compacted', 'permission.updated', 'permission.asked', 'todo.updated']);
+const TRACKED = new Set(['session.created', 'session.idle', 'session.error', 'session.compacted', 'permission.updated', 'permission.asked', 'todo.updated', 'message.updated']);
 
 async function loadLib() {
   let here = null;
@@ -126,6 +126,27 @@ export const DevTeamOffice = async ({ client, directory }) => {
       .catch((err) => toTui(msg.text).catch(() => ack(msg.id, 'failed', errText(err))));
   }
 
+  // How full a session's context is: an assistant message's tokens (what it read, cached or not, and
+  // what it wrote) against its model's window (the provider says it: limit.context).
+  const windows = new Map(); // "provider/model" → context window
+  const lastContext = new Map(); // session → what was sent (only when it moves)
+  async function windowOf(providerID, modelID) {
+    const key = `${providerID}/${modelID}`;
+    if (!windows.has(key)) {
+      const cfg = unwrap(await client.config.providers().catch(() => null)) || {};
+      const model = (cfg.providers || []).find((x) => x.id === providerID)?.models?.[modelID];
+      windows.set(key, Number(model?.limit?.context) || 0);
+    }
+    return windows.get(key);
+  }
+  async function contextOf(info) {
+    const tk = info?.tokens;
+    if (info?.role !== 'assistant' || !tk) return null;
+    const used = (tk.input || 0) + (tk.cache?.read || 0) + (tk.cache?.write || 0) + (tk.output || 0) + (tk.reasoning || 0);
+    const max = used ? await windowOf(info.providerID, info.modelID) : 0;
+    return used && max ? { used, max } : null;
+  }
+
   // ---- pipelines inside the session ----
 
   /** "provider/model" → { providerID, modelID }. Without a provider, it looks it up among the configured ones. */
@@ -147,7 +168,7 @@ export const DevTeamOffice = async ({ client, directory }) => {
 
     runSession = msg.session && msg.session === lastSession ? msg.session : lastSession || await newSession(`Pipeline ${pipeline.name}`);
     const report = (e) => send({ session: runSession, cwd, ...e });
-    const me = run = new lib.PipelineRun({ id: msg.id, project, pipeline, task: msg.task, report, onStatus: update });
+    const me = run = new lib.PipelineRun({ id: msg.id, project, pipeline, task: msg.task, report, onStatus: update, models: msg.models || null });
     toast(`Pipeline «${pipeline.name}» desde Dev Team Office`);
     let step = run.start();
     while (step.action === 'prompt' && run === me) {
@@ -230,6 +251,14 @@ export const DevTeamOffice = async ({ client, directory }) => {
         case 'permission.updated':
         case 'permission.asked': return send({ ...at, cwd, kind: 'waiting', text: p.title || 'OpenCode pide permiso' });
         case 'todo.updated': return run && session === runSession ? undefined : send({ ...at, cwd, kind: 'todos', todos: p.todos });
+        case 'message.updated': {
+          if (at.child) return; // a subagent's context is its own
+          const context = await contextOf(p.info);
+          const key = context && `${Math.round(context.used / 1000)}/${context.max}`;
+          if (!context || lastContext.get(session) === key) return;
+          lastContext.set(session, key);
+          return send({ ...at, cwd, kind: 'context', context });
+        }
       }
     },
     // User message → new task for the team (stage prompts are not). In a child session it is the

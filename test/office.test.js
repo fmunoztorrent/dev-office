@@ -299,7 +299,8 @@ test('lo de cada subagente lleva su id, la salida de sus comandos y su informe',
   assert.equal(pi({ child: '31', kind: 'thinking' })[0].subId, 'c1');
   // what it read is not sent (only the output of commands, or of what failed)
   assert.equal(pi({ child: '31', kind: 'tool_end', tool: 'read', input: { path: 'src/cart.js' }, output: 'export function subtotal() {}' })[0].output, undefined);
-  assert.equal(pi({ child: '31', kind: 'tool_start', tool: 'bash', input: { command: 'cd /tienda && npm test' } })[0].text, '$ npm test', 'sin el cd del principio');
+  const [run] = pi({ child: '31', kind: 'tool_start', tool: 'bash', input: { command: 'cd /tienda && npm test' } });
+  assert.deepEqual([run.text, run.command], ['Corriendo los tests', 'cd /tienda && npm test'], 'en palabras; el comando, aparte');
   // the main agent's tool output is not sent (it is already visible in its pane)
   assert.equal(pi({ kind: 'tool_end', tool: 'bash', input: { command: 'ls' }, output: 'a\nb' })[0].output, undefined);
   const [done] = pi({ kind: 'tool_end', tool: 'subagent_run', toolUseId: 'c1', input: { agent: 'qa' }, output: 'Escribí 2 tests en test/shipping.test.js; fallan como se espera.' });
@@ -361,4 +362,21 @@ test('los eventos que sí marcan trabajo conservan su estado', () => {
   assert.equal(status({ kind: 'waiting', text: 'aprueba el Bash' }).manager.status, 'waiting');
   assert.equal(status({ kind: 'done' }).manager.status, 'done');
   assert.equal(status({ kind: 'phase', role: 'qa', phase: 'red' }, { kind: 'turn_end' }).qa.status, 'idle');
+});
+
+test('el contexto de cada sesión: cuánto lleva usado su agente, sin pasar por la bitácora', () => {
+  const o = new Office();
+  const pi = (e) => o.ingest('pi', { session: 'ctx-1', cwd: '/p', ...e });
+  pi({ kind: 'task', text: 'algo' });
+  const before = o.log.length;
+  const [ev] = pi({ kind: 'context', context: { used: 50_000, max: 200_000 } });
+  assert.equal(ev.kind, 'context');
+  assert.deepEqual([o.sessionSummary('ctx-1').context.used, o.sessionSummary('ctx-1').context.max], [50_000, 200_000]);
+  assert.equal(o.log.length, before, 'no ensucia la bitácora');
+  // Claude Code: the hook reads it from the transcript and sends it with the event
+  o.ingest('claude-code', cc({ session_id: 'cl-1', hook_event_name: 'PostToolUse', tool_name: 'Read', tool_input: { file_path: 'a.js' }, tool_response: {}, devteam_context: { used: 120_000, max: 200_000 } }));
+  assert.equal(o.sessionSummary('cl-1').context.used, 120_000);
+  // a subagent's context is its own: it does not move the session's bar
+  pi({ child: '7', kind: 'context', context: { used: 1, max: 10 } });
+  assert.equal(o.sessionSummary('ctx-1').context.used, 50_000);
 });

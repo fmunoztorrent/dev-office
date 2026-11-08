@@ -1,6 +1,7 @@
 // Decides which team member stands for each of the agent's actions.
 
 import { t } from '../public/i18n.js';
+import { humanizeCommand, humanizeTool } from './humanize.js';
 import { TEXT_RULES } from '../integrations/common/devteam.mjs';
 
 export const ROLE_IDS = ['po', 'analyst', 'manager', 'tl', 'qa', 'backend', 'frontend', 'designer'];
@@ -109,7 +110,7 @@ export function roleForTool(tool = '', input = {}) {
   switch (t) {
     case 'todowrite': case 'todoread': case 'taskcreate': case 'taskupdate': case 'tasklist': return 'manager';
     case 'websearch': case 'webfetch': return 'analyst';
-    case 'askuserquestion': case 'question': return 'manager'; // the agent brings the question to you (the PO)
+    case 'askuserquestion': case 'question': case 'ask_user_choice': case 'ask_user_question': case 'ask_user': return 'manager'; // the agent brings the question to you (the PO)
     case 'enterplanmode': case 'exitplanmode': case 'lsp': return 'tl';
     case 'bash': case 'shell': case 'exec': return roleForCommand(input.command || input.cmd || '');
     case 'skill': return roleForText(`${input.skill || ''} ${input.args || ''}`);
@@ -139,14 +140,15 @@ export function describe(tool = '', input = {}) {
     case 'read': return t('events.read', { file: base(f) });
     case 'write': return t('events.write', { file: base(f) });
     case 'edit': case 'multiedit': case 'patch': case 'notebookedit': return t('events.edit', { file: base(f) });
-    case 'bash': case 'shell': case 'exec': return clip(`$ ${String(input.command || input.cmd || '').replace(/^\s*cd\s+("[^"]*"|'[^']*'|\S+)\s*&&\s*/, '')}`, 70);
+    // what the command does, in words: never the command line itself (that one travels as ev.command)
+    case 'bash': case 'shell': case 'exec': case 'exec_command': case 'local_shell': case 'unified_exec': return clip(humanizeCommand(input.command || input.cmd || ''), 70);
     case 'grep': return clip(t('events.grep', { pattern: input.pattern || '' }));
     case 'glob': case 'list': case 'ls': return clip(t('events.glob', { pattern: input.pattern || input.path || t('events.files') }));
     case 'websearch': return clip(t('events.websearch', { query: input.query || '' }));
     case 'webfetch': {
       try { return t('events.webfetch', { host: new URL(input.url).host }); } catch { return t('events.web'); }
     }
-    case 'askuserquestion': case 'question': {
+    case 'askuserquestion': case 'question': case 'ask_user_choice': case 'ask_user_question': case 'ask_user': {
       const q = input.questions?.[0]?.question || input.question;
       return q ? clip(t('events.askWhat', { question: q })) : t('events.ask');
     }
@@ -154,8 +156,8 @@ export function describe(tool = '', input = {}) {
     case 'enterplanmode': return t('events.planning');
     case 'skill': return clip(t('events.skill', { skill: input.skill || '' }));
     default:
-      if (tl.startsWith('mcp__')) return clip(t('events.mcp', { tool: tool.split('__').slice(1).join(' › ') }));
-      return clip(f ? `${tool} ${base(f)}` : tool || t('events.working'));
+      if (tl.startsWith('mcp__')) return clip(humanizeTool(tool));
+      return clip(f ? t('act.read', { file: base(f) }) : tool ? humanizeTool(tool) : t('events.working'));
   }
 }
 

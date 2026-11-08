@@ -1,7 +1,7 @@
 // Draws the simulation (public/sim.js) on the terminal framebuffer.
 // The 960×600 world is scaled to the available pixels; the text goes in cells on top.
 
-import { W, H, TEAM, SPOT, BOARD, PLANTS, STATUS_ICON, PHASE_COLOR, phaseInfo, DREAMS, DREAM_PALETTE, RAINBOW_COLORS, rainbowPixels, CAFE, DINING, DINING_SEATS, PARTITION, BATH, RACK, EXTINGUISHER, daylight, GLASS, EASEL, CLOCK, TV, SOFA, ALARM, SIGN, tvChannel } from '../public/sim.js';
+import { W, H, TEAM, SPOT, BOARD, PLANTS, STATUS_ICON, PHASE_COLOR, phaseInfo, DREAMS, DREAM_PALETTE, RAINBOW_COLORS, rainbowPixels, CAFE, DINING, DINING_SEATS, PARTITION, BATH, RACK, EXTINGUISHER, daylight, GLASS, EASEL, CLOCK, TV, SOFA, ALARM, SIGN, tvChannel, HOT_DESKS } from '../public/sim.js';
 import { outdoor, lightning, weatherIcon } from '../public/sky.js';
 import { hex, mix, fit, wrap, strWidth } from './screen.js';
 import { AGENT_NAME, TASK_STATUS } from '../public/targets.js';
@@ -64,6 +64,8 @@ export function drawFrame(scr, L, sim, model, now) {
     items.push({ y: s.y + 1, fn: () => drawDesk(g, a, now) });
     items.push({ y: a.seated ? s.y : a.y, fn: () => drawPerson(g, a, sim, model, now) });
   }
+  HOT_DESKS.forEach((s, i) => items.push({ y: s.y + 1, fn: () => drawHotDesk(g, sim, i, now) }));
+  for (const a of sim.ghosts) if (a.fade > 0.2) items.push({ y: a.seated ? a.cfg.seat.y : a.y, fn: () => drawPerson(g, ghostly(a), sim, model, now) });
   items.push({ y: CAFE.bistro.y, fn: () => drawBistro(g) });
   items.push({ y: DINING.top + 13, fn: () => drawDiningWall(g) });
   items.push({ y: DINING.table.y - 1, fn: () => drawDiningBackChairs(g) });
@@ -79,7 +81,7 @@ export function drawFrame(scr, L, sim, model, now) {
   if (model.selected) drawPlumbob(g, sim.agents[model.selected], now);
   // Bubbles: the newest are placed first; if they collide with another, they move up.
   const placed = [];
-  const withBubble = Object.values(sim.agents).filter((a) => a.bubble).sort((a, b) => b.bubble.until - a.bubble.until);
+  const withBubble = [...Object.values(sim.agents), ...sim.ghosts.filter((a) => a.fade > 0.5)].filter((a) => a.bubble).sort((a, b) => b.bubble.until - a.bubble.until);
   for (const a of withBubble) drawBubble(g, a, placed);
   drawBanner(g, sim, now);
   drawSceneIcons(scr, L, model);
@@ -88,6 +90,7 @@ export function drawFrame(scr, L, sim, model, now) {
   if (L.panelW) drawPanel(scr, L, sim, model);
   if (model.brief) drawBrief(scr, L, model);
   if (model.svc) drawServices(scr, L, model);
+  if (model.boardView) drawBoardView(scr, L, sim);
   if (model.settings) model.settings.draw(scr, L);
 }
 
@@ -392,6 +395,30 @@ function drawDesk(g, a, now) {
   for (let i = 0; i < Math.min(3, a.badges.size); i++) rect(s.x - 46 + i * 6, s.y - 30 - i * 4, 18, 12, C.folder);
   // name plate
   g.centered(s.x, g.row(s.y + 10), a.id === 'po' ? ` ${a.cfg.name} · ${t('team.you')} ` : ` ${a.cfg.name} `, hex(c.shirt), C.frame); // the PO is you
+}
+
+// The newcomers (one per running subagent): the terminal has no transparency, so their colors are
+// washed towards a pale blue, like a ghost.
+const PALE = hex('#dce9f5');
+const washed = (c) => `#${mix(hex(c), PALE, 0.55).toString(16).padStart(6, '0')}`;
+function ghostly(a) {
+  const p = Object.create(a);
+  p.cfg = { ...a.cfg, shirt: washed(a.cfg.shirt), pants: washed(a.cfg.pants), hair: washed(a.cfg.hair), skin: washed(a.cfg.skin) };
+  return p;
+}
+
+function drawHotDesk(g, sim, i, now) {
+  const { rect, X, Y, scr } = g;
+  const s = HOT_DESKS[i];
+  const a = sim.ghosts.find((x) => x.desk === i);
+  rect(s.x - 14, s.y - 36, 28, 30, C.chair);
+  rect(s.x - 36, s.y - 14, 72, 14, C.wood);
+  rect(s.x - 36, s.y - 2, 72, 22, C.woodFront);
+  rect(s.x - 36, s.y - 2, 72, 2, C.woodEdge);
+  const mx = X(s.x + 4), my = Y(s.y - 32), mw = Math.max(2, X(s.x + 28) - mx), mh = Math.max(1, Y(s.y - 18) - my);
+  screenPixels(g, mx, my, mw, mh, !!a && ['working', 'thinking', 'red'].includes(a.state), hex(a?.cfg.shirt || '#8d99ae'), now);
+  if (a?.badges.size) rect(s.x - 30, s.y - 24, 16, 11, C.folder);
+  g.centered(s.x, g.row(s.y + 9), a ? ` ${a.cfg.name} ` : ` ${t('sim.newcomer.hotDesk')} `, a ? hex(washed(a.cfg.shirt)) : hex('#8d99ae'), C.frame);
 }
 
 function drawProps(g, sim, now, model = {}) {
@@ -902,6 +929,41 @@ export function rackAtCell(L, col, row) {
 const PH = Object.fromEntries(Object.entries({ bg: '#06100b', head: '#0b1d14', phos: '#7dffb0', dim: '#3f9e6c', amber: '#ffcf6e', sel: '#1e4a33' }).map(([k, v]) => [k, hex(v)]));
 
 /** The services left running in the background and, below, what the chosen one prints (a phosphor terminal). */
+// The whiteboard, expanded: the tasks as post-its in three columns (to do, doing, done).
+const POSTIT = { pending: { bg: hex('#fef08a'), fg: hex('#3f3a0b') }, in_progress: { bg: hex('#fdba74'), fg: hex('#431407') }, completed: { bg: hex('#bbf7d0'), fg: hex('#14532d') } };
+function drawBoardView(scr, L, sim) {
+  const board = sim.board;
+  const w = Math.min(L.cols - 2, 110), x0 = Math.floor((L.cols - w) / 2);
+  const h = Math.max(10, L.rows - 4), y0 = Math.max(1, Math.floor((L.rows - h) / 2));
+  const paper = hex('#f8fafc'), ink = hex('#1e3a8a'), frame = hex('#9ca3af');
+  for (let r = y0 + 1; r <= y0 + h; r++) scr.fill(x0 + 1, r, w, CB.shadow);
+  for (let r = y0; r < y0 + h; r++) scr.fill(x0, r, w, paper);
+  scr.fill(x0, y0, w, frame);
+  scr.fill(x0, y0 + h - 1, w, frame);
+  const done = board.todos.filter((x) => x.status === 'completed').length;
+  scr.text(x0 + 1, y0, fit(board.title ? t('scene.taskTitle', { title: board.title }) : t('board.untitled'), w - 20), ink, frame);
+  const progress = t('board.progress', { done, total: board.todos.length });
+  scr.text(x0 + w - 1 - strWidth(progress), y0, progress, hex('#111827'), frame);
+  scr.text(x0 + 1, y0 + h - 1, fit(`t: ${t('board.newBrief').replace(/^✚\s*/, '')} · esc`, w - 2), hex('#111827'), frame);
+  const cols = [['pending', 'scene.todo'], ['in_progress', 'scene.doing'], ['completed', 'scene.done']];
+  const cw = Math.floor((w - 4) / 3);
+  cols.forEach(([status, label], ci) => {
+    const cx = x0 + 2 + ci * cw;
+    const items = board.todos.filter((x) => (cols.some(([s]) => s === x.status) ? x.status : 'pending') === status);
+    scr.text(cx, y0 + 2, fit(`${t(label)} ${items.length || ''}`, cw - 2), hex('#334155'), paper);
+    let r = y0 + 4;
+    for (const x of items) {
+      const lines = wrap(status === 'in_progress' && x.activeForm ? x.activeForm : x.content, cw - 6, 3);
+      if (r + lines.length + 1 > y0 + h - 2) break;
+      const { bg, fg } = POSTIT[status];
+      for (let k = 0; k < lines.length + 1; k++) scr.fill(cx, r + k, cw - 3, bg);
+      lines.forEach((line, k) => scr.text(cx + 1, r + k, line, fg, bg));
+      if (status === 'completed') scr.text(cx + cw - 5, r + lines.length, '✓', fg, bg);
+      r += lines.length + 2;
+    }
+  });
+}
+
 function drawServices(scr, L, model) {
   const v = model.svc, list = model.services || [];
   const w = Math.min(L.cols - 2, 100), x0 = Math.floor((L.cols - w) / 2);
@@ -953,7 +1015,7 @@ const CB = Object.fromEntries(Object.entries({
 /** The whiteboard dialog: a cork board with a pinned sheet, as in the web view. */
 function drawBrief(scr, L, model) {
   const b = model.brief;
-  const opts = briefOptions({ targets: model.targets || [] }, b.sel);
+  const opts = briefOptions({ targets: model.targets || [], models: model.prefs?.models }, b.sel);
   const w = Math.min(L.cols - 2, 88);
   const iw = w - 8; // usable width inside the sheet
   const labelW = 10;
@@ -980,6 +1042,7 @@ function drawBrief(scr, L, model) {
     : t('brief.registerHint');
   for (const line of wrap(desc, iw - labelW - 3, 2)) rows.push((row, col) => scr.text(col + labelW + 3, row, line, CB.soft, CB.paper));
   rows.push(field('session', t('brief.session'), opts.session?.label));
+  if (opts.profiles.length > 1) rows.push(field('profile', t('brief.models'), `${opts.profile?.label || ''}${opts.profileNote ? ` · ${opts.profileNote}` : ''}`));
   // the task, on a yellow note
   const focusTask = b.field === 'task';
   const noteW = iw - labelW;

@@ -3,7 +3,7 @@
 import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createSim, assignees, PRODUCT, TECH, TEAM, UNICORN, SKULL, PIZZA, rainbowPixels, DINING, DINING_SEATS, RACK, SOFA, TV } from '../public/sim.js';
+import { createSim, assignees, PRODUCT, TECH, TEAM, UNICORN, SKULL, PIZZA, rainbowPixels, DINING, DINING_SEATS, RACK, SOFA, TV, HOT_DESKS } from '../public/sim.js';
 import { Screen } from '../tui/screen.js';
 import { computeLayout, drawFrame } from '../tui/view.js';
 
@@ -279,9 +279,11 @@ test('lo que hace el harness se ve en la oficina: el subagente de backend teclea
   sim.handle({ kind: 'subagent_start', role: 'backend', subId: 's1', text: 'Implementar el endpoint de pagos' });
   run(20);
   const diego = sim.agents.backend;
-  assert.ok(diego.seated && diego.badges.has('s1'), 'Diego está en su escritorio con la carpeta del subagente');
-  sim.handle({ kind: 'tool_start', role: 'backend', tool: 'Edit', text: 'Editando pagos.js', ok: true });
-  assert.equal(diego.state, 'working', 'y teclea');
+  const [nuevo] = sim.ghosts;
+  assert.ok(nuevo?.seated && nuevo.badges.has('s1'), 'llegó alguien nuevo de backend, sentado en un puesto temporal con la carpeta del subagente');
+  assert.deepEqual([nuevo.role, nuevo.cfg.seat], ['backend', HOT_DESKS[0]]);
+  sim.handle({ kind: 'tool_start', role: 'backend', subId: 's1', tool: 'Edit', text: 'Editando pagos.js', ok: true });
+  assert.equal(nuevo.state, 'working', 'y teclea él');
   // a streak of backend errors overheats the rack until it catches fire
   let fired = false;
   for (let i = 0; i < 8 && !fired; i++) {
@@ -469,4 +471,53 @@ test('sin clima real, el clima simulado (y el sol) es el de la ciudad de la ofic
   assert.ok(sim.weather.sunset > santiago + 0.5, 'en el sur, en verano, el sol se pone más tarde');
   sim.setPlace(null);
   assert.equal(sim.weather.place, 'Santiago');
+});
+
+test('las charlas hablan de lo que pasa: quién hace qué, cómo va el tablero y quién se trabó', () => {
+  const { sim, said, run } = office(9);
+  sim.setBoard({ title: 'Envío gratis', todos: [{ content: 'tests', status: 'completed' }, { content: 'shipping()', status: 'in_progress' }] });
+  for (let i = 0; i < 12; i++) {
+    sim.handle({ kind: 'tool_start', role: 'backend', tool: 'Bash', text: 'Corriendo los tests' });
+    if (i === 6) sim.handle({ kind: 'tool_end', role: 'frontend', tool: 'Edit', ok: false, text: 'Falló' });
+    for (const id of ['analyst', 'designer', 'po']) sim.agents[id].mind.social = 2;
+    run(20);
+  }
+  const chat = said.filter((s) => ['analyst', 'designer', 'po'].includes(s.who)).map((s) => s.text);
+  assert.ok(chat.some((x) => /Diego anda corriendo los tests|Vamos 1 de 2 en el tablero/.test(x)), chat.join(' | '));
+  assert.ok(!chat.some((x) => /\$ /.test(x)), 'nunca un comando');
+});
+
+test('cada subagente es alguien nuevo que llega, trabaja en un puesto temporal y se va al terminar', () => {
+  const { sim, said, run } = office(4);
+  run(2);
+  for (const [subId, role] of [['a', 'backend'], ['b', 'qa'], ['c', 'frontend']]) sim.handle({ kind: 'subagent_start', role, subId, text: `parte ${subId}` });
+  const [a, b, c] = sim.ghosts;
+  assert.ok(a.x < 0 && !a.seated && a.fade === 0, 'entra por la escalera, todavía invisible');
+  run(20);
+  assert.deepEqual([a.cfg.seat, b.cfg.seat], HOT_DESKS, 'los dos puestos temporales');
+  assert.ok(c.desk < 0 && c.seated, 'el tercero se sienta en la mesa de reuniones');
+  assert.ok(a.fade === 1 && a.seated && a.cfg.shirt === TEAM.backend.shirt && a.cfg.name !== TEAM.backend.name, 'otra persona, con la camisa de su rol');
+  assert.ok(said.some((x) => x.who === 'manager' && x.text.startsWith(`${a.cfg.name}, `)), 'Marco le lleva la tarjeta');
+  sim.handle({ kind: 'tool_start', role: 'backend', subId: 'a', tool: 'Bash', text: 'Corriendo los tests' });
+  assert.equal(a.state, 'working');
+  assert.notEqual(sim.agents.backend.state, 'working', 'Diego no: el trabajo del subagente es del nuevo');
+  sim.handle({ kind: 'subagent_end', role: 'backend', subId: 'a', text: 'listo' });
+  assert.ok(a.leaving && /me voy/.test(a.bubble?.text), 'se despide');
+  run(20);
+  assert.ok(!sim.ghosts.includes(a), 'se fue');
+  assert.equal(sim.ghosts.length, 2);
+  sim.handle({ kind: 'done', role: 'manager', text: 'Terminado' });
+  run(25);
+  assert.equal(sim.ghosts.length, 0, 'al terminar la tarea se van todos');
+  assert.ok(sim.journal.some((j) => j.kind === 'newcomer') && sim.journal.some((j) => j.kind === 'farewell'));
+});
+
+test('al terminar el turno del agente se van sus nuevos, aunque el fin de un subagente nunca haya llegado', () => {
+  const { sim, run } = office(6);
+  sim.handle({ kind: 'subagent_start', role: 'qa', subId: 'x', session: 'pi-1', text: 'tests' });
+  sim.handle({ kind: 'subagent_start', role: 'backend', subId: 'y', session: 'otra', text: 'api' });
+  run(15);
+  sim.handle({ kind: 'turn_end', role: 'manager', session: 'pi-1' });
+  run(20);
+  assert.deepEqual(sim.ghosts.map((g) => g.subId), ['y'], 'sólo los de esa sesión');
 });

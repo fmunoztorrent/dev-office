@@ -52,14 +52,25 @@ abre o se cierra) no lo mueven.
 
 Para cambiar de vista: el botón ◇ (arriba a la derecha), la tecla `v` o **⚙ › General › Vista de la oficina**. La elección queda en los ajustes y todas las ventanas la siguen. El juego en la terminal usa siempre la frontal.
 
+En las dos vistas (y en el juego de la terminal):
+
+- **Las burbujas dicen qué hace cada uno en palabras** («Corriendo los tests», «Leyendo cart.js»), nunca el comando. El visor `follow` de un subagente muestra además el comando, atenuado, debajo de las palabras.
+- **Cada subagente es alguien nuevo:** un extra translúcido de su rol (otro nombre, la misma camisa) que entra, se sienta en uno de los dos **puestos temporales** (abajo a la izquierda; si son más, en la mesa de reuniones), hace el trabajo del subagente y se va al terminar. La placa de su escritorio dice quién es y para qué proyecto vino.
+- **La pizarra con tickets** se expande al hacerle clic: las tareas como post-its en tres columnas. En la terminal, `t` o Enter ahí abre un encargo nuevo.
+- **La barra de contexto** (navegador, abajo al centro): cuánto contexto le queda al agente de la sesión enfocada, como la barra de vida de un juego de pelea.
+
 ## Pedirle algo al equipo
 
 | Desde | Cómo |
 |---|---|
-| El juego | Clic en la pizarra, o `t`. Eliges el agente, el pipeline de su harness, la sesión y escribes el prompt |
+| El juego | Clic en la pizarra (con tickets primero los expande como post-its: ahí, **✚ Nuevo encargo**), o `t`. Eliges el agente (agrupados por proyecto), el pipeline de su harness, la sesión, el perfil de modelos y escribes el prompt |
 | La terminal | `dev-team-office task "Agrega paginación" --agent pi`, o `dev-team-office prompt <id> "…" --pipeline <entrada>` |
 | Tu agente | Directo en su sesión: la oficina lo ve igual |
 | Otro agente (MCP) | La herramienta `send_task` |
+
+Cada encargo va con su alcance delante (una línea que empieza con 📁): el agente trabaja sólo dentro de la carpeta de su proyecto y sólo en lo que se pidió. Esa línea no es parte del pedido: el título de la pizarra es sólo lo que escribiste. A OpenCode además le llega como regla de verdad (los archivos fuera de la carpeta se le niegan).
+
+**Perfiles de modelos** (⚙ › Modelos): un perfil dice qué modelo usa cada rol. Vienen listos el de Anthropic (Sonnet; Opus para el arquitecto, Haiku para QA) y el de OpenCode (sus modelos gratuitos), y **✚ Nuevo perfil** agrega los tuyos. Por defecto cada agente usa su modelo; el perfil elegido en el encargo (o el por defecto de ⚙ › Modelos) se usa al abrir una **sesión nueva** (el agente arranca con el modelo del perfil) y en las etapas de un pipeline que no fijan modelo (cada una, el de su rol). Una sesión abierta sigue con su modelo.
 
 La tarea llega así:
 
@@ -94,6 +105,7 @@ El subagente lo sigue corriendo su harness; el pane sólo lo **muestra**, con `d
   - Si al agente **le faltan roles** (o no trae subagentes), le completa el equipo con el de la oficina (arquitecto, explorador, backend, frontend y QA) en el proyecto, en su formato: `.claude/agents`, `.opencode/agents`, `.pi/agents` o `.codex/agents`. Claude Code (si esa carpeta no existía) y OpenCode tienen que reiniciarse para verlos; Pi los usa desde el próximo subagente. Detalle en [installation.es.md](installation.es.md#si-tu-agente-no-trae-equipo).
   - `--team <pack>` elige otro pack y `--no-team` no deja ninguno.
 - **⚙ › Agentes** (o `dev-team-office agents add <ruta> --agent <cli>`) es el mantenedor: ruta completa, CLI y oficina.
+- **Una oficina, varios proyectos:** registra un agente por carpeta de proyecto (`api-pagos` con Claude Code, `bff-web` con Pi…). El encargo los agrupa por proyecto, cada uno trabaja sólo dentro de su carpeta, la lista de sesiones dice de qué proyecto es cada una y, cuando hay más de uno activo, cada línea de la bitácora lleva su proyecto.
 - **Oficinas:** una empresa puede tener varias (equipos o dominios), cada una con su zona horaria, su ciudad (su clima) y sus personajes. Se crean en ⚙ › Oficinas o con `dev-team-office offices add "Pagos" --timezone Europe/Madrid`.
 - **Team packs:** `dev-team-office team install example --agent <pi|claude|opencode|codex> --project .` deja un subagente por rol, en el formato de ese agente.
 
@@ -131,5 +143,5 @@ El subagente lo sigue corriendo su harness; el pane sólo lo **muestra**, con `d
 |---|---|
 | Monitor | `o` navegador · `g` juego · `←→` oficina · `1`–`9`/`l` los logs de un servicio · `q` salir |
 | Bitácora | `g` juego · `o` navegador · `h` ayuda · `q` cerrar |
-| Juego (terminal) | `t` encargo · `c` ajustes · `o` oficina · `a` actividad · `tab`/flechas elegir · `m` mensaje · `b` btw · `s` saludar · `x` cancelar · `l` servicios (o clic en el rack) · `d`/`p` demos · `r` reiniciar · `q` volver |
+| Juego (terminal) | `t` encargo · clic en la pizarra: sus tareas (con tickets) o un encargo · `c` ajustes · `o` oficina · `a` actividad · `tab`/flechas elegir · `m` mensaje · `b` btw · `s` saludar · `x` cancelar · `l` servicios (o clic en el rack) · `d`/`p` demos · `r` reiniciar · `q` volver |
 | Juego (navegador) | `t` encargo · `c` ajustes · `o` oficina · `a` terminal de actividad · `f` pantalla completa · `v` vista frontal o cenital · `l` servicios (o clic en el rack) · `esc` cerrar |

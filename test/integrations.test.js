@@ -105,7 +105,7 @@ test('extensión de Pi: corre el pipeline en su sesión, con setModel por etapa,
 
       // a direct task arrives as a user message
       await call(server.url, 'POST', '/v1/tasks', { agent: 'pi', text: 'Sube la cobertura' });
-      await until(() => sent.some((m) => m.text === 'Sube la cobertura'));
+      await until(() => sent.some((m) => m.text.endsWith('\n\nSube la cobertura')));
       await fire('session_shutdown');
     });
   } finally {

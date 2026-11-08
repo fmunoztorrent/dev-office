@@ -58,8 +58,11 @@ Lo que se ve en la oficina:
 
 - **Pizarra kanban** en un atril, con los todos del agente (por hacer / en curso / hecho) y una barra de progreso. Encima tiene un **reloj digital de puntitos rojos**, con la hora de la oficina (su zona horaria).
 - **Nuevo requerimiento:** tú (la PO) lo anuncias en el rincón de producto y se lo llevas al manager, y él se lo reparte a quien corresponda según de qué trata (pantallas → frontend, endpoints → backend, bugs → QA, colores y logos → diseño; si no está claro, al Tech Lead).
-- **Subagente (`Task`/`Agent`):** el manager camina con una tarjeta hasta el escritorio de quien corresponde y le deja una carpeta mientras dure la subtarea.
-- **Uso de herramientas:** el personaje teclea, su monitor muestra código y saltan glifos. El rack de servidores parpadea cuando trabaja backend.
+- **Subagente (`Task`/`Agent`):** llega **alguien nuevo** de ese rol, translúcido como un fantasma, con un nombre propio y la camisa de su rol, y se sienta en uno de los **puestos temporales** (si son más, en la mesa de reuniones). El manager le lleva la tarjeta, hace el trabajo del subagente y, al terminar, se despide y se desvanece.
+- **Uso de herramientas:** el personaje teclea, su monitor muestra código y saltan glifos, y su burbuja dice **qué está haciendo en palabras** («Corriendo los tests», «Haciendo commit: «…»»), nunca el comando. El rack de servidores parpadea cuando trabaja backend.
+- **Las charlas siguen el trabajo:** mientras hay una tarea hablan de quién hace qué, de cómo va el tablero, de quién se trabó o de que esperan tu OK.
+- **La pizarra, expandida:** con tickets, al hacerle clic crece sobre la oficina y muestra las tareas como **post-its** en tres columnas (por hacer, en curso, hecho). Sin tickets, el clic abre un encargo nuevo.
+- **La barra de contexto:** abajo al centro, como la barra de vida de un juego de pelea, cuánto contexto le queda al agente de la sesión enfocada (lo informan Claude Code, Pi y OpenCode). Se pone naranja, después roja, y dice KO cuando está casi lleno.
 - **Error:** el personaje se sacude con chispas rojas y el Tech Lead se acerca a ayudar.
 - **Permiso pendiente:** el manager va a tu escritorio (el de la PO) a pedirte el OK, levanta la mano y aparece un banner naranja. Si el agente te pregunta algo (`AskUserQuestion`), te trae la pregunta.
 - **`Stop`:** confeti y todo el equipo celebra en la mesa de reuniones.
@@ -260,10 +263,13 @@ Cuando el orquestador delega, el personaje que se mueve es el de ese subagente:
 
 Al hacer clic en la pizarra de la oficina, en la terminal o en la web (en la terminal también con `t`), se abre el diálogo **Nuevo encargo**. Ahí eliges:
 
-- **Agente:** los registrados y las sesiones abiertas.
+- **Agente:** los registrados y las sesiones abiertas, **agrupados por proyecto** (una oficina puede tener varios: unos cuantos backends y sus BFF, una app web…).
 - **Pipeline:** las entradas que trae su harness (ver arriba).
 - **Sesión:** una abierta en esa ruta, o una nueva.
+- **Modelos:** el modelo del agente, o un **perfil de modelos** (⚙ › Modelos: los de Anthropic y OpenCode vienen listos, y puedes agregar los tuyos). Una sesión nueva arranca con el modelo del perfil; las etapas de un pipeline que no fijan uno toman el de su rol.
 - **El prompt**, en una nota adhesiva.
+
+El encargo va con su alcance delante: el agente trabaja **sólo dentro de la carpeta de su proyecto**, y sólo en lo que se pidió (a OpenCode además le llega como regla: leer o cambiar archivos fuera de la carpeta se le niega). El skill **stay-focused**, que instala `setup`, le dice lo mismo a cualquier agente.
 
 Antes de enviar, el diálogo muestra las etapas del pipeline y qué personaje hace cada una. Con **✉ Enviar prompt** en ⚙ › Agentes se abre con ese agente ya elegido.
 

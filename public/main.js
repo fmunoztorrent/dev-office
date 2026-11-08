@@ -1,9 +1,10 @@
 import { createGame, TEAM, phaseInfo } from './game.js';
-import { applyAppearance, needsOf, DREAMS } from './sim.js';
+import { applyAppearance, needsOf, DREAMS, BOARD, W, H } from './sim.js';
 import { AGENT_NAME, TASK_STATUS } from './targets.js';
 import { briefOptions, briefProblem, briefMessage, defaultTarget, targetLabel } from './brief.js';
 import { createSettings } from './settings-ui.js';
 import { createServices } from './services-ui.js';
+import { createBoardView } from './board-ui.js';
 import { drawSprite } from './sprite.js';
 import { season, isSouth, daylight, weatherIcon } from './sky.js';
 import { t, setLanguage, onLanguage, getLanguage, timeOf } from './i18n.js';
@@ -25,7 +26,18 @@ let prefs = null;  // the general settings (language, zone, weather, herdr, log)
 let herdr = { available: false, panes: [] };
 let services = []; // the services the agents left running in the background (the rack, the ▶ chip)
 
-const game = createGame($('office'), { onSelect: (id) => select(id), onBoardClick: () => openBrief(), onRackClick: () => servicesUi.open() });
+// the whiteboard: with tickets it expands to show them as post-its; without them, a new brief
+const game = createGame($('office'), { onSelect: (id) => select(id), onBoardClick: () => (boardView.hasTickets() ? boardView.open() : openBrief()), onRackClick: () => servicesUi.open() });
+const boardView = createBoardView({
+  getBoard: () => game.sim.board,
+  onBrief: () => openBrief(),
+  // where the small whiteboard is on the page (in the top-down view, roughly: the top center)
+  boardRect: () => {
+    const r = $('office').getBoundingClientRect();
+    if (game.view === 'iso') return { left: r.left + r.width * 0.42, top: r.top + r.height * 0.1, width: r.width * 0.16, height: r.height * 0.12 };
+    return { left: r.left + (BOARD.x / W) * r.width, top: r.top + (BOARD.y / H) * r.height, width: (BOARD.w / W) * r.width, height: (BOARD.h / H) * r.height };
+  },
+});
 const zone = () => office?.timezone || null;
 const hhmm = (ts) => timeOf(ts, zone());
 
@@ -43,6 +55,7 @@ onLanguage(() => {
   applyI18n();
   select(selected);
   renderSessions();
+  renderContext();
   renderTeam();
   renderOffices();
   renderWeather();
@@ -191,6 +204,7 @@ function onSnapshot(state) {
   state.log.forEach((ev) => addLog(ev, { quiet: true }));
   if (focus && !sessions.has(focus)) focus = null;
   renderSessions();
+  renderContext();
   renderTeam();
   renderSheet(true);
 }
@@ -199,10 +213,11 @@ function onEvent(ev, session) {
   if (session && session.id !== OFFICE_SESSION) sessions.set(session.id, session);
   const current = currentSession();
   // Events from other sessions move the team all the same, but the board shows the focused session.
-  game.handle(ev);
-  if (!current || ev.session === current.id) game.setBoard(currentSession());
+  game.handle(ev.kind === 'subagent_start' ? { ...ev, project: projectOf(ev.session) } : ev);
+  if (!current || ev.session === current.id) { game.setBoard(currentSession()); boardView.refresh(); }
   addLog(ev);
   renderSessions();
+  renderContext();
   renderTeam();
   if (session?.source === 'claude-code' && $('brief').open) renderBrief();
   if (selected === ev.role) renderSheet();
@@ -249,7 +264,37 @@ function pushLine(li, { quiet = false } = {}) {
   if (!term.open && !quiet) { term.unread++; renderBadge(); }
 }
 
+// ---------------------------------------------------------------- the context bar
+
+const kTokens = (n) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}M` : `${Math.round(n / 1000)}k`);
+/** The focused session's context, as a health bar: what is left. Hidden if its agent does not say. */
+function renderContext() {
+  const s = currentSession();
+  const c = s?.context;
+  const bar = $('ctx-bar');
+  bar.hidden = !c || !(c.max > 0);
+  if (bar.hidden) return;
+  const left = Math.max(0, Math.min(1, 1 - c.used / c.max));
+  const pct = Math.round(left * 100);
+  $('ctx-fill').style.width = `${left * 100}%`;
+  $('ctx-trail').style.width = `${left * 100}%`;
+  $('ctx-who').textContent = t('ui.context', { agent: AGENT_NAME[s.source] || s.source || '' });
+  $('ctx-tokens').textContent = `${kTokens(c.used)} / ${kTokens(c.max)}`;
+  $('ctx-pct').textContent = t('ui.contextLeft', { pct });
+  $('ctx-meter').setAttribute('aria-valuenow', String(pct));
+  $('ctx-meter').setAttribute('aria-label', t('ui.contextAria', { pct, used: kTokens(c.used), max: kTokens(c.max) }));
+  bar.classList.toggle('mid', pct <= 50 && pct > 25);
+  bar.classList.toggle('low', pct <= 25);
+  $('ctx-ko').hidden = pct > 10;
+}
+
+// An office can hold several projects (a few backends and their BFFs…): each session's project is
+// its folder, and when more than one is active the log says which one each line is about.
+const projectOf = (session) => { const cwd = sessions.get(session)?.cwd; return cwd ? cwd.split('/').filter(Boolean).pop() : ''; };
+const severalProjects = () => new Set([...sessions.values()].filter((s) => s.cwd && Date.now() - s.lastAt < 6 * 3600_000).map((s) => s.cwd)).size > 1;
+
 function addLog(ev, opts) {
+  if (ev.kind === 'context') return; // it only moves the context bar
   const li = document.createElement('li');
   li.dataset.ev = '1';
   const cfg = TEAM[ev.role];
@@ -265,7 +310,8 @@ function addLog(ev, opts) {
   const name = el('b', '', `${ev.kind === 'btw' && ev.phase === 'ask' ? ev.from : who}: `);
   if (cfg) name.style.color = cfg.shirt;
   const body = el('span', ev.ok === false || (ev.kind === 'btw' && ev.phase === 'failed') ? 'err' : '');
-  body.append(name, document.createTextNode(text), el('span', 'src', `  ${ev.source || ''}`));
+  const project = severalProjects() ? projectOf(ev.session) : '';
+  body.append(name, ...(project ? [el('span', 'proj', `[${project}] `)] : []), document.createTextNode(text), el('span', 'src', `  ${ev.source || ''}`));
   li.append(el('time', '', hhmm(ev.ts)), body);
   pushLine(li, opts);
 }
@@ -370,11 +416,12 @@ function renderSessions() {
   const list = [...sessions.values()].sort((a, b) => b.lastAt - a.lastAt);
   sel.innerHTML = '';
   sel.append(new Option(t('ui.latest'), ''));
-  for (const s of list) sel.append(new Option(`${s.source} · ${s.id.slice(0, 8)}`, s.id));
+  for (const s of list) sel.append(new Option([projectOf(s.id), AGENT_NAME[s.source] || s.source, s.id.slice(0, 8)].filter(Boolean).join(' · '), s.id));
   sel.value = focus || '';
 
   const s = currentSession();
   game.setBoard(s);
+  boardView.refresh();
   $('task-title').textContent = s?.title || (s ? t('ui.noTaskYet') : t('ui.waitingAgent'));
   const todos = s?.todos || [];
   const done = todos.filter((x) => x.status === 'completed').length;
@@ -578,6 +625,24 @@ function openBrief(agentId) {
   $('b-text').focus();
 }
 
+/** The brief's agents, grouped by project (each one works only inside its folder). */
+function fillByProject(select, items, index) {
+  select.innerHTML = '';
+  const groups = new Map();
+  items.forEach((x, i) => {
+    const project = String(x.path || '').split('/').filter(Boolean).pop() || x.name;
+    if (!groups.has(project)) groups.set(project, []);
+    groups.get(project).push([x, i]);
+  });
+  for (const [project, list] of groups) {
+    const g = document.createElement('optgroup');
+    g.label = `📁 ${project}`;
+    for (const [x, i] of list) g.append(new Option(targetLabel(x), String(i)));
+    select.append(g);
+  }
+  select.value = String(Math.min(index, Math.max(0, items.length - 1)));
+}
+
 function fillSelect(select, items, index, label = (x) => x.label) {
   select.innerHTML = '';
   items.forEach((item, i) => select.append(new Option(label(item), String(i))));
@@ -585,13 +650,16 @@ function fillSelect(select, items, index, label = (x) => x.label) {
 }
 
 function renderBrief() {
-  const o = brief.opts = briefOptions({ targets }, brief.sel);
-  fillSelect($('b-agent'), targets.length ? targets : [{ label: t('brief.noAgentWeb') }], brief.sel.target, (x) => x.label || targetLabel(x));
+  const o = brief.opts = briefOptions({ targets, models: prefs?.models }, brief.sel);
+  if (targets.length) fillByProject($('b-agent'), targets, brief.sel.target);
+  else fillSelect($('b-agent'), [{ label: t('brief.noAgentWeb') }], 0);
   $('b-agent').disabled = !targets.length;
   fillSelect($('b-pipeline'), o.entries.length ? o.entries : [{ label: '—' }], Math.max(0, o.entries.indexOf(o.entry)));
   $('b-desc').textContent = o.entry ? [o.entry.description, o.entry.source && o.entry.source !== 'agente' ? `(${o.entry.source})` : ''].filter(Boolean).join(' ')
     : t('brief.registerHintWeb');
   fillSelect($('b-session'), o.sessions.length ? o.sessions : [{ label: '—' }], o.sessionIndex);
+  fillSelect($('b-profile'), o.profiles, o.profileIndex);
+  $('b-profile-note').textContent = o.profileNote;
 
   const box = $('b-stages');
   box.innerHTML = '';
@@ -616,6 +684,7 @@ function renderBrief() {
 $('b-agent').onchange = (e) => { brief.sel = { target: Number(e.target.value), entry: 0, session: -1 }; renderBrief(); };
 $('b-pipeline').onchange = (e) => { brief.sel = { ...brief.sel, entry: Number(e.target.value) }; renderBrief(); };
 $('b-session').onchange = (e) => { brief.sel = { ...brief.sel, session: Number(e.target.value) }; renderBrief(); };
+$('b-profile').onchange = (e) => { brief.sel = { ...brief.sel, profile: Number(e.target.value) }; renderBrief(); };
 $('b-text').oninput = () => renderBrief();
 $('b-text').onkeydown = (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) $('brief-form').requestSubmit(); };
 $('brief-close').onclick = $('brief-cancel').onclick = () => $('brief').close();
@@ -645,7 +714,7 @@ function el(tag, cls, text) {
   return e;
 }
 
-$('session').onchange = (e) => { focus = e.target.value || null; renderSessions(); };
+$('session').onchange = (e) => { focus = e.target.value || null; renderSessions(); renderContext(); };
 $('demo').onclick = () => COMMANDS.demo();
 $('demo-pi').onclick = () => COMMANDS.tdd();
 $('reset').onclick = () => COMMANDS.reset();

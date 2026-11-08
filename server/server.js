@@ -101,7 +101,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   const hub = new TaskHub(company, { officeUrl: officeUrl(), store, herdr, prefs: () => store.getPrefs(), socket: null });
   hub.officeName = (id) => company.info(id)?.name || '';
   const pipelines = new PipelineHub(company, hub, { store });
-  const registry = new AgentRegistry({ getAgents: () => store.listAgents(), hub, pipelines, office: company });
+  const registry = new AgentRegistry({ getAgents: () => store.listAgents(), hub, pipelines, office: company, prefs: () => store.getPrefs() });
   // side questions (btw) to each office's agent on duty
   const asks = new AskDesk({ company, store, officeUrl, ...asksOpt });
   const publicAsk = ({ id, office: o, agent, question, answer, status, error, from, forked, role, createdAt, updatedAt }) => ({ id, office: o, agent, question, answer, status, error, from, forked, role, createdAt, updatedAt });

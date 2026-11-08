@@ -170,7 +170,7 @@ test('la oficina dentro de herdr: el agente al abrir, las sesiones nuevas en pan
     const task = await until(() => server.hub.snapshot().tasks.find((x) => x.pane));
     assert.equal(task.office, 'pagos');
     assert.equal(task.status, 'running');
-    assert.ok(fake.calls.some((c) => c[1] === 'prompt' && c[3] === 'Reembolsos parciales'));
+    assert.ok(fake.calls.some((c) => c[1] === 'prompt' && /^📁 Trabaja sólo dentro de .*\n\nReembolsos parciales$/.test(c[3])), 'con su carpeta y su foco delante');
     // when that pane's agent ends its turn, the task is done
     fake.panes.get(task.pane).agent_status = 'working';
     await sleep(80);

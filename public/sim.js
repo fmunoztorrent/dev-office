@@ -131,6 +131,13 @@ export const PLANTS = [[20, 560], [700, 400], [944, 590]];
 const TABLE_SEATS = [[-75, -40], [-25, -42], [25, -42], [75, -40], [-108, 0], [108, 0], [-100, 42], [100, 42]];
 const CORRIDOR_TOP = 148, CORRIDOR_MID = 318, CORRIDOR_LOW = 462;
 const LANES = [25, 445, 637]; // gaps between desks where people switch aisles
+// Hot desks: where the newcomers sit. Each subagent is a new employee who comes in for its subtask
+// and leaves when it is done: a translucent extra of its role's character. More newcomers than
+// desks sit at the meeting table.
+export const HOT_DESKS = [{ x: 78, y: 560 }, { x: 166, y: 560 }];
+export const STAIRS = { x: -14, y: CORRIDOR_LOW }; // where the newcomers come in and go out
+const NEWCOMER_NAMES = ['Nico', 'Sam', 'Alex', 'Robin', 'Fran', 'Dani', 'Cami', 'Juli', 'Ale', 'Gabi', 'Santi', 'Vale', 'Noa', 'Eli'];
+const FADE_MS = 900;
 const DEVS = ['backend', 'frontend', 'designer'];
 const SPEED = 120; // world px per second when walking
 export const LUNCH = { start: 13 * 60, end: 14 * 60 }; // minutes of the day
@@ -317,6 +324,7 @@ function describe(kind, who, extra) {
     case 'deskchat': case 'gossip': case 'idea': case 'feasibility': case 'consult': case 'rounds': case 'coffee': case 'requirement':
     case 'bathroom': case 'lunch': case 'lunchend': case 'fire': case 'repaired': case 'tv': case 'pane': case 'paneDone':
       return t(`sim.journal.${kind}`, vars);
+    case 'newcomer': case 'farewell': return t(`sim.journal.${kind}`, { ...vars, name: extra.name || '', role: TEAM[who]?.title || who });
     default: return t('sim.journal.other', { ...vars, kind });
   }
 }
@@ -452,6 +460,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   const L = (key) => ta(key, teamNames());
   const chance = (p) => random() < p;
   const agents = Object.fromEntries(Object.entries(TEAM).map(([id, cfg]) => [id, new Agent(id, cfg, now_, random)]));
+  const ghosts = new Map(); // subId → the newcomer doing that subagent's work (a translucent extra employee)
   let particles = [];
   let board = { title: '', todos: [], status: 'idle', source: '' };
   let banner = null; // { text, tone, until }
@@ -464,7 +473,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   let journal = [];  // what they did on their own initiative (for the terminal, the tests and the curious)
   let timers = [];   // things that happen a while later: { at, fn }
   let lastRequirement = { text: '', at: -Infinity };
-  const memory = { task: '', lastError: null, lastGreen: null, fails: [], work: {} }; // what the office talks about and how the work is going
+  const memory = { task: '', lastError: null, lastGreen: null, fails: [], work: {}, doing: {} }; // what the office talks about and how the work is going
   // Office life
   let bath = { occupant: null, line: [], doorAt: -Infinity };
   let lunch = null;          // { endMin, nextTalk } mientras almuerzan
@@ -552,7 +561,8 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   }
 
   function handle(ev) {
-    const a = agents[ev.role];
+    const ghost = ev.subId ? ghosts.get(ev.subId) : null; // a subagent's events are its newcomer's
+    const a = ghost || agents[ev.role];
     const now = simNow;
     if (a) log(a, ev.text);
     switch (ev.kind) {
@@ -575,7 +585,8 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
       }
       case 'tool_start':
         if (!a) break;
-        if (/^(askuserquestion|question)$/i.test(ev.tool || '') && a.id !== 'po') {
+        if (ev.text) memory.doing[a.id] = { text: ev.text, at: now };
+        if (/^(askuserquestion|question|ask_user_choice|ask_user_question|ask_user)$/i.test(ev.tool || '') && a.id !== 'po') {
           // the agent asks you something: you both leave what you were doing and whoever asks goes to
           // your desk (the PO's) with the question
           const po = agents.po;
@@ -591,7 +602,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         break;
       case 'tool_end':
         if (!a) break;
-        if (!ev.ok && ev.phase !== 'red') memory.lastError = { role: a.id, at: now };
+        if (!ev.ok && ev.phase !== 'red') memory.lastError = { role: a.id, at: now, text: memory.doing[a.id]?.text || '' };
         if (ev.ok && ev.role === 'qa' && ev.phase !== 'red' && /^(bash|shell|exec)$/i.test(ev.tool)) memory.lastGreen = { at: now };
         if (ev.ok) {
           a.stateUntil = Math.max(a.stateUntil, now + 2500);
@@ -617,12 +628,24 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
           a.shakeUntil = now + 700;
           a.say(ev.text, 5000, 'error');
           emit(a.x, a.y - 40, 14, 'spark', '#ff4d4d');
-          if (ev.role !== 'tl') visit(agents.tl, ev.role, T('sim.helpError'), { stay: 2200 });
+          if (ev.role !== 'tl' || a.ghost) visit(agents.tl, a.ghost ? a.cfg.seat : ev.role, T('sim.helpError'), { stay: 2200 });
           else agents.tl.say(T('sim.reviewThis'), 4000);
         }
         break;
       case 'subagent_start': {
         if (!a) break;
+        const g = ghost || hire(ev);
+        if (g) {
+          // a newcomer: Marco brings them the card, and their role's character says hello
+          g.badges.set(ev.subId, ev.text);
+          note('newcomer', ev.role, { name: g.cfg.name, text: ev.text });
+          const main = agents[ev.role];
+          if (main?.free) later(R(900, 1800), () => main.say(T('sim.newcomer.welcome', { name: g.cfg.name }), 2600));
+          const busy = () => work(g, T('sim.subtask', { text: ev.text }), 'working', 7000);
+          if (ev.role !== 'manager') visit(agents.manager, g.cfg.seat, T('sim.assignSub', { name: g.cfg.name, text: ev.text }), { carry: true, after: busy });
+          else busy();
+          break;
+        }
         a.badges.set(ev.subId, ev.text);
         const m = agents.manager;
         const line = T('sim.assignSub', { name: a.cfg.name, text: ev.text });
@@ -632,6 +655,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
       }
       case 'subagent_end':
         if (!a) break;
+        if (a.ghost) { note('farewell', ev.role, { name: a.cfg.name }); farewell(a); emit(a.x, a.y - 60, 1, 'check'); break; }
         a.badges.delete(ev.subId);
         a.setState('done', 2500);
         a.say(T('sim.subDone', { text: ev.text }));
@@ -667,9 +691,11 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
       case 'done':
         turn = turnPhase = null;
         celebrate(ev.text);
+        for (const g of ghosts.values()) farewell(g); // the task is over: the newcomers go home
         break;
       case 'session_end':
         agents.manager.say(T('sim.sessionEnd'));
+        for (const g of ghosts.values()) farewell(g);
         break;
       case 'chat': {
         banner = { text: `💬 ${ev.from}: ${ev.text}`, tone: 'chat', until: now + 7000 };
@@ -708,7 +734,8 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         requirement(ev.text.replace(/^[^:]*:\s*/, ''));
         break;
       case 'phase':
-        if (a) phase(a, ev, now);
+        if (a?.ghost) { const ph = phaseInfo(ev.phase); work(a, `${ph.icon} ${ph.label}${ev.text ? `: ${ev.text}` : ''}`); } // a newcomer's phase is its own
+        else if (a) phase(a, ev, now);
         break;
       case 'phase_end':
         turn = turnPhase = null;
@@ -717,6 +744,8 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
       case 'turn_end':
         // end of turn, without celebration: the same calm as closing a phase.
         turn = turnPhase = null;
+        // the agent's turn is over: so are its subagents (even one whose end never arrived)
+        if (!ev.subId) for (const g of ghosts.values()) if (!ev.session || g.session === ev.session) farewell(g);
         if (a) a.say(ev.text || T('sim.turnEnd'), 2500);
         break;
       case 'stage_end':
@@ -919,23 +948,84 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     for (const m of sc.members) agents[m].queue = agents[m].queue.map((j) => (j.t === 'until' ? { ...j, at: sc.end } : j));
   }
 
-  /** What is said in the chit-chat: office gossip and what is going on. */
-  function gossipLine(id) {
-    const topics = [...(PRODUCT.includes(id) ? L(`sim.gossip.${id}`) : L('sim.replies'))];
-    if (memory.task) topics.push(T('sim.gossipTask', { task: short(memory.task, 22) }));
-    if (memory.lastError && simNow - memory.lastError.at < 120_000) topics.push(T('sim.gossipError', { name: TEAM[memory.lastError.role].name }));
-    if (memory.lastGreen && simNow - memory.lastGreen.at < 120_000) topics.push(T('sim.gossipGreen', { name: TEAM.qa.name }));
-    if (journal.some((j) => j.kind === 'repaired' && simNow - j.t < 10 * 60_000)) topics.push(T('sim.gossipFire'));
-    return P(topics);
+  const lower = (s) => String(s || '').replace(/^./, (c) => c.toLocaleLowerCase());
+  const nameOf = (id) => TEAM[id]?.name || [...ghosts.values()].find((g) => g.id === id)?.cfg.name || '';
+  /** Is the office busy with real work? (something happened in the last minutes) */
+  const lively = () => Object.values(memory.doing).some((d) => simNow - d.at < 180_000) || (board.todos.length > 0 && board.todos.some((x) => x.status !== 'completed'));
+
+  /** What is going on right now, said by `id`: the board, who is doing what, who got stuck, the
+   *  newcomers, whether you (the PO) are being waited for. The chit-chat comes from here. */
+  function liveTopics(id) {
+    const out = [];
+    const todos = board.todos;
+    if (todos.length) out.push(T('sim.live.board', { done: todos.filter((x) => x.status === 'completed').length, total: todos.length }));
+    for (const [role, d] of Object.entries(memory.doing)) {
+      if (role === id || simNow - d.at > 90_000 || !nameOf(role)) continue;
+      out.push(T('sim.live.doing', { name: nameOf(role), action: lower(short(d.text, 40)) }));
+    }
+    const e = memory.lastError;
+    if (e && simNow - e.at < 120_000 && e.text && nameOf(e.role)) out.push(T('sim.live.stuck', { name: nameOf(e.role), action: lower(short(e.text, 36)) }));
+    if (memory.lastGreen && simNow - memory.lastGreen.at < 120_000) out.push(T('sim.gossipGreen', { name: TEAM.qa.name }));
+    if (agents.manager.handUp) out.push(T('sim.live.waitingYou'));
+    for (const g of ghosts.values()) if (!g.leaving) out.push(T('sim.live.newcomer', { name: g.cfg.name, role: TEAM[g.role].title }));
+    return out;
   }
+
+  /** What is said in the chit-chat: what is going on (when there is work), or office gossip. */
+  function gossipLine(id) {
+    const live = liveTopics(id);
+    if (memory.task) live.push(T('sim.gossipTask', { task: short(memory.task, 22) }));
+    if (lively() && live.length && chance(0.85)) return { text: P(live), live: true };
+    const topics = [...(PRODUCT.includes(id) ? L(`sim.gossip.${id}`) : L('sim.replies')), ...live];
+    if (memory.lastError && simNow - memory.lastError.at < 120_000 && nameOf(memory.lastError.role)) topics.push(T('sim.gossipError', { name: nameOf(memory.lastError.role) }));
+    if (journal.some((j) => j.kind === 'repaired' && simNow - j.t < 10 * 60_000)) topics.push(T('sim.gossipFire'));
+    const text = P(topics);
+    return { text, live: live.includes(text) };
+  }
+  // ---------------------------------------------------------------- the newcomers (subagents)
+
+  /** A subagent starts: a newcomer of its role comes in through the stairs to a hot desk. */
+  function hire(ev) {
+    const look = TEAM[ev.role];
+    if (!look || !ev.subId) return null;
+    const taken = new Set([...ghosts.values()].filter((g) => !g.leaving).map((g) => g.desk));
+    const desk = HOT_DESKS.findIndex((_, i) => !taken.has(i));
+    const extra = [...ghosts.values()].filter((g) => !g.leaving && g.desk < 0).length;
+    const [dx, dy] = TABLE_SEATS[extra % TABLE_SEATS.length];
+    const seat = desk >= 0 ? HOT_DESKS[desk] : { x: SPOT.table.x + dx, y: SPOT.table.y + dy };
+    const used = new Set([...ghosts.values()].map((g) => g.cfg.name));
+    const name = P(NEWCOMER_NAMES.filter((n) => !used.has(n))) || `${look.name} 2`;
+    const cfg = { ...look, title: look.title, name, seat, prop: 'laptop', hair: P(LOOK_PALETTES.hair), skin: P(LOOK_PALETTES.skin), long: chance(0.5), beard: chance(0.25), glasses: chance(0.3) };
+    const g = new Agent(`new:${ev.subId}`, cfg, now_, random);
+    Object.assign(g, { ghost: true, role: ev.role, subId: ev.subId, session: ev.session || null, project: ev.project || '', desk, x: STAIRS.x, y: STAIRS.y, seated: false, born: simNow, fade: 0, leaving: false, gone: false });
+    g.goHome();
+    ghosts.set(ev.subId, g);
+    return g;
+  }
+
+  /** Its subtask is done: says goodbye, walks to the stairs and fades away. */
+  function farewell(g) {
+    if (!g || g.leaving) return;
+    g.leaving = true;
+    g.badges.clear();
+    g.queue = [];
+    g.setState('done', 2500);
+    g.jumpUntil = simNow + 700;
+    g.say(T('sim.newcomer.bye'), 2600);
+    g.wait(1600).goTo(STAIRS).then((x) => { x.gone = true; });
+  }
+
+  /** The answer to a line: about the work if the line was about the work. */
+  const replyTo = (line) => P(L(line.live ? 'sim.live.replies' : 'sim.replies'));
 
   function gossip(a) {
     const others = PRODUCT.filter((id) => id !== a.id && agents[id].free);
     if (!others.length) return false;
     const members = [a.id, ...others.slice(0, chance(0.5) ? 2 : 1)];
-    const lines = [[a.id, gossipLine(a.id)], [members[1], P(L('sim.replies'))]];
-    if (members[2]) lines.push([members[2], P(L('sim.replies'))]);
-    if (chance(0.5)) lines.push([a.id, P([...L('sim.replies'), gossipLine(a.id)])]);
+    const first = gossipLine(a.id);
+    const lines = [[a.id, first.text], [members[1], replyTo(first)]];
+    if (members[2]) lines.push([members[2], replyTo(first)]);
+    if (chance(0.5)) { const more = gossipLine(a.id); lines.push([a.id, more.live || chance(0.5) ? more.text : replyTo(first)]); }
     // sitting together they chit-chat from the desk; sometimes they meet at the café or the sofa
     const spot = chance(0.55) ? null : P([{ x: COUNTER_SPOTS[0].x, y: COUNTER_SPOTS[0].y + 4 }, SPOT.sofa, { x: 210, y: CORRIDOR_TOP + 4 }]);
     // and sometimes an idea comes out of the chat and they take it to the manager (not you, the PO:
@@ -987,7 +1077,8 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     const tl = agents.tl;
     if (tl.scene || tl.away || tl.lunch) return false;
     // if they are doing something concrete ("Editing api.js") they say it: "I'm editing api.js: …"
-    const doing = chance(0.5) ? t('sim.doing', { text: short(a.text, 26) }) : '';
+    const now = memory.doing[a.id];
+    const doing = now && simNow - now.at < 120_000 ? t('sim.doing', { text: short(now.text, 34) }) : chance(0.5) ? t('sim.doing', { text: short(a.text, 26) }) : '';
     const sc = scene('consult', [a.id], [[a.id, T('sim.consultAsk', { doing, ask: P(L(`sim.ask.${a.id}`)) })]], { spot: { x: tl.cfg.seat.x + 62, y: tl.cfg.seat.y - 6 } });
     const at = sc.lines[0].at;
     join(sc, 'tl', [[P(L('sim.answers')), at + 2300]], at + 5300);
@@ -1029,7 +1120,9 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     const busy = TECH.filter((id) => agents[id].seated && ['working', 'thinking'].includes(agents[id].state) && !agents[id].scene);
     if (!busy.length) return false;
     const who = agents[P(busy)];
-    const sc = scene('rounds', ['manager'], [['manager', P(ta('sim.rounds', { name: who.cfg.name }))]],
+    const doing = memory.doing[who.id];
+    const ask = doing && simNow - doing.at < 120_000 ? T('sim.live.rounds', { name: who.cfg.name, action: lower(short(doing.text, 36)) }) : P(ta('sim.rounds', { name: who.cfg.name }));
+    const sc = scene('rounds', ['manager'], [['manager', ask]],
       { spot: { x: who.cfg.seat.x + 62, y: who.cfg.seat.y - 6 } });
     const at = sc.lines[0].at + 2200;
     join(sc, who.id, [[P(L('sim.roundsReplies')), at]], at + 800);
@@ -1206,7 +1299,8 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
       if (row) {
         const [a, b] = [...row].sort(() => random() - 0.5);
         const pool = PRODUCT.includes(a.id) || a.id === 'manager' ? L('sim.lunchTalk.product') : L('sim.lunchTalk.tech');
-        scene('lunchtalk', [a.id, b.id], [[a.id, P(pool)], [b.id, P(L('sim.replies'))]], { quiet: true });
+        const live = lively() && chance(0.6) ? gossipLine(a.id) : { text: P(pool), live: false };
+        scene('lunchtalk', [a.id, b.id], [[a.id, live.text], [b.id, replyTo(live)]], { quiet: true });
         if (chance(0.5)) emit(a.x, a.y - 60, 1, 'emote', null, a.food || '🍽️');
       }
     }
@@ -1514,6 +1608,14 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
       if (a.seated && a.state === 'working' && random() < dt * 2.2) emit(a.cfg.seat.x + 34, a.cfg.seat.y - 50, 1, 'code', a.cfg.shirt);
       if (a.dream && random() < dt * 3) emit(a.x + R(-20, 20), a.y - R(90, 130), 1, 'sparkle', a.dream.kind === 'rainbow' ? P(RAINBOW_COLORS) : DREAMS[a.dream.kind].glow);
     }
+    for (const [id, g] of ghosts) {
+      g.update(dt, now);
+      if (g.seated && g.state === 'working' && random() < dt * 2.2) emit(g.cfg.seat.x + 20, g.cfg.seat.y - 40, 1, 'code', g.cfg.shirt);
+      // they fade in when they arrive and out when they leave (or after 10 minutes without news)
+      g.fade = g.gone ? Math.max(0, g.fade - dt * 1000 / FADE_MS) : Math.min(1, g.fade + dt * 1000 / FADE_MS);
+      if (!g.leaving && now - g.lastActive > 10 * 60_000) farewell(g);
+      if (g.gone && g.fade <= 0) ghosts.delete(id);
+    }
     runScenes();
     if (timers.length) {
       const due = timers.filter((t) => now >= t.at);
@@ -1547,6 +1649,8 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     get turn() { return turn; },
     get turnPhase() { return turnPhase; },
     get journal() { return journal; },
+    /** The newcomers: one per running subagent (translucent, at the hot desks), while they last. */
+    get ghosts() { return [...ghosts.values()]; },
     get scenes() { return scenes; },
     get fire() { return fire; },
     get lunch() { return lunch; },
@@ -1573,8 +1677,9 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         Object.assign(a, { queue: [], seated: true, x: a.cfg.seat.x, y: a.cfg.seat.y, state: 'idle', bubble: null, handUp: false, history: [], dream: null, scene: null, carry: false, perch: false, hidden: false, dance: false, food: null, lunch: null, back: false, tvSeat: null, diningSeat: null });
         a.badges.clear();
       }
+      ghosts.clear();
       banner = null; particles = []; board = { title: '', todos: [] }; turn = turnPhase = lastDev = lastBlocked = null;
-      scenes = []; timers = []; memory.task = ''; memory.lastError = memory.lastGreen = null; memory.fails = []; memory.work = {};
+      scenes = []; timers = []; memory.task = ''; memory.lastError = memory.lastGreen = null; memory.fails = []; memory.work = {}; memory.doing = {};
       bath = { occupant: null, line: [], doorAt: -Infinity };
       // if it is lunchtime, they go out again on the next tick
       lunch = null; lunchDay = null; fire = null; extinguisher = 'floor'; heat = 0; timers = [];

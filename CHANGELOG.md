@@ -4,6 +4,22 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+### Added
+
+- **Subagents are newcomers:** each one is a translucent extra of its role (another name, the same shirt) who comes in, sits at one of the two new **hot desks** (more of them, at the meeting table), does the subagent's work and leaves when it ends. In both views and in the terminal game.
+- **The whiteboard, expanded:** with tickets on it, clicking it shows the tasks as post-its in three columns (web and terminal); without tickets it opens a brief, as before.
+- **The context bar:** at the bottom center, like a fighting game's health bar, how much context the focused session's agent has left. Claude Code (from its transcript), Pi (`getContextUsage`) and OpenCode (each message's tokens) report it; `{ kind: "context", context: { used, max } }` for any harness.
+- **Model profiles** (⚙ › Models, also in the brief): which model each role uses. Anthropic's and OpenCode's come ready and more can be added. A new session starts with the profile's model; a pipeline's stages without one take their role's. By default each agent keeps its own model.
+- **The stay-focused skill:** do exactly what was asked (or the agreed plan step), without tangents or unrequested ideas. `setup` installs it for every agent.
+- **One office, several projects:** the brief groups the agents by project, the sessions say which project they are, and the log tags each line with its project when more than one is active.
+
+### Changed
+
+- **Words, not commands:** the bubbles, the log and the monitor say what each one is doing ("Running the tests", "Committing: “…”") instead of the command line (`server/humanize.js`); `follow` still shows the command, dimmed, under the words.
+- **The chit-chat follows the work:** while there is a task they talk about who is doing what, the board's progress, who got stuck and whether they are waiting for you.
+- **A brief keeps the agent in its project:** it goes with a scope line (only inside its folder, only what was asked) that is not part of the board's title, and OpenCode also gets it as a rule (`external_directory: deny`).
+- The agent's questions from Pi's gentle-pi (`ask_user_choice`, `ask_user_question`) come to your desk like Claude Code's.
+
 ## [0.7.0] - 2026-10-30
 
 ### Added

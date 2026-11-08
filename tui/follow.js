@@ -63,7 +63,11 @@ export function createFollow({ session, sub, color = true, colorMode = '256', wi
     const out = [];
     switch (ev.kind) {
       case 'thinking': if (!st.thought) out.push(line('💭', t('follow.thinking'), null)); st.thought = true; break;
-      case 'tool_start': out.push(line('▸', ev.text || ev.tool)); break;
+      case 'tool_start':
+        out.push(line('▸', ev.text || ev.tool));
+        // this is the detailed view: under the words, dimmed, the command itself
+        if (ev.command) out.push(`${c(DIM)}          $ ${fit(ev.command.replace(/\s+/g, ' '), cols() - 12)}${c(RESET)}`);
+        break;
       case 'tool_end':
         if (!ev.ok) out.push(line('✖', ev.phase === 'red' ? `${ev.text} · ${t('follow.red')}` : ev.text, ev.phase === 'red' ? 'warn' : 'err'));
         if (ev.output) out.push(...block(ev.output));

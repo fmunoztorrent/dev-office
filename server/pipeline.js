@@ -98,7 +98,7 @@ export class PipelineHub extends EventEmitter {
   }
 
   /** Asks an agent session to run a pipeline. */
-  start({ session, agent, pipeline, task, from, meta } = {}) {
+  start({ session, agent, pipeline, task, from, meta, models = null } = {}) {
     task = String(task ?? '').trim();
     if (!task) return { ok: false, error: tr('err.taskEmpty') };
     if (task.length > 4000) return { ok: false, error: tr('err.taskTooLong', { n: 4000 }) };
@@ -115,6 +115,7 @@ export class PipelineHub extends EventEmitter {
       status: host.live ? 'sent' : 'queued', detail: host.live ? tr('run.sent') : tr('task.queuedClaude'),
       stages: pl.stages.map((s) => ({ ...s, status: 'pending', attempts: 0 })), startedAt: Date.now(), endedAt: null, cancelRequested: false,
       agentId: meta?.agentId || null, entry: meta?.entry || `devteam:${pl.id}`,
+      models, // the model profile's role → model, for the stages without one of their own
     };
     this.runs.set(run.id, run);
     if (this.runs.size > 30) {
@@ -125,7 +126,7 @@ export class PipelineHub extends EventEmitter {
       session: 'office', office: run.office, kind: 'dispatch', agent: host.agent, from: run.from,
       text: tr('run.dispatch', { name: pl.name, agent: AGENT_NAME[host.agent] || host.agent, task }),
     });
-    if (host.live) this.tasks.sendToSession(host.session, { type: 'pipeline', id: run.id, session: host.session, pipeline: pl.id, task });
+    if (host.live) this.tasks.sendToSession(host.session, { type: 'pipeline', id: run.id, session: host.session, pipeline: pl.id, task, ...(models ? { models } : {}) });
     this.changed(run);
     return { ok: true, run: this.#public(run) };
   }
@@ -137,7 +138,7 @@ export class PipelineHub extends EventEmitter {
     run.status = 'sent';
     run.detail = tr('run.claudeTook');
     this.changed(run);
-    return { id: run.id, pipeline: run.pipeline.id, task: run.task };
+    return { id: run.id, pipeline: run.pipeline.id, task: run.task, ...(run.models ? { models: run.models } : {}) };
   }
 
   /** For the Claude Code hook: that session's pipelines the user cancelled. */

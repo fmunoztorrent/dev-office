@@ -119,6 +119,10 @@ export class Office extends EventEmitter {
     const tl = tool.toLowerCase();
     const input = r.input && typeof r.input === 'object' ? r.input : {};
     const ev = { id: ++this.seq, ts: Date.now(), source: r.source, session: s.id, kind: r.kind, tool, ok: r.ok !== false };
+    // how full the agent's context is (any event can bring it; `context` events bring only that)
+    const ctx = r.context;
+    if (ctx && Number(ctx.max) > 0 && Number(ctx.used) >= 0 && !r.child) s.context = { used: Math.round(Number(ctx.used)), max: Math.round(Number(ctx.max)), at: ev.ts };
+    if (r.kind === 'context') return s.context ? { ...ev, role: 'manager', text: '' } : null;
 
     // A subagent that is its own process (Pi's) reports to the parent's session with `child`:
     // its work is done by the subagent's character, and its start, its task and its turn ends
@@ -183,6 +187,8 @@ export class Office extends EventEmitter {
         if (s.turn && ev.role === s.turn) ev.phase = s.phase;
       }
       ev.text = clip(r.text && start ? r.text : describe(tool, input), 90);
+      // the command line itself, apart from the words: for whoever wants to see it (never in a bubble)
+      if (COMMAND_TOOLS.has(tl) && (input.command || input.cmd)) ev.command = clip(String(input.command || input.cmd), 300);
       if (!start && !ev.ok) ev.text = clip(t('events.failed', { text: ev.text, detail: r.text ? ` — ${r.text}` : '' }), 120);
       if (!start && sub && r.output && (COMMAND_TOOLS.has(tl) || !ev.ok)) ev.output = excerpt(r.output);
       return ev;
@@ -216,6 +222,8 @@ export class Office extends EventEmitter {
       case 'subagent_end':
         return this.#endSub(s, ev, { agentId: r.agentId, toolUseId: r.toolUseId, fromHook: !r.toolUseId });
       case 'task':
+        // the scope line the office puts before a brief (tasks.js) is not part of the request
+        if (typeof r.text === 'string' && r.text.startsWith('📁 ')) r.text = r.text.replace(/^📁 [^\n]*\n+/, '');
         // Pi's extension and skill may announce the same task: the duplicate is dropped.
         if (s.title === clip(r.text, 300) && ev.ts - (s.taskAt || 0) < 30_000) return null;
         s.title = clip(r.text, 300);
@@ -336,6 +344,7 @@ export class Office extends EventEmitter {
 
   #apply(ev) {
     const s = this.sessions.get(ev.session);
+    if (ev.kind === 'context') return; // it only updates the session's context bar: nobody works, nothing is logged
     s.lastAt = ev.ts;
     if (ev.kind === 'tool_start') s.tools++;
     // In RED (TDD) a failing test is expected: it does not count as an error.

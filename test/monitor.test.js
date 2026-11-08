@@ -29,7 +29,7 @@ test('monitor: cifras, cada agente con su tarea y en qué está, sus subagentes 
     assert.match(lines[1], /2 agente\(s\) activo\(s\).*1 esperándote.*1 subagente\(s\) corriendo/);
     assert.match(text, /✋ Claude · api +esperándote +Arregla el login +▸ Marco: Claude necesita tu permiso/);
     assert.match(text, /● Pi · tienda +en curso +Agrega discount\(\) al carrito/);
-    assert.match(text, /└ 🧪 Andrés +ex-qa +🔴 RED: tests de discount +▸ \$ npm test/);
+    assert.match(text, /└ 🧪 Andrés +ex-qa +🔴 RED: tests de discount +▸ Corriendo los tests/);
     assert.match(text, /BITÁCORA/);
     assert.match(text, /Andrés +🤖 RED: tests de discount/);
     assert.match(lines.at(-1), /o navegador · g juego · ←→ oficina · q salir/);

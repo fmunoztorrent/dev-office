@@ -11,7 +11,7 @@
 import {
   createSim, W, H, SPOT, PLANTS, STATUS_ICON, PHASE_COLOR, phaseInfo, onBoard, tvChannel,
   DREAMS, DREAM_PALETTE, rainbowPixels, CAFE, DINING, DINING_SEATS, PARTITION, BATH, RACK, EXTINGUISHER, daylight,
-  BOARD, EASEL, CLOCK, GLASS, TV, SOFA, ALARM, SIGN,
+  BOARD, EASEL, CLOCK, GLASS, TV, SOFA, ALARM, SIGN, HOT_DESKS, TEAM,
 } from './sim.js';
 import { outdoor, lightning, colorHex, weatherIcon } from './sky.js';
 import { isoCamera, apply, unapply, scaled, BACK, WALL_H } from './iso.js';
@@ -423,7 +423,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     });
     if (hoverBoard) {
       ctx.font = `14px ${FONT}`;
-      const tip = t('scene.boardTip');
+      const tip = t(board.todos.length ? 'scene.boardTipTickets' : 'scene.boardTip');
       const tw = ctx.measureText(tip).width + 12;
       R(x + w - tw - 4, y + h - 20, tw, 16, '#2b2d42');
       ctx.fillStyle = '#ffd166'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
@@ -667,6 +667,54 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     for (let i = 0; i < Math.min(3, a.badges.size); i++) {
       R(s.x - 46 + i * 4, s.y - 30 - i * 3, 18, 13, '#ffb703'); R(s.x - 46 + i * 4, s.y - 32 - i * 3, 8, 3, '#fb8500');
     }
+  }
+
+  // ---------------------------------------------------------------- the newcomers (subagents)
+
+  const atDesk = (i) => sim.ghosts.find((g) => g.desk === i);
+  function drawHotChair(i) {
+    const s = HOT_DESKS[i];
+    R(s.x - 14, s.y - 36, 28, 30, '#3a3f58');
+    R(s.x - 12, s.y - 34, 24, 26, '#4a5070');
+  }
+  /** A hot desk: smaller, lighter wood and a laptop. Its plate says who sits there, or that it is free. */
+  function drawHotDesk(i, now) {
+    const s = HOT_DESKS[i];
+    R(s.x - 36, s.y - 14, 72, 14, '#b48450');
+    R(s.x - 36, s.y - 2, 72, 22, '#8a5c34');
+    R(s.x - 36, s.y - 2, 72, 3, '#5d3b20');
+    drawHotPlate(i);
+    drawLaptop(i, now);
+  }
+  function drawHotPlate(i) {
+    const s = HOT_DESKS[i], g = atDesk(i);
+    R(s.x - 33, s.y + 5, 66, 13, '#1b1f33');
+    ctx.font = `${fpx(13)}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = g ? g.cfg.shirt : '#8d99ae';
+    // who sits there and for which project (an office can hold several), or that it is free
+    ctx.fillText(fit(g ? `${g.cfg.name} · ${g.project || TEAM[g.role]?.title || ''}` : t('sim.newcomer.hotDesk'), 62), s.x, s.y + 12);
+  }
+  function drawLaptop(i, now) {
+    const s = HOT_DESKS[i], g = atDesk(i);
+    const busy = g && ['working', 'thinking', 'red'].includes(g.state);
+    R(s.x + 2, s.y - 34, 28, 19, '#2b2d42');
+    R(s.x + 4, s.y - 32, 24, 15, busy ? '#0d1b2a' : '#1d2433');
+    if (busy) {
+      const off = Math.floor(now / 160);
+      for (let k = 0; k < 3; k++) R(s.x + 6 + ((k * 5) % 6), s.y - 30 + k * 4, Math.max(4, ((k * 7 + off) * 13) % 18), 2, ['#06d6a0', '#ffd166', g.cfg.shirt][(k + off) % 3]);
+    }
+    R(s.x - 2, s.y - 15, 36, 3, '#adb5bd');
+    if (g?.badges.size) { R(s.x - 30, s.y - 24, 16, 11, '#ffb703'); R(s.x - 30, s.y - 26, 7, 3, '#fb8500'); }
+  }
+  /** A newcomer: their role's look, translucent and with a soft glow, like a ghost. */
+  function drawGhost(g, now) {
+    if (!g.fade) return;
+    ctx.save();
+    ctx.globalAlpha = 0.55 * g.fade;
+    ctx.shadowColor = 'rgba(170, 215, 255, 0.95)';
+    ctx.shadowBlur = 6 * scale;
+    drawPerson(g, now);
+    ctx.restore();
   }
 
   function drawProps(now) {
@@ -1004,6 +1052,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
       const busy = ['working', 'thinking', 'red'].includes(a.state);
       if (busy || n > 0.3) glow(a.cfg.seat.x + 34, a.cfg.seat.y - 34, 34, a.state === 'red' ? '255,80,100' : '120,190,255', (busy ? 0.06 : 0.02) + n * 0.06);
     }
+    for (const g of sim.ghosts) if (g.desk >= 0 && ['working', 'thinking'].includes(g.state)) glow(HOT_DESKS[g.desk].x + 16, HOT_DESKS[g.desk].y - 26, 26, '150,210,255', 0.05 + n * 0.06);
     // the office sign
     glow(SIGN.x, SIGN.y + 22, 56, '255,209,102', 0.03 + n * 0.05);
     // the fire: flickering orange light and the alarm spinning
@@ -1202,6 +1251,16 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     drawDeskProps(a, now);
   }
 
+  function isoHotDesk(i, now) {
+    const s = HOT_DESKS[i];
+    shadowAt(s.x, s.y + 4, 40, 20);
+    box(s.x - 36, s.y - 16, s.x + 36, s.y + 16, 24, { top: '#b48450', front: '#8a5c34', side: '#5d3b20', edge: '#d09a62' });
+    use(cam.front(s.y + 16, s.y + 22));
+    drawHotPlate(i);
+    use(cam.front(s.y - 6, s.y - 12, 24));
+    drawLaptop(i, now);
+  }
+
   function isoRack(now) {
     const { x, y, w, h } = RACK, gy = y + h;
     box(x, gy - 22, x + w, gy, h, { top: '#2b2d42', front: '#1b1f33', side: '#151827' });
@@ -1286,6 +1345,8 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     const items = [];
     const add = (x, y, fn) => items.push({ d: cam.depth(x, y), fn });
     const at = (m, fn) => () => { use(m); fn(); };
+    HOT_DESKS.forEach((s, i) => { add(s.x, s.y - 40, () => isoChair(s)); add(s.x, s.y + 4, () => isoHotDesk(i, now)); });
+    for (const g of sim.ghosts) { const [x, y] = anchor(g); add(x, y, at(personM(g), () => drawGhost(g, now))); }
     for (const a of Object.values(agents)) {
       const s = a.cfg.seat;
       add(s.x, s.y - 44, () => isoChair(s));
@@ -1400,6 +1461,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     for (const a of Object.values(agents)) { use(personM(a)); drawDream(a, now); }
     if (agents[selected]) { use(personM(agents[selected])); drawPlumbob(agents[selected], now); }
     for (const a of Object.values(agents)) { use(personM(a)); drawBubble(a, now); }
+    for (const g of sim.ghosts) if (g.fade > 0.5) { use(personM(g)); drawBubble(g, now); }
     use(ID);
     drawVignette();
     drawBanner(now);
@@ -1429,6 +1491,8 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
       items.push({ y: s.y + 1, fn: () => drawDesk(a, now) });
       items.push({ y: a.seated ? s.y : a.y, fn: () => drawPerson(a, now) });
     }
+    HOT_DESKS.forEach((s, i) => { items.push({ y: s.y - 1, fn: () => drawHotChair(i) }); items.push({ y: s.y + 1, fn: () => drawHotDesk(i, now) }); });
+    for (const g of sim.ghosts) items.push({ y: g.seated ? g.cfg.seat.y : g.y, fn: () => drawGhost(g, now) });
     items.push({ y: CAFE.bistro.y, fn: () => drawBistro() });
     items.push({ y: DINING.top + 13, fn: () => drawDiningWall() });
     items.push({ y: DINING.table.y - 1, fn: () => drawDiningBackChairs() });
@@ -1444,6 +1508,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     for (const a of Object.values(agents)) drawDream(a, now);
     drawPlumbob(agents[selected], now);
     for (const a of Object.values(agents)) drawBubble(a, now);
+    for (const g of sim.ghosts) if (g.fade > 0.5) drawBubble(g, now);
     drawVignette();
     drawBanner(now);
     requestAnimationFrame(frame);

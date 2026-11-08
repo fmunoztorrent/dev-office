@@ -86,6 +86,37 @@ function duplicatedByPlugin() {
   } catch { return false; }
 }
 
+// How full the session's context is: the transcript's last assistant message says what it read
+// (input + cache) and wrote; the window is 1M if the model says so or it is already past 200k.
+// It reads only the end of the file (the last MB), and never fails.
+const CONTEXT_EVENTS = new Set(['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'Stop', 'PreCompact']);
+function contextOf(file) {
+  if (!file) return null;
+  let fd;
+  try {
+    fd = fs.openSync(file, 'r');
+    const size = fs.fstatSync(fd).size;
+    const len = Math.min(size, 1 << 20);
+    const buf = Buffer.alloc(len);
+    fs.readSync(fd, buf, 0, len, size - len);
+    const lines = buf.toString('utf8').split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (!lines[i].includes('"usage"')) continue;
+      let e;
+      try { e = JSON.parse(lines[i]); } catch { continue; }
+      const u = e.message?.usage;
+      if (e.type !== 'assistant' || !u || e.isSidechain) continue;
+      const used = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.output_tokens || 0);
+      if (!used) continue;
+      const max = /\[1m\]/i.test(String(e.message.model || '')) || used > 200_000 ? 1_000_000 : 200_000;
+      return { used, max };
+    }
+  } catch { /* no transcript: no bar */ } finally {
+    if (fd !== undefined) try { fs.closeSync(fd); } catch { /* closed */ }
+  }
+  return null;
+}
+
 async function main() {
   // a side question (btw) launched by the office: it is not the team's work, it is not reported
   if (process.env.DEV_TEAM_OFFICE_BTW || duplicatedByPlugin()) return;
@@ -99,7 +130,8 @@ async function main() {
   const stateFile = path.join(RUNS, `${String(session).replace(/[^\w-]/g, '_')}.json`);
   // with a pipeline in progress, Stop closes a stage: it is not "done"
   const stage = event === 'Stop' && fs.existsSync(stateFile);
-  const directive = (await post('/v1/hooks/claude-code', { ...input, ...WHERE, session_id: session, ...(stage ? { devteam_stage: true } : {}) })) || {};
+  const context = !child && !input.agent_id && CONTEXT_EVENTS.has(event) ? contextOf(input.transcript_path) : null;
+  const directive = (await post('/v1/hooks/claude-code', { ...input, ...WHERE, session_id: session, ...(stage ? { devteam_stage: true } : {}), ...(context ? { devteam_context: context } : {}) })) || {};
   if (child) return;
 
   const lib = await loadLib();
@@ -127,7 +159,7 @@ async function main() {
     const project = lib.loadProject(input.cwd);
     const pipeline = project.pipelines.find((p) => p.id === directive.pipeline.pipeline);
     if (!pipeline) { await onStatus({ id: directive.pipeline.id, status: 'failed', detail: `no hay un pipeline "${directive.pipeline.pipeline}" en ${project.dir}/.devteam/` }); return; }
-    run = new lib.PipelineRun({ id: directive.pipeline.id, project, pipeline, task: directive.pipeline.task, report, onStatus });
+    run = new lib.PipelineRun({ id: directive.pipeline.id, project, pipeline, task: directive.pipeline.task, report, onStatus, models: directive.pipeline.models || null });
     step = run.start();
   }
 

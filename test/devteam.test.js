@@ -139,8 +139,8 @@ test('el proyecto de ejemplo: equipo, agentes de cada harness y pipelines resuel
   assert.equal(diseno.model, 'anthropic/claude-opus-5-5'); // from the role in team.json
   assert.match(diseno.agentPrompt, /\S/); // the persona comes from .pi/agents/architect.md
   assert.deepEqual([review.harness, review.agent, review.native, review.model], ['claude-code', 'code-reviewer', true, 'opus']);
-  // "model": false = the session's model
-  assert.ok(p.pipelines.find((x) => x.id === 'subagentes-pi').stages.every((s) => s.model === null));
+  // "model": false = the session's model (a profile does not change it; null would be "the profile's")
+  assert.ok(p.pipelines.find((x) => x.id === 'subagentes-pi').stages.every((s) => s.model === false));
   // what is announced to the office carries no prompts or personas
   const entry = lib.catalogEntry(p);
   assert.equal(entry.pipelines.length, 3);
@@ -319,4 +319,16 @@ test('agentCommand: una sesión nueva sin shell y con la tarea como un solo argu
   assert.deepEqual(lib.agentCommand('claude-code', { text: 'x' }, { bin: node, args: ['--permission-mode', 'auto'] }).argv, ['-p', 'x', '--permission-mode', 'auto']);
   assert.match(lib.agentCommand('emacs', { text: 'x' }).error, /no sé lanzar/);
   assert.match(lib.agentCommand('pi', { text: 'x' }, { bin: 'no-existe-este-comando-xyz' }).error, /no encuentro/);
+});
+
+test('perfiles de modelos: el agente arranca con el modelo del perfil y las etapas sin modelo toman el de su rol', () => {
+  assert.deepEqual(lib.modelArgs('claude-code', 'anthropic/claude-opus-5-5'), ['--model', 'claude-opus-5-5']);
+  assert.deepEqual(lib.modelArgs('opencode', 'opencode/big-pickle'), ['-m', 'opencode/big-pickle']);
+  assert.deepEqual(lib.modelArgs('pi', 'anthropic/claude-sonnet-5-5'), ['--model', 'anthropic/claude-sonnet-5-5']);
+  assert.deepEqual(lib.modelArgs('pi', null), []);
+  const cmd = lib.agentCommand('pi', { text: 'hola', model: 'x/y' }, { bin: process.execPath });
+  assert.ok(cmd.argv.join(' ').includes('--model x/y'), cmd.argv.join(' '));
+  const pipeline = { stages: [{ id: 'a', role: 'qa', model: null }, { id: 'b', role: 'backend', model: null }, { id: 'c', role: 'tl', model: false }, { id: 'd', role: 'tl', model: 'mine' }].map((s) => ({ ...s, needs: [] })) };
+  const run = new lib.PipelineRun({ id: 'r', project: { dir: '/p', name: 'p' }, pipeline, task: 't', models: { default: 'p/def', qa: 'p/qa' } });
+  assert.deepEqual(run.stages.map((s) => s.model), ['p/qa', 'p/def', null, 'mine'], 'su rol, si no el default; el de la sesión y el propio se respetan');
 });

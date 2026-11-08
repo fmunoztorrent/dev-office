@@ -51,14 +51,25 @@ When an agent leaves a service running in the background (a dev server, a watche
 
 To switch views: the ◇ button (top right), the `v` key or **⚙ › General › Office view**. The choice is saved in the settings and every window follows it. The terminal game always uses the front view.
 
+In both views (and in the terminal game):
+
+- **The bubbles say what each one is doing in words** ("Running the tests", "Reading cart.js"), never the command line. The `follow` viewer of a subagent shows the command too, dimmed, under the words.
+- **Each subagent is a newcomer:** a translucent extra of its role (another name, the same shirt) who comes in, sits at one of the two **hot desks** (bottom left; more of them, at the meeting table), does the subagent's work and leaves when it ends. Their desk's plate says who they are and which project they came for.
+- **The whiteboard with tickets** expands when clicked: the tasks as post-its in three columns. In the terminal, `t` or Enter there opens a new brief.
+- **The context bar** (browser, bottom center): how much context the focused session's agent has left, like a fighting game's health bar.
+
 ## Asking the team for something
 
 | From | How |
 |---|---|
-| The game | Click the whiteboard, or `t`. You pick the agent, its harness's pipeline, the session, and write the prompt |
+| The game | Click the whiteboard (with tickets it first expands them as post-its: **✚ New brief** there), or `t`. You pick the agent (grouped by project), its harness's pipeline, the session, the model profile, and write the prompt |
 | The terminal | `dev-team-office task "Add pagination" --agent pi`, or `dev-team-office prompt <id> "…" --pipeline <entry>` |
 | Your agent | Directly in its session: the office sees it all the same |
 | Another agent (MCP) | The `send_task` tool |
+
+Each brief goes with its scope in front (a line starting with 📁): the agent works only inside its project's folder and only on what was asked. That line is not part of the request: the whiteboard's title is only what you wrote. OpenCode also gets a real rule (files outside the folder are denied).
+
+**Model profiles** (⚙ › Models): a profile says which model each role uses. Anthropic's (Sonnet; Opus for the architect, Haiku for QA) and OpenCode's (its free models) come ready, and **✚ New profile** adds yours. By default each agent uses its own model; the profile chosen in the brief (or the default one in ⚙ › Models) is used when a **new session** opens (the agent starts with the profile's model) and by a pipeline's stages that set no model (each one, its role's). An open session keeps its model.
 
 The task arrives like this:
 
@@ -90,6 +101,7 @@ The subagent is still run by its harness; the pane only **shows** it, with `dev-
   - If the agent **lacks roles** (or brings no subagents), it completes its team with the office's (architect, explorer, backend, frontend and QA) in the project, in the agent's format: `.claude/agents`, `.opencode/agents`, `.pi/agents` or `.codex/agents`. Claude Code (if that folder did not exist) and OpenCode need a restart to see them; Pi uses them from the next subagent call. Details in [installation.md](installation.md#if-your-agent-brings-no-team).
   - `--team <pack>` picks another pack and `--no-team` adds none.
 - **⚙ › Agents** (or `dev-team-office agents add <path> --agent <cli>`) is the maintainer: full path, CLI and office.
+- **One office, several projects:** register one agent per project folder (`api-payments` with Claude Code, `bff-web` with Pi…). The brief groups them by project, each one works only inside its folder, the sessions list says which project each one is, and when more than one is active each line of the log is tagged with its project.
 - **Offices:** a company can have several (teams or domains), each one with its time zone, its city (its weather) and its characters. Create them in ⚙ › Offices or with `dev-team-office offices add "Payments" --timezone Europe/Madrid`.
 - **Team packs:** `dev-team-office team install example --agent <pi|claude|opencode|codex> --project .` leaves one subagent per role, in that agent's format.
 
@@ -127,5 +139,5 @@ The subagent is still run by its harness; the pane only **shows** it, with `dev-
 |---|---|
 | Monitor | `o` browser · `g` game · `←→` office · `1`–`9`/`l` a service's logs · `q` quit |
 | Log | `g` game · `o` browser · `h` help · `q` close |
-| Game (terminal) | `t` brief · `c` settings · `o` office · `a` activity · `tab`/arrows pick · `m` message · `b` btw · `s` greet · `x` cancel · `l` services (or click the rack) · `d`/`p` demos · `r` restart · `q` back |
+| Game (terminal) | `t` brief · click the whiteboard: its tasks (with tickets) or a brief · `c` settings · `o` office · `a` activity · `tab`/arrows pick · `m` message · `b` btw · `s` greet · `x` cancel · `l` services (or click the rack) · `d`/`p` demos · `r` restart · `q` back |
 | Game (browser) | `t` brief · `c` settings · `o` office · `a` activity terminal · `f` full screen · `v` front or top-down view · `l` services (or click the rack) · `esc` close |

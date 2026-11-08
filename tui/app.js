@@ -165,7 +165,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
 
     function briefKey(k) {
       const b = model.brief;
-      const opts = briefOptions({ targets: model.targets }, b.sel);
+      const opts = briefOptions({ targets: model.targets, models: model.prefs?.models }, b.sel);
       const fields = briefFields(opts);
       const i = Math.max(0, fields.indexOf(b.field));
       if (!fields.includes(b.field)) b.field = 'task';
@@ -196,6 +196,8 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       if (model.settings) { if (model.settings.key(k) === 'close') model.settings = null; return; }
       if (model.brief) return briefKey(k);
       if (model.svc) return serviceKey(k);
+      // the whiteboard, expanded: t or Enter for a new brief, anything else closes it
+      if (model.boardView) { model.boardView = false; if (k === 't' || k === '\r' || k === '\n') openBrief(); return; }
       if (model.chat !== null) {
         if (k === 'esc') model.chat = null;
         else if (k === '\r' || k === '\n') {
@@ -253,7 +255,8 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
           else if (press && btn === 0 && !L.tooSmall && !model.brief && !model.settings && at(L.termCell, 4)) { model.panel = !model.panel; resize(); }
           else if (press && btn === 0 && !model.brief && !model.settings && !model.svc) {
             const who = agentAtCell(L, sim, col, row);
-            if (!who && boardAtCell(L, col, row)) openBrief();
+            // with tickets the whiteboard expands (its tasks as post-its); without them, a new brief
+            if (!who && boardAtCell(L, col, row)) { if (sim.board.todos.length) model.boardView = true; else openBrief(); }
             else if (!who && rackAtCell(L, col, row)) openServices();
             else model.selected = who;
           }

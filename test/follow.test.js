@@ -64,7 +64,7 @@ test('follow en vivo: se engancha a la oficina, muestra lo que el subagente ya h
     pi({ child: '77', kind: 'tool_start', tool: 'bash', input: { command: 'npm test' } });
     pi({ kind: 'tool_end', tool: 'subagent_run', toolUseId: 'k1', input: { agent: 'ex-backend' }, output: 'Listo: 4 tests pasan.' });
     await until(() => out.includes('Listo: 4 tests pasan.'));
-    assert.match(out, /\$ npm test/);
+    assert.match(out, /▸ Corriendo los tests\n.*\$ npm test/, 'en palabras y, debajo, el comando');
     assert.match(out, /el pane se cierra solo/);
   } finally {
     view.close();
