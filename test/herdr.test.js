@@ -23,7 +23,7 @@ const until = async (fn, ms = 4000) => {
 };
 
 /** A fake herdr CLI: panes in memory and the list of what it was asked. */
-function fakeHerdr({ onPrompt, agentGet } = {}) {
+function fakeHerdr({ onPrompt, agentGet, onStart } = {}) {
   const panes = new Map([['w1:p1', { pane_id: 'w1:p1', workspace_id: 'w1', cwd: '/oficina', agent_status: 'unknown' }]]);
   const calls = [];
   let n = 1;
@@ -46,7 +46,13 @@ function fakeHerdr({ onPrompt, agentGet } = {}) {
       return ok({ type: 'pane_process_info', process_info: { pane_id: p.pane_id, foreground_processes: p.foreground_processes || [], shell_pid: 1 } });
     }
     if (group === 'pane' && cmd === 'close') { panes.delete(rest[0]); return ok(); }
-    if (group === 'agent' && cmd === 'start') { const p = panes.get(opt(rest, '--pane')); Object.assign(p, { agent: opt(rest, '--kind'), agent_status: 'idle' }); return ok(); }
+    if (group === 'agent' && cmd === 'start') {
+      const pane = opt(rest, '--pane');
+      const kind = opt(rest, '--kind');
+      if (onStart) return onStart(pane, kind, { ok });
+      Object.assign(panes.get(pane), { agent: kind, agent_status: 'idle' });
+      return ok();
+    }
     // with a custom executable, herdr recognizes the agent in the pane when it starts
     if (group === 'agent' && cmd === 'wait') { const p = panes.get(rest[0]); if (p) Object.assign(p, { agent: p.agent || 'claude', agent_status: 'idle' }); return ok(); }
     if (group === 'agent' && cmd === 'prompt') return onPrompt ? onPrompt(rest[0], rest[1], { ok }) : ok();
@@ -359,4 +365,40 @@ test('herdr: un agente bloqueado (agent_blocked) no se reintenta', async () => {
   const herdr = new Herdr({ env: ENV, run: fake.run });
   await assert.rejects(herdr.launchAgent({ harness: 'claude-code', cwd: '/x', prompt: 'hola' }), (err) => err.code === 'agent_blocked');
   assert.equal(prompts, 1, 'agent_blocked no se reintenta');
+});
+
+test('herdr: un pane ocupado (agent_pane_busy) se des-trackea y se reintenta en un pane nuevo', async () => {
+  let starts = 0;
+  const fake = fakeHerdr({
+    onStart: (pane, kind, { ok }) => {
+      starts++;
+      if (starts === 1) throw Object.assign(new Error('el pane está ocupado'), { code: 'agent_pane_busy' });
+      return ok();
+    },
+  });
+  const herdr = new Herdr({ env: ENV, run: fake.run });
+  const { pane } = await herdr.launchAgent({ harness: 'claude-code', cwd: '/x', prompt: 'hola' });
+  assert.equal(pane, 'w1:p3', 'el pane nuevo gana');
+  assert.equal(starts, 2, 'un solo reintento');
+  assert.equal(fake.calls.filter((c) => c[1] === 'split').length, 2, 'split se pidió dos veces');
+  assert.ok(!herdr.tracked.has('w1:p2'), 'el pane ocupado se des-trackeó');
+  assert.ok(fake.panes.has('w1:p2'), 'el pane ocupado no se cerró');
+  assert.ok(herdr.tracked.has('w1:p3'), 'el pane nuevo queda trackeado');
+});
+
+test('herdr: un error de lanzamiento con otro código (agent_blocked) no se reintenta', async () => {
+  let starts = 0;
+  const fake = fakeHerdr({
+    onStart: () => {
+      starts++;
+      throw Object.assign(new Error('el agente está bloqueado'), { code: 'agent_blocked' });
+    },
+  });
+  const herdr = new Herdr({ env: ENV, run: fake.run });
+  await assert.rejects(
+    herdr.launchAgent({ harness: 'claude-code', cwd: '/x', prompt: 'hola' }),
+    (err) => err.code === 'agent_blocked' && err.pane === 'w1:p2',
+  );
+  assert.equal(starts, 1, 'un solo intento');
+  assert.equal(fake.calls.filter((c) => c[1] === 'split').length, 1, 'un solo split');
 });

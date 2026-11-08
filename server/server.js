@@ -721,7 +721,13 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       subPanes?.stop();
       hub.stopAll();
       for (const c of wss.clients) c.terminate();
-      await Promise.all([tcp, unix].filter(Boolean).map((s) => new Promise((r) => s.close(r))));
+      // `close()` stops accepting new connections but waits for the open ones (a browser's keep-alive,
+      // an idle socket): a terminal that quits would hang here and never reach `process.exit(0)`.
+      // So after each `close()` we force the remaining connections shut.
+      await Promise.all([tcp, unix].filter(Boolean).map((s) => new Promise((r) => {
+        s.close(r);
+        s.closeAllConnections?.();
+      })));
       if (socketPath) fs.rmSync(socketPath, { force: true });
       if (ownStore) store.close();
     },
