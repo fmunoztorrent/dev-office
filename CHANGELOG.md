@@ -4,6 +4,10 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+### Fixed
+
+- **`update` no longer downgrades:** `dev-team-office update` went from 0.7.0 back to 0.6.0 because the installer resolved the latest GitHub *Release* (v0.6.0) while the v0.7.0 tag had no Release. The installer now installs the highest version tag (`main` if the tags cannot be looked up) and never replaces a newer installed copy unless `DEV_TEAM_OFFICE_REF` is set. `update` says when you are already on the latest version, and downloads retry over HTTP/1.1 when HTTP/2 fails.
+
 ## [0.7.0] - 2026-10-30
 
 ### Added

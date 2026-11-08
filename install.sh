@@ -10,7 +10,8 @@
 #
 # Environment:
 #   DEV_TEAM_OFFICE_REPO     owner/repo on GitHub        (default fmunoztorrent/dev-office)
-#   DEV_TEAM_OFFICE_REF      branch or tag               (default: the latest release; main for the newest code)
+#   DEV_TEAM_OFFICE_REF      branch or tag               (default: the highest version tag, vX.Y.Z; main if it cannot be looked up)
+#                            an auto-resolved version never downgrades an installed newer one
 #   DEV_TEAM_OFFICE_SOURCE   a local folder or .tar.gz to install instead of downloading
 #   DEV_TEAM_OFFICE_HOME     where it lives              (default ~/.dev-team-office)
 #   DEV_TEAM_OFFICE_BIN_DIR  where the command goes      (default ~/.local/bin)
@@ -23,13 +24,15 @@ REPO="${DEV_TEAM_OFFICE_REPO:-fmunoztorrent/dev-office}"
 REF="${DEV_TEAM_OFFICE_REF:-}"
 DTO_HOME="${DEV_TEAM_OFFICE_HOME:-$HOME/.dev-team-office}"
 APP="$DTO_HOME/app"
+AUTO_REF=0
 
 say() { printf '%s\n' "$*"; }
-# The latest release's tag (vX.Y.Z), so everyone installing gets the same published version.
-latest_release() {
+# curl with retries; on failure (e.g. exit 16, HTTP/2 framing errors) once more over HTTP/1.1.
+fetch() { curl -fsSL --retry 3 --retry-delay 1 "$@" || curl -fsSL --http1.1 --retry 3 --retry-delay 1 "$@"; }
+# The highest version tag (vX.Y.Z), compared numerically per segment (0.10.0 > 0.9.1). Fails if none.
+latest_tag() {
   command -v curl >/dev/null 2>&1 || return 1
-  u=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/${REPO}/releases/latest" 2>/dev/null) || return 1
-  case "$u" in */releases/tag/?*) printf '%s' "${u##*/}" ;; *) return 1 ;; esac
+  fetch "https://api.github.com/repos/${REPO}/tags?per_page=100" 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const t=JSON.parse(s).map(x=>x.name).filter(n=>/^v\d+\.\d+\.\d+$/.test(n)).sort((a,b)=>{const p=a.slice(1).split("."),q=b.slice(1).split(".");for(let i=0;i<3;i++)if(p[i]-q[i])return p[i]-q[i];return 0});if(!t.length)throw 0;process.stdout.write(t[t.length-1])}catch{process.exit(1)}})'
 }
 die() { printf 'dev-team-office: %s\n' "$*" >&2; exit 1; }
 
@@ -55,16 +58,38 @@ if [ -n "${DEV_TEAM_OFFICE_SOURCE:-}" ]; then
     mv "$TMP/x"/* "$TMP/src"
   fi
 else
-  [ -n "$REF" ] || REF=$(latest_release) || REF=main
+  # AUTO_REF=1: nobody chose a version, so the downgrade guard below applies.
+  [ -n "$REF" ] || { AUTO_REF=1; REF=$(latest_tag) || REF=main; }
   URL="https://codeload.github.com/${REPO}/tar.gz/${REF}"
   say "Downloading ${REPO}@${REF}…"
-  if command -v curl >/dev/null 2>&1; then curl -fsSL "$URL" -o "$TMP/app.tgz" || die "could not download $URL"
+  if command -v curl >/dev/null 2>&1; then fetch "$URL" -o "$TMP/app.tgz" || die "could not download $URL"
   elif command -v wget >/dev/null 2>&1; then wget -qO "$TMP/app.tgz" "$URL" || die "could not download $URL"
   else die "curl or wget is required"; fi
   mkdir -p "$TMP/x" && tar -xzf "$TMP/app.tgz" -C "$TMP/x"
   mv "$TMP/x"/* "$TMP/src"
 fi
 [ -f "$TMP/src/bin/dev-team-office.js" ] || die "that does not look like Dev Team Office (no bin/dev-team-office.js)"
+
+# --- downgrade guard: an auto-resolved version never replaces a newer installed one
+if [ "$AUTO_REF" = 1 ]; then
+  CURRENT="${DEV_TEAM_OFFICE_UPDATE_FROM:-}"
+  [ -n "$CURRENT" ] || { [ -f "$APP/package.json" ] && CURRENT=$(node -p 'require(process.argv[1]).version' "$APP/package.json" 2>/dev/null) || CURRENT=""; }
+  if [ -n "$CURRENT" ]; then
+    NEW=$(node -p 'require(process.argv[1]).version' "$TMP/src/package.json")
+    # Prints gt, eq or lt: CURRENT compared with NEW, numerically per segment.
+    CMP=$(node -p 'const p=v=>String(v).split("-")[0].split(".").map(n=>parseInt(n,10)||0);const a=p(process.argv[1]),b=p(process.argv[2]);let r="eq";for(let i=0;i<3&&r==="eq";i++)if((a[i]||0)!==(b[i]||0))r=(a[i]||0)>(b[i]||0)?"gt":"lt";r' "$CURRENT" "$NEW")
+    if [ "$CMP" = gt ]; then
+      say "Dev Team Office ${CURRENT} is newer than ${NEW}: not downgrading (set DEV_TEAM_OFFICE_REF=v${NEW} to install it anyway)"
+      FINISHED=1
+      exit 0
+    fi
+    if [ "$CMP" = eq ] && [ -n "${DEV_TEAM_OFFICE_UPDATE_FROM:-}" ]; then
+      say "Dev Team Office ${CURRENT} is already the latest version"
+      FINISHED=1
+      exit 0
+    fi
+  fi
+fi
 
 # --- in place (the old copy goes away only when the new one is ready)
 mkdir -p "$DTO_HOME"

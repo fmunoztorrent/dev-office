@@ -489,15 +489,25 @@ async function cmdDoctor() {
   if (!out.ok) process.exitCode = 1;
 }
 
-// Updating: an installed copy is replaced by the latest version (with the same installer); a git
-// clone is updated with git.
+// Updating: an installed copy is replaced by the latest version (with the same installer, which
+// never downgrades: it gets the running version in DEV_TEAM_OFFICE_UPDATE_FROM); a git clone is
+// updated with git. The installer is downloaded to a temp file first, retrying over HTTP/1.1
+// if the default attempt fails.
 async function cmdUpdate() {
   const { ROOT_DIR } = await import('./setup.js');
   if (fs.existsSync(path.join(ROOT_DIR, '.git'))) { console.log(t('cli.updateGit', { dir: tilde(ROOT_DIR) })); return; }
   const { spawnSync } = await import('node:child_process');
   const url = process.env.DEV_TEAM_OFFICE_INSTALLER || 'https://raw.githubusercontent.com/fmunoztorrent/dev-office/main/install.sh';
-  const r = spawnSync('sh', ['-c', `curl -fsSL ${JSON.stringify(url)} | sh`], { stdio: 'inherit' });
-  process.exitCode = r.status ?? 1;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dev-team-office-update-'));
+  try {
+    const file = path.join(dir, 'install.sh');
+    const get = (extra, stderr) => spawnSync('curl', ['-fsSL', '--retry', '3', '--retry-delay', '1', ...extra, '-o', file, url], { stdio: ['ignore', 'ignore', stderr] }).status === 0;
+    if (!get([], 'ignore') && !get(['--http1.1'], 'inherit')) { process.exitCode = 1; return; }
+    const r = spawnSync('sh', [file], { stdio: 'inherit', env: { ...process.env, DEV_TEAM_OFFICE_UPDATE_FROM: VERSION } });
+    process.exitCode = r.status ?? 1;
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 // The team packs shipped with the package: they are listed and installed into a harness's agents.
