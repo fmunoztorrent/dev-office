@@ -120,3 +120,37 @@ test('update: la oficina en segundo plano que quedó con la versión vieja se re
   assert.notEqual(now.pid, old.pid);
   appCli('stop');
 });
+
+test('update en un clon de git: hace git pull --ff-only, corre setup y reinicia la oficina de ese clon; sin cambios no la toca', async () => {
+  const { home, base, env } = await sandbox();
+  Object.assign(env, { DEV_TEAM_OFFICE_BIN_DIR: path.join(home, 'bin'), DEV_TEAM_OFFICE_SETUP_CLI: '0', DEV_TEAM_OFFICE_MODIFY_PATH: '0', GIT_CONFIG_NOSYSTEM: '1' });
+  const git = (cwd, ...a) => { const r = spawnSync('git', ['-C', cwd, '-c', 'user.name=t', '-c', 'user.email=t@localhost', ...a], { env, encoding: 'utf8' }); assert.equal(r.status, 0, r.stderr); return r.stdout.trim(); };
+  // the "remote" (this checkout's files) and the user's clone of it
+  const origin = path.join(home, 'origin');
+  fs.cpSync(ROOT, origin, { recursive: true, filter: (src) => !/\/(\.git|node_modules|\.claude)(\/|$)/.test(src.slice(ROOT.length)) });
+  git(origin, 'init', '-q', '-b', 'main');
+  git(origin, 'add', '-A');
+  git(origin, 'commit', '-qm', 'base');
+  const clone = path.join(home, 'clone');
+  assert.equal(spawnSync('git', ['clone', '-q', origin, clone], { env }).status, 0);
+  const cloneCli = (...args) => spawnSync(process.execPath, [path.join(clone, 'bin', 'dev-team-office.js'), ...args], { env, encoding: 'utf8', timeout: 60000 });
+
+  assert.equal(cloneCli('start').status, 0);
+  const before = await officeHealth(base);
+  const same = cloneCli('update'); // nothing new: the office is left alone
+  assert.equal(same.status, 0, same.stderr);
+  assert.match(same.stdout, /Updating the git clone/);
+  assert.equal((await officeHealth(base)).pid, before.pid);
+
+  fs.appendFileSync(path.join(origin, 'README.md'), '\nA new line.\n');
+  git(origin, 'commit', '-qam', 'new');
+  const r = cloneCli('update');
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(git(clone, 'rev-parse', 'HEAD'), git(origin, 'rev-parse', 'HEAD'));
+  assert.match(r.stdout, /Dev Team Office .* setup|installation/i); // setup ran with the new code
+  assert.match(r.stdout, /restarted/);
+  const after = await officeHealth(base);
+  assert.ok(after && after.pid !== before.pid, 'la oficina no se reinició');
+  assert.ok(sameInstall(after, clone));
+  cloneCli('stop');
+});

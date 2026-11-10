@@ -214,12 +214,13 @@ async function cmdRestart() {
 }
 
 // After an install or an update (install.sh calls it with --if-outdated): an office still running
-// an older version is restarted with the new one. One in the background comes back by itself; one
+// an older version is restarted with the new one (--if-running: whatever its version, after a git pull). One in the background comes back by itself; one
 // that lives in a terminal is closed, to be opened again there.
 async function cmdRefresh() {
   const h = await runningOffice();
   const now = installedVersion() || VERSION;
-  if (!h || compareVersions(h.version, now) === 0 || !sameInstall(h)) return;
+  // --if-running (a git pull): the code changed even if the version did not
+  if (!h || (!args['if-running'] && compareVersions(h.version, now) === 0) || !sameInstall(h)) return;
   const mode = officeMode(h); // before stopping it: an older office is recognized by its process
   const out = await stopOffice({ base });
   if (!out.stopped) { console.log(t('cli.refreshFailed', { version: h.version, error: out.error || '' })); return; }
@@ -541,8 +542,9 @@ async function cmdDoctor() {
 // if the default attempt fails.
 async function cmdUpdate() {
   const { ROOT_DIR } = await import('./setup.js');
-  if (fs.existsSync(path.join(ROOT_DIR, '.git'))) { console.log(t('cli.updateGit', { dir: tilde(ROOT_DIR) })); return; }
   const { spawnSync } = await import('node:child_process');
+  const fresh = (...a) => spawnSync(process.execPath, [path.join(ROOT_DIR, 'bin', 'dev-team-office.js'), ...a], { stdio: 'inherit' });
+  if (fs.existsSync(path.join(ROOT_DIR, '.git'))) return updateClone(ROOT_DIR, spawnSync, fresh);
   const url = process.env.DEV_TEAM_OFFICE_INSTALLER || 'https://raw.githubusercontent.com/fmunoztorrent/dev-office/main/install.sh';
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dev-team-office-update-'));
   try {
@@ -556,6 +558,20 @@ async function cmdUpdate() {
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+}
+
+// A git clone is updated with `git pull --ff-only` (never a merge or a rebase of your work). If
+// the code changed, the new code (fresh processes) runs setup, so the copies the agents use
+// (hooks, extension, plugin, skills) are the new ones, and restarts the office of this clone.
+function updateClone(root, spawnSync, fresh) {
+  const head = () => spawnSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
+  console.log(t('cli.updateGit', { dir: tilde(root) }));
+  const before = head();
+  const r = spawnSync('git', ['-C', root, 'pull', '--ff-only'], { stdio: 'inherit' });
+  if (r.status !== 0) { console.log(t('cli.updateGitFailed', { dir: tilde(root) })); process.exitCode = 1; return; }
+  if (head() === before) return;
+  fresh('setup');
+  fresh('restart', '--if-running');
 }
 
 // The team packs shipped with the package: they are listed and installed into a harness's agents.
@@ -619,7 +635,7 @@ if (args.help) { console.log(HELP()); process.exit(0); }
 if (args.version) { console.log(VERSION); process.exit(0); }
 
 const commands = {
-  open: () => cmdOpen({ game: !!args.game }), game: () => cmdOpen({ game: true }), monitor: () => cmdOpen(), serve: cmdServe, start: cmdStart, stop: cmdStop, restart: () => (args['if-outdated'] ? cmdRefresh() : cmdRestart()), watch: () => cmdWatch(args._[1]), status: cmdStatus,
+  open: () => cmdOpen({ game: !!args.game }), game: () => cmdOpen({ game: true }), monitor: () => cmdOpen(), serve: cmdServe, start: cmdStart, stop: cmdStop, restart: () => (args['if-outdated'] || args['if-running'] ? cmdRefresh() : cmdRestart()), watch: () => cmdWatch(args._[1]), status: cmdStatus,
   demo: cmdDemo, send: cmdSend, task: cmdTask, tasks: cmdTasks, install: cmdSetup, setup: cmdSetup, uninstall: cmdUninstall, doctor: cmdDoctor, update: cmdUpdate, agents: cmdAgents, offices: cmdOffices, config: cmdConfig,
   pane: cmdPane, follow: cmdFollow, join: cmdJoin, prompt: cmdPrompt, team: cmdTeam, mcp: cmdMcp, btw: cmdBtw, help: () => console.log(HELP()),
 };

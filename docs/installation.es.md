@@ -42,7 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/fmunoztorrent/dev-office/main/insta
 
 Al terminar tienes:
 
-- **la versión más nueva (el tag de versión más alto)** de la oficina en `~/.dev-team-office/app`. Su primera línea dice cuál (`Downloading fmunoztorrent/dev-office@v0.8.0…`), así que todos los que instalan reciben la misma versión;
+- **la versión más nueva (el tag de versión más alto)** de la oficina en `~/.dev-team-office/app`. Su primera línea dice cuál (`Downloading fmunoztorrent/dev-office@v0.8.1…`), así que todos los que instalan reciben la misma versión;
 - **el comando** `dev-team-office` en `~/.local/bin`;
 - **tus agentes conectados**, porque el instalador corre `dev-team-office setup` (ver el paso 3).
 
@@ -244,8 +244,10 @@ Una oficina que sigue corriendo mantiene el código con que arrancó, así que d
 ```bash
 dev-team-office start      # la oficina en segundo plano
 dev-team-office stop       # la detiene (en segundo plano o en una terminal)
-dev-team-office restart    # la detiene y la vuelve a iniciar con el código instalado (también después de un git pull)
+dev-team-office restart    # la detiene y la vuelve a iniciar con el código instalado
 ```
+
+En un clon de git (el comando corre tu checkout), `update` hace `git pull --ff-only` (nunca un merge ni un rebase de tu trabajo), corre `setup` para que tus agentes reciban los hooks, la extensión y las skills nuevas, y reinicia la oficina si el código cambió. Con cambios locales o en otra rama lo dice y te lo deja a ti.
 
 ## Si algo no anda
 

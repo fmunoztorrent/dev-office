@@ -23,7 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/fmunoztorrent/dev-office/main/insta
 3. **Open a new terminal** and start the office: `dev-team-office`.
 4. **Your agent needs its own login.** The office uses no model. Claude Code: `/login`. Pi: `/login` and a model. OpenCode works with its free models as installed.
 
-To check or undo: `dev-team-office doctor` · `dev-team-office uninstall`. To update: `dev-team-office update` (or the same `curl`); it restarts the office that is running so the new version is the one you see. For the newest code instead of the latest version: `curl … | DEV_TEAM_OFFICE_REF=main sh`.
+To check or undo: `dev-team-office doctor` · `dev-team-office uninstall`. To update: `dev-team-office update` (or the same `curl`; in a git clone it does `git pull`); it restarts the office that is running so the new version is the one you see. For the newest code instead of the latest version: `curl … | DEV_TEAM_OFFICE_REF=main sh`.
 
 Step by step, with every way to start it and how to add your project: [docs/installation.md](docs/installation.md).
 

@@ -42,7 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/fmunoztorrent/dev-office/main/insta
 
 When it finishes you have:
 
-- **the latest version** (the highest version tag) of the office in `~/.dev-team-office/app`. Its first line says which one (`Downloading fmunoztorrent/dev-office@v0.8.0…`), so everyone installing gets the same version;
+- **the latest version** (the highest version tag) of the office in `~/.dev-team-office/app`. Its first line says which one (`Downloading fmunoztorrent/dev-office@v0.8.1…`), so everyone installing gets the same version;
 - **the** `dev-team-office` **command** in `~/.local/bin`;
 - **your agents connected**, because the installer runs `dev-team-office setup` (see step 3).
 
@@ -244,8 +244,10 @@ An office that keeps running keeps the code it started with, so after installing
 ```bash
 dev-team-office start      # the office in the background
 dev-team-office stop       # stops it (in the background or in a terminal)
-dev-team-office restart    # stops it and starts it again with the installed code (after a git pull, too)
+dev-team-office restart    # stops it and starts it again with the installed code
 ```
+
+In a git clone (the command runs your checkout), `update` does `git pull --ff-only` (never a merge or a rebase of your work), runs `setup` so your agents get the new hooks, extension and skills, and restarts the office if the code changed. With local changes or on another branch it says so and leaves it to you.
 
 ## Troubleshooting
 

@@ -4,6 +4,12 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-10
+
+### Fixed
+
+- **`update` in a git clone updates it:** when `dev-team-office` runs a git checkout, `update` only printed "update it with git pull", so nothing changed. Now it does `git pull --ff-only`, runs `setup` with the new code (your agents' hooks, extension and skills) and restarts the office of that clone if the code changed. With local changes or on another branch it says so and does nothing.
+
 ## [0.8.0] - 2026-11-10
 
 ### Added
@@ -94,7 +100,8 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/fmunoztorrent/dev-office/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/fmunoztorrent/dev-office/releases/tag/v0.6.0

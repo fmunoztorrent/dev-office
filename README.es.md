@@ -23,7 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/fmunoztorrent/dev-office/main/insta
 3. **Abre una terminal nueva** y arranca la oficina: `dev-team-office`.
 4. **Tu agente necesita su propio login.** La oficina no usa ningún modelo. Claude Code: `/login`. Pi: `/login` y un modelo. OpenCode funciona con sus modelos gratuitos tal como se instala.
 
-Para revisar o deshacer: `dev-team-office doctor` · `dev-team-office uninstall`. Para actualizar: `dev-team-office update` (o el mismo `curl`); reinicia la oficina que esté corriendo para que veas la versión nueva. Para el código más nuevo en vez de la versión más nueva: `curl … | DEV_TEAM_OFFICE_REF=main sh`.
+Para revisar o deshacer: `dev-team-office doctor` · `dev-team-office uninstall`. Para actualizar: `dev-team-office update` (o el mismo `curl`; en un clon de git hace `git pull`); reinicia la oficina que esté corriendo para que veas la versión nueva. Para el código más nuevo en vez de la versión más nueva: `curl … | DEV_TEAM_OFFICE_REF=main sh`.
 
 Paso a paso, con cada forma de arrancar y cómo sumar tu proyecto: [docs/installation.es.md](docs/installation.es.md).
 

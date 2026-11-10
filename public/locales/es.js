@@ -470,7 +470,7 @@ Uso:
   dev-team-office doctor          Revisa la instalación (Node, lanzador, oficina, cada agente).
   dev-team-office uninstall [--only …] [--purge]
                                   Deshace setup (--purge también borra la base).
-  dev-team-office update          Actualiza a la última versión y reinicia con ella la oficina que esté corriendo.
+  dev-team-office update          Actualiza a la última versión (un clon de git: git pull) y reinicia con ella la oficina que esté corriendo.
   dev-team-office mcp             El servidor MCP (stdio) que setup registra en cada agente.
   dev-team-office btw "<pregunta>" [--office <id>]
                                   Una pregunta al margen al agente de turno sobre el equipo (como /btw).
@@ -519,13 +519,14 @@ API: docs/api.es.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
     teams: 'Equipos:', teamNone: '(sin equipos empaquetados)',
     teamUsage: 'Uso: dev-team-office team [list] | dev-team-office team install <team> --agent <pi|claude|opencode|codex> [--project <dir>] [--from <packsRoot>]',
     btwUsage: 'Uso: dev-team-office btw "<pregunta>" [--office <id>]', btwAsking: '❓ preguntándole a {agent}…',
-    updateGit: 'Es un clon de git ({dir}): actualízalo con git pull y luego dev-team-office restart',
+    updateGit: 'Actualizando el clon de git en {dir} (git pull --ff-only)…',
+    updateGitFailed: 'No se pudo actualizar {dir} con git pull --ff-only (¿cambios locales u otra rama?): actualízalo a mano y luego dev-team-office restart',
     replaced: 'La oficina {old} que estaba corriendo fue reemplazada por esta ({version})',
     alreadyRunning: 'La oficina {version} ya está corriendo en {url} (pid {pid})',
     started: 'Oficina {version} iniciada en segundo plano en {url} (pid {pid}) · dev-team-office stop la detiene',
     startFailed: 'La oficina no arrancó: mira {log}', stopped: 'Oficina {version} detenida (pid {pid})', notRunning: 'No hay ninguna oficina corriendo en {base}',
     restarted: 'Oficina {version} reiniciada en {url} (pid {pid})',
-    refreshed: 'La oficina que estaba corriendo se reinició: {old} → {version} ({url}). Recarga el juego en el navegador si no lo hace solo.',
+    refreshed: 'La oficina que estaba corriendo se reinició: {old} → {version} ({url}). El juego abierto en el navegador se recarga solo (uno de la 0.7.0 o anterior: recárgalo a mano).',
     refreshTerminal: 'La oficina {old} que estaba abierta en una terminal se cerró para que sirva la {version}: ábrela otra vez ahí con dev-team-office',
     refreshFailed: 'No se pudo reiniciar la oficina que está corriendo ({version}): {error} · usa dev-team-office restart',
     paneOpened: '{pane}', paneOffline: '(la oficina no está corriendo: el pane se abrió, pero no aparece en el juego)',
