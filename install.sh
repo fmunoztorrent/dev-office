@@ -102,6 +102,9 @@ VERSION=$(node -p "require('$APP/package.json').version")
 say "Dev Team Office $VERSION installed at $APP"
 
 # --- connect the agents (and the `dev-team-office` command)
+# An office left running from this install keeps its old code: restart it with the new one.
+node "$APP/bin/dev-team-office.js" restart --if-outdated 2>/dev/null || true
+
 if [ "${DEV_TEAM_OFFICE_NO_SETUP:-}" = 1 ]; then
   say "Next: $APP/bin/dev-team-office.js setup"
   FINISHED=1

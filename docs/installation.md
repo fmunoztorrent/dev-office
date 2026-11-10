@@ -42,7 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/fmunoztorrent/dev-office/main/insta
 
 When it finishes you have:
 
-- **the latest version** (the highest version tag) of the office in `~/.dev-team-office/app`. Its first line says which one (`Downloading fmunoztorrent/dev-office@v0.7.0…`), so everyone installing gets the same version;
+- **the latest version** (the highest version tag) of the office in `~/.dev-team-office/app`. Its first line says which one (`Downloading fmunoztorrent/dev-office@v0.8.0…`), so everyone installing gets the same version;
 - **the** `dev-team-office` **command** in `~/.local/bin`;
 - **your agents connected**, because the installer runs `dev-team-office setup` (see step 3).
 
@@ -238,6 +238,14 @@ dev-team-office uninstall --purge      # also deletes ~/.dev-team-office (your d
 ```
 
 `update` never downgrades: it says when you are already on the latest version, and it only installs an older one if you set `DEV_TEAM_OFFICE_REF`.
+
+An office that keeps running keeps the code it started with, so after installing `update` (and the `curl`) restarts it: one in the background (started by Pi, the MCP or `dev-team-office start`) comes back by itself with the new version, and the open game in the browser reloads; one open in a terminal is closed, to be opened again there with `dev-team-office`. Opening a newer `dev-team-office` also replaces an older office that is still running. By hand:
+
+```bash
+dev-team-office start      # the office in the background
+dev-team-office stop       # stops it (in the background or in a terminal)
+dev-team-office restart    # stops it and starts it again with the installed code (after a git pull, too)
+```
 
 ## Troubleshooting
 

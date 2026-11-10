@@ -437,6 +437,9 @@ Usage:
                                   The roles its subagents do not cover are filled with the office team, in the
                                   project and in the agent's format (--team picks another pack; --no-team, none).
   dev-team-office serve           Just the API and the log, no keys (to leave it in the background).
+  dev-team-office start           Starts the office in the background (the game at its URL; the log in ~/.dev-team-office/office.log).
+  dev-team-office stop            Stops the running office (in the background or in a terminal).
+  dev-team-office restart         Stops it and starts it again in the background, with the installed code.
   dev-team-office watch [url]     Watch an office that is already running (the local one by default).
   dev-team-office status          Is an office running? Shows the version and endpoints.
   dev-team-office demo [--pi]     Plays a sample session (Claude Code, or a Pi TDD flow).
@@ -467,7 +470,7 @@ Usage:
   dev-team-office doctor          Checks the installation (Node, launcher, office, each agent).
   dev-team-office uninstall [--only …] [--purge]
                                   Undoes setup (--purge also deletes the database).
-  dev-team-office update          Updates to the latest version.
+  dev-team-office update          Updates to the latest version and restarts the running office with it.
   dev-team-office mcp             The MCP server (stdio) that setup registers in each agent.
   dev-team-office btw "<question>" [--office <id>]
                                   A side question to the agent on duty about the team (like /btw).
@@ -516,7 +519,15 @@ API: docs/api.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
     teams: 'Teams:', teamNone: '(no team packs shipped)',
     teamUsage: 'Usage: dev-team-office team [list] | dev-team-office team install <team> --agent <pi|claude|opencode|codex> [--project <dir>] [--from <packsRoot>]',
     btwUsage: 'Usage: dev-team-office btw "<question>" [--office <id>]', btwAsking: '❓ asking {agent}…',
-    updateGit: 'This is a git clone ({dir}): update it with git pull',
+    updateGit: 'This is a git clone ({dir}): update it with git pull, then dev-team-office restart',
+    replaced: 'The office {old} that was running was replaced by this one ({version})',
+    alreadyRunning: 'The office {version} is already running at {url} (pid {pid})',
+    started: 'Office {version} started in the background at {url} (pid {pid}) · dev-team-office stop stops it',
+    startFailed: 'The office did not start: see {log}', stopped: 'Office {version} stopped (pid {pid})', notRunning: 'No office is running at {base}',
+    restarted: 'Office {version} restarted at {url} (pid {pid})',
+    refreshed: 'The running office was restarted: {old} → {version} ({url}). Reload the game in the browser if it does not do it by itself.',
+    refreshTerminal: 'The office {old} that was open in a terminal was closed so that {version} is the one serving: open it again there with dev-team-office',
+    refreshFailed: 'Could not restart the running office ({version}): {error} · use dev-team-office restart',
     paneOpened: '{pane}', paneOffline: '(the office is not running: the pane opened, but it does not show up in the game)',
   },
   install: {

@@ -13,6 +13,7 @@ import { openStore } from '../server/store.js';
 import { detectHarness } from '../integrations/common/devteam.mjs';
 import { t, setLanguage, getLanguage } from '../public/i18n.js';
 import { systemZone, countryName, zoneInfo } from '../public/clock.js';
+import { compareVersions, installedVersion, officeMode, sameInstall, stopOffice, startOffice } from '../server/lifecycle.js';
 
 // ---------------------------------------------------------------- argumentos
 
@@ -85,11 +86,11 @@ async function launchAgent(server) {
 const wantsMonitor = () => args._[0] === 'monitor' || (process.env.HERDR_ENV === '1' && args.monitor !== false);
 
 /** Starts the office and leaves the log in the terminal; with `game`, it goes straight into the game. */
-async function cmdOpen({ game = false } = {}) {
+async function cmdOpen({ game = false, notes: carried = [] } = {}) {
   // Without an interactive terminal (a script, a background process) there is no game in the terminal,
   // but the office stays alive for the browser, with the log.
   if (!process.stdout.isTTY || !process.stdin.isTTY) return cmdServe();
-  const notes = [];
+  const notes = [...carried];
   let started = false;
   let server;
   try {
@@ -99,6 +100,11 @@ async function cmdOpen({ game = false } = {}) {
     if (err.code !== 'EADDRINUSE') throw err;
     const other = await runningOffice();
     if (!other) fail(t('cli.portBusyOther', { port }));
+    // an office left running with an older version (from before an update): this one replaces it
+    if (compareVersions(other.version, VERSION) < 0 && sameInstall(other) && (await stopOffice({ base })).stopped) {
+      notes.push(t('cli.replaced', { old: other.version, version: VERSION }));
+      return cmdOpen({ game, notes });
+    }
     if (wantsMonitor()) return cmdMonitorRemote();
     return cmdWatch(`ws://${new URL(base).host}/v1/ws`, t('console.attached'));
   }
@@ -161,7 +167,7 @@ async function cmdServe() {
   let started = false;
   let server;
   try {
-    server = await startServer({ port, host, socket, log: (m) => { if (!started) notes.push(m); }, herdr: args.herdr !== false });
+    server = await startServer({ port, host, socket, log: (m) => { if (!started) notes.push(m); }, herdr: args.herdr !== false, mode: 'background' });
     started = true;
   } catch (err) {
     if (err.code === 'EADDRINUSE') fail(t('cli.portBusy', { port }));
@@ -180,6 +186,46 @@ async function cmdStatus() {
   const h = await runningOffice();
   if (!h) fail(t('cli.noOffice', { base }));
   console.log(t('cli.status', { version: h.version, pid: h.pid, uptime: h.uptime, url: h.url, socket: tilde(h.socket) || t('cli.noSocket') }));
+}
+
+// start / stop / restart: the office in the background, without a terminal of its own (the
+// browser at its URL, the agents reporting to it). `dev-team-office` (the monitor) attaches to it.
+async function cmdStart() {
+  const h = await runningOffice();
+  if (h && compareVersions(h.version, VERSION) >= 0) { console.log(t('cli.alreadyRunning', { version: h.version, url: base, pid: h.pid })); return; }
+  if (h) return cmdRestart();
+  const out = await startOffice({ base, port: args.port || process.env.DEV_TEAM_OFFICE_PORT });
+  if (!out.ok) fail(t('cli.startFailed', { log: tilde(out.log) }));
+  console.log(t('cli.started', { version: out.health.version, url: base, pid: out.health.pid }));
+}
+
+async function cmdStop() {
+  const out = await stopOffice({ base });
+  if (!out.ok) fail(t('cli.couldNot', { error: out.error }));
+  console.log(out.stopped ? t('cli.stopped', { version: out.health.version, pid: out.health.pid }) : t('cli.notRunning', { base }));
+}
+
+async function cmdRestart() {
+  const out = await stopOffice({ base });
+  if (!out.ok) fail(t('cli.couldNot', { error: out.error }));
+  const up = await startOffice({ base, port: args.port || process.env.DEV_TEAM_OFFICE_PORT });
+  if (!up.ok) fail(t('cli.startFailed', { log: tilde(up.log) }));
+  console.log(t('cli.restarted', { version: up.health.version, url: base, pid: up.health.pid }));
+}
+
+// After an install or an update (install.sh calls it with --if-outdated): an office still running
+// an older version is restarted with the new one. One in the background comes back by itself; one
+// that lives in a terminal is closed, to be opened again there.
+async function cmdRefresh() {
+  const h = await runningOffice();
+  const now = installedVersion() || VERSION;
+  if (!h || compareVersions(h.version, now) === 0 || !sameInstall(h)) return;
+  const mode = officeMode(h); // before stopping it: an older office is recognized by its process
+  const out = await stopOffice({ base });
+  if (!out.stopped) { console.log(t('cli.refreshFailed', { version: h.version, error: out.error || '' })); return; }
+  if (mode !== 'background') { console.log(t('cli.refreshTerminal', { old: h.version, version: now })); return; }
+  const up = await startOffice({ base, port: args.port || process.env.DEV_TEAM_OFFICE_PORT });
+  console.log(up.ok ? t('cli.refreshed', { old: h.version, version: up.health.version, url: base }) : t('cli.startFailed', { log: tilde(up.log) }));
 }
 
 async function cmdDemo() {
@@ -505,6 +551,8 @@ async function cmdUpdate() {
     if (!get([], 'ignore') && !get(['--http1.1'], 'inherit')) { process.exitCode = 1; return; }
     const r = spawnSync('sh', [file], { stdio: 'inherit', env: { ...process.env, DEV_TEAM_OFFICE_UPDATE_FROM: VERSION } });
     process.exitCode = r.status ?? 1;
+    // the office still running keeps its old code: the new one (a fresh process) restarts it
+    if (r.status === 0) spawnSync(process.execPath, [path.join(ROOT_DIR, 'bin', 'dev-team-office.js'), 'restart', '--if-outdated'], { stdio: 'inherit' });
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -571,7 +619,7 @@ if (args.help) { console.log(HELP()); process.exit(0); }
 if (args.version) { console.log(VERSION); process.exit(0); }
 
 const commands = {
-  open: () => cmdOpen({ game: !!args.game }), game: () => cmdOpen({ game: true }), monitor: () => cmdOpen(), serve: cmdServe, watch: () => cmdWatch(args._[1]), status: cmdStatus,
+  open: () => cmdOpen({ game: !!args.game }), game: () => cmdOpen({ game: true }), monitor: () => cmdOpen(), serve: cmdServe, start: cmdStart, stop: cmdStop, restart: () => (args['if-outdated'] ? cmdRefresh() : cmdRestart()), watch: () => cmdWatch(args._[1]), status: cmdStatus,
   demo: cmdDemo, send: cmdSend, task: cmdTask, tasks: cmdTasks, install: cmdSetup, setup: cmdSetup, uninstall: cmdUninstall, doctor: cmdDoctor, update: cmdUpdate, agents: cmdAgents, offices: cmdOffices, config: cmdConfig,
   pane: cmdPane, follow: cmdFollow, join: cmdJoin, prompt: cmdPrompt, team: cmdTeam, mcp: cmdMcp, btw: cmdBtw, help: () => console.log(HELP()),
 };

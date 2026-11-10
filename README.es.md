@@ -23,7 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/fmunoztorrent/dev-office/main/insta
 3. **Abre una terminal nueva** y arranca la oficina: `dev-team-office`.
 4. **Tu agente necesita su propio login.** La oficina no usa ningún modelo. Claude Code: `/login`. Pi: `/login` y un modelo. OpenCode funciona con sus modelos gratuitos tal como se instala.
 
-Para revisar o deshacer: `dev-team-office doctor` · `dev-team-office uninstall`. Para actualizar: `dev-team-office update` (o el mismo `curl`). Para el código más nuevo en vez de la versión más nueva: `curl … | DEV_TEAM_OFFICE_REF=main sh`.
+Para revisar o deshacer: `dev-team-office doctor` · `dev-team-office uninstall`. Para actualizar: `dev-team-office update` (o el mismo `curl`); reinicia la oficina que esté corriendo para que veas la versión nueva. Para el código más nuevo en vez de la versión más nueva: `curl … | DEV_TEAM_OFFICE_REF=main sh`.
 
 Paso a paso, con cada forma de arrancar y cómo sumar tu proyecto: [docs/installation.es.md](docs/installation.es.md).
 
@@ -162,6 +162,7 @@ dev-team-office monitor    # el monitor de actividad: cuántos agentes corren y 
 dev-team-office game       # fuera de herdr, entra directo al juego en la terminal
 dev-team-office join       # suma esta carpeta al juego: registra el proyecto, detecta sus subagentes y completa el equipo
 dev-team-office serve      # sólo la API y la bitácora, sin teclas (para dejarla en segundo plano)
+dev-team-office start      # inicia la oficina en segundo plano · stop la detiene · restart la reinicia
 dev-team-office watch      # otra terminal mirando la misma oficina
 dev-team-office status     # ¿está corriendo? versión, puerto y socket
 dev-team-office demo --pi  # reproduce una sesión de ejemplo
@@ -377,7 +378,7 @@ Usa el formato genérico por WebSocket o por `POST /v1/events/<nombre>` (ver [do
 ## Estructura
 
 ```
-bin/dev-team-office.js  el ejecutable: open (la bitácora + el juego; dentro de herdr, el monitor), monitor, game, serve, watch, status, join, follow, demo, send, task, agents, offices, config, pane, btw, mcp, setup, doctor, uninstall, update
+bin/dev-team-office.js  el ejecutable: open (la bitácora + el juego; dentro de herdr, el monitor), monitor, game, serve, start, stop, restart, watch, status, join, follow, demo, send, task, agents, offices, config, pane, btw, mcp, setup, doctor, uninstall, update
 bin/setup.js            conecta cada agente (hooks, MCP, skills, lanzador), doctor y uninstall
 bin/install.js          copia los archivos de cada integración
 install.sh              el instalador de una línea (curl … | sh)

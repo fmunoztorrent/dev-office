@@ -128,6 +128,7 @@ Your answer is pressed in the agent's pane, as if you were there: the arrows to 
 | `dev-team-office monitor` | The activity monitor (of the running office, or it starts one) |
 | `dev-team-office game` | Outside herdr it goes straight into the terminal game; inside herdr it opens the monitor (the game, with `g`) |
 | `dev-team-office serve` | Only the API and the log, no keys (in the background) |
+| `dev-team-office start` · `stop` · `restart` | Starts the office in the background (its log in `~/.dev-team-office/office.log`), stops the running one (in the background or in a terminal), or restarts it with the installed code |
 | `dev-team-office watch` | Another terminal watching the same office's game |
 | `dev-team-office status` | Is it running? Version, port and socket |
 | `dev-team-office join [path] [--agent <cli>] [--office <office>] [--team <pack>\|--no-team] [--open]` | Adds a project to the game and completes its team with the office's (see above) |

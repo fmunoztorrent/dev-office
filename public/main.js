@@ -74,6 +74,7 @@ onLanguage(() => {
 
 // ---------------------------------------------------------------- socket
 
+let served = null; // the office version this page was loaded from
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   ws = new WebSocket(`${proto}://${location.host}/v1/ws`);
@@ -81,6 +82,8 @@ function connect() {
   ws.onclose = () => { setConn(false); setTimeout(connect, 1500); };
   ws.onmessage = (m) => {
     const msg = JSON.parse(m.data);
+    // the office was restarted with another version (an update): this page has the old code
+    if (msg.type === 'hello') { if (served && msg.version && msg.version !== served) location.reload(); served = msg.version || served; }
     if (msg.type === 'snapshot') {
       const st = msg.state;
       if (st.prefs) onPrefs(st.prefs);

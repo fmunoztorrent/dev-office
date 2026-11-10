@@ -137,7 +137,7 @@ EOF
     need
     say "Installing this checkout again in ${H}…"
     install_checkout
-    say "Restart the office in its pane (q, then dev-team-office) so it runs the new code."
+    say "A running office of this install restarts by itself when the version changes; if not: dev-team-office restart (or q and dev-team-office in its pane)."
     ;;
   h)
     need

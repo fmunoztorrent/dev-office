@@ -4,6 +4,8 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-10
+
 ### Added
 
 - **Subagents are newcomers:** each one is a translucent extra of its role (another name, the same shirt) who comes in, sits at one of the two new **hot desks** (more of them, at the meeting table), does the subagent's work and leaves when it ends. In both views and in the terminal game.
@@ -12,6 +14,7 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 - **Model profiles** (⚙ › Models, also in the brief): which model each role uses. Anthropic's and OpenCode's come ready and more can be added. A new session starts with the profile's model; a pipeline's stages without one take their role's. By default each agent keeps its own model.
 - **The stay-focused skill:** do exactly what was asked (or the agreed plan step), without tangents or unrequested ideas. `setup` installs it for every agent.
 - **Answer your agents from the office:** inside herdr, when an agent asks you something on its screen (a permission, "Allow?", a choice), the office reads it from its pane. The **✋ chip** in the game ("Pi is asking you", also `r`, or a click on the PO) shows the question with a button per option, and the monitor lists it under **WAITING FOR YOU** (`r`, then the number). Your answer is pressed in the agent's pane, and only if the question is still the one on the screen. It works with any agent: Claude Code's permissions, Pi's and OpenCode's questions, an extension's gate. `GET /v1/prompts` and `POST /v1/prompts/<id>/answer`.
+- **`dev-team-office start`, `stop` and `restart`:** the office in the background (the game at its URL, its log in `~/.dev-team-office/office.log`), stopping the running one (in the background or in a terminal), and restarting it with the installed code. `/v1/health` now says the office's `mode` (`terminal` or `background`) and its install folder (`root`).
 - **One office, several projects:** the brief groups the agents by project, the sessions say which project they are, and the log tags each line with its project when more than one is active.
 
 ### Changed
@@ -23,6 +26,7 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ### Fixed
 
+- **An update is seen right away:** an office left running (started by Pi, the MCP or `serve`) kept serving the old code after `dev-team-office update`, so nothing changed. Now `update` (and the installer) restarts the running office of that install with the new version, the game open in the browser reloads by itself when the version changes, and a newer `dev-team-office` replaces an older office still running. An installer run from another folder (a test, a temporary `HOME`) never touches your office.
 - **`update` no longer downgrades:** `dev-team-office update` went from 0.7.0 back to 0.6.0 because the installer resolved the latest GitHub *Release* (v0.6.0) while the v0.7.0 tag had no Release. The installer now installs the highest version tag (`main` if the tags cannot be looked up) and never replaces a newer installed copy unless `DEV_TEAM_OFFICE_REF` is set. `update` says when you are already on the latest version, and downloads retry over HTTP/1.1 when HTTP/2 fails.
 
 ## [0.7.0] - 2026-10-30
@@ -90,7 +94,8 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/fmunoztorrent/dev-office/releases/tag/v0.6.0
 [0.5.0]: https://github.com/fmunoztorrent/dev-office/compare/2693433...e4576a1

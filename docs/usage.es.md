@@ -134,6 +134,7 @@ Tu respuesta se aprieta en el pane del agente, como si estuvieras ahí: las flec
 | `dev-team-office monitor` | El monitor de actividad (de la oficina que corre, o levanta una) |
 | `dev-team-office game` | Fuera de herdr entra directo al juego en la terminal; dentro de herdr abre el monitor (el juego, con `g`) |
 | `dev-team-office serve` | Sólo la API y la bitácora, sin teclas (en segundo plano) |
+| `dev-team-office start` · `stop` · `restart` | Inicia la oficina en segundo plano (su bitácora en `~/.dev-team-office/office.log`), detiene la que esté corriendo (en segundo plano o en una terminal) o la reinicia con el código instalado |
 | `dev-team-office watch` | Otra terminal mirando el juego de la misma oficina |
 | `dev-team-office status` | ¿Corre? Versión, puerto y socket |
 | `dev-team-office join [ruta] [--agent <cli>] [--office <oficina>] [--team <pack>\|--no-team] [--open]` | Suma un proyecto al juego y le completa el equipo con el de la oficina (ver arriba) |

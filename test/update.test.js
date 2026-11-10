@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const INSTALL_SH = path.join(ROOT, 'install.sh');
 const APP = path.join('.dev-team-office', 'app');
+const REPO_VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 
 const tmpDirs = [];
 const tmp = (prefix) => { const d = fs.mkdtempSync(path.join(os.tmpdir(), prefix)); tmpDirs.push(d); return d; };
@@ -200,7 +201,7 @@ test('update de punta a punta: vuelve a bajar el instalador y no baja de versió
   });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /not downgrading/);
-  assert.equal(version(home), '0.7.0'); // the running copy is unchanged
+  assert.equal(version(home), REPO_VERSION); // the running copy is unchanged
   const installer = curlCalls(stub).filter((a) => a.some((x) => String(x).includes('install.sh')));
   assert.ok(installer.some((a) => a.includes('--http1.1')), 'el instalador no se bajó con --http1.1');
   assert.ok(installer.some((a) => !a.includes('--http1.1')), 'no hubo un primer intento sin --http1.1');
@@ -208,15 +209,15 @@ test('update de punta a punta: vuelve a bajar el instalador y no baja de versió
 
 test('update de punta a punta: avisa cuando el target es la misma versión que la instalada', () => {
   const stub = setupStub();
-  makeTarball(stub, 'v0.7.0.tgz', '0.7.0');
+  makeTarball(stub, `v${REPO_VERSION}.tgz`, REPO_VERSION);
   const home = tmp('dto-home-');
   const first = runInstall(home, stub, { DEV_TEAM_OFFICE_SOURCE: ROOT });
   assert.equal(first.status, 0, first.stderr);
   const r = runUpdate(home, stub, {
     DEV_TEAM_OFFICE_INSTALLER: 'https://raw.githubusercontent.com/x/install.sh',
-    STUB_TAGS: JSON.stringify([{ name: 'v0.7.0' }]),
+    STUB_TAGS: JSON.stringify([{ name: `v${REPO_VERSION}` }]),
   });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /already the latest/);
-  assert.equal(version(home), '0.7.0');
+  assert.equal(version(home), REPO_VERSION);
 });

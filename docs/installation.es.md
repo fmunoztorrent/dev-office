@@ -42,7 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/fmunoztorrent/dev-office/main/insta
 
 Al terminar tienes:
 
-- **la versión más nueva (el tag de versión más alto)** de la oficina en `~/.dev-team-office/app`. Su primera línea dice cuál (`Downloading fmunoztorrent/dev-office@v0.7.0…`), así que todos los que instalan reciben la misma versión;
+- **la versión más nueva (el tag de versión más alto)** de la oficina en `~/.dev-team-office/app`. Su primera línea dice cuál (`Downloading fmunoztorrent/dev-office@v0.8.0…`), así que todos los que instalan reciben la misma versión;
 - **el comando** `dev-team-office` en `~/.local/bin`;
 - **tus agentes conectados**, porque el instalador corre `dev-team-office setup` (ver el paso 3).
 
@@ -238,6 +238,14 @@ dev-team-office uninstall --purge      # además borra ~/.dev-team-office (tu ba
 ```
 
 `update` nunca baja de versión: avisa cuando ya tienes la versión más nueva, y solo instala una más vieja si defines `DEV_TEAM_OFFICE_REF`.
+
+Una oficina que sigue corriendo mantiene el código con que arrancó, así que después de instalar `update` (y el `curl`) la reinicia: la que está en segundo plano (la que inició Pi, el MCP o `dev-team-office start`) vuelve sola con la versión nueva, y el juego abierto en el navegador se recarga; la que está abierta en una terminal se cierra, para abrirla otra vez ahí con `dev-team-office`. Abrir un `dev-team-office` más nuevo también reemplaza una oficina más vieja que siga corriendo. A mano:
+
+```bash
+dev-team-office start      # la oficina en segundo plano
+dev-team-office stop       # la detiene (en segundo plano o en una terminal)
+dev-team-office restart    # la detiene y la vuelve a iniciar con el código instalado (también después de un git pull)
+```
 
 ## Si algo no anda
 

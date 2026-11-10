@@ -23,7 +23,7 @@ The port is changed with `--port` or `$DEV_TEAM_OFFICE_PORT`; the socket, with `
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| `GET` | `/v1/health` | | `{ ok, name, version, pid, uptime, url, socket, lang, herdr }` |
+| `GET` | `/v1/health` | | `{ ok, name, version, pid, uptime, url, socket, lang, herdr, mode, root }` (`mode`: `terminal` or `background`; `root`: the install folder) |
 | `GET` | `/v1/state?office=<id>` | | An office's state (by default, the one being watched): `{ sessions, roles, log, tasks, pipelines, targets, appearance, weather, office, offices, prefs, herdr, asks }` |
 | `POST` | `/v1/events/<source>` | An event or an array of events | `{ ok, accepted, ids }` |
 | `POST` | `/v1/events?source=<source>` | Same as above | Same |

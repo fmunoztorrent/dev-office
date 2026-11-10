@@ -12,11 +12,11 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import readline from 'node:readline';
-import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { detectHarness, harnessId, projectRoot, HARNESS_IDS, AGENT_ROLE_IDS, ROLE_NAME } from '../integrations/common/devteam.mjs';
 import { DEFAULT_TEAM } from '../public/sim.js';
 import { realDir } from './paths.js';
+import { spawnOffice } from './lifecycle.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
@@ -578,14 +578,7 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
  * kills the whole process tree of its MCP server, even if each process has its own group.
  */
 export function startOfficeDetached({ port, log = path.join(os.homedir(), '.dev-team-office', 'office.log'), env = process.env } = {}) {
-  fs.mkdirSync(path.dirname(log), { recursive: true });
-  const fd = fs.openSync(log, 'a');
-  const child = spawn('/bin/sh', ['-c', '"$0" "$@" &', process.execPath, path.join(ROOT, 'bin', 'dev-team-office.js'), 'serve', ...(port ? ['--port', String(port)] : [])], {
-    detached: true, stdio: ['ignore', fd, fd], env: { ...env, DEV_TEAM_OFFICE_LAUNCHED: '1' },
-  });
-  child.on('error', () => {});
-  child.unref();
-  fs.closeSync(fd);
+  spawnOffice({ port, root: ROOT, log, env });
 }
 
 /** stdio: one JSON-RPC message per line on stdin, the responses on stdout. */

@@ -437,6 +437,9 @@ Uso:
                                   Los roles que no cubren sus subagentes los pone el equipo de la oficina, en el
                                   proyecto y en su formato (--team elige otro pack; --no-team, ninguno).
   dev-team-office serve           Sólo la API y la bitácora, sin teclas (para dejarla en segundo plano).
+  dev-team-office start           Inicia la oficina en segundo plano (el juego en su URL; la bitácora en ~/.dev-team-office/office.log).
+  dev-team-office stop            Detiene la oficina que está corriendo (en segundo plano o en una terminal).
+  dev-team-office restart         La detiene y la vuelve a iniciar en segundo plano, con el código instalado.
   dev-team-office watch [url]     Mira una oficina que ya está corriendo (por defecto la local).
   dev-team-office status          ¿Hay una oficina corriendo? Muestra versión y endpoints.
   dev-team-office demo [--pi]     Reproduce una sesión de ejemplo (Claude Code, o flujo TDD de Pi).
@@ -467,7 +470,7 @@ Uso:
   dev-team-office doctor          Revisa la instalación (Node, lanzador, oficina, cada agente).
   dev-team-office uninstall [--only …] [--purge]
                                   Deshace setup (--purge también borra la base).
-  dev-team-office update          Actualiza a la última versión.
+  dev-team-office update          Actualiza a la última versión y reinicia con ella la oficina que esté corriendo.
   dev-team-office mcp             El servidor MCP (stdio) que setup registra en cada agente.
   dev-team-office btw "<pregunta>" [--office <id>]
                                   Una pregunta al margen al agente de turno sobre el equipo (como /btw).
@@ -516,7 +519,15 @@ API: docs/api.es.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
     teams: 'Equipos:', teamNone: '(sin equipos empaquetados)',
     teamUsage: 'Uso: dev-team-office team [list] | dev-team-office team install <team> --agent <pi|claude|opencode|codex> [--project <dir>] [--from <packsRoot>]',
     btwUsage: 'Uso: dev-team-office btw "<pregunta>" [--office <id>]', btwAsking: '❓ preguntándole a {agent}…',
-    updateGit: 'Es un clon de git ({dir}): actualízalo con git pull',
+    updateGit: 'Es un clon de git ({dir}): actualízalo con git pull y luego dev-team-office restart',
+    replaced: 'La oficina {old} que estaba corriendo fue reemplazada por esta ({version})',
+    alreadyRunning: 'La oficina {version} ya está corriendo en {url} (pid {pid})',
+    started: 'Oficina {version} iniciada en segundo plano en {url} (pid {pid}) · dev-team-office stop la detiene',
+    startFailed: 'La oficina no arrancó: mira {log}', stopped: 'Oficina {version} detenida (pid {pid})', notRunning: 'No hay ninguna oficina corriendo en {base}',
+    restarted: 'Oficina {version} reiniciada en {url} (pid {pid})',
+    refreshed: 'La oficina que estaba corriendo se reinició: {old} → {version} ({url}). Recarga el juego en el navegador si no lo hace solo.',
+    refreshTerminal: 'La oficina {old} que estaba abierta en una terminal se cerró para que sirva la {version}: ábrela otra vez ahí con dev-team-office',
+    refreshFailed: 'No se pudo reiniciar la oficina que está corriendo ({version}): {error} · usa dev-team-office restart',
     paneOpened: '{pane}', paneOffline: '(la oficina no está corriendo: el pane se abrió, pero no aparece en el juego)',
   },
   install: {

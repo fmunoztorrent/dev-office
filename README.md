@@ -23,7 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/fmunoztorrent/dev-office/main/insta
 3. **Open a new terminal** and start the office: `dev-team-office`.
 4. **Your agent needs its own login.** The office uses no model. Claude Code: `/login`. Pi: `/login` and a model. OpenCode works with its free models as installed.
 
-To check or undo: `dev-team-office doctor` · `dev-team-office uninstall`. To update: `dev-team-office update` (or the same `curl`). For the newest code instead of the latest version: `curl … | DEV_TEAM_OFFICE_REF=main sh`.
+To check or undo: `dev-team-office doctor` · `dev-team-office uninstall`. To update: `dev-team-office update` (or the same `curl`); it restarts the office that is running so the new version is the one you see. For the newest code instead of the latest version: `curl … | DEV_TEAM_OFFICE_REF=main sh`.
 
 Step by step, with every way to start it and how to add your project: [docs/installation.md](docs/installation.md).
 
@@ -162,6 +162,7 @@ dev-team-office monitor    # the activity monitor: how many agents are running a
 dev-team-office game       # outside herdr, goes straight into the game in the terminal
 dev-team-office join       # adds this folder to the game: registers the project, detects its subagents and completes the team
 dev-team-office serve      # only the API and the log, no keys (to leave it in the background)
+dev-team-office start      # starts the office in the background · stop stops it · restart restarts it
 dev-team-office watch      # another terminal watching the same office
 dev-team-office status     # is it running? version, port and socket
 dev-team-office demo --pi  # replays a sample session
@@ -377,7 +378,7 @@ Use the generic format over WebSocket or `POST /v1/events/<name>` (see [docs/api
 ## Layout
 
 ```
-bin/dev-team-office.js  the executable: open (the log + the game; inside herdr, the monitor), monitor, game, serve, watch, status, join, follow, demo, send, task, agents, offices, config, pane, btw, mcp, setup, doctor, uninstall, update
+bin/dev-team-office.js  the executable: open (the log + the game; inside herdr, the monitor), monitor, game, serve, start, stop, restart, watch, status, join, follow, demo, send, task, agents, offices, config, pane, btw, mcp, setup, doctor, uninstall, update
 bin/setup.js            connects each agent (hooks, MCP, skills, launcher), doctor and uninstall
 bin/install.js          copies each integration's files
 bin/team.js             the team packs, in each harness's format, and the team `join` completes
