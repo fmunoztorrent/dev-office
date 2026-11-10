@@ -315,7 +315,11 @@ El cliente puede enviar:
 { "type": "view", "office": "pagos" }              // mirar otra oficina: llega su snapshot (y queda guardada)
 { "type": "prefs", "prefs": { "lang": "es" } }     // cambiar ajustes generales
 { "type": "ask", "text": "¿quién está con los tests?", "id": 2 }  // btw: el ack trae { ask } y la respuesta llega como { type: "ask", ask }
+{ "type": "client", "app": "web" }                  // la página web dice que se recarga sola cuando `hello` trae otra versión
 ```
+
+Una conexión del navegador (manda un `Origin`) que no manda `client` en 3 s se cargó desde una oficina más vieja: el servidor le manda `{ "type": "error", "error": "…recarga esta página…" }`.
+
 
 El chat, los saludos y los comandos van a la oficina que mira el visor.
 

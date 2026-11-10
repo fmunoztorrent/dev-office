@@ -34,7 +34,7 @@ import { zoneInfo, systemZone } from '../public/clock.js';
 import { insideDir as inside } from './paths.js';
 import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.8.1';
+export const VERSION = '0.8.2';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
 const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
@@ -70,7 +70,7 @@ class HttpError extends Error {
  *                 says it, so `update` knows whether it can bring the office back by itself
  * @returns {Promise<{company, office, url, socket, command, handleMessage, close, …}>}
  */
-export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {}, mode = 'terminal' } = {}) {
+export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {}, mode = 'terminal', outdatedAfter = 3000 } = {}) {
   const ownStore = !db || typeof db === 'string';
   const store = ownStore ? openStore(db || dbFile()) : db; // oficinas, agentes, ajustes e historial
   setLanguage(store.getPrefs().lang);
@@ -387,6 +387,10 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       }
       case 'prefs':
         return setPrefs(msg.prefs || {});
+      // a browser page says it is from 0.8.2 or newer: it reloads itself when the version changes
+      case 'client':
+        if (conn) conn.client = String(msg.app || 'web');
+        return { ok: true };
       default:
         return { ok: false, error: t('err.unknownType', { type: msg.type }) };
     }
@@ -683,7 +687,11 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     const conn = ws.conn = { id: ++connSeq, agent: null, view: wanted && company.has(wanted) ? wanted : view(), send: (m) => ws.readyState === 1 && ws.send(JSON.stringify(m)) };
     ws.send(JSON.stringify({ type: 'hello', ...info() }));
     ws.send(JSON.stringify({ type: 'snapshot', state: fullState(conn.view) }));
-    ws.on('close', () => hub.unregister(conn.id));
+    // A browser page (it sends an Origin, Node clients do not) that does not say `client` was loaded
+    // from an older office (0.8.1 or before): its code cannot reload itself, so it is told to.
+    const stale = req?.headers?.origin ? setTimeout(() => { if (!conn.client) conn.send({ type: 'error', error: t('server.outdatedPage', { version: VERSION }) }); }, outdatedAfter) : null;
+    stale?.unref?.();
+    ws.on('close', () => { clearTimeout(stale); hub.unregister(conn.id); });
     ws.on('message', (data) => {
       let msg;
       try { msg = JSON.parse(data); } catch { return ws.send(JSON.stringify({ type: 'error', error: 'invalid json' })); }

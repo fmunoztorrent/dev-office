@@ -316,7 +316,10 @@ The client can send:
 { "type": "view", "office": "payments" }           // watch another office: its snapshot arrives (and it is saved)
 { "type": "prefs", "prefs": { "lang": "es" } }     // change general settings
 { "type": "ask", "text": "who is on the tests?", "id": 2 }  // btw: the ack carries { ask } and the answer arrives as { type: "ask", ask }
+{ "type": "client", "app": "web" }                  // the web page says it reloads itself when `hello` brings another version
 ```
+
+A browser connection (one that sends an `Origin`) that does not send `client` within 3 s was loaded from an older office: the server sends it `{ "type": "error", "error": "…reload this page…" }`.
 
 Chat, greetings and commands go to the office the viewer is watching.
 

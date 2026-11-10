@@ -21,3 +21,25 @@ test('el cierre no se cuelga con una conexión TCP abierta (keep-alive del naveg
     if (!closed) await server.close(); // idempotent: a second close must not hang either
   }
 });
+
+test('una página del navegador que no dice `client` (cargada de una oficina vieja) recibe el aviso de recargar; una nueva o un cliente de Node, no', async () => {
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false, outdatedAfter: 150 });
+  const port = new URL(server.url).port;
+  const listen = (headers, hello) => new Promise((resolve) => {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/ws`, { headers });
+    const got = [];
+    ws.onopen = () => { if (hello) ws.send(JSON.stringify({ type: 'client', app: 'web' })); };
+    ws.onmessage = (m) => got.push(JSON.parse(m.data));
+    setTimeout(() => { ws.close(); resolve(got.filter((x) => x.type === 'error')); }, 500);
+  });
+  try {
+    const origin = { origin: `http://127.0.0.1:${port}` };
+    const [old, fresh, node] = await Promise.all([listen(origin, false), listen(origin, true), listen({}, false)]);
+    assert.equal(old.length, 1);
+    assert.match(old[0].error, /reload this page/);
+    assert.deepEqual(fresh, []);
+    assert.deepEqual(node, []);
+  } finally {
+    await server.close();
+  }
+});

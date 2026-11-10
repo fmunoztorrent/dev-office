@@ -42,7 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/fmunoztorrent/dev-office/main/insta
 
 When it finishes you have:
 
-- **the latest version** (the highest version tag) of the office in `~/.dev-team-office/app`. Its first line says which one (`Downloading fmunoztorrent/dev-office@v0.8.1…`), so everyone installing gets the same version;
+- **the latest version** (the highest version tag) of the office in `~/.dev-team-office/app`. Its first line says which one (`Downloading fmunoztorrent/dev-office@v0.8.2…`), so everyone installing gets the same version;
 - **the** `dev-team-office` **command** in `~/.local/bin`;
 - **your agents connected**, because the installer runs `dev-team-office setup` (see step 3).
 

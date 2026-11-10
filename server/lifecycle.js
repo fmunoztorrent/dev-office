@@ -54,7 +54,7 @@ export function sameInstall(h, root = ROOT) {
 /** The command line of a process, in words ([] if it is gone). */
 function commandOf(pid) {
   if (!Number(pid)) return [];
-  const r = spawnSync('ps', ['-o', 'command=', '-p', String(Number(pid))], { encoding: 'utf8' });
+  const r = spawnSync('ps', ['-ww', '-o', 'command=', '-p', String(Number(pid))], { encoding: 'utf8' });
   return (r.stdout || '').trim().split(/\s+/).filter(Boolean);
 }
 

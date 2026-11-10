@@ -4,6 +4,13 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-11-10
+
+### Fixed
+
+- **The game open in the browser shows the update:** a page loaded from 0.8.1 or older keeps its old code after the office restarts with a new version, so the game looked the same. Now the office tells such a page, in its terminal, to reload (⌘R or Ctrl+R), and pages from 0.8.2 on reload by themselves. Web pages say they are new with a `client` message on connection.
+- Recognizing an older office by its process uses the full command line (`ps -ww`).
+
 ## [0.8.1] - 2026-11-10
 
 ### Fixed
@@ -100,7 +107,8 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/fmunoztorrent/dev-office/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/fmunoztorrent/dev-office/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.6.0...v0.7.0

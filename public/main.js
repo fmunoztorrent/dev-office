@@ -78,7 +78,7 @@ let served = null; // the office version this page was loaded from
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   ws = new WebSocket(`${proto}://${location.host}/v1/ws`);
-  ws.onopen = () => setConn(true);
+  ws.onopen = () => { setConn(true); ws.send(JSON.stringify({ type: 'client', app: 'web' })); };
   ws.onclose = () => { setConn(false); setTimeout(connect, 1500); };
   ws.onmessage = (m) => {
     const msg = JSON.parse(m.data);
