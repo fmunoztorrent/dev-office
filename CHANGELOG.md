@@ -4,6 +4,8 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-11
+
 ### Added
 
 - **Two more floors:** besides its offices, the company's building has an **executive floor** on top and an **archive** in the basement, shared by every office. Go up or down with the selector at the top left (now always visible), `o`, `PgUp`/`PgDn` or the elevator. Both are drawn in the front and the top-down views, with their own people.
@@ -24,6 +26,7 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 ### Fixed
 
 - The floor selector showed the 🏢 icon twice.
+- **The shared floors fit the bigger screen:** in the front view the executive floor and the archive are drawn as big as they fit, under a dark band where the HUD goes; the HUD no longer covers the executive floor's window or boards, and there is no extra carpet at the bottom.
 
 ## [0.9.0] - 2026-11-10
 
@@ -142,7 +145,8 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.8.2...v0.9.0
 [0.8.2]: https://github.com/fmunoztorrent/dev-office/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/fmunoztorrent/dev-office/compare/v0.8.0...v0.8.1

@@ -70,7 +70,13 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   // The transform used to draw (the isometric camera's, or none), times the canvas scale.
   const ID = [1, 0, 0, 1, 0, 0];
   const FLAT = [1, 0, 0, 1, -LEFT, 0]; // the front view: the world shifted so that x = LEFT is the canvas's edge
-  const FLOOR_FLAT = [1, 0, 0, 1, (WORLD_W - W) / 2, 0]; // the shared floors (x 0..W), centered in the front view
+  // The shared floors are planned on 960 × 600 (FLOOR_H). In the front view they are drawn as big as
+  // they fit under a dark band at the top, where the HUD goes (so it covers no window or board).
+  const FLOOR_H = 600, FLOOR_BAND = 64;
+  const FLOOR_K = (H - FLOOR_BAND) / FLOOR_H;
+  const FLOOR_FLAT = [FLOOR_K, 0, 0, FLOOR_K, (WORLD_W - W * FLOOR_K) / 2, FLOOR_BAND];
+  /** A point on the canvas → on the shared floor's plan (front view). */
+  const toFloor = (x, y) => [(x - FLOOR_FLAT[4]) / FLOOR_K, (y - FLOOR_BAND) / FLOOR_K];
   const use = (m) => ctx.setTransform(...scaled(m, scale));
   const FS = 1.35; // in the isometric view the sprites' texts get bigger (the sprite gets smaller)
   const fpx = (n) => Math.round(n * (iso ? FS : 1));
@@ -1645,9 +1651,11 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     ctx.imageSmoothingEnabled = false;
     if (floor !== 'office') {
-      // the shared floors keep the office's 960-wide plan: in the front view, centered on the canvas
-      if (!iso) { use(ID); R(0, 0, WORLD_W, H, '#1b1f33'); use(FLOOR_FLAT); }
+      // the shared floors keep the office's 960-wide plan: in the front view, scaled to fit under the HUD's band
+      ctx.save();
+      if (!iso) { use(ID); R(0, 0, WORLD_W, H, '#1b1f33'); use(FLOOR_FLAT); ctx.beginPath(); ctx.rect(0, 0, W, FLOOR_H); ctx.clip(); }
       drawFloor(G, floors[floor], now, light, { hover: floorHover, selected: floorSel });
+      ctx.restore();
       use(ID);
       drawVignette();
       requestAnimationFrame(frame);
@@ -1721,7 +1729,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   canvas.addEventListener('mousemove', (e) => {
     const [x, y] = toWorld(e);
     if (floor !== 'office') {
-      const hit = floorHit(floors[floor], iso ? x : x - FLOOR_FLAT[4], y, { iso, cam });
+      const hit = floorHit(floors[floor], ...(iso ? [x, y] : toFloor(x, y)), { iso, cam });
       floorHover = hit?.person || null;
       canvas.style.cursor = hit ? 'pointer' : 'default';
       return;
@@ -1737,7 +1745,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   canvas.addEventListener('click', (e) => {
     const [x, y] = toWorld(e);
     if (floor !== 'office') {
-      const hit = floorHit(floors[floor], iso ? x : x - FLOOR_FLAT[4], y, { iso, cam });
+      const hit = floorHit(floors[floor], ...(iso ? [x, y] : toFloor(x, y)), { iso, cam });
       floorSel = hit?.person || null;
       if (hit?.person) floors[floor].intro(hit.person);
       else if (hit?.what) onFloorClick?.(floor, hit.what);
