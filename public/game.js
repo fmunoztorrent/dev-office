@@ -190,6 +190,9 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   // ---------------------------------------------------------------- the hallway, the elevator and the bathroom
 
   const BW = BATHROOM;
+  // Drawing the hallway and the bathroom for a shared floor (the executive one, the archive): its
+  // bathroom is still (nobody from the office is there) and its elevator shows that floor.
+  let wing = null; // { tag, doorAt } while drawing a shared floor's wing
   /** The back wall left of the office: the bathroom's tiles (stalls, sink, mirror), a pillar, and
    * the hallway's wall with the elevator at its end. */
   function drawLeftBackWall(now) {
@@ -209,7 +212,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   }
   // a stall: its partitions and door (open for a moment when someone goes in or out) and its sign
   function drawStall(s, i, now) {
-    const x0 = s.x - s.w / 2, open = now - sim.bath.doorAt[i] < 650, busy = !!sim.bath.stalls[i];
+    const x0 = s.x - s.w / 2, open = !wing && now - sim.bath.doorAt[i] < 650, busy = !wing && !!sim.bath.stalls[i];
     R(x0 - 2, 32, s.w + 4, 90, '#8d99ae');
     R(x0, 36, s.w, 82, open ? '#2b2d42' : '#eef1f4');
     if (open) {
@@ -232,7 +235,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   }
   // the elevator, at the end of the hallway: steel doors that slide open when someone arrives or leaves
   function drawElevator(now) {
-    const { x, w } = ELEVATOR, e = sim.elevator, dt = now - e.doorAt;
+    const { x, w } = ELEVATOR, e = wing ? { floor: wing.tag, doorAt: wing.doorAt } : sim.elevator, dt = now - e.doorAt;
     const open = dt < 0 ? 0 : dt < 400 ? dt / 400 : dt < 2400 ? 1 : dt < 2800 ? 1 - (dt - 2400) / 400 : 0;
     R(x, 24, w, 98, '#9aa3ae'); R(x + 3, 27, w - 6, 95, '#6c757d');
     const inner = w - 16, half = inner / 2, gap = Math.round(half * open), cx = x + w / 2;
@@ -1632,7 +1635,51 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     use,
     outdoorAt: (opts, now, light) => drawOutdoor(outdoor({ date: sim.date(), weather: sim.weather, light, now, ...opts })),
     isoBackdrop: (now, light, kind) => (kind === 'archive' ? drawUnderground() : drawIsoBackdrop(now, light)),
+    isoWing,
   };
+  /**
+   * The top-down view of a shared floor has the same footprint as an office's: left of its room, the
+   * hallway with the building's elevator at its end and the bathroom. Its floor, the building's
+   * left wall, the back wall and, by depth, its low walls (with the room's door), the cooler and the signs.
+   */
+  function isoWing(now, { tag, doorAt = -Infinity, wall = '#2b3150' } = {}) {
+    const P0 = (x, y, z = 0) => cam.proj(x, y, z);
+    wing = { tag, doorAt };
+    try {
+      ctx.save();
+      use(cam.floor(0));
+      ctx.beginPath(); ctx.rect(LEFT, BACK, -LEFT, H - BACK); ctx.clip();
+      drawLeftFloors();
+      ctx.restore();
+      const side = (u0, v0, u1, v1, color) => poly([P0(LEFT, u0, v0), P0(LEFT, u1, v0), P0(LEFT, u1, v1), P0(LEFT, u0, v1)], color);
+      use(ID);
+      side(BACK, 0, H, WALL_H, wall);
+      side(BACK, 0, BW.front, WALL_H, '#d3e3e9');
+      for (let z = 12; z < WALL_H; z += 12) side(BACK, z, BW.front, z + 1, '#b9ced6');
+      side(BACK, WALL_H - 6, H, WALL_H, '#232840');
+      side(BW.front, 0, H, 5, '#9aa3ae');
+      side(BW.front, 0, H, 1, '#7d8692');
+      ctx.save();
+      use(cam.front(BACK));
+      ctx.beginPath(); ctx.rect(LEFT, 0, -LEFT, BACK); ctx.clip();
+      drawLeftBackWall(now);
+      ctx.restore();
+      use(ID);
+      ctx.strokeStyle = '#151827'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(...P0(LEFT, BACK, 0)); ctx.lineTo(...P0(LEFT, BACK, WALL_H)); ctx.stroke();
+      // its volumes, back to front
+      const items = [];
+      const add = (x, y, fn) => items.push({ d: cam.depth(x, y), fn });
+      const at = (m, fn) => () => { use(m); fn(); };
+      isoWall(HALL.x1, BACK, 0, OFFICE_DOOR.y0, add); isoWall(HALL.x1, OFFICE_DOOR.y1, 0, H, add);
+      isoWall(BW.x1, BACK, HALL.x0, BW.door.y0, add); isoWall(BW.x1, BW.door.y1, HALL.x0, BW.front, add);
+      isoWall(BW.x0, BW.front - 8, HALL.x0, BW.front, add);
+      add(COOLER.x, COOLER.y, at(cam.billboard(COOLER.x, COOLER.y, COOLER.x, COOLER.y), drawCooler));
+      for (const sg of SIGNS) add(sg.x + 6, sg.y + 8, at(cam.billboard(sg.x, sg.y, sg.x, sg.y + 8, LOW_WALL + 22), () => drawSignPlate(sg)));
+      items.sort((a, b) => a.d - b.d).forEach((i) => i.fn());
+      use(ID);
+    } finally { wing = null; }
+  }
   /** Behind the archive, in the top-down view: the ground it is dug into. */
   function drawUnderground() {
     use(ID);

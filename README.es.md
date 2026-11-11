@@ -219,7 +219,7 @@ Las interfaces muestran **una oficina a la vez**: la que eliges en el selector d
 
 ## Dos pisos más: la dirección y el archivo
 
-El edificio de la empresa tiene, además de sus oficinas, dos pisos que comparten todas. Sube o baja con el selector de **arriba a la izquierda** (`o`, o `RePág`/`AvPág`), o **con el ascensor**: al hacerle clic, en cualquier piso y en las dos vistas, se abre su panel con un botón por piso, y te lleva al que aprietes.
+El edificio de la empresa tiene, además de sus oficinas, dos pisos que comparten todas. Sube o baja con el selector de **arriba a la izquierda** (`o`, o `RePág`/`AvPág`), o **con el ascensor**: al hacerle clic, en cualquier piso y en las dos vistas, se abre su panel con un botón por piso, y te lleva al que aprietes. En la vista cenital todos los pisos tienen la misma planta: la sala y, a su izquierda, el pasillo con el ascensor del edificio y el baño.
 
 **🏛 La dirección**, arriba: los directivos, que presides tú (con tu aspecto de PO). Ahí das **directivas**: una orden para varias oficinas, departamentos o proyectos a la vez («que todas las APIs expongan `/health`», «actualicen el logger en todos lados»). Haz clic en el **tablero de directivas** (o `t` ahí), escribe la orden y elige las oficinas (todos sus proyectos) o los proyectos uno por uno. La oficina le manda al agente de cada proyecto un encargo con su parte (a una sesión abierta suya o a una nueva, como cualquier encargo) y el piso sigue cómo va cada parte; puedes detenerla. La **pantalla** de la empresa muestra qué hace cada oficina (quién trabaja, quién te espera, cuántos encargos). Cuando una directiva termina, su **acta** va al archivo. Los agentes también las dan: `send_directive` (MCP).
 

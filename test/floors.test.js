@@ -329,3 +329,16 @@ test('la sesión que recibe su parte de una directiva se titula con la orden, si
   office.ingest('pi', { session: 's1', cwd: tmp(), kind: 'task', text: '🏛 Directiva de la dirección: «Agregar /health». También la trabajan: web. Haz la parte de este proyecto.\n\nAgregar /health a la API' });
   assert.equal(office.sessions.get('s1').title, '🏛 Agregar /health a la API');
 });
+
+test('en la vista cenital los pisos compartidos tienen el pasillo de la oficina: un clic en su ascensor abre el panel de pisos', async () => {
+  const { createFloors, floorHit } = await import('../public/floors.js');
+  const { isoCamera, BACK } = await import('../public/iso.js');
+  const { ELEVATOR } = await import('../public/sim.js');
+  const cam = isoCamera();
+  const floors = createFloors({ clock: () => 0 });
+  for (const kind of ['exec', 'archive']) {
+    const [x, y] = cam.proj(ELEVATOR.x + ELEVATOR.w / 2, BACK, 60); // the middle of its doors, on the back wall
+    assert.deepEqual(floorHit(floors[kind], x, y, { iso: true, cam }), { what: 'lift' }, kind);
+    assert.equal(floorHit(floors[kind], ELEVATOR.x + ELEVATOR.w / 2, 60, { iso: false }), null, 'en la vista frontal no hay pasillo');
+  }
+});

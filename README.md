@@ -219,7 +219,7 @@ The interfaces show **one office at a time**: the one you pick in the selector a
 
 ## Two more floors: the executive one and the archive
 
-The company's building has, besides its offices, two floors every office shares. Go up or down with the selector at the **top left** (`o`, or `PgUp`/`PgDn`), or **with the elevator**: clicking it, on any floor and in both views, opens its panel with a button per floor, and it takes you to the one you press.
+The company's building has, besides its offices, two floors every office shares. Go up or down with the selector at the **top left** (`o`, or `PgUp`/`PgDn`), or **with the elevator**: clicking it, on any floor and in both views, opens its panel with a button per floor, and it takes you to the one you press. In the top-down view every floor has the same footprint: the room, and left of it the hallway with the building's elevator and the bathroom.
 
 **🏛 The executive floor**, on top: the directors, presided over by you (with your PO look). There you give **directives**: one order for several offices, departments or projects at once ("every API exposes `/health`", "update the logger everywhere"). Click the **directives board** (or `t` there), write the order and pick the offices (all their projects) or the projects one by one. The office sends each project's agent a brief with its part (to an open session of it, or a new one, like any brief) and the floor follows how each part goes; you can stop it. The company's **screen** shows what each office is doing (who is working, who is waiting for you, how many briefs). When a directive ends, its **minutes** go to the archive. Agents send them too: `send_directive` (MCP).
 

@@ -10,7 +10,7 @@
 // The floors live on their own: their people chat, go for coffee and take the elevator, and they
 // react to what the server tells (a directive sent or finished, an entry saved, read, installed…).
 
-import { W, H, rand, pick } from './sim.js';
+import { W, H, LEFT, ELEVATOR, rand, pick } from './sim.js';
 import { BACK, unapply } from './iso.js';
 import { t, ta } from './i18n.js';
 
@@ -222,6 +222,7 @@ export function floorHit(floor, X, Y, { iso = false, cam } = {}) {
   }
   const [x, y] = iso ? unapply(cam.front(BACK), X, Y) : [X, Y];
   if (y < 0 || y > BACK + 2) return null;
+  if (iso && x >= ELEVATOR.x && x <= ELEVATOR.x + ELEVATOR.w) return { what: 'lift' }; // the building's, in the hallway
   if (floor.kind === 'exec') {
     if (inRect(x, y, EXEC.board)) return { what: 'directives' };
     if (inRect(x, y, EXEC.screen)) return { what: 'company' };
@@ -289,17 +290,16 @@ function drawIso(g, floor, now, light) {
   const P0 = (x, y, z = 0) => cam.proj(x, y, z);
   const slab = 12;
   const edge = floor.kind === 'exec' ? '#2a1d16' : '#2b2f38';
-  g.poly([P0(0, H), P0(W, H), P0(W, BACK), [P0(W, BACK)[0], P0(W, BACK)[1] + slab], [P0(W, H)[0], P0(W, H)[1] + slab], [P0(0, H)[0], P0(0, H)[1] + slab]], edge);
+  // the same footprint as an office's (the tower below is as wide): the room, and left of it the hallway
+  // with the building's elevator and the bathroom
+  g.poly([P0(LEFT, H), P0(W, H), P0(W, BACK), [P0(W, BACK)[0], P0(W, BACK)[1] + slab], [P0(W, H)[0], P0(W, H)[1] + slab], [P0(LEFT, H)[0], P0(LEFT, H)[1] + slab]], edge);
   ctx.save();
   g.use(cam.floor(0));
   ctx.beginPath(); ctx.rect(0, BACK, W, H - BACK); ctx.clip();
   drawFloorPlane(g, floor);
   ctx.restore();
-  // the left wall: plain, with its skirting
-  const side = (u0, v0, u1, v1, color) => g.poly([P0(0, u0, v0), P0(0, u1, v0), P0(0, u1, v1), P0(0, u0, v1)], color);
+  g.isoWing(now, { tag: floor.kind === 'exec' ? 'D' : 'A', doorAt: floor.lift.openUntil - 2400, wall: floor.kind === 'exec' ? '#3a2a24' : '#2f343f' });
   g.use(g.ID);
-  side(BACK, 0, H, 126, floor.kind === 'exec' ? '#5b3a29' : '#454c5a');
-  side(BACK, 0, H, 5, floor.kind === 'exec' ? '#3b2418' : '#2f343f');
   ctx.save();
   g.use(cam.front(BACK));
   ctx.beginPath(); ctx.rect(0, 0, W, BACK); ctx.clip();
