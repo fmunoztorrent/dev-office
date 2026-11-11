@@ -42,7 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/fmunoztorrent/dev-office/main/insta
 
 Al terminar tienes:
 
-- **la versión más nueva (el tag de versión más alto)** de la oficina en `~/.dev-team-office/app`. Su primera línea dice cuál (`Downloading fmunoztorrent/dev-office@v0.9.0…`), así que todos los que instalan reciben la misma versión;
+- **la versión más nueva (el tag de versión más alto, o `main` si ya trae una versión más nueva)** de la oficina en `~/.dev-team-office/app`. Su primera línea dice cuál (`Downloading fmunoztorrent/dev-office@v0.9.0…`), así que todos los que instalan reciben la misma versión;
 - **el comando** `dev-team-office` en `~/.local/bin`;
 - **tus agentes conectados**, porque el instalador corre `dev-team-office setup` (ver el paso 3).
 
@@ -72,7 +72,7 @@ El instalador acepta estas variables:
 
 - `DEV_TEAM_OFFICE_HOME`: dónde vive la oficina.
 - `DEV_TEAM_OFFICE_BIN_DIR`: dónde va el comando.
-- `DEV_TEAM_OFFICE_REF`: qué tag o rama instalar. Por defecto, la versión más nueva (el tag de versión más alto); `main` es el código más nuevo: `curl -fsSL … | DEV_TEAM_OFFICE_REF=main sh`.
+- `DEV_TEAM_OFFICE_REF`: qué tag o rama instalar. Por defecto, la versión más nueva (el tag de versión más alto, o `main` si su versión es más nueva: una versión cuyo tag todavía no está); `main` es el código más nuevo: `curl -fsSL … | DEV_TEAM_OFFICE_REF=main sh`.
 - `DEV_TEAM_OFFICE_NO_SETUP=1`: sólo instala, sin conectar los agentes.
 - `DEV_TEAM_OFFICE_MODIFY_PATH=1`: agrega `~/.local/bin` al perfil de tu shell sin preguntar; `0` no lo toca nunca.
 

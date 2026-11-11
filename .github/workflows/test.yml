@@ -1,6 +1,7 @@
 # Runs the test suite on every push and pull request, on the platforms and Node versions the
 # package supports (package.json: "os" darwin/linux, "engines" node >= 22.13), and a new user's
-# install with each agent.
+# install with each agent. On main, once everything is green, a new version (package.json) is
+# released by itself: its tag and its GitHub release, with its CHANGELOG section as the notes.
 name: test
 
 on:
@@ -46,3 +47,24 @@ jobs:
         with:
           name: install-check-${{ matrix.os }}
           path: install-check.json
+
+  # The release: nobody has to tag anything by hand. A push to main whose package.json version has no
+  # tag yet gets it (vX.Y.Z), and its GitHub release, marked as the latest. `update` installs the
+  # highest tag (or main, if main is newer), so every user gets it with a plain `dev-team-office update`.
+  release:
+    needs: [test, install]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Tag and publish the version on main, if it is new
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="v$(node -p "require('./package.json').version")"
+          if git ls-remote --exit-code --tags origin "refs/tags/$v" >/dev/null; then echo "$v is already released"; exit 0; fi
+          awk -v v="${v#v}" '$0 ~ "^## \\[" v "\\]" { on = 1; next } on && /^## \[/ { exit } on' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "See CHANGELOG.md" > notes.md
+          gh release create "$v" --target "$GITHUB_SHA" --title "$v" --notes-file notes.md --latest

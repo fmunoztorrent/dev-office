@@ -25,7 +25,8 @@ const version = (home) => readJson(home, path.join(APP, 'package.json')).version
 const marker = (home) => path.join(home, APP, 'marker');
 
 // The stub curl: a `#!/usr/bin/env node` script first on PATH. It appends each argv to STUB_LOG and
-// answers three URL shapes from the environment (tags JSON, codeload tarballs, any install.sh).
+// answers four URL shapes from the environment (tags JSON, main's package.json, codeload tarballs,
+// any install.sh).
 const CURL_STUB = [
   '#!/usr/bin/env node',
   "const fs = require('node:fs');",
@@ -49,6 +50,11 @@ const CURL_STUB = [
   "  const src = process.env.STUB_DIR + '/' + ref + '.tgz';",
   "  if (!fs.existsSync(src)) process.exit(22);",
   '  emit(fs.readFileSync(src));',
+  '  process.exit(0);',
+  '}',
+  "if (url && url.includes('raw.githubusercontent.com') && url.endsWith('/main/package.json')) {",
+  '  if (process.env.STUB_MAIN_VERSION === undefined) process.exit(22);',
+  "  emit(JSON.stringify({ name: 'dev-team-office', version: process.env.STUB_MAIN_VERSION }));",
   '  process.exit(0);',
   '}',
   "if (url && url.includes('install.sh')) {",
@@ -220,4 +226,39 @@ test('update de punta a punta: avisa cuando el target es la misma versión que l
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /already the latest/);
   assert.equal(version(home), REPO_VERSION);
+});
+
+// A release whose version is on main but whose tag was not pushed yet: `update` must find it all the
+// same, with nothing to type (no DEV_TEAM_OFFICE_REF).
+test('si main trae una versión más nueva que la última etiqueta, instala main; si es la misma, la etiqueta', () => {
+  const stub = setupStub();
+  makeTarball(stub, 'v0.9.0.tgz', '0.9.0');
+  makeTarball(stub, 'main.tgz', '0.10.0');
+  const home = tmp('dto-home-');
+  let r = runInstall(home, stub, { STUB_TAGS: JSON.stringify([{ name: 'v0.9.0' }]), STUB_MAIN_VERSION: '0.10.0' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(version(home), '0.10.0');
+  // the same version on main and in the tag: the tag (main may have unreleased commits)
+  const stub2 = setupStub();
+  makeTarball(stub2, 'v0.10.0.tgz', '0.10.0');
+  const home2 = tmp('dto-home-');
+  r = runInstall(home2, stub2, { STUB_TAGS: JSON.stringify([{ name: 'v0.10.0' }]), STUB_MAIN_VERSION: '0.10.0' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(curlCalls(stub2).some((a) => a.some((x) => String(x).endsWith('/tar.gz/v0.10.0'))));
+  assert.ok(!curlCalls(stub2).some((a) => a.some((x) => String(x).endsWith('/tar.gz/main'))));
+});
+
+test('update de punta a punta: sin pasos extra llega a la versión nueva aunque su etiqueta todavía no exista', () => {
+  const stub = setupStub();
+  makeTarball(stub, 'main.tgz', '99.0.0');
+  const home = tmp('dto-home-');
+  const first = runInstall(home, stub, { DEV_TEAM_OFFICE_SOURCE: ROOT });
+  assert.equal(first.status, 0, first.stderr);
+  const r = runUpdate(home, stub, {
+    DEV_TEAM_OFFICE_INSTALLER: 'https://raw.githubusercontent.com/x/install.sh',
+    STUB_TAGS: JSON.stringify([{ name: `v${REPO_VERSION}` }]),
+    STUB_MAIN_VERSION: '99.0.0',
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(version(home), '99.0.0');
 });

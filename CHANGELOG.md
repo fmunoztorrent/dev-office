@@ -21,6 +21,8 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ### Changed
 
+- **`update` always finds the newest version, with no extra steps:** the installer takes the highest version tag or, if `main` already carries a newer version (a release whose tag is not there yet), `main`. Before, a release without its tag stayed invisible to `update`.
+- **Releases publish themselves:** a push to `main` with a new version gets its tag and its GitHub release (with its CHANGELOG section) once CI is green.
 - **The game's simulated terminal (`>_`) is gone.** Its log is now **📰 Activity** (`a`), a panel you read over the office, with the *office life* toggle and *clear*; the task, flow, pipelines, tasks, demos and the team moved to **📋 Work** (`w`); talking to the team is done on the characters' sheets. The `/commands` are gone: each has its key or button (`t`, `c`, `o`, `f`, the settings' *office life*). The terminal game, the monitor and the CLI log are unchanged.
 
 ### Fixed

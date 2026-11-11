@@ -69,6 +69,14 @@ Y abre `http://127.0.0.1:4320`. Con `dev-team-office demo --pi --port 4320` corr
 | Un ajuste | [`server/store.js`](server/store.js), [`public/settings-ui.js`](public/settings-ui.js), [`tui/settings.js`](tui/settings.js) y `dev-team-office config` |
 | Una herramienta MCP | [`server/mcp.js`](server/mcp.js) y [docs/mcp.es.md](docs/mcp.es.md) |
 
+## Publicar una versión
+
+1. Actualiza el [`CHANGELOG.md`](CHANGELOG.md) con la versión nueva.
+2. Sube la versión en `package.json` (y `npm install --package-lock-only`), `server/server.js` y `.claude-plugin/plugin.json`; `test/release.test.js` revisa que coincidan.
+3. Intégrala en `main`. Nada más: cuando el CI pasa ahí, etiqueta la versión (`v<versión>`) y publica su release en GitHub con su sección del CHANGELOG (el job `release` de `.github/workflows/test.yml`).
+
+Los usuarios la reciben con `dev-team-office update`, sin pasos extra: el instalador toma el tag de versión más alto, o `main` si `main` ya trae una versión más nueva (una versión cuyo tag todavía no está).
+
 ## Reportar un problema
 
 Abre un issue con:

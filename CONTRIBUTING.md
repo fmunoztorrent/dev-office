@@ -74,7 +74,9 @@ And open `http://127.0.0.1:4320`. `dev-team-office demo --pi --port 4320` runs t
 
 1. Update [`CHANGELOG.md`](CHANGELOG.md) with the new version.
 2. Bump the version in `package.json` (and `npm install --package-lock-only`), `server/server.js` and `.claude-plugin/plugin.json`; `test/release.test.js` checks they match.
-3. Tag it (`git tag v<version>`) and create the GitHub release.
+3. Merge it into `main`. Nothing else: once CI is green there, it tags the version (`v<version>`) and publishes its GitHub release with its CHANGELOG section (the `release` job in `.github/workflows/test.yml`).
+
+Users get it with `dev-team-office update`, with no extra steps: the installer takes the highest version tag, or `main` if `main` already carries a newer version (a release whose tag is not there yet).
 
 ## Reporting a problem
 

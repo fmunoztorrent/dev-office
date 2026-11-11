@@ -18,7 +18,7 @@ You need **Node.js ≥ 22.13** (macOS or Linux) and a coding agent. Nothing else
 curl -fsSL https://raw.githubusercontent.com/fmunoztorrent/dev-office/main/install.sh | sh
 ```
 
-1. **The installer** downloads the latest version (the highest version tag) to `~/.dev-team-office/app` and puts the `dev-team-office` command in `~/.local/bin`. Then it **connects every agent it finds by itself** (Claude Code, Codex, OpenCode, Pi, Gemini CLI, Cursor): its live integration, the **MCP server** and the **skills**.
+1. **The installer** downloads the latest version (the highest version tag, or `main` if it already carries a newer one) to `~/.dev-team-office/app` and puts the `dev-team-office` command in `~/.local/bin`. Then it **connects every agent it finds by itself** (Claude Code, Codex, OpenCode, Pi, Gemini CLI, Cursor): its live integration, the **MCP server** and the **skills**.
 2. **Its only question:** if `~/.local/bin` is not on your `PATH`, it offers to add it to your shell's profile. Press Enter.
 3. **Open a new terminal** and start the office: `dev-team-office`.
 4. **Your agent needs its own login.** The office uses no model. Claude Code: `/login`. Pi: `/login` and a model. OpenCode works with its free models as installed.

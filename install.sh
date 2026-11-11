@@ -10,7 +10,9 @@
 #
 # Environment:
 #   DEV_TEAM_OFFICE_REPO     owner/repo on GitHub        (default fmunoztorrent/dev-office)
-#   DEV_TEAM_OFFICE_REF      branch or tag               (default: the highest version tag, vX.Y.Z; main if it cannot be looked up)
+#   DEV_TEAM_OFFICE_REF      branch or tag               (default: the newest version: the highest version tag,
+#                            vX.Y.Z, or main if its version is newer — a release not tagged yet — or the tags
+#                            cannot be looked up)
 #                            an auto-resolved version never downgrades an installed newer one
 #   DEV_TEAM_OFFICE_SOURCE   a local folder or .tar.gz to install instead of downloading
 #   DEV_TEAM_OFFICE_HOME     where it lives              (default ~/.dev-team-office)
@@ -34,6 +36,13 @@ latest_tag() {
   command -v curl >/dev/null 2>&1 || return 1
   fetch "https://api.github.com/repos/${REPO}/tags?per_page=100" 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const t=JSON.parse(s).map(x=>x.name).filter(n=>/^v\d+\.\d+\.\d+$/.test(n)).sort((a,b)=>{const p=a.slice(1).split("."),q=b.slice(1).split(".");for(let i=0;i<3;i++)if(p[i]-q[i])return p[i]-q[i];return 0});if(!t.length)throw 0;process.stdout.write(t[t.length-1])}catch{process.exit(1)}})'
 }
+# The version on main (its package.json), to see if there is a release newer than the tags. Fails if it cannot be read.
+main_version() {
+  command -v curl >/dev/null 2>&1 || return 1
+  fetch "https://raw.githubusercontent.com/${REPO}/main/package.json" 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const v=JSON.parse(s).version;if(!/^\d+\.\d+\.\d+/.test(v))throw 0;process.stdout.write(v)}catch{process.exit(1)}})'
+}
+# Prints gt, eq or lt: version $1 compared with $2, numerically per segment (0.10.0 > 0.9.1).
+vcmp() { node -p 'const p=v=>String(v).replace(/^v/,"").split("-")[0].split(".").map(n=>parseInt(n,10)||0);const a=p(process.argv[1]),b=p(process.argv[2]);let r="eq";for(let i=0;i<3&&r==="eq";i++)if((a[i]||0)!==(b[i]||0))r=(a[i]||0)>(b[i]||0)?"gt":"lt";r' "$1" "$2"; }
 die() { printf 'dev-team-office: %s\n' "$*" >&2; exit 1; }
 
 # --- Node.js >= 22.13 (it brings SQLite and WebSocket: nothing else to install)
@@ -59,7 +68,16 @@ if [ -n "${DEV_TEAM_OFFICE_SOURCE:-}" ]; then
   fi
 else
   # AUTO_REF=1: nobody chose a version, so the downgrade guard below applies.
-  [ -n "$REF" ] || { AUTO_REF=1; REF=$(latest_tag) || REF=main; }
+  # Nobody chose: the newest one. The highest tag, unless main already carries a newer version (a
+  # release whose tag is not there yet); without tags, main.
+  if [ -z "$REF" ]; then
+    AUTO_REF=1
+    TAG=$(latest_tag) || TAG=""
+    MAIN_VERSION=$(main_version) || MAIN_VERSION=""
+    if [ -z "$TAG" ]; then REF=main
+    elif [ -n "$MAIN_VERSION" ] && [ "$(vcmp "$MAIN_VERSION" "$TAG")" = gt ]; then REF=main
+    else REF=$TAG; fi
+  fi
   URL="https://codeload.github.com/${REPO}/tar.gz/${REF}"
   say "Downloading ${REPO}@${REF}…"
   if command -v curl >/dev/null 2>&1; then fetch "$URL" -o "$TMP/app.tgz" || die "could not download $URL"
@@ -77,7 +95,7 @@ if [ "$AUTO_REF" = 1 ]; then
   if [ -n "$CURRENT" ]; then
     NEW=$(node -p 'require(process.argv[1]).version' "$TMP/src/package.json")
     # Prints gt, eq or lt: CURRENT compared with NEW, numerically per segment.
-    CMP=$(node -p 'const p=v=>String(v).split("-")[0].split(".").map(n=>parseInt(n,10)||0);const a=p(process.argv[1]),b=p(process.argv[2]);let r="eq";for(let i=0;i<3&&r==="eq";i++)if((a[i]||0)!==(b[i]||0))r=(a[i]||0)>(b[i]||0)?"gt":"lt";r' "$CURRENT" "$NEW")
+    CMP=$(vcmp "$CURRENT" "$NEW")
     if [ "$CMP" = gt ]; then
       say "Dev Team Office ${CURRENT} is newer than ${NEW}: not downgrading (set DEV_TEAM_OFFICE_REF=v${NEW} to install it anyway)"
       FINISHED=1
