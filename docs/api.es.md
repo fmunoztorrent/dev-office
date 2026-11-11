@@ -87,6 +87,11 @@ La dirección y el archivo sirven a todas las oficinas (no dependen de la oficin
 | `GET` · `PUT` · `DELETE` | `/v1/knowledge/<id>` (`?from=agent`: cuenta como una lectura) | `PUT`: los campos a cambiar | `{ ok, entry }` · `{ ok }` |
 | `POST` | `/v1/knowledge/<id>/install` | `{ targets: [id de agente] }` | `{ ok, results: [{ target, name, harness, ok, action: created \| updated \| same, reason?: exists \| manual \| invalid \| harness \| unknown, file, rel }] }` |
 | `POST` | `/v1/knowledge/generate` | `{ kind: skill \| connector \| note \| doc, text, target }` | Como un encargo: `{ ok, task \| run }` (el agente guarda el resultado con `save_knowledge`) |
+| `GET` | `/v1/knowledge/search?q=&office=&project=&k=&source=&from=agent` | | **El RAG:** `{ ok, results: [{ id: "<entrada>§<n>", entryId, kind, title, heading, label, text, scope: project \| department \| company, origin, score }], terms: [{ term, definition, synonyms }], semantic }`. Por palabras (FTS5) y, con un proveedor de embeddings, por significado, fusionados. `from=agent` registra como vacío una pregunta que no contesta |
+| `POST` | `/v1/knowledge/import` | `{ url }` o `{ name, text \| base64 }`, más `kind?` (doc), `title?`, `office?`, `project?`, `tags?`, `validUntil?` | `201 { ok, entry }`: su texto legible (Markdown, texto, CSV, JSON, HTML; PDF y Word con `pdftotext`/`pandoc`), indexado. `400 { code: format \| convert \| empty \| tooBig \| url \| fetch }` |
+| `GET` | `/v1/knowledge/gaps?office=` | | `{ ok, gaps: [{ id, query, office, project, source, count, firstAt, lastAt }] }`: lo que los agentes buscaron y no encontraron |
+| `POST` | `/v1/knowledge/gaps/<id>/resolve` | | `{ ok }` |
+| `GET` · `POST` | `/v1/archive/index` · `/v1/archive/reindex` | | `{ chunks, embedded, model, embeddings, running, error }` · `{ ok, chunks }` |
 
 `kind` es `note`, `decision`, `doc`, `minute` (el acta de una directiva), `skill` o `connector`. Por WebSocket todos los espectadores reciben `{ type: "directives", directives }`, `{ type: "overview", overview }`, `{ type: "archive", archive: { counts, recent } }` y lo que pasa en los pisos, `{ type: "floor", event: { floor: exec \| archive, kind, text, … } }`; el cliente puede mandar `{ type: "directive", text, offices?, targets? }` y `{ type: "directive_cancel", id }`. El piso que se mira es `prefs.view.floor` (`exec`, `office` o `archive`).
 
@@ -206,6 +211,7 @@ Formato y protocolo con los agentes: [pipelines.es.md](pipelines.es.md).
 | `view` | `{ office: <id>, mode: "flat" \| "iso" }`: la oficina que se mira y cómo se ve en el navegador (frontal, por defecto, o cenital isométrica) |
 | `herdr` | `{ launch: bool, subagents: bool, direction: "right" \| "down", startAgent: "auto" \| "none" \| <id de agente> }` (`subagents`: un pane por subagente) |
 | `log` | `{ life: bool }` (la vida de la oficina en la bitácora) |
+| `archive` | `{ push: bool, embeddings: "off" \| "ollama" \| "openai", model, url }`: lo que sabe el archivo va arriba de cada encargo y pregunta; el proveedor de embeddings para la búsqueda por significado (su clave en `$DEV_TEAM_OFFICE_EMBED_KEY`) |
 | `autonomy` | `{ clarify: bool, autonomous: bool }`: la analista revisa cada encargo primero; cada encargo le pide al agente trabajar solo hasta terminar (los dos encendidos por defecto) |
 
 - **Validación:** todo se valida antes de escribir. Si hay un error, la respuesta es `400 { error }` (en el idioma del juego) y no se toca nada.

@@ -132,11 +132,19 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     for (const p of document.querySelectorAll('#settings .s-panel')) p.hidden = p.dataset.panel !== tab;
     $('settings-save').hidden = tab !== 'look' && tab !== 'models';
     $('s-file').textContent = st.data ? t('settings.file', { file: tilde(st.data.office.file) }) : '';
-    if (tab === 'general') renderGeneral();
+    if (tab === 'general') { renderGeneral(); indexStatus(); }
     else if (tab === 'offices') { renderOffices(); loadProjects(); }
     else if (tab === 'agents') renderAgents();
     else if (tab === 'models') { st.models = null; renderModels(); }
     else { st.looks = null; renderLook(); }
+  }
+
+  /** How the archive is indexed: chunks, and how many have their embedding. */
+  async function indexStatus() {
+    const r = await api('GET', '/v1/archive/index');
+    const box = $('s-index');
+    if (!r.ok || !box) return;
+    box.textContent = t('settings.general.indexStatus', { chunks: r.chunks, embedded: r.embedded }) + (r.error ? ` · ⚠ ${r.error}` : r.running ? ' · …' : '');
   }
 
   /** Something new arrived (agents, offices, settings, the language…): the tab is redrawn. */
@@ -185,6 +193,18 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       el('h3', {}, G('autonomy')),
       check(p.autonomy?.clarify !== false, G('clarify'), (e) => setPref({ autonomy: { clarify: e.target.checked } })),
       check(p.autonomy?.autonomous !== false, G('autonomous'), (e) => setPref({ autonomy: { autonomous: e.target.checked } })),
+      // the archive as a RAG: its chunks go on top of every brief; embeddings for the semantic search
+      el('h3', {}, G('archive')),
+      check(p.archive?.push !== false, G('archivePush'), (e) => setPref({ archive: { push: e.target.checked } })),
+      el('label', { class: 'b-field' }, el('span', {}, G('embeddings')),
+        el('select', { onchange: (e) => setPref({ archive: { embeddings: e.target.value } }) }, ['off', 'ollama', 'openai'].map((x) => option(x, G(`embed_${x}`), x === (p.archive?.embeddings || 'off'))))),
+      p.archive?.embeddings && p.archive.embeddings !== 'off' ? [
+        el('label', { class: 'b-field' }, el('span', {}, G('embedModel')), el('input', { type: 'text', value: p.archive.model || '', placeholder: p.archive.embeddings === 'ollama' ? 'nomic-embed-text' : 'text-embedding-3-small', onchange: (e) => setPref({ archive: { model: e.target.value } }) })),
+        el('label', { class: 'b-field' }, el('span', {}, G('embedUrl')), el('input', { type: 'text', value: p.archive.url || '', placeholder: p.archive.embeddings === 'ollama' ? 'http://127.0.0.1:11434' : 'https://api.openai.com/v1', onchange: (e) => setPref({ archive: { url: e.target.value } }) })),
+        el('p', { class: 'hint' }, G(p.archive.embeddings === 'ollama' ? 'embedOllamaHint' : 'embedKeyHint')),
+      ] : null,
+      el('p', { class: 'hint', id: 's-index' }),
+      el('div', { class: 's-row' }, el('button', { type: 'button', class: 's-mini', onclick: async () => { await api('POST', '/v1/archive/reindex', {}); indexStatus(); } }, G('reindex'))),
       // when they wait for you (this browser's own: a sound, a system notification)
       alerts ? check(alerts.get().sound, t('attention.sound'), (e) => alerts.set({ sound: e.target.checked })) : null,
       alerts && 'Notification' in window ? check(alerts.get().notify, t('attention.notify'), async (e) => {

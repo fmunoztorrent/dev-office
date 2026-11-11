@@ -267,6 +267,8 @@ export default {
   targets: { openSession: 'open session', claudeTurn: 'Claude, when its turn ends' },
   offices: { main: 'Main office' },
   // the analyst reviews a brief before it goes to work (server/clarify.js)
+  ingest: { tooBig: 'too big (more than {mb} MB)', convert: 'to read {name} the office needs {tool} installed (or ask an agent to convert it: ✨ Ask an agent)', format: 'the archive does not read .{ext} files (Markdown, text, CSV, JSON, HTML, PDF or Word)', empty: '{name} has no text', url: 'that is not an http(s) address', fetch: 'could not download it: {error}' },
+  rag: { block: 'From the archive (cite its [id]; search more with search_knowledge):' },
   clarify: {
     promptHead: '[review] Before a brief goes to work, check whether it has everything needed to do it end to end without asking anyone. Do not change any file and do not start the work: only review it.',
     promptProject: 'Project: {name} ({dir})',
@@ -294,7 +296,7 @@ export default {
 
   // ---------------------------------------------------------------- the two shared floors: the executive one and the archive
   directiveStatus: { running: 'running', done: 'accomplished', partial: 'partly accomplished', failed: 'failed', cancelled: 'cancelled', interrupted: 'interrupted' },
-  knowledgeKind: { note: 'note', decision: 'decision', doc: 'doc', minute: 'minutes', skill: 'skill', connector: 'connector' },
+  knowledgeKind: { note: 'note', decision: 'decision', doc: 'doc', term: 'term', minute: 'minutes', skill: 'skill', connector: 'connector' },
   floors: {
     lift: { title: 'Elevator', here: 'you are here' },
     name: { exec: '🏛 Executive floor', archive: '📚 Archive' }, key: 'Pick the floor: the executive one, an office or the archive (o · PgUp/PgDn)', going: 'Floor: {name}',
@@ -368,7 +370,7 @@ export default {
     reason: { exists: 'it has its own one with that name', manual: 'it has opencode.jsonc: add it by hand', invalid: 'its config file is not valid JSON', harness: 'its agent does not support it', unknown: 'it is not registered', error: 'it could not be written' },
     action: { created: 'installed', updated: 'added', same: 'already had it' },
     ui: {
-      title: '📚 Archive', search: 'Search the archive…', all: 'All', kinds: { note: 'Notes', decision: 'Decisions', doc: 'Docs', minute: 'Minutes', skill: 'Skills', connector: 'Connectors' },
+      title: '📚 Archive', search: 'Search the archive…', all: 'All', kinds: { note: 'Notes', decision: 'Decisions', doc: 'Docs', term: 'Glossary', minute: 'Minutes', skill: 'Skills', connector: 'Connectors' },
       empty: 'The archive is empty. Save what the company knows, or ask an agent for it.', none: 'Nothing matches "{q}".', pickOne: 'Pick an entry to read it.',
       new: '✚ New', ask: '✨ Ask an agent', edit: '✎ Edit', remove: '🗑 Delete', removeAsk: 'Delete "{title}" from the archive?', save: 'Save', back: '← Back',
       kind: 'Kind', name: 'Name', titleField: 'Title', descField: 'Description (what it does and when to use it)', infoField: 'What information it gives', body: 'Text (Markdown)', instructions: 'Instructions (Markdown)', setup: 'How to set it up (no secrets)',
@@ -376,6 +378,12 @@ export default {
       install: 'Install in', installGo: '⬇ Install', installHint: 'It is written in each project’s folder, in its agent’s format (Claude Code: .claude/; Pi, OpenCode and Codex: .agents/ or their MCP config).',
       uses: '{n} read(s)', by: 'by {who}', saved: 'Saved', removed: 'Deleted', describe: 'What do you need?', describePh: 'A skill to deploy to staging with our pipeline…', agent: 'Agent',
       asked: 'You asked {agent}: it will save it in the archive when it is done', noTargets: 'Register an agent in ⚙ › Agents to ask it',
+      termField: 'Term', definition: 'Definition (Markdown)', synonyms: 'Synonyms (comma-separated)', project: 'Only for the project', anyProject: 'any project', validUntil: 'Valid until', expired: 'expired', origin: 'from {origin}',
+      index: '🧠 {n} chunk(s) indexed · {e} with embedding', chunks: 'How it was indexed', download: '⬇ .md',
+      import: '📥 Load', importTitle: 'Load documents', importHint: 'Markdown, text, CSV, JSON, HTML, PDF or Word (PDF and Word need pdftotext or pandoc on this machine). Their readable text is kept, and it is indexed for the agents.',
+      drop: 'Drop files here, or pick them', url: 'or a web address', importGo: '📥 Load into the archive', importing: 'Loading {name}…', imported: 'Loaded: {n} document(s)', importFailed: '{name}: {error}',
+      gaps: '🕳 Gaps', gapsHint: 'What the agents searched and did not find. Answer it (a note, a doc, a term) and they will find it next time.', gapsEmpty: 'No gaps: the agents found what they searched for.',
+      gapTimes: '{n} time(s)', gapAnswer: '✍ Answer it', gapDismiss: 'Dismiss',
     },
   },
   services: {
@@ -397,7 +405,7 @@ export default {
     pathMissing: 'the path is missing', pathRelative: '{path}: use the full path (e.g. ~/Workspace/my-project)', pathNotFound: '{path}: that folder does not exist',
     harness: 'choose the agent for that path: claude-code, opencode or pi', args: '{name}: args must be a list of strings',
     agentExists: 'that agent is already registered for that path', saveFailed: 'could not save: {error}', agentsMax: 'at most {n} agents',
-    unknownAgent: 'unknown agent', character: { json: 'that file is not JSON', kind: 'that is not a Dev Team Office character (its "kind" must be "dev-team-office/character")' }, unknownRole: 'unknown role: {role}', oneOf: '{role}: "{key}" must be one of: {values}', notEditable: '{role}: "{key}" cannot be changed',
+    unknownAgent: 'unknown agent', unknownGap: 'unknown gap', character: { json: 'that file is not JSON', kind: 'that is not a Dev Team Office character (its "kind" must be "dev-team-office/character")' }, unknownRole: 'unknown role: {role}', oneOf: '{role}: "{key}" must be one of: {values}', notEditable: '{role}: "{key}" cannot be changed',
     color: '{role}.{key}: use a color like #3f73f0', empty: '{role}.{key} cannot be empty',
     unknownOffice: 'unknown department (office): {office}', officeName: 'give the department a name', officeExists: 'there is already a department with that name',
     officesMax: 'at most {n} offices', mainOffice: 'the main office cannot be deleted', timezone: 'unknown time zone: {tz}',
@@ -490,6 +498,7 @@ export default {
     keys: { field: 'field', change: 'change', action: 'action', save: 'save', close: 'close', tabs: '◂ ▸ switch tab' },
     yes: 'yes', no: 'no',
     general: {
+      archive: 'Archive (the agents’ knowledge)', archivePush: 'What the archive knows goes on top of every brief and question (the glossary terms and the most relevant passages)', embeddings: 'Semantic search', embed_off: 'Off: by words only (offline)', embed_ollama: 'Ollama, on this machine', embed_openai: 'An OpenAI-compatible API (OpenAI, Voyage…)', embedModel: 'Embedding model', embedUrl: 'Address', embedOllamaHint: 'Install Ollama and run: ollama pull nomic-embed-text. Nothing leaves this machine.', embedKeyHint: 'Its key goes in the DEV_TEAM_OFFICE_EMBED_KEY environment variable (never in the database). The archive’s text is sent to that API to be embedded.', indexStatus: '🧠 {chunks} chunk(s) indexed · {embedded} with embedding', reindex: '↻ Index it again',
       autonomy: 'Autonomy', clarify: 'Before a brief goes to work, the analyst checks it has everything (and asks you only what is missing)', autonomous: 'The agents work on their own to the end (they ask only what only you can answer)',
       language: 'Language', timezone: 'Time zone', tzSystem: 'the system one ({tz})', tzHint: 'The time zone gives the date, the time and the country. Each office can have its own (⚙ › Offices).',
       city: 'City', cityZone: 'the time zone’s ({city})', cityHint: 'The city gives the weather, the sun and the moon. Type to search among the cities of the time zone’s country: in Chile, for example, Concepción and Punta Arenas share Santiago’s time zone.',

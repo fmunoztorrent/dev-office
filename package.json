@@ -1,6 +1,6 @@
 {
   "name": "dev-team-office",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "license": "MIT",
   "author": "Fabián Muñoz (https://github.com/fmunoztorrent)",
   "description": "A live pixel-art office for your coding agent (Claude Code, Codex, OpenCode, Pi…): every subagent is a character of a development team. Zero dependencies, MCP server included.",

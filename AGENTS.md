@@ -34,6 +34,7 @@ Dev Team Office es una oficina en pixel art que muestra en vivo lo que hacen los
 | `server/store.js` | La base SQLite: oficinas, agentes, ajustes (`prefs`), apariencia, historial, directivas y el archivo (`knowledge`) |
 | `server/clarify.js` | La autonomía: antes de que un encargo pase a trabajo, la analista se lo da a revisar al agente del proyecto (sólo lectura) y te trae sólo las preguntas que cambiarían el resultado |
 | `server/guides.js` | Las indicaciones de cada departamento (una oficina) y de cada proyecto (su carpeta): van arriba de cada encargo, pipeline, directiva y pregunta, bajo la línea 📁 |
+| `server/rag.js` · `server/chunks.js` · `server/ingest.js` | El archivo como RAG: cargar documentos (su texto legible), cortarlos en fragmentos, buscarlos por palabras (FTS5) y por significado (embeddings opcionales), el glosario, los vacíos y el bloque «📚 Del archivo» arriba de cada encargo |
 | `server/directives.js` · `server/archive.js` | Los dos pisos compartidos: la dirección (una directiva = un encargo por proyecto, a varias oficinas) y el archivo (notas, decisiones, documentos, actas, skills y conectores; instala skills y conectores en cada proyecto) |
 | `public/sim.js` | La simulación (personajes, rutas, vida de la oficina). La comparten el navegador y la terminal |
 | `public/game.js` · `public/iso.js` | El juego en canvas: la vista frontal y la cenital (cámara isométrica) |
@@ -115,7 +116,7 @@ Más detalle en [docs/conventions.es.md](docs/conventions.es.md) y [CONTRIBUTING
   - En la simulación cotorrea, pero no decide nada sola: no lleva ideas al backlog ni contesta alcances.
 - **Cada subagente es alguien nuevo** en la simulación (`sim.ghosts`): un extra translúcido de su rol que llega por el ascensor (`ELEVATOR`) y se sienta en un escritorio propio, que existe mientras él está (`HOT_DESKS` son los lugares). Los eventos con `subId` son suyos, no del personaje fijo del rol.
 - **El mundo va de `x = LEFT` (negativo) a `W`:** la oficina es `x ≥ 0`; a su izquierda, el pasillo (`HALL`) y el baño (`BATHROOM`). La vista frontal dibuja con el mundo corrido (`FLAT` en `game.js`), la terminal resta `LEFT` al convertir, y la ruta (`route` en `sim.js`) pasa por las puertas: nadie cruza una pared.
-- **Un encargo lleva su alcance delante:** una línea que empieza con `📁` (`server/tasks.js`, `scoped`): sólo la carpeta del proyecto y sólo lo pedido. Debajo van las indicaciones de su departamento y de su proyecto (líneas `📋 …` y `│ …`, `server/guides.js`). La oficina saca esa cabecera del título de la pizarra (`unguided`); a OpenCode el alcance además le llega como regla (`fenced`).
+- **Un encargo lleva su alcance delante:** una línea que empieza con `📁` (`server/tasks.js`, `scoped`): sólo la carpeta del proyecto y sólo lo pedido. Debajo van el modo autónomo y las indicaciones de su departamento y de su proyecto (líneas `📋 …` y `│ …`, `server/guides.js`), y lo que sabe el archivo (`📚 …`, `server/rag.js`). La oficina saca esa cabecera del título de la pizarra (`unguided`); a OpenCode el alcance además le llega como regla (`fenced`).
 - **El contexto** llega como evento `context` (o el campo `context` de cualquier evento): sólo actualiza `session.context`, no va a la bitácora ni mueve a nadie.
 - **Los roles de los subagentes** salen de, en este orden:
   1. su `role:`;

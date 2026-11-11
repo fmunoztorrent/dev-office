@@ -587,3 +587,25 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
   .ar-list { max-height: 34vh; }
   .ar-card .brief-head { flex-wrap: wrap; }
 }
+
+/* the archive, to read: its text as a document, its index underneath */
+.ar-read { font: 14px/1.55 "Space Grotesk", sans-serif; color: var(--ink); background: #fff; box-shadow: 0 0 0 2px var(--ink); padding: 12px 18px; }
+.ar-read h3, .ar-read h4, .ar-read h5, .ar-read h6 { margin: 14px 0 6px; font: 600 16px "Space Grotesk", sans-serif; text-transform: none; letter-spacing: 0; }
+.ar-read h3 { font-size: 18px; }
+.ar-read p { margin: 0 0 10px; }
+.ar-read ul, .ar-read ol { margin: 0 0 10px; padding-left: 22px; }
+.ar-read code { font: 13px ui-monospace, monospace; background: #ece7da; padding: 1px 4px; }
+.ar-read pre { background: #2b2d42; color: #e8e9f1; padding: 10px; overflow: auto; }
+.ar-read pre code { background: none; color: inherit; padding: 0; }
+.ar-read blockquote { margin: 0 0 10px; padding: 4px 10px; box-shadow: inset 3px 0 0 #c9b48a; color: #555b70; }
+.ar-read table { border-collapse: collapse; margin: 0 0 10px; font-size: 13px; }
+.ar-read th, .ar-read td { border: 1px solid #d6cfbc; padding: 3px 8px; text-align: left; }
+.ar-read a { color: #1b6fa8; }
+.ar-index { margin-top: 12px; font-size: 12px; color: #555b70; }
+.ar-index summary { cursor: pointer; }
+.ar-index ol { margin: 6px 0 0; padding-left: 22px; display: grid; gap: 6px; max-height: 260px; overflow: auto; }
+.ar-index b { display: block; color: var(--ink); }
+.ar-drop { display: grid; place-items: center; gap: 6px; padding: 18px; text-align: center; cursor: pointer; background: #f6f3e9; box-shadow: inset 0 0 0 2px #c9b48a; outline: 2px dashed #c9b48a; outline-offset: -8px; }
+.ar-drop.over { background: #fff3c4; }
+.ar-gaps-tab { color: #b3261e !important; font-weight: 600; }
+.ar-gap .ar-row { margin-top: 4px; }

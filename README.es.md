@@ -147,7 +147,7 @@ Para conectar cualquier otro harness (o entender el contrato de roles), ver [doc
 | `report_activity` | En qué rol y fase estás (`task`, `phase`, `todos`, `waiting`, `done`…) |
 | `send_task` | Le manda un prompt al agente de otro proyecto registrado |
 | `open_pane` | Dentro de herdr, abre un pane con una actividad (tests en watch, otro agente…) |
-| `search_knowledge` · `get_knowledge` · `save_knowledge` | El archivo de la empresa: notas, decisiones, documentos, skills y conectores |
+| `search_knowledge` · `get_knowledge` · `save_knowledge` | El archivo de la empresa (su base de conocimiento): los fragmentos que contestan una pregunta, con un id para citarlos; notas, decisiones, documentos, el glosario, skills y conectores |
 | `send_directive` · `list_directives` | La dirección: una orden para varias oficinas o proyectos |
 | `list_teams` · `install_team` | Los team packs (un subagente por rol) |
 
@@ -243,7 +243,12 @@ La orden le llega a **operaciones** (el COO), que la reparte entre los departame
 
 **📚 El archivo**, en el subsuelo: lo que sabe la empresa, compartido por todas las oficinas y todos los agentes.
 
-- **Notas, decisiones y documentos** (y las actas de las directivas): búscalas, léelas, escríbelas. Los agentes las buscan y las agregan por MCP (`search_knowledge`, `get_knowledge`, `save_knowledge`), y el servidor MCP les pide buscar ahí antes de empezar y guardar lo que deciden.
+- **La base de conocimiento de la empresa (un RAG):** notas, decisiones, documentos, el **glosario** (cada término con su definición y sus sinónimos) y las actas de las directivas. **📥 Cargar** trae archivos (Markdown, texto, CSV, JSON, HTML; PDF y Word con `pdftotext` o `pandoc` en la máquina), arrastrados o elegidos, o una dirección web; cada uno puede ser para toda la empresa, un departamento o un proyecto, y vigente hasta una fecha.
+  - **Tú lo lees como documento** (Markdown con formato, ⬇ .md para bajarlo): el texto legible se guarda tal cual.
+  - **Los agentes lo reciben como índice:** cada entrada se corta en fragmentos por sus títulos, se indexa por palabras (sin acentos, sin internet) y, si lo enciendes en ⚙ › General › Archivo, también por significado (embeddings de Ollama local o de una API compatible con OpenAI, guardados junto a cada fragmento). *Cómo se indexó* muestra sus fragmentos.
+  - **A pedido:** `search_knowledge` (MCP) devuelve los fragmentos que contestan una pregunta, del proyecto del agente, de su departamento y de la empresa, cada uno con un id como `[k12§3]` para citarlo, y los términos del glosario que tocan.
+  - **Arriba de cada encargo y pregunta:** un bloque «📚 Del archivo» con los términos del glosario que menciona y los fragmentos más relevantes (se puede apagar).
+  - **🕳 Vacíos:** lo que los agentes buscaron y no encontraron (o encontraron sólo en parte). Contéstalo (una nota, un documento, un término) y la próxima vez lo encuentran.
 - **Skills:** se escriben una vez y se instalan en los proyectos que elijas, en el formato de cada agente (`.claude/skills/` para Claude Code, `.agents/skills/` para Pi, OpenCode y Codex). Nunca se pisa una skill propia del proyecto con el mismo nombre.
 - **Conectores:** servidores MCP que traen información de afuera (el gestor de issues, la documentación, una base de datos), con su comando o su URL. Se instalan en la config MCP de cada proyecto (`.mcp.json`, `.pi/mcp.json`, `opencode.json`, `.codex/config.toml`) sin tocar lo demás; cada agente te pide confiar en ellos la primera vez. Nunca escribas un secreto en uno.
 - **✨ Pedírsela a un agente:** describe la skill, el conector o el documento que necesitas y elige un agente: lo escribe y lo guarda en el archivo con `save_knowledge`.

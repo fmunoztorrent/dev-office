@@ -18,6 +18,7 @@ import { t, getLanguage, LANGUAGES } from '../public/i18n.js';
 import { clip } from './roles.js';
 import { childEnv } from './tasks.js';
 import { guideFor, guideText } from './guides.js';
+import { contextBlock } from './rag.js';
 import { MAIN_OFFICE } from './store.js';
 
 const ANSI = /\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07/g;
@@ -68,7 +69,7 @@ export class ClarifyDesk extends EventEmitter {
     // without text, or for something the registry does not know, it goes as it is (the registry says why)
     if (!this.enabled || msg.clarified || !text || !target) return this.registry.run(msg);
     const harness = (msg.session && target.sessions?.find((s) => s.session === msg.session)?.agent) || target.harness;
-    const guide = guideText(guideFor(this.store, target.path, target.office));
+    const guide = [guideText(guideFor(this.store, target.path, target.office)), this.store?.listKnowledge ? contextBlock(this.store, text, { office: target.office, project: target.path }) : ''].filter(Boolean).join('\n');
     const question = [
       t('clarify.promptHead'),
       t('clarify.promptProject', { name: target.name, dir: target.path }),

@@ -20,6 +20,8 @@ import { TaskHub, AGENT_LABEL } from './tasks.js';
 import { PipelineHub } from './pipeline.js';
 import { AgentRegistry } from './registry.js';
 import { ClarifyDesk } from './clarify.js';
+import { search as ragSearch, createEmbedder, createIndexer } from './rag.js';
+import { fromFile, fromUrl } from './ingest.js';
 import { AskDesk } from './asks.js';
 import { Archive } from './archive.js';
 import { DirectiveDesk } from './directives.js';
@@ -38,7 +40,7 @@ import { zoneInfo, systemZone } from '../public/clock.js';
 import { insideDir as inside } from './paths.js';
 import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.13.0';
+export const VERSION = '0.14.0';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
 const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
@@ -74,7 +76,7 @@ class HttpError extends Error {
  *                 says it, so `update` knows whether it can bring the office back by itself
  * @returns {Promise<{company, office, url, socket, command, handleMessage, close, …}>}
  */
-export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {}, clarify: clarifyOpt = {}, mode = 'terminal', outdatedAfter = 3000 } = {}) {
+export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {}, clarify: clarifyOpt = {}, rag: ragOpt = {}, mode = 'terminal', outdatedAfter = 3000 } = {}) {
   const ownStore = !db || typeof db === 'string';
   const store = ownStore ? openStore(db || dbFile()) : db; // oficinas, agentes, ajustes e historial
   setLanguage(store.getPrefs().lang);
@@ -116,6 +118,10 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   const publicAsk = ({ id, office: o, agent, question, answer, status, error, from, forked, role, createdAt, updatedAt }) => ({ id, office: o, agent, question, answer, status, error, from, forked, role, createdAt, updatedAt });
   // the two floors that serve every office: the archive (the company's knowledge) and the executive one (directives)
   const archive = new Archive({ store, registry });
+  // the archive as a RAG: its embeddings (optional) are made in the background after each save
+  const embedder = createEmbedder(() => store.getPrefs(), ragOpt);
+  const indexer = createIndexer(store, embedder);
+  archive.on('saved', () => indexer.kick());
   const directives = new DirectiveDesk({ store, registry, hub, pipelines, archive, company });
   const startedAt = Date.now();
   const bus = new EventEmitter(); // changes the interfaces see: settings, appearance, weather, offices, log
@@ -751,6 +757,28 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const out = archive.save(await body(req), { source: t('events.you') });
         return json(res, out.ok ? (out.created ? 201 : 200) : out.status || 400, out);
       }
+      // The archive as a RAG: the chunks that answer a search, with an id to cite them (lexical and,
+      // with an embedding provider, semantic). A search that finds nothing is recorded as a gap.
+      if (req.method === 'GET' && p === '/v1/knowledge/search') {
+        const query = q('q') || '';
+        const out = await ragSearch(store, query, { office: q('office') || null, project: q('project') || null, k: Math.min(20, Number(q('k')) || 5), embedder, source: q('source') || null, gap: q('from') === 'agent' });
+        if (query && q('from') === 'agent') floor('archive', 'search', { text: query });
+        return json(res, 200, { ok: true, ...out });
+      }
+      // A document into the archive: { url } or { name, text | base64 }, plus kind, title, office, project, tags, validUntil
+      if (req.method === 'POST' && p === '/v1/knowledge/import') {
+        const b = await body(req);
+        const doc = b.url ? await fromUrl(String(b.url)) : fromFile({ name: b.name, text: b.text, base64: b.base64 });
+        if (!doc.ok) return json(res, 400, doc);
+        const out = archive.save({ kind: b.kind || 'doc', title: b.title || doc.title, body: doc.text, origin: doc.origin, office: b.office || null, project: b.project || null, tags: b.tags, validUntil: b.validUntil ?? null }, { source: b.from || t('events.you') });
+        return json(res, out.ok ? 201 : out.status || 400, out);
+      }
+      // What the agents searched and did not find: to fill it in
+      if (req.method === 'GET' && p === '/v1/knowledge/gaps') return json(res, 200, { ok: true, gaps: store.listGaps({ office: q('office') || null }) });
+      if (req.method === 'POST' && (m = p.match(/^\/v1\/knowledge\/gaps\/(\d+)\/resolve$/))) { const out = store.resolveGap(m[1]); return json(res, out.ok ? 200 : out.status || 400, out); }
+      // How the archive is indexed (chunks, embeddings), and indexing it again
+      if (req.method === 'GET' && p === '/v1/archive/index') return json(res, 200, { ok: true, ...store.indexStatus(embedder.model), embeddings: embedder.enabled, running: indexer.status.running, error: indexer.status.lastError });
+      if (req.method === 'POST' && p === '/v1/archive/reindex') { const chunks = store.indexAll(); indexer.kick(); return json(res, 200, { ok: true, chunks }); }
       if (req.method === 'POST' && p === '/v1/knowledge/generate') {
         const out = archive.generate(await body(req));
         return json(res, out.ok ? 200 : 400, out);
@@ -765,7 +793,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         if (!m[2] && req.method === 'GET') {
           const e = archive.get(id, { touch: q('from') === 'agent' });
           if (e && q('from') === 'agent') floor('archive', 'read', { text: e.title, entryKind: e.kind });
-          return e ? json(res, 200, { ok: true, entry: e }) : json(res, 404, { ok: false, error: t('err.unknownKnowledge') });
+          // with its index: the chunks it was cut into, and how many have their embedding
+          return e ? json(res, 200, { ok: true, entry: e, chunks: store.chunksOf(e.id) }) : json(res, 404, { ok: false, error: t('err.unknownKnowledge') });
         }
         if (!m[2] && (req.method === 'PUT' || req.method === 'PATCH')) {
           const out = archive.save({ ...(await body(req)), id });
@@ -915,6 +944,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     asks,
     clarify,
     archive,
+    embedder,
+    indexer,
     directives,
     overview,
     bus,

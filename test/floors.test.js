@@ -57,7 +57,7 @@ test('el archivo: notas, skills y conectores validados; una skill con el mismo n
   assert.equal(store.listKnowledge({ q: 'POSTGRESQL' })[0].kind, 'decision');
   assert.equal(store.listKnowledge({ q: 'cómo' })[0].id, note.entry.id, 'sin tildes: como = cómo');
   assert.deepEqual(store.listKnowledge({ q: 'nada que ver' }), []);
-  assert.deepEqual(store.knowledgeCounts(), { note: 1, decision: 1, doc: 0, minute: 0, skill: 1, connector: 2 });
+  assert.deepEqual(store.knowledgeCounts(), { note: 1, decision: 1, doc: 0, term: 0, minute: 0, skill: 1, connector: 2 });
   // an office's entries: its own plus the whole company's
   store.createOffice({ name: 'Pagos' });
   store.createKnowledge({ kind: 'note', title: 'Sólo de pagos', office: 'Pagos' });
@@ -283,8 +283,9 @@ test('MCP: un agente busca, lee y guarda en el archivo (con la oficina cerrada t
   let r = await tool(offline, 'save_knowledge', { kind: 'decision', title: 'Las fechas van en UTC', body: 'Siempre ISO 8601', tags: ['fechas'] });
   assert.match(r.content[0].text, /Saved in the archive: .* \[decision\] Las fechas van en UTC · the office is offline/);
   r = await tool(offline, 'search_knowledge', { query: 'utc' });
-  assert.match(r.content[0].text, /\[decision\] Las fechas van en UTC #fechas/);
-  const id = r.content[0].text.split(' ')[0];
+  // the passage that answers it, with its id to cite
+  assert.match(r.content[0].text, /^\[k\w+§1\] Las fechas van en UTC \(company\)\n {4}Siempre ISO 8601\n/);
+  const id = r.content[0].text.match(/^\[([^\]]+)\]/)[1]; // get_knowledge takes the citation too
   r = await tool(offline, 'get_knowledge', { id });
   assert.match(r.content[0].text, /Siempre ISO 8601/);
   assert.equal((await tool(offline, 'send_directive', { text: 'x', offices: ['all'] })).isError, true, 'una directiva necesita la oficina');

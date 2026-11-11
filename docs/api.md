@@ -87,6 +87,11 @@ The executive floor and the archive serve every office (they do not depend on th
 | `GET` · `PUT` · `DELETE` | `/v1/knowledge/<id>` (`?from=agent`: counts as a read) | `PUT`: the fields to change | `{ ok, entry }` · `{ ok }` |
 | `POST` | `/v1/knowledge/<id>/install` | `{ targets: [agent id] }` | `{ ok, results: [{ target, name, harness, ok, action: created \| updated \| same, reason?: exists \| manual \| invalid \| harness \| unknown, file, rel }] }` |
 | `POST` | `/v1/knowledge/generate` | `{ kind: skill \| connector \| note \| doc, text, target }` | Like a brief: `{ ok, task \| run }` (the agent saves the result with `save_knowledge`) |
+| `GET` | `/v1/knowledge/search?q=&office=&project=&k=&source=&from=agent` | | **The RAG:** `{ ok, results: [{ id: "<entry>§<n>", entryId, kind, title, heading, label, text, scope: project \| department \| company, origin, score }], terms: [{ term, definition, synonyms }], semantic }`. Lexical (FTS5) and, with an embedding provider, semantic, fused. `from=agent` records a question it does not answer as a gap |
+| `POST` | `/v1/knowledge/import` | `{ url }` or `{ name, text \| base64 }`, plus `kind?` (doc), `title?`, `office?`, `project?`, `tags?`, `validUntil?` | `201 { ok, entry }`: its readable text (Markdown, text, CSV, JSON, HTML; PDF and Word with `pdftotext`/`pandoc`), indexed. `400 { code: format \| convert \| empty \| tooBig \| url \| fetch }` |
+| `GET` | `/v1/knowledge/gaps?office=` | | `{ ok, gaps: [{ id, query, office, project, source, count, firstAt, lastAt }] }`: what the agents searched and did not find |
+| `POST` | `/v1/knowledge/gaps/<id>/resolve` | | `{ ok }` |
+| `GET` · `POST` | `/v1/archive/index` · `/v1/archive/reindex` | | `{ chunks, embedded, model, embeddings, running, error }` · `{ ok, chunks }` |
 
 `kind` is `note`, `decision`, `doc`, `minute` (a directive's minutes), `skill` or `connector`. Over WebSocket every viewer gets `{ type: "directives", directives }`, `{ type: "overview", overview }`, `{ type: "archive", archive: { counts, recent } }` and what happens on the floors, `{ type: "floor", event: { floor: exec \| archive, kind, text, … } }`; the client may send `{ type: "directive", text, offices?, targets? }` and `{ type: "directive_cancel", id }`. The floor being watched is `prefs.view.floor` (`exec`, `office` or `archive`).
 
@@ -206,6 +211,7 @@ Format and protocol with the agents: [pipelines.md](pipelines.md).
 | `view` | `{ office: <id>, mode: "flat" \| "iso" }`: the office being watched and how it looks in the browser (front, the default, or isometric top-down) |
 | `herdr` | `{ launch: bool, subagents: bool, direction: "right" \| "down", startAgent: "auto" \| "none" \| <agent id> }` (`subagents`: one pane per subagent) |
 | `log` | `{ life: bool }` (the office's life in the log) |
+| `archive` | `{ push: bool, embeddings: "off" \| "ollama" \| "openai", model, url }`: what the archive knows goes on top of every brief and question; the embedding provider for the semantic search (its key in `$DEV_TEAM_OFFICE_EMBED_KEY`) |
 | `autonomy` | `{ clarify: bool, autonomous: bool }`: the analyst reviews each brief first; every brief asks the agent to work on its own to the end (both on by default) |
 
 - **Validation:** everything is validated before writing. On an error, the response is `400 { error }` (in the game's language) and nothing is touched.

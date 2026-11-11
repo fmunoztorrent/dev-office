@@ -23,6 +23,7 @@ import { realDir } from './paths.js';
 import { childEnv } from './tasks.js';
 import { DEFAULT_TEAM } from '../public/sim.js';
 import { guideFor, guideText } from './guides.js';
+import { contextBlock } from './rag.js';
 
 const ANSI = /\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07/g;
 const SOURCE_HARNESS = { 'claude-code': 'claude-code', claude: 'claude-code', codex: 'codex', opencode: 'opencode', pi: 'pi' };
@@ -105,6 +106,9 @@ export class AskDesk extends EventEmitter {
     // how to work with this project and its department (their instructions)
     const guide = guideText(guideFor(this.store, duty.cwd, officeId));
     if (guide) lines.push(guide);
+    // what the archive knows about the question (with its ids, to cite them)
+    const archive = this.store?.listKnowledge ? contextBlock(this.store, this.#question || '', { office: officeId, project: duty.cwd || null }) : '';
+    if (archive) lines.push(archive);
     if (forked) return lines.join('\n');
     if (duty.title) lines.push(t('btw.ctxTask', { task: clip(duty.title, 200) }));
     if (duty.turn) lines.push(t('btw.ctxTurn', { role: t(`team.titles.${duty.turn}`) }));
@@ -126,7 +130,9 @@ export class AskDesk extends EventEmitter {
     return style === 'normal' ? 'promptRules' : `rules.${style}`;
   }
 
+  #question = '';
   #prompt(question, officeId, duty, role, forked) {
+    this.#question = question;
     return [
       t('btw.promptHead'),
       this.#context(officeId, duty, role, forked),

@@ -147,7 +147,7 @@ To connect any other harness (or understand the role contract), see [docs/connec
 | `report_activity` | Which role and phase you are in (`task`, `phase`, `todos`, `waiting`, `done`…) |
 | `send_task` | Sends a prompt to another registered project's agent |
 | `open_pane` | Inside herdr, opens a pane with an activity (tests in watch mode, another agent…) |
-| `search_knowledge` · `get_knowledge` · `save_knowledge` | The company archive: notes, decisions, docs, skills and connectors |
+| `search_knowledge` · `get_knowledge` · `save_knowledge` | The company archive (its knowledge base): the passages that answer a question, with an id to cite; notes, decisions, docs, the glossary, skills and connectors |
 | `send_directive` · `list_directives` | The executive floor: one order for several offices or projects |
 | `list_teams` · `install_team` | The team packs (one subagent per role) |
 
@@ -243,7 +243,12 @@ The order goes to **operations** (the COO), who splits it across the departments
 
 **📚 The archive**, in the basement: what the company knows, shared by every office and every agent.
 
-- **Notes, decisions and docs** (and the directives' minutes): search them, read them, write them. Agents search and add to them through MCP (`search_knowledge`, `get_knowledge`, `save_knowledge`), and the MCP server asks them to look there before starting and to save what they settle.
+- **The company's knowledge base (a RAG):** notes, decisions, documents, the **glossary** (each term with its definition and synonyms) and the directives' minutes. **📥 Load** brings in files (Markdown, text, CSV, JSON, HTML; PDF and Word with `pdftotext` or `pandoc` on the machine), dropped or picked, or a web address; each one can be for the whole company, a department or a project, and valid until a date.
+  - **You read it as a document** (rendered Markdown, ⬇ .md to download it): the readable text is kept as it is.
+  - **The agents get it as an index:** each entry is cut into chunks by its headings, indexed by words (accent-insensitive, offline) and, if you turn it on in ⚙ › General › Archive, by meaning too (embeddings from local Ollama or an OpenAI-compatible API, stored next to each chunk). *How it was indexed* shows its chunks.
+  - **On demand:** `search_knowledge` (MCP) returns the passages that answer a question, from the agent's project, its department and the company, each with an id like `[k12§3]` to cite, and the glossary terms involved.
+  - **On top of every brief and question:** a "📚 From the archive" block with the glossary terms it mentions and the most relevant passages (it can be turned off).
+  - **🕳 Gaps:** what the agents searched and did not find (or found only partly). Answer it (a note, a doc, a term) and they will find it next time.
 - **Skills:** written once, installed in the projects you pick, in each agent's format (`.claude/skills/` for Claude Code, `.agents/skills/` for Pi, OpenCode and Codex). A project's own skill with the same name is never overwritten.
 - **Connectors:** MCP servers that bring outside information (the issue tracker, the docs, a database), with their command or their URL. Installed in each project's MCP config (`.mcp.json`, `.pi/mcp.json`, `opencode.json`, `.codex/config.toml`) without touching the rest; each agent asks you to trust them the first time. Never write a secret in one.
 - **✨ Ask an agent:** describe the skill, connector or doc you need and pick an agent: it writes it and saves it in the archive with `save_knowledge`.

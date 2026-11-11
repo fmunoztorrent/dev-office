@@ -267,6 +267,8 @@ export default {
   targets: { openSession: 'sesión abierta', claudeTurn: 'Claude, al terminar su turno' },
   offices: { main: 'Oficina principal' },
   // la analista revisa un encargo antes de que pase a trabajo (server/clarify.js)
+  ingest: { tooBig: 'demasiado grande (más de {mb} MB)', convert: 'para leer {name} la oficina necesita {tool} instalado (o pídele a un agente que lo convierta: ✨ Pedírselo a un agente)', format: 'el archivo no lee archivos .{ext} (Markdown, texto, CSV, JSON, HTML, PDF o Word)', empty: '{name} no tiene texto', url: 'eso no es una dirección http(s)', fetch: 'no se pudo bajar: {error}' },
+  rag: { block: 'Del archivo (cita su [id]; busca más con search_knowledge):' },
   clarify: {
     promptHead: '[revisión] Antes de que un encargo pase a trabajo, revisa si tiene todo lo necesario para hacerlo de punta a punta sin preguntarle a nadie. No cambies ningún archivo ni empieces el trabajo: sólo revísalo.',
     promptProject: 'Proyecto: {name} ({dir})',
@@ -294,7 +296,7 @@ export default {
 
   // ---------------------------------------------------------------- the two shared floors: the executive one and the archive
   directiveStatus: { running: 'en curso', done: 'cumplida', partial: 'cumplida a medias', failed: 'falló', cancelled: 'cancelada', interrupted: 'interrumpida' },
-  knowledgeKind: { note: 'nota', decision: 'decisión', doc: 'documento', minute: 'acta', skill: 'skill', connector: 'conector' },
+  knowledgeKind: { note: 'nota', decision: 'decisión', doc: 'documento', term: 'término', minute: 'acta', skill: 'skill', connector: 'conector' },
   floors: {
     lift: { title: 'Ascensor', here: 'estás aquí' },
     name: { exec: '🏛 Dirección', archive: '📚 Archivo' }, key: 'Elige el piso: la dirección, una oficina o el archivo (o · RePág/AvPág)', going: 'Piso: {name}',
@@ -368,7 +370,7 @@ export default {
     reason: { exists: 'ya tiene uno propio con ese nombre', manual: 'tiene opencode.jsonc: agrégalo a mano', invalid: 'su archivo de configuración no es JSON válido', harness: 'su agente no lo admite', unknown: 'no está registrado', error: 'no se pudo escribir' },
     action: { created: 'instalada', updated: 'agregada', same: 'ya la tenía' },
     ui: {
-      title: '📚 Archivo', search: 'Buscar en el archivo…', all: 'Todo', kinds: { note: 'Notas', decision: 'Decisiones', doc: 'Docs', minute: 'Actas', skill: 'Skills', connector: 'Conectores' },
+      title: '📚 Archivo', search: 'Buscar en el archivo…', all: 'Todo', kinds: { note: 'Notas', decision: 'Decisiones', doc: 'Docs', term: 'Glosario', minute: 'Actas', skill: 'Skills', connector: 'Conectores' },
       empty: 'El archivo está vacío. Guarda lo que la empresa sabe, o pídeselo a un agente.', none: 'Nada coincide con «{q}».', pickOne: 'Elige una entrada para leerla.',
       new: '✚ Nueva', ask: '✨ Pedírsela a un agente', edit: '✎ Editar', remove: '🗑 Eliminar', removeAsk: '¿Eliminar «{title}» del archivo?', save: 'Guardar', back: '← Volver',
       kind: 'Tipo', name: 'Nombre', titleField: 'Título', descField: 'Descripción (qué hace y cuándo usarla)', infoField: 'Qué información da', body: 'Texto (Markdown)', instructions: 'Instrucciones (Markdown)', setup: 'Cómo se configura (sin secretos)',
@@ -376,6 +378,12 @@ export default {
       install: 'Instalar en', installGo: '⬇ Instalar', installHint: 'Se escribe en la carpeta de cada proyecto, en el formato de su agente (Claude Code: .claude/; Pi, OpenCode y Codex: .agents/ o su config MCP).',
       uses: '{n} lectura(s)', by: 'por {who}', saved: 'Guardado', removed: 'Eliminado', describe: '¿Qué necesitas?', describePh: 'Una skill para desplegar a staging con nuestro pipeline…', agent: 'Agente',
       asked: 'Se lo pediste a {agent}: lo guardará en el archivo cuando termine', noTargets: 'Registra un agente en ⚙ › Agentes para pedírselo',
+      termField: 'Término', definition: 'Definición (Markdown)', synonyms: 'Sinónimos (separados por coma)', project: 'Sólo para el proyecto', anyProject: 'cualquier proyecto', validUntil: 'Vigente hasta', expired: 'vencido', origin: 'de {origin}',
+      index: '🧠 {n} fragmento(s) indexado(s) · {e} con embedding', chunks: 'Cómo se indexó', download: '⬇ .md',
+      import: '📥 Cargar', importTitle: 'Cargar documentos', importHint: 'Markdown, texto, CSV, JSON, HTML, PDF o Word (PDF y Word necesitan pdftotext o pandoc en esta máquina). Se guarda su texto legible y se indexa para los agentes.',
+      drop: 'Suelta aquí los archivos, o elígelos', url: 'o una dirección web', importGo: '📥 Cargar al archivo', importing: 'Cargando {name}…', imported: 'Cargado(s): {n} documento(s)', importFailed: '{name}: {error}',
+      gaps: '🕳 Vacíos', gapsHint: 'Lo que los agentes buscaron y no encontraron. Contéstalo (una nota, un documento, un término) y la próxima vez lo encuentran.', gapsEmpty: 'Sin vacíos: los agentes encontraron lo que buscaron.',
+      gapTimes: '{n} vez/veces', gapAnswer: '✍ Contestarlo', gapDismiss: 'Descartar',
     },
   },
   services: {
@@ -397,7 +405,7 @@ export default {
     pathMissing: 'falta la ruta', pathRelative: '{path}: usa la ruta completa (p. ej. ~/Workspace/mi-proyecto)', pathNotFound: '{path}: no existe esa carpeta',
     harness: 'elige el agente que atiende esa ruta: claude-code, opencode o pi', args: '{name}: args debe ser una lista de textos',
     agentExists: 'ese agente ya está registrado en esa ruta', saveFailed: 'no se pudo guardar: {error}', agentsMax: 'como máximo {n} agentes',
-    unknownAgent: 'agente desconocido', character: { json: 'ese archivo no es JSON', kind: 'eso no es un personaje de Dev Team Office (su "kind" debe ser "dev-team-office/character")' }, unknownRole: 'rol desconocido: {role}', oneOf: '{role}: «{key}» debe ser uno de: {values}', notEditable: '{role}: no se puede cambiar "{key}"',
+    unknownAgent: 'agente desconocido', unknownGap: 'vacío desconocido', character: { json: 'ese archivo no es JSON', kind: 'eso no es un personaje de Dev Team Office (su "kind" debe ser "dev-team-office/character")' }, unknownRole: 'rol desconocido: {role}', oneOf: '{role}: «{key}» debe ser uno de: {values}', notEditable: '{role}: no se puede cambiar "{key}"',
     color: '{role}.{key}: usa un color como #3f73f0', empty: '{role}.{key} no puede quedar vacío',
     unknownOffice: 'departamento (oficina) desconocido: {office}', officeName: 'ponle un nombre al departamento', officeExists: 'ya hay un departamento con ese nombre',
     officesMax: 'como máximo {n} oficinas', mainOffice: 'la oficina principal no se puede eliminar', timezone: 'zona horaria desconocida: {tz}',
@@ -490,6 +498,7 @@ export default {
     keys: { field: 'campo', change: 'cambia', action: 'acción', save: 'guardar', close: 'cerrar', tabs: '◂ ▸ cambia de pestaña' },
     yes: 'sí', no: 'no',
     general: {
+      archive: 'Archivo (lo que saben los agentes)', archivePush: 'Lo que sabe el archivo va arriba de cada encargo y pregunta (los términos del glosario y los fragmentos más relevantes)', embeddings: 'Búsqueda semántica', embed_off: 'Apagada: sólo por palabras (sin internet)', embed_ollama: 'Ollama, en esta máquina', embed_openai: 'Una API compatible con OpenAI (OpenAI, Voyage…)', embedModel: 'Modelo de embeddings', embedUrl: 'Dirección', embedOllamaHint: 'Instala Ollama y corre: ollama pull nomic-embed-text. Nada sale de esta máquina.', embedKeyHint: 'Su clave va en la variable de entorno DEV_TEAM_OFFICE_EMBED_KEY (nunca en la base). El texto del archivo se manda a esa API para sacar sus embeddings.', indexStatus: '🧠 {chunks} fragmento(s) indexado(s) · {embedded} con embedding', reindex: '↻ Indexarlo de nuevo',
       autonomy: 'Autonomía', clarify: 'Antes de que un encargo pase a trabajo, la analista revisa que tenga todo (y te pregunta sólo lo que falta)', autonomous: 'Los agentes trabajan solos hasta terminar (preguntan sólo lo que únicamente tú puedes responder)',
       language: 'Idioma', timezone: 'Zona horaria', tzSystem: 'la del sistema ({tz})', tzHint: 'De la zona horaria salen la fecha, la hora y el país. Cada oficina puede tener la suya (⚙ › Oficinas).',
       city: 'Ciudad', cityZone: 'la de la zona horaria ({city})', cityHint: 'De la ciudad salen el clima, el sol y la luna. Escribe para buscar entre las ciudades del país de la zona horaria: en Chile, por ejemplo, Concepción y Punta Arenas comparten la zona horaria de Santiago.',

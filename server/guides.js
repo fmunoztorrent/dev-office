@@ -46,5 +46,5 @@ export function guideText(g) {
   ].join('\n');
 }
 
-/** Takes the office's header (the 📁 scope and the 📋 instructions) out of a brief: what is left is the task. */
-export const unguided = (text) => (/^(📁 |📋 )/.test(text) ? text.replace(/^(?:(?:📁 |📋 |│)[^\n]*\n)+\n*/, '') : text);
+/** Takes the office's header (the 📁 scope, the 📋 instructions, the 📚 archive) out of a brief: what is left is the task. */
+export const unguided = (text) => (/^(📁 |📋 |📚 )/.test(text) ? text.replace(/^(?:(?:📁 |📋 |📚 |│)[^\n]*\n)+\n*/, '') : text);

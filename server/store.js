@@ -22,7 +22,8 @@ import { t, isLanguage, DEFAULT_LANGUAGE } from '../public/i18n.js';
 import { validZone } from '../public/clock.js';
 import { DEFAULT_MODELS, normalizeModels } from '../public/models.js';
 import { SEXES, PERSONALITIES, STYLES } from '../public/sim.js';
-import { realDir } from './paths.js';
+import { realDir, insideDir } from './paths.js';
+import { chunkText } from './chunks.js';
 
 const HARNESS_IDS = ['claude-code', 'opencode', 'pi', 'codex'];
 const ASKS_KEEP = 500;
@@ -32,9 +33,9 @@ const INSTRUCTIONS_MAX = 4000; // a department's or a project's instructions
 const PROMPTS_KEEP = 2000;
 const DIRECTIVES_KEEP = 200;
 const KNOWLEDGE_MAX = 5000;
-export const KNOWLEDGE_KINDS = ['note', 'decision', 'doc', 'minute', 'skill', 'connector'];
+export const KNOWLEDGE_KINDS = ['note', 'decision', 'doc', 'term', 'minute', 'skill', 'connector'];
 const NAMED = new Set(['skill', 'connector']); // they are installed in a project by their name
-const BODY_MAX = 64 * 1024;
+const BODY_MAX = 1024 * 1024; // a whole document (its readable text); the archive indexes it in chunks
 const COLOR_RX = /^#[0-9a-f]{6}$/i;
 // what can be changed of each character, and how it is checked (a list: one of those values)
 const APPEARANCE = { name: 'text', title: 'text', sex: SEXES, personality: Object.keys(PERSONALITIES), style: STYLES, shirt: 'color', pants: 'color', hair: 'color', skin: 'color', long: 'bool', beard: 'bool', glasses: 'bool' };
@@ -55,6 +56,9 @@ export const DEFAULT_PREFS = {
   // how a brief is worked: the analyst first checks it has everything (and asks you only what is missing),
   // and the agent works on its own to the end (it asks only if it gets stuck)
   autonomy: { clarify: true, autonomous: true },
+  // the archive as a RAG: its chunks go on top of every brief (push), and optionally they get an
+  // embedding for the semantic search (off | ollama | openai, with its model and URL)
+  archive: { push: true, embeddings: 'off', model: '', url: '' },
 };
 
 // The default language (until one is chosen in ⚙): $DEV_TEAM_OFFICE_LANG, otherwise English.
@@ -175,6 +179,35 @@ const MIGRATIONS = [
      instructions TEXT NOT NULL DEFAULT '',
      updated_at   INTEGER NOT NULL
    );`,
+  // The archive as a RAG: each entry's readable text, cut into chunks with their full-text index (and,
+  // if a provider is set, their embedding); what agents searched and did not find (the gaps); and an
+  // entry's scope (a project folder), where it came from and until when it is valid.
+  `ALTER TABLE knowledge ADD COLUMN project TEXT;
+   ALTER TABLE knowledge ADD COLUMN origin TEXT;
+   ALTER TABLE knowledge ADD COLUMN valid_until INTEGER;
+   CREATE TABLE knowledge_chunks (
+     id        INTEGER PRIMARY KEY,
+     entry_id  TEXT NOT NULL,
+     ord       INTEGER NOT NULL,
+     heading   TEXT NOT NULL DEFAULT '',
+     text      TEXT NOT NULL,
+     embedding BLOB,                         -- Float32 vector (null: not embedded)
+     model     TEXT                          -- which embedding model made it
+   );
+   CREATE INDEX chunks_by_entry ON knowledge_chunks (entry_id, ord);
+   CREATE VIRTUAL TABLE knowledge_fts USING fts5(chunk_id UNINDEXED, title, heading, text, tokenize = 'unicode61 remove_diacritics 2');
+   CREATE TABLE knowledge_gaps (
+     id        INTEGER PRIMARY KEY,
+     query     TEXT NOT NULL,
+     key       TEXT NOT NULL,                -- the query folded, to merge the same one asked again
+     office_id TEXT,
+     project   TEXT,
+     source    TEXT,                         -- who searched (an agent through MCP, a brief…)
+     count     INTEGER NOT NULL DEFAULT 1,
+     first_at  INTEGER NOT NULL,
+     last_at   INTEGER NOT NULL,
+     resolved  INTEGER NOT NULL DEFAULT 0
+   );`,
 ];
 
 class Invalid extends Error {}
@@ -198,6 +231,7 @@ export function openStore(file = dbFile()) {
     try { db.exec(MIGRATIONS[v]); db.exec(`PRAGMA user_version = ${v + 1}`); db.exec('COMMIT'); } catch (err) { db.exec('ROLLBACK'); throw err; }
   }
   const store = new Store(db, file);
+  store.indexAll({ onlyIfEmpty: true }); // an archive from before the RAG gets its chunks
   if (fresh && file !== ':memory:') store.importLegacy(legacyConfig());
   return store;
 }
@@ -438,6 +472,19 @@ export class Store {
               else fail(t('err.pref', { key: `autonomy.${ak}` }));
             }
             break;
+          case 'archive':
+            if (!isObj(v)) fail(t('err.prefValue', { key: k }));
+            for (const [ak, av] of Object.entries(v)) {
+              if (ak === 'push') next.archive.push = bool('archive.push', av);
+              else if (ak === 'embeddings') next.archive.embeddings = ['off', 'ollama', 'openai'].includes(av) ? av : fail(t('err.prefValue', { key: 'archive.embeddings' }));
+              else if (ak === 'model') next.archive.model = String(av ?? '').trim().slice(0, 120);
+              else if (ak === 'url') {
+                const u = String(av ?? '').trim();
+                if (u && !/^https?:\/\/[^\s]+$/i.test(u)) fail(t('err.prefValue', { key: 'archive.url' }));
+                next.archive.url = u.slice(0, 300);
+              } else fail(t('err.pref', { key: `archive.${ak}` }));
+            }
+            break;
           case 'models': {
             // a whole set ({ active, profiles }) or just which one is active ({ active })
             const merged = isObj(v) && !v.profiles ? { ...next.models, ...v } : v;
@@ -562,7 +609,7 @@ export class Store {
 
   #knowledge(r) {
     if (!r) return null;
-    const k = { id: r.id, kind: r.kind, title: r.title, body: r.body, tags: json(r.tags, []) || [], office: r.office_id || null, source: r.source || null, uses: r.uses, createdAt: r.created_at, updatedAt: r.updated_at };
+    const k = { id: r.id, kind: r.kind, title: r.title, body: r.body, tags: json(r.tags, []) || [], office: r.office_id || null, project: r.project || null, origin: r.origin || null, validUntil: r.valid_until || null, source: r.source || null, uses: r.uses, createdAt: r.created_at, updatedAt: r.updated_at };
     if (r.name) k.name = r.name;
     const config = json(r.config, null);
     if (isObj(config)) k.config = config;
@@ -578,7 +625,8 @@ export class Store {
     const body = String(e.body ?? current.body ?? '');
     if (body.length > BODY_MAX) fail(t('err.knowledgeTooLong', { n: BODY_MAX / 1024 }));
     let tags = e.tags !== undefined ? e.tags : current.tags ?? [];
-    if (typeof tags === 'string') tags = tags.split(/[,\s]+/);
+    // with commas, each one may have several words (a glossary synonym: "código de producto")
+    if (typeof tags === 'string') tags = tags.split(tags.includes(',') ? /\s*,\s*/ : /\s+/);
     if (!Array.isArray(tags)) fail(t('err.prefValue', { key: 'tags' }));
     tags = [...new Set(tags.map((x) => slug(String(x), '')).filter(Boolean))].slice(0, 12);
     const officeRef = e.office !== undefined ? e.office : current.office ?? null;
@@ -602,7 +650,15 @@ export class Store {
       config = url ? { url: url.slice(0, 500) } : { command, args: args.slice(0, 30).map((x) => x.slice(0, 300)) };
     }
     const source = e.source !== undefined ? (e.source ? String(e.source).slice(0, 60) : null) : current.source ?? null;
-    return { kind, name, title, body, tags, office, source, config };
+    // a project folder (its scope: only that project's agents get it), where it came from, until when it holds
+    const projectRef = e.project !== undefined ? e.project : current.project ?? null;
+    const project = projectRef ? realDir(String(projectRef).replace(/^~(?=$|\/)/, os.homedir())) : null;
+    if (project && !path.isAbsolute(project)) fail(t('err.pathRelative', { path: projectRef }));
+    const origin = e.origin !== undefined ? (e.origin ? String(e.origin).trim().slice(0, 500) : null) : current.origin ?? null;
+    const until = e.validUntil !== undefined ? e.validUntil : current.validUntil ?? null;
+    const validUntil = until === null || until === '' ? null : Number.isFinite(Number(until)) ? Number(until) : Date.parse(String(until));
+    if (validUntil !== null && !Number.isFinite(validUntil)) fail(t('err.prefValue', { key: 'validUntil' }));
+    return { kind, name, title, body, tags, office, source, config, project, origin, validUntil };
   }
 
   /** Saves a new entry. With the name of a skill or connector that already exists, it updates that one. */
@@ -616,8 +672,9 @@ export class Store {
       const e = this.#cleanKnowledge(input);
       const now = Date.now();
       const id = `k${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-      this.db.prepare('INSERT INTO knowledge (id, kind, name, title, body, tags, office_id, source, config, uses, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)')
-        .run(id, e.kind, e.name, e.title, e.body, JSON.stringify(e.tags), e.office, e.source, e.config && JSON.stringify(e.config), now, now);
+      this.db.prepare('INSERT INTO knowledge (id, kind, name, title, body, tags, office_id, source, config, project, origin, valid_until, uses, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)')
+        .run(id, e.kind, e.name, e.title, e.body, JSON.stringify(e.tags), e.office, e.source, e.config && JSON.stringify(e.config), e.project, e.origin, e.validUntil, now, now);
+      this.#index(id);
       return { ok: true, entry: this.getKnowledge(id), created: true };
     });
   }
@@ -627,13 +684,15 @@ export class Store {
       const current = this.getKnowledge(id);
       if (!current) return { ok: false, error: t('err.unknownKnowledge'), status: 404 };
       const e = this.#cleanKnowledge(patch, current);
-      this.db.prepare('UPDATE knowledge SET kind = ?, name = ?, title = ?, body = ?, tags = ?, office_id = ?, source = ?, config = ?, updated_at = ? WHERE id = ?')
-        .run(e.kind, e.name, e.title, e.body, JSON.stringify(e.tags), e.office, e.source, e.config && JSON.stringify(e.config), Date.now(), current.id);
+      this.db.prepare('UPDATE knowledge SET kind = ?, name = ?, title = ?, body = ?, tags = ?, office_id = ?, source = ?, config = ?, project = ?, origin = ?, valid_until = ?, updated_at = ? WHERE id = ?')
+        .run(e.kind, e.name, e.title, e.body, JSON.stringify(e.tags), e.office, e.source, e.config && JSON.stringify(e.config), e.project, e.origin, e.validUntil, Date.now(), current.id);
+      if (e.title !== current.title || e.body !== current.body) this.#index(current.id);
       return { ok: true, entry: this.getKnowledge(current.id), created: false };
     });
   }
 
   deleteKnowledge(id) {
+    this.#unindex(String(id));
     const r = this.db.prepare('DELETE FROM knowledge WHERE id = ?').run(String(id));
     return r.changes ? { ok: true } : { ok: false, error: t('err.unknownKnowledge'), status: 404 };
   }
@@ -667,6 +726,108 @@ export class Store {
       if (hits) scored.push([score * (hits / words.length), r]);
     }
     return scored.sort((a, b) => b[0] - a[0] || b[1].updated_at - a[1].updated_at).slice(0, n).map(([, r]) => this.#knowledge(r));
+  }
+
+  // ---------------------------------------------------------------- the archive as a RAG (server/rag.js)
+
+  #unindex(id) {
+    for (const c of this.db.prepare('SELECT id FROM knowledge_chunks WHERE entry_id = ?').all(id)) this.db.prepare('DELETE FROM knowledge_fts WHERE chunk_id = ?').run(c.id);
+    this.db.prepare('DELETE FROM knowledge_chunks WHERE entry_id = ?').run(id);
+  }
+  /** Cuts an entry's readable text into chunks and indexes them (their embeddings come later, if any). */
+  #index(id) {
+    const r = this.db.prepare('SELECT id, kind, title, body FROM knowledge WHERE id = ?').get(String(id));
+    this.#unindex(String(id));
+    if (!r) return 0;
+    const pieces = chunkText(r.body, r.title);
+    pieces.forEach((c, ord) => {
+      const { lastInsertRowid } = this.db.prepare('INSERT INTO knowledge_chunks (entry_id, ord, heading, text) VALUES (?, ?, ?, ?)').run(r.id, ord, c.heading, c.text);
+      this.db.prepare('INSERT INTO knowledge_fts (chunk_id, title, heading, text) VALUES (?, ?, ?, ?)').run(Number(lastInsertRowid), r.title, c.heading, c.text);
+    });
+    return pieces.length;
+  }
+  /** Indexes every entry again (onlyIfEmpty: only when there are entries and no chunks, after the migration). */
+  indexAll({ onlyIfEmpty = false } = {}) {
+    if (onlyIfEmpty && (this.db.prepare('SELECT count(*) AS n FROM knowledge_chunks').get().n || !this.db.prepare('SELECT count(*) AS n FROM knowledge').get().n)) return 0;
+    let n = 0;
+    for (const r of this.db.prepare('SELECT id FROM knowledge').all()) n += this.#index(r.id);
+    return n;
+  }
+  /** An entry's chunks, as they are indexed (to read them, and how many are embedded). */
+  chunksOf(id) {
+    return this.db.prepare('SELECT id, ord, heading, text, model, embedding IS NOT NULL AS embedded FROM knowledge_chunks WHERE entry_id = ? ORDER BY ord').all(String(id)).map((c) => ({ id: c.id, ord: c.ord, heading: c.heading, text: c.text, embedded: !!c.embedded, model: c.model || null }));
+  }
+
+  /**
+   * The chunks that match a search (FTS5's bm25: lower is better), with their entry, in that scope:
+   * the company's, the department's (office) and the project's (a folder that contains `project`),
+   * still valid. { chunk, entry, rank }.
+   */
+  searchChunks(match, { office = null, project = null, kinds = null, limit = 20 } = {}) {
+    if (!match) return [];
+    let rows;
+    try {
+      rows = this.db.prepare(`SELECT f.chunk_id AS cid, bm25(knowledge_fts, 0, 4, 2, 1) AS rank FROM knowledge_fts f WHERE knowledge_fts MATCH ? ORDER BY rank LIMIT ?`).all(match, Math.max(limit * 4, 40));
+    } catch { return []; }
+    return this.#inScope(rows.map((r) => ({ cid: r.cid, rank: r.rank })), { office, project, kinds }).slice(0, limit);
+  }
+  #inScope(hits, { office, project, kinds }) {
+    const out = [];
+    const now = Date.now();
+    const entries = new Map();
+    for (const h of hits) {
+      const c = this.db.prepare('SELECT id, entry_id, ord, heading, text FROM knowledge_chunks WHERE id = ?').get(h.cid);
+      if (!c) continue;
+      if (!entries.has(c.entry_id)) entries.set(c.entry_id, this.getKnowledge(c.entry_id));
+      const e = entries.get(c.entry_id);
+      if (!e || (kinds && !kinds.includes(e.kind)) || e.kind === 'connector') continue;
+      if (e.validUntil && e.validUntil < now) continue;
+      if (e.office && e.office !== office) continue; // another department's (or a department's, and the search has none)
+      if (e.project && (!project || !insideDir(project, e.project))) continue;
+      out.push({ chunk: { id: c.id, ord: c.ord, heading: c.heading, text: c.text }, entry: e, rank: h.rank, ...(h.score !== undefined ? { score: h.score } : {}) });
+    }
+    return out;
+  }
+  /** The embedded chunks in that scope, for the semantic search: { chunk, entry, vector }. */
+  vectorsInScope(model, { office = null, project = null } = {}) {
+    const rows = this.db.prepare('SELECT id, embedding FROM knowledge_chunks WHERE model = ? AND embedding IS NOT NULL').all(String(model));
+    const vectors = new Map(rows.map((r) => [r.id, new Float32Array(r.embedding.buffer, r.embedding.byteOffset, r.embedding.byteLength / 4)]));
+    return this.#inScope(rows.map((r) => ({ cid: r.id, rank: 0 })), { office, project }).map((h) => ({ ...h, vector: vectors.get(h.chunk.id) }));
+  }
+  /** Chunks still without an embedding of that model (to embed them in the background). */
+  pendingChunks(model, limit = 32) {
+    return this.db.prepare('SELECT c.id, c.heading, c.text, k.title FROM knowledge_chunks c JOIN knowledge k ON k.id = c.entry_id WHERE c.embedding IS NULL OR c.model IS NOT ? LIMIT ?').all(String(model), limit);
+  }
+  setEmbedding(chunkId, vector, model) {
+    const v = vector instanceof Float32Array ? vector : Float32Array.from(vector);
+    this.db.prepare('UPDATE knowledge_chunks SET embedding = ?, model = ? WHERE id = ?').run(new Uint8Array(v.buffer, v.byteOffset, v.byteLength), String(model), Number(chunkId));
+  }
+  /** How the archive is indexed: chunks, and how many embedded with that model. */
+  indexStatus(model = null) {
+    const chunks = this.db.prepare('SELECT count(*) AS n FROM knowledge_chunks').get().n;
+    const embedded = model ? this.db.prepare('SELECT count(*) AS n FROM knowledge_chunks WHERE model = ? AND embedding IS NOT NULL').get(String(model)).n : 0;
+    return { chunks, embedded, model };
+  }
+
+  /** What an agent searched in the archive and did not find: the same question asked again adds up. */
+  recordGap({ query, office = null, project = null, source = null } = {}) {
+    const q = String(query || '').trim().replace(/\s+/g, ' ').slice(0, 300);
+    const key = fold(q).replace(/[^a-z0-9]+/g, ' ').trim();
+    if (!key) return null;
+    const now = Date.now();
+    const same = this.db.prepare('SELECT id FROM knowledge_gaps WHERE key = ? AND resolved = 0 AND office_id IS ?').get(key, office);
+    if (same) this.db.prepare('UPDATE knowledge_gaps SET count = count + 1, last_at = ?, source = COALESCE(?, source) WHERE id = ?').run(now, source, same.id);
+    else this.db.prepare('INSERT INTO knowledge_gaps (query, key, office_id, project, source, first_at, last_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(q, key, office, project, source, now, now);
+    return same?.id ?? null;
+  }
+  listGaps({ office = null, limit = 50 } = {}) {
+    return this.db.prepare('SELECT * FROM knowledge_gaps WHERE resolved = 0 ORDER BY count DESC, last_at DESC LIMIT ?').all(limit)
+      .filter((g) => !office || !g.office_id || g.office_id === office)
+      .map((g) => ({ id: g.id, query: g.query, office: g.office_id || null, project: g.project || null, source: g.source || null, count: g.count, firstAt: g.first_at, lastAt: g.last_at }));
+  }
+  resolveGap(id) {
+    const r = this.db.prepare('UPDATE knowledge_gaps SET resolved = 1 WHERE id = ?').run(Number(id));
+    return r.changes ? { ok: true } : { ok: false, status: 404, error: t('err.unknownGap') };
   }
 
   /** How many entries of each kind the archive keeps. */

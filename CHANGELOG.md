@@ -4,6 +4,22 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-11
+
+### Added
+
+- **The archive is the company's knowledge base (a RAG).** Load documents (📥: Markdown, text, CSV, JSON, HTML; PDF and Word with `pdftotext`/`pandoc`), a web address, or write notes, decisions and **glossary terms** (definition and synonyms), for the whole company, a department or a project, and valid until a date.
+  - You read it as a document (rendered Markdown, ⬇ .md); its readable text is kept as it is.
+  - It is cut into chunks by its headings and indexed by words (SQLite FTS5, accent-insensitive, offline) and, optionally, by meaning: embeddings from local Ollama or an OpenAI-compatible API (⚙ › General › Archive; the key in `$DEV_TEAM_OFFICE_EMBED_KEY`), stored next to each chunk; both rankings are fused.
+  - The agents get it on demand (`search_knowledge` returns the passages that answer a question, with an id like `[k12§3]` to cite, and the glossary terms) and on top of every brief and question ("📚 From the archive").
+  - **🕳 Gaps:** what the agents searched and did not find (or only partly) is recorded, to answer it.
+  - `/v1/knowledge/search`, `/v1/knowledge/import`, `/v1/knowledge/gaps`, `/v1/archive/index`; `get_knowledge` takes a citation id.
+
+### Changed
+
+- A note, decision or document can be up to 1 MB (it is indexed in chunks).
+- Tags (and synonyms) separated by commas keep their spaces: "product code, reference".
+
 ## [0.13.0] - 2026-11-11
 
 ### Added
@@ -190,7 +206,8 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/fmunoztorrent/dev-office/compare/v0.11.0...v0.11.1

@@ -292,11 +292,11 @@ const TOOLS = [
   {
     name: 'search_knowledge',
     title: 'Search the archive',
-    description: 'The company archive: notes, decisions, docs, minutes (of directives), skills and connectors (MCP servers to outside information), shared by every office. Search it before starting a task for what already applies. Returns the best matches with an excerpt; get_knowledge returns an entry whole.',
+    description: 'The company archive, its knowledge base: business rules, the glossary, documents, decisions, minutes (of directives), skills and connectors, shared by every office. Ask it in plain words before assuming a business fact: it returns the most relevant passages (from your project, your department and the company) with an id like [k12§3] to cite, and the glossary terms involved. A question with no answer is recorded so a human fills it in. get_knowledge returns an entry whole. Without query (or with kind), it lists entries.',
     inputSchema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Words to look for (empty: the newest entries)' },
+        query: { type: 'string', description: 'What you need to know, in plain words (empty: the newest entries)' },
         kind: { type: 'string', enum: KNOWLEDGE_KINDS },
         limit: { type: 'number', description: 'At most this many (default 10)' },
       },
@@ -647,6 +647,24 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
 
     async search_knowledge({ query = '', kind, limit = 10 } = {}) {
       const n = Math.min(50, Math.max(1, Number(limit) || 10));
+      // a question: the passages that answer it, with their id to cite (scoped to this project)
+      if (String(query).trim() && !kind) {
+        const project = where();
+        let out;
+        if (await running()) {
+          const qs = new URLSearchParams({ q: query, k: String(Math.min(n, 20)), from: 'agent', project, source: `MCP · ${client.name || 'agent'}` });
+          out = okOr(await api(`/v1/knowledge/search?${qs}`));
+        } else {
+          const { search } = await import('./rag.js');
+          out = await search(local(), query, { project, k: Math.min(n, 20), source: `MCP · ${client.name || 'agent'}` });
+        }
+        const results = out.results || [], terms = out.terms || [];
+        const text = [
+          ...terms.map((x) => `📖 ${x.term}: ${x.definition}`),
+          ...results.map((r) => `[${r.id}] ${r.label || [r.title, r.heading].filter(Boolean).join(' › ')} (${r.scope}${r.origin ? ` · ${r.origin}` : ''})\n    ${r.text.replace(/\n+/g, '\n    ')}`),
+        ].join('\n\n');
+        return { text: text || `Nothing in the archive for "${query}" (recorded as a gap for a human to fill in). Do not invent it: ask the PO if it matters.`, data: out };
+      }
       let entries;
       if (await running()) {
         const qs = new URLSearchParams({ limit: String(n), from: 'agent', ...(query ? { q: query } : {}), ...(kind ? { kind } : {}) });
@@ -661,6 +679,7 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
 
     async get_knowledge({ id, name, kind } = {}) {
       need(id || name, 'pass an id (from search_knowledge) or a skill/connector name');
+      if (id) id = String(id).trim().replace(/^\[|\]$/g, '').replace(/§\d+$/, ''); // a citation ([k12§3]) is its entry
       const live = await running();
       let e;
       if (!id) {
