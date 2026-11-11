@@ -19,6 +19,7 @@ import { runDemo, demoScript, piDemoScript } from './demo.js';
 import { TaskHub, AGENT_LABEL } from './tasks.js';
 import { PipelineHub } from './pipeline.js';
 import { AgentRegistry } from './registry.js';
+import { ClarifyDesk } from './clarify.js';
 import { AskDesk } from './asks.js';
 import { Archive } from './archive.js';
 import { DirectiveDesk } from './directives.js';
@@ -37,7 +38,7 @@ import { zoneInfo, systemZone } from '../public/clock.js';
 import { insideDir as inside } from './paths.js';
 import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.12.0';
+export const VERSION = '0.13.0';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
 const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
@@ -73,7 +74,7 @@ class HttpError extends Error {
  *                 says it, so `update` knows whether it can bring the office back by itself
  * @returns {Promise<{company, office, url, socket, command, handleMessage, close, …}>}
  */
-export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {}, mode = 'terminal', outdatedAfter = 3000 } = {}) {
+export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {}, clarify: clarifyOpt = {}, mode = 'terminal', outdatedAfter = 3000 } = {}) {
   const ownStore = !db || typeof db === 'string';
   const store = ownStore ? openStore(db || dbFile()) : db; // oficinas, agentes, ajustes e historial
   setLanguage(store.getPrefs().lang);
@@ -110,6 +111,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   const registry = new AgentRegistry({ getAgents: () => store.listAgents(), hub, pipelines, office: company, prefs: () => store.getPrefs() });
   // side questions (btw) to each office's agent on duty
   const asks = new AskDesk({ company, store, officeUrl, ...asksOpt });
+  // a brief from you is reviewed first by the analyst: does it have everything? (server/clarify.js)
+  const clarify = new ClarifyDesk({ registry, store, company, ...clarifyOpt });
   const publicAsk = ({ id, office: o, agent, question, answer, status, error, from, forked, role, createdAt, updatedAt }) => ({ id, office: o, agent, question, answer, status, error, from, forked, role, createdAt, updatedAt });
   // the two floors that serve every office: the archive (the company's knowledge) and the executive one (directives)
   const archive = new Archive({ store, registry });
@@ -159,7 +162,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       ...company.get(id).snapshot(), ...hub.snapshot(id), pipelines: p.runs, projects: p.projects, targets: registry.targets(id),
       appearance: store.getAppearance(id), weather: weatherOf(id)?.current || null,
       office: company.info(id), offices: company.list(), prefs: prefs(), herdr: herdr ? herdr.status() : { available: false, panes: [] },
-      asks: asks.list(id, 10), services: services.list(id), prompts: promptsOf(id),
+      asks: asks.list(id, 10), clarifications: clarify.list(id), services: services.list(id), prompts: promptsOf(id),
       directives: directives.list(), archive: archive.snapshot(), overview: overview(),
     };
   };
@@ -410,7 +413,12 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         return hub.cancel(msg.id);
       // A prompt for an agent, through an entry of its harness (what the whiteboard sends).
       case 'run':
-        return registry.run(msg);
+        return clarify.review(msg);
+      // your answers to the analyst's questions about a brief (or skip: the team decides)
+      case 'clarify_answer':
+        return clarify.answer(msg.id, { answers: Array.isArray(msg.answers) ? msg.answers : [], skip: !!msg.skip });
+      case 'clarify_cancel':
+        return clarify.cancel(msg.id);
       // the executive floor: one order for several offices or projects, and cancelling it
       case 'directive':
         return directives.create({ text: msg.text, title: msg.title, offices: msg.offices, targets: msg.targets, from: msg.from });
@@ -644,12 +652,20 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       }
       // Send it a prompt: { text, entry?: the entry of its harness, session?: id | null (new session) }
       if (req.method === 'POST' && (m = p.match(/^\/v1\/agents\/([^/]+)\/prompt$/))) {
-        const out = registry.run({ ...(await body(req)), target: decodeURIComponent(m[1]) });
+        const out = clarify.review({ ...(await body(req)), target: decodeURIComponent(m[1]) });
         return json(res, out.ok ? 200 : 400, out);
       }
       if (req.method === 'POST' && p === '/v1/run') {
-        const out = registry.run(await body(req));
+        const out = clarify.review(await body(req));
         return json(res, out.ok ? 200 : 400, out);
+      }
+      // The analyst's questions about your briefs, and your answers
+      if (req.method === 'GET' && p === '/v1/clarifications') return json(res, 200, { ok: true, clarifications: clarify.list(q('office') || undefined) });
+      if (req.method === 'POST' && (m = p.match(/^\/v1\/clarifications\/([^/]+)\/(answer|cancel)$/))) {
+        const id = decodeURIComponent(m[1]);
+        const b = await body(req);
+        const out = m[2] === 'cancel' ? clarify.cancel(id) : clarify.answer(id, { answers: Array.isArray(b.answers) ? b.answers : [], skip: !!b.skip });
+        return json(res, out.ok ? 200 : out.status || 400, out);
       }
       if (req.method === 'GET' && p === '/v1/prompts') {
         return json(res, 200, { prompts: store.listPrompts({ agentId: q('agent'), limit: q('limit') || 50 }) });
@@ -813,6 +829,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   bus.on('offices', (list) => broadcast({ type: 'offices', offices: list }));
   bus.on('herdr', (st) => broadcast({ type: 'herdr', herdr: st }));
   asks.on('change', (a) => toOffice(a.office, { type: 'ask', ask: publicAsk(a) }));
+  clarify.on('change', (c) => toOffice(c.office, { type: 'clarify', clarify: c }));
   // the two floors every office shares: the directives, the archive and what happens on them
   directives.on('change', (list) => broadcast({ type: 'directives', directives: list }));
   archive.on('change', () => broadcast({ type: 'archive', archive: archive.snapshot() }));
@@ -896,6 +913,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     pipelines,
     registry,
     asks,
+    clarify,
     archive,
     directives,
     overview,

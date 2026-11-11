@@ -35,7 +35,7 @@ test('una tarea llega a la sesión de Pi conectada y queda en curso al aceptarla
   const res = await (await post(base, '/v1/tasks', { agent: 'pi', text: 'Agrega validación de email' })).json();
   assert.equal(res.ok, true);
   await until(() => got.length === 1);
-  assert.equal(got[0].text, '📁 Trabaja sólo dentro de /proj: no leas ni cambies archivos fuera de esa carpeta. Haz exactamente lo que se pide (o el paso del plan acordado), sin irte por la tangente ni agregar ideas que nadie pidió.\n\nAgrega validación de email');
+  assert.match(got[0].text, /^📁 Trabaja sólo dentro de \/proj: no leas ni cambies archivos fuera de esa carpeta\. Haz exactamente lo que se pide .*\n📋 Modo autónomo: trabájalo hasta terminar .*\n\nAgrega validación de email$/);
   assert.equal(got[0].session, 'pi-1');
   await until(() => server.hub.snapshot().tasks[0].status === 'running');
   // the Pi session gets the task as its new request
@@ -60,7 +60,8 @@ test('Claude Code: la tarea espera en cola y la oficina se la da al hook en el S
   assert.equal(res.task.status, 'queued');
   assert.deepEqual(await hook({ hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: {} }), {});
   const out = await hook({ hook_event_name: 'Stop' });
-  assert.deepEqual(out, { task: { id: res.task.id, text: 'Escribe los tests del login' } });
+  assert.match(out.task.text, /^📋 Modo autónomo: .*\n\nEscribe los tests del login$/, 'Claude ya trabaja en su carpeta: sin 📁, con el modo autónomo');
+  assert.equal(out.task.id, res.task.id);
   assert.equal(server.hub.snapshot().tasks[0].status, 'running');
   assert.deepEqual(await hook({ hook_event_name: 'Stop' }), {}); // nothing is left in the queue
 }));

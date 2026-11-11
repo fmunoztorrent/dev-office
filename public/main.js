@@ -28,6 +28,7 @@ let prefs = null;  // the general settings (language, zone, weather, herdr, log)
 let herdr = { available: false, panes: [] };
 let services = []; // the services the agents left running in the background (the rack, the ▶ chip)
 let asking = [];   // what the agents ask you on their screens (inside herdr): the ✋ chip
+let clarifications = []; // the analyst's reviews of your briefs (server/clarify.js): her questions wait for you
 // the two shared floors: the executive one (directives, how each office is doing) and the archive
 let directives = [];
 let overview = [];
@@ -108,6 +109,8 @@ function connect() {
       onTargets(st.targets);
       onServices(st.services || []);
       onPrompts(st.prompts || []);
+      clarifications = st.clarifications || [];
+      renderAttention();
       onFloors(st);
     }
     if (msg.type === 'directives') onFloors({ directives: msg.directives });
@@ -121,6 +124,7 @@ function connect() {
     if (msg.type === 'targets') onTargets(msg.targets);
     if (msg.type === 'services' && msg.office === office?.id) onServices(msg.services);
     if (msg.type === 'prompts' && msg.office === office?.id) onPrompts(msg.prompts);
+    if (msg.type === 'clarify' && msg.clarify?.office === office?.id) onClarify(msg.clarify);
     if (msg.type === 'snapshot' || msg.type === 'appearance') { applyAppearance((msg.state || msg).appearance || {}); game.floors.setYou(TEAM.po); renderTeam(); renderSheet(true); settings?.appearanceChanged?.(); }
     if (msg.type === 'snapshot' || msg.type === 'weather') { game.sim.setWeather((msg.state ? msg.state.weather : msg.weather) || null); renderWeather(); }
     if (msg.type === 'event') onEvent(msg.event, msg.session);
@@ -168,7 +172,119 @@ function onPrompts(list) {
   asking = list || [];
   renderAskChip();
   promptsUi.refresh();
+  renderAttention();
 }
+
+// ---------------------------------------------------------------- waiting for you
+
+// Whatever needs your answer: the analyst's questions about a brief, what an agent asks on its screen
+// (inside herdr) and the sessions that stopped to wait for you (a permission, their question tool).
+// It shows as a big pulsing banner at the top with the screen's edge lit up, in the tab's title, and
+// (if you want, in ⚙ › General) with a sound and a system notification. It stays until you answer.
+const ALERTS_KEY = 'dto.alerts';
+const alertPrefs = () => { try { return { sound: true, notify: false, ...JSON.parse(localStorage.getItem(ALERTS_KEY) || '{}') }; } catch { return { sound: true, notify: false }; } };
+function setAlertPrefs(patch) { try { localStorage.setItem(ALERTS_KEY, JSON.stringify({ ...alertPrefs(), ...patch })); } catch { /* private window: only for now */ } }
+const announced = new Set();
+const baseTitle = document.title;
+
+function attentionItems() {
+  const items = [];
+  for (const c of clarifications) {
+    if (c.status !== 'asking') continue;
+    items.push({ key: `c:${c.id}`, who: TEAM.analyst.name, what: t('attention.clarify', { name: TEAM.analyst.name, n: c.questions.length }), since: c.createdAt, label: t('attention.answer'), go: () => openClarify(c.id) });
+  }
+  for (const p of asking) items.push({ key: `p:${p.id}:${p.rev}`, who: AGENT_NAME[p.agent] || p.agent || t('prompts.theAgent'), what: p.summary || '', since: p.since || Date.now(), label: t('attention.answer'), go: () => promptsUi.open() });
+  for (const s of sessions.values()) {
+    const w = s.status === 'waiting' && s.waiting;
+    if (!w || Date.now() - w.since > 6 * 3600_000 || asking.some((p) => p.cwd && s.cwd && p.cwd === s.cwd)) continue;
+    items.push({
+      key: `s:${s.id}:${w.since}`, who: [AGENT_NAME[s.source] || s.source, projectOf(s.id)].filter(Boolean).join(' · '),
+      what: w.question ? t('attention.question', { text: w.text }) : w.text, since: w.since,
+      // outside herdr the office cannot press anything for you: you answer in the agent's terminal
+      label: t('attention.terminal'), go: () => { if (w.role && TEAM[w.role]) select(w.role); },
+    });
+  }
+  return items.sort((a, b) => a.since - b.since);
+}
+
+function renderAttention() {
+  const items = attentionItems();
+  const bar = $('attention');
+  bar.hidden = !items.length; // on every floor: wherever you are, you see it
+  $('screen').classList.toggle('waiting', items.length > 0);
+  document.title = items.length ? `${t('attention.title', { n: items.length })} · ${baseTitle}` : baseTitle;
+  if (!items.length) return;
+  const first = items[0];
+  $('attention-who').textContent = items.length > 1 ? `${t('attention.many', { n: items.length })} · ` : `${t('attention.one', { who: first.who })} · `;
+  $('attention-what').textContent = items.length > 1 ? `${first.who}: ${first.what}` : first.what;
+  const min = Math.floor((Date.now() - first.since) / 60_000);
+  $('attention-since').textContent = min >= 1 ? t('attention.since', { min }) : '';
+  $('attention-go').textContent = first.label;
+  $('attention-go').onclick = first.go;
+  // something new: a sound and, if you allowed it, a system notification
+  const fresh = items.filter((x) => !announced.has(x.key));
+  for (const x of items) announced.add(x.key);
+  if (fresh.length) announce(fresh[0]);
+}
+setInterval(renderAttention, 15_000); // the "for N min" grows
+
+function announce(item) {
+  const p = alertPrefs();
+  if (p.sound) chime();
+  if (p.notify && 'Notification' in window && Notification.permission === 'granted' && document.visibilityState !== 'visible') {
+    try { new Notification(t('attention.notifyTitle'), { body: `${item.who}: ${item.what}`, tag: item.key }); } catch { /* not allowed here */ }
+  }
+}
+/** Two soft notes (no audio files: WebAudio). Browsers allow it after your first click on the page. */
+let audio = null;
+function chime() {
+  try {
+    audio ||= new (window.AudioContext || window.webkitAudioContext)();
+    const now = audio.currentTime;
+    [[880, 0], [1320, 0.16]].forEach(([f, at]) => {
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.frequency.value = f; o.type = 'sine';
+      g.gain.setValueAtTime(0.0001, now + at); g.gain.exponentialRampToValueAtTime(0.18, now + at + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.35);
+      o.connect(g).connect(audio.destination);
+      o.start(now + at); o.stop(now + at + 0.4);
+    });
+  } catch { /* no audio */ }
+}
+
+// ---------------------------------------------------------------- the analyst's questions about a brief
+
+let clarifyOpen = null;
+function onClarify(c) {
+  clarifications = [...clarifications.filter((x) => x.id !== c.id), c].slice(-30);
+  if (clarifyOpen === c.id && c.status !== 'asking') $('clarify').close();
+  renderAttention();
+}
+function openClarify(id) {
+  const c = clarifications.find((x) => x.id === id && x.status === 'asking');
+  if (!c) return;
+  clarifyOpen = id;
+  $('cl-title').textContent = t('clarify.ui.title', { name: TEAM.analyst.name });
+  $('cl-brief').textContent = `${c.name}: ${c.text}`;
+  const ol = $('cl-questions');
+  ol.innerHTML = '';
+  c.questions.forEach((q, i) => {
+    const li = el('li');
+    const area = el('textarea');
+    area.rows = 2; area.maxLength = 1000; area.placeholder = t('clarify.ui.placeholder'); area.dataset.i = String(i);
+    li.append(el('p', 'cl-q', q), area);
+    ol.append(li);
+  });
+  const dlg = $('clarify');
+  if (!dlg.open) dlg.showModal();
+  ol.querySelector('textarea')?.focus();
+}
+const clarifyReply = (body) => { if (!clarifyOpen) return; send({ type: 'clarify_answer', id: clarifyOpen, ...body }); $('clarify').close(); };
+$('cl-form').onsubmit = (e) => { e.preventDefault(); clarifyReply({ answers: [...$('cl-questions').querySelectorAll('textarea')].map((x) => x.value) }); };
+$('cl-skip').onclick = () => clarifyReply({ skip: true });
+$('cl-cancel').onclick = () => { if (clarifyOpen) send({ type: 'clarify_cancel', id: clarifyOpen }); $('clarify').close(); };
+$('cl-close').onclick = () => $('clarify').close();
+$('clarify').addEventListener('close', () => { clarifyOpen = null; });
+$('cl-questions').onkeydown = (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) $('cl-form').requestSubmit(); };
 
 /** The ✋ chip in the HUD: it shows up while an agent is waiting for your answer. */
 function renderAskChip() {
@@ -369,6 +485,7 @@ function onEvent(ev, session) {
   renderContext();
   renderTeam();
   if (session?.source === 'claude-code' && $('brief').open) renderBrief();
+  if (ev.kind === 'waiting' || session?.status === 'waiting' || $('screen').classList.contains('waiting')) renderAttention();
   if (selected === ev.role) renderSheet();
 }
 
@@ -468,6 +585,7 @@ function addLog(ev, opts) {
   }
   if (ev.kind === 'phase_end') text = t('events.turnEnd', { text: ev.text ? `: ${ev.text}` : '' });
   if (ev.kind === 'pane_open' || ev.kind === 'pane_close') text = `🪟 ${ev.pane} · ${ev.text}${ev.kind === 'pane_close' ? ' ✔' : ''}`;
+  if (ev.kind === 'clarify') text = t(`events.clarify.${ev.phase}`, { project: ev.project || '', n: ev.n || 0, text: ev.text || '' });
   if (ev.kind === 'btw') text = ev.phase === 'ask' ? `❓ btw: ${ev.text}` : ev.phase === 'answer' ? `💡 ${ev.text}` : `✖ btw: ${ev.text}`;
   const name = el('b', '', `${ev.kind === 'btw' && ev.phase === 'ask' ? ev.from : who}: `);
   if (cfg) name.style.color = cfg.shirt;
@@ -917,6 +1035,7 @@ const settings = createSettings({
   getTargets: () => targets, getOffices: () => offices, getOffice: () => office, getPrefs: () => prefs, getHerdr: () => herdr,
   onPrompt: (id) => { $('settings').close(); openBrief(id); },
   onView: (id) => viewOffice(id),
+  alerts: { get: alertPrefs, set: setAlertPrefs },
 });
 $('open-settings').onclick = () => settings.open();
 $('brief-form').onsubmit = (e) => {

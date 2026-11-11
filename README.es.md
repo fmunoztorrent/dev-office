@@ -301,6 +301,16 @@ Cuando el orquestador delega, el personaje que se mueve es el de ese subagente:
 - **Errementari:** spec → analista, architect → Tech Lead, qa → QA, backend → backend, pipeline → manager.
 - **gentle-pi:** `subagent_run`, con sdd-* y review-*.
 
+## Autonomía: tú encargas, el equipo hace el resto
+
+La oficina busca que tú encargues y el equipo llegue solo al objetivo:
+
+- **Primero, la analista revisa el encargo.** Antes de que pase a trabajo, Valentina se lo da a leer al agente del proyecto (en sólo lectura: no cambia nada ni empieza) con las indicaciones del proyecto y del departamento. Si se puede hacer bien con lo que hay, pasa directo a trabajo. Si falta algo que sólo tú sabes y que cambiaría el resultado (el alcance, los criterios de aceptación, una decisión de negocio), te trae **hasta 3 preguntas**: va a tu escritorio con la mano en alto. Contestas lo que puedas (lo que dejes vacío lo decide el equipo), o **Que decida el equipo**; tus respuestas van con el encargo. Si la revisión falla o tarda demasiado, el encargo va tal cual.
+- **Después, modo autónomo.** Cada encargo lleva una línea que le pide al agente trabajarlo hasta terminar por su cuenta (planificar, implementar, probar y verificar, con subagentes si conviene) y preguntar sólo lo que únicamente tú puedes responder, con su herramienta de preguntas; si no, tomar supuestos razonables y anotarlos. Los pipelines ya trabajan así.
+- Las dos se cambian en **⚙ › General › Autonomía**.
+
+**Cuando un agente te espera, lo ves.** Un agente que te pregunta algo (el `AskUserQuestion` de Claude Code, el `question` de Pi y OpenCode), un permiso que necesita, una pregunta en su pantalla dentro de herdr, o las preguntas de la analista: arriba late un cartel amarillo grande, en todos los pisos, con quién te espera, para qué y hace cuánto, y el borde de la pantalla se ilumina. El título de la pestaña dice `✋ (n)`. **Responder** abre las preguntas (o la pregunta dentro de herdr); fuera de herdr, contestas en la terminal del agente. Se queda hasta que contestas. Si quieres (⚙ › General, en cada navegador), con un sonido y una notificación del sistema. El juego de la terminal lo muestra como una franja que late arriba de la escena.
+
 ## Encargos: haz clic en la pizarra
 
 Al hacer clic en la pizarra de la oficina, en la terminal o en la web (en la terminal también con `t`), se abre el diálogo **Nuevo encargo**. Ahí eliges:

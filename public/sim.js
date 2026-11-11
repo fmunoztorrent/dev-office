@@ -908,6 +908,31 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         }
         break;
       }
+      // The analyst reviews your brief before it goes to work (server/clarify.js): she thinks it over
+      // and, if something only you know is missing, she brings you her questions and waits at your
+      // desk, hand up, until you answer.
+      case 'clarify': {
+        const an = agents.analyst, po = agents.po;
+        if (ev.phase === 'review') {
+          an.setState('thinking', 180_000);
+          an.say(P(L('sim.clarify.review')), 3500);
+        } else if (ev.phase === 'ask') {
+          const line = T('sim.clarify.ask', { n: ev.n || 1 });
+          banner = { text: `❓ ${an.cfg.name}: ${line}`, tone: 'chat', until: now + 12_000 };
+          an.setState('waiting', 3_600_000);
+          an.handUp = true;
+          if (!an.hidden && !po.hidden && an.queue.length < 3) {
+            an.carry = true;
+            an.goTo({ x: po.cfg.seat.x + 62, y: po.cfg.seat.y - 6 }).then((x) => { x.carry = false; x.say(line, 6000); }).waitFor(() => !an.handUp).goHome();
+          } else an.say(line, 6000);
+        } else {
+          an.handUp = false;
+          an.setState(ev.phase === 'sent' ? 'done' : 'idle', 2500);
+          if (ev.phase === 'sent') an.say(P(L('sim.clarify.sent')), 3000);
+          else if (ev.phase === 'cancelled') an.say(T('sim.clarify.cancelled'), 2500);
+        }
+        break;
+      }
       case 'poke':
         if (!a) break;
         a.jumpUntil = now + 700;
@@ -970,7 +995,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     }
     correlate(ev);
     // Any agent event clears the waiting notice (it was already answered).
-    if (!['waiting', 'chat', 'poke'].includes(ev.kind) && !(ev.kind === 'pane_state' && ev.state === 'blocked')) {
+    if (!['waiting', 'chat', 'poke', 'clarify'].includes(ev.kind) && !(ev.kind === 'pane_state' && ev.state === 'blocked')) {
       if (banner?.tone === 'warn') banner = null;
       if (agents.manager.handUp) { agents.manager.handUp = false; if (agents.manager.state === 'waiting') agents.manager.state = 'idle'; }
     }

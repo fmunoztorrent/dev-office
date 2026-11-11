@@ -86,6 +86,7 @@ export function drawFrame(scr, L, sim, model, now) {
   const withBubble = [...Object.values(sim.agents), ...sim.ghosts.filter((a) => a.fade > 0.5)].filter((a) => a.bubble).sort((a, b) => b.bubble.until - a.bubble.until);
   for (const a of withBubble) drawBubble(g, a, placed);
   drawBanner(g, sim, now);
+  drawWaiting(g, model, now);
   drawSceneIcons(scr, L, model);
   drawHeader(scr, L, model, sim, light);
   drawFooter(scr, L, model);
@@ -707,6 +708,21 @@ function drawBanner(g, sim, now) {
   scr.fill(L.ox, row, L.pw, pulse);
   const text = fit(banner.text, L.pw - 2);
   scr.text(L.ox + Math.floor((L.pw - strWidth(text)) / 2), row, text, tone[1], pulse);
+}
+
+/** Waiting for you: a pulsing yellow strip at the top of the scene, until you answer in the agent's terminal. */
+function drawWaiting(g, model, now) {
+  const list = model.waiting || [];
+  if (!list.length) return;
+  const { scr, L } = g;
+  const s = list[0], w = s.waiting;
+  const who = [AGENT_NAME[s.source] || s.source, s.cwd ? s.cwd.split('/').filter(Boolean).pop() : ''].filter(Boolean).join(' · ');
+  const head = list.length > 1 ? t('attention.many', { n: list.length }) : t('attention.one', { who });
+  const what = w.question ? t('attention.question', { text: w.text }) : w.text;
+  const bg = Math.floor(now / 550) % 2 ? hex('#ffd166') : hex('#ffbe3d');
+  const row = Math.floor(L.oy / 2) + 1; // L.oy is in half-block pixels: two per text row
+  scr.fill(L.ox, row, L.pw, bg);
+  scr.text(L.ox + 1, row, fit(`✋ ${head} · ${what} — ${t('attention.terminal')}`, L.pw - 2), C.ink, bg);
 }
 
 // ------------------------------------------------------------------ header, footer and panel

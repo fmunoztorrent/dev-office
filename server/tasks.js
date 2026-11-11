@@ -20,7 +20,7 @@ import path from 'node:path';
 import { clip } from './roles.js';
 import { sanitizeProject } from './pipeline.js';
 import { agentCommand, modelArgs, HARNESSES, which } from '../integrations/common/devteam.mjs';
-import { guideFor, guideText } from './guides.js';
+import { guideFor, guideText, GUIDE_MARK } from './guides.js';
 import { t as tr } from '../public/i18n.js';
 import { MAIN_OFFICE } from './store.js';
 
@@ -140,8 +140,11 @@ export class TaskHub extends EventEmitter {
    * A brief as its agent gets it: the 📁 scope (scope: false, without it) and the instructions of
    * the project in `dir` and of its department, on top of the text.
    */
-  brief(text, dir, { office = null, scope = true } = {}) {
-    return scoped(text, scope ? dir : null, guideText(guideFor(this.store, dir, office)));
+  brief(text, dir, { office = null, scope = true, autonomous = true } = {}) {
+    // autonomous: it works to the end on its own, and asks only what only you can answer (a pipeline
+    // already is: its stages and gates say how far it goes)
+    const auto = autonomous && this.store?.getPrefs?.().autonomy?.autonomous !== false ? `${GUIDE_MARK}${tr('guide.autonomous')}` : '';
+    return scoped(text, scope ? dir : null, [auto, guideText(guideFor(this.store, dir, office))].filter(Boolean).join('\n'));
   }
 
   // ---------------------------------------------------------------- tareas

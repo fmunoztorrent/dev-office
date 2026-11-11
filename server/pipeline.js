@@ -132,7 +132,7 @@ export class PipelineHub extends EventEmitter {
   }
 
   /** The task as the agent gets it: with its project's and department's instructions on top. */
-  #guided(run) { return this.tasks.brief ? this.tasks.brief(run.task, run.project.dir, { office: run.office, scope: false }) : run.task; }
+  #guided(run) { return this.tasks.brief ? this.tasks.brief(run.task, run.project.dir, { office: run.office, scope: false, autonomous: false }) : run.task; }
 
   /** For the Claude Code hook: that session's next queued pipeline. */
   takeForClaude(session) {

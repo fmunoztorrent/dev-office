@@ -128,6 +128,7 @@ test('cancelar desde la oficina: el hook lo recoge en el siguiente Stop; y sin o
 test('a una sesión de Claude ya abierta, el /task de Errementari le llega expandido en el Stop', async () => {
   const ctx = { ...setup(), project: errementariProject() };
   const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
+  server.store.setPrefs({ autonomy: { clarify: false } }); // the dispatch itself (the review: clarify.test.js)
   const base = server.url;
   try {
     await hook(ctx, base, { hook_event_name: 'SessionStart', source: 'startup' }); // the session announces its path

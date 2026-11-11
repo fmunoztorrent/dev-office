@@ -206,6 +206,7 @@ Format and protocol with the agents: [pipelines.md](pipelines.md).
 | `view` | `{ office: <id>, mode: "flat" \| "iso" }`: the office being watched and how it looks in the browser (front, the default, or isometric top-down) |
 | `herdr` | `{ launch: bool, subagents: bool, direction: "right" \| "down", startAgent: "auto" \| "none" \| <agent id> }` (`subagents`: one pane per subagent) |
 | `log` | `{ life: bool }` (the office's life in the log) |
+| `autonomy` | `{ clarify: bool, autonomous: bool }`: the analyst reviews each brief first; every brief asks the agent to work on its own to the end (both on by default) |
 
 - **Validation:** everything is validated before writing. On an error, the response is `400 { error }` (in the game's language) and nothing is touched.
 - **Live:** when the settings change the server broadcasts `{ type: "prefs", prefs }`; the appearance, `{ type: "appearance", appearance, office }` to whoever watches that office; the agents or sessions, `{ type: "targets", targets }`.
@@ -222,6 +223,20 @@ Format and protocol with the agents: [pipelines.md](pipelines.md).
 - `sunrise` and `sunset`: epoch ms.
 
 `GET /v1/weather?office=<id>` gives that office's. It also arrives in the snapshot (`state.weather`) and, when it changes, in `{ type: "weather", weather, office }`. The place is the office's `place`: its `location`, the company's `prefs.city` or, without either, `DEV_TEAM_OFFICE_LOCATION` or the time zone's city.
+
+## The analyst's review of a brief (autonomy)
+
+A brief from you (`run` over WebSocket, `POST /v1/run`, `POST /v1/agents/<id>/prompt`) is reviewed first when `prefs.autonomy.clarify` is on (the default): the answer is `{ ok, clarify: { id, status: "reviewing", … } }` and the brief goes to work when the project's agent says it is ready, or after you answer the analyst's questions.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| `GET` | `/v1/clarifications?office=<id>` | | `{ ok, clarifications }`: each `{ id, office, target, name, text, status: reviewing \| asking \| sent \| failed \| cancelled, questions, answers, createdAt }` |
+| `POST` | `/v1/clarifications/<id>/answer` | `{ answers: [..] }` or `{ skip: true }` (the team decides) | what sending the brief returns, with `clarify` |
+| `POST` | `/v1/clarifications/<id>/cancel` | | `{ ok }` |
+
+Over WebSocket: `{ type: "clarify_answer", id, answers?, skip? }` and `{ type: "clarify_cancel", id }`; changes arrive as `{ type: "clarify", clarify }` (and `clarifications` in the snapshot). The office's log gets `clarify` events (`phase`: review, ask, sent, failed, cancelled; the analyst's role). `prefs.autonomy.autonomous` (default on) adds the autonomous-mode line to every brief.
+
+**Waiting for you:** a session that waits for your input (a `waiting` event, or a `tool_start` of the agent's question tool) has `status: "waiting"` and `waiting: { text, since, question, role }` until its next event.
 
 ## Tasks for the agents
 

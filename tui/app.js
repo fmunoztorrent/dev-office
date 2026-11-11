@@ -42,6 +42,8 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
     const refreshSession = () => {
       model.session = [...sessions.values()].sort((a, b) => b.lastAt - a.lastAt)[0] || null;
       sim.setBoard(model.session);
+      // the sessions that stopped to wait for you (a permission, their question tool): the scene says so
+      model.waiting = [...sessions.values()].filter((s) => s.status === 'waiting' && s.waiting && Date.now() - s.waiting.since < 6 * 3600_000).sort((a, b) => a.waiting.since - b.waiting.since);
     };
 
     feed.start({

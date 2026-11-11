@@ -301,6 +301,16 @@ When the orchestrator delegates, the character that moves is that subagent's:
 - **Errementari:** spec → analyst, architect → Tech Lead, qa → QA, backend → backend, pipeline → manager.
 - **gentle-pi:** `subagent_run`, with sdd-* and review-*.
 
+## Autonomy: you brief, the team does the rest
+
+The office aims for you to brief and the team to get there on its own:
+
+- **First, the analyst checks the brief.** Before it goes to work, Valentina has the project's own agent read it (read-only: it changes nothing and does not start) with the project's and department's instructions. If it can be done well with what there is, it goes straight to work. If something only you know is missing and it would change the result (the scope, the acceptance criteria, a business decision), she brings you **up to 3 questions**: she walks to your desk with her hand up. You answer what you can (an empty answer is left to the team), or **Let the team decide**; your answers go with the brief. If the review fails or takes too long, the brief goes as it is.
+- **Then, autonomous mode.** Every brief carries a line asking the agent to work on it to the end on its own (plan, implement, test and check, with subagents if it helps) and to ask only what only you can answer, with its question tool; otherwise to make reasonable assumptions and note them. Pipelines already work that way.
+- Both are switched in **⚙ › General › Autonomy**.
+
+**When an agent waits for you, you see it.** An agent asking you something (Claude Code's `AskUserQuestion`, Pi's and OpenCode's question), a permission it needs, a question on its screen inside herdr, or the analyst's questions: a big yellow banner pulses at the top, on every floor, with who is waiting, for what and for how long, and the screen's edge lights up. The tab's title says `✋ (n)`. **Answer** opens the questions (or the prompt inside herdr); outside herdr, you answer in the agent's terminal. It stays until you answer. Optionally (⚙ › General, per browser), a sound and a system notification. The terminal game shows it as a pulsing strip at the top of the scene.
+
 ## Briefs: click the whiteboard
 
 Clicking the office's whiteboard, in the terminal or on the web (in the terminal also with `t`), opens the **New brief** dialog. There you choose:

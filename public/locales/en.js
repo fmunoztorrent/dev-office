@@ -72,6 +72,7 @@ export default {
     askYou: '{name}, I have a question for you ❓',
     chatReplies: ['Noted! 📝', "Let's cover it at the daily 👍", 'Got it 🙌', 'Good idea!'],
     btwThinking: ['Hmm, good question… 🤔', 'Let me check… 🔍', 'One sec, looking it up 📚'],
+    clarify: { review: ['Let me read it carefully 🔍', 'Checking we have everything 📋', 'Before starting, let me review it 🤓'], ask: 'I have {n} question(s) before we start 📝', sent: ['All clear: to work! 🚀', 'Ready for the team 💪'], cancelled: 'Ok, we drop it' },
     btwFail: "I couldn't find out 🤷",
     poke: '{from} says hi 👋',
     turnEnd: '✔ My turn is done',
@@ -241,6 +242,7 @@ export default {
     cd: 'Going into {dir}', background: '{what} (in the background)', mcp: 'Using {server}: {what}', toolUse: 'Using {tool}',
   },
   events: {
+    clarify: { review: '🔍 Reviewing the brief for {project}', ask: '❓ {n} question(s) for you: {text}', sent: '📨 The brief goes to work: {text}', failed: '✖ The brief could not be sent: {text}', cancelled: '⊘ Brief cancelled' },
     updateBoard: 'Updates the board', newCard: 'New card: {text}', moveCard: 'Moves a card', failed: 'Failed: {text}{detail}',
     thinking: 'Thinking…', waiting: 'The agent is waiting for your approval', error: 'Something went wrong', compact: 'Tidies up the notes (compacts the context)',
     done: 'Task done!', sessionStart: 'New work session', sessionEnd: 'Session closed', serviceUp: 'Started a service: {name}', serviceDown: 'The service stopped: {name}', you: 'You', office: 'Office', subtask: 'Subtask',
@@ -264,8 +266,31 @@ export default {
   },
   targets: { openSession: 'open session', claudeTurn: 'Claude, when its turn ends' },
   offices: { main: 'Main office' },
+  // the analyst reviews a brief before it goes to work (server/clarify.js)
+  clarify: {
+    promptHead: '[review] Before a brief goes to work, check whether it has everything needed to do it end to end without asking anyone. Do not change any file and do not start the work: only review it.',
+    promptProject: 'Project: {name} ({dir})',
+    promptBrief: 'The brief:\n{text}',
+    promptRules: 'If it can be done well with what there is (or with reasonable, safe assumptions), answer exactly: READY\nIf something only the PO knows is missing and it would change the result (the scope, the acceptance criteria, a business decision), answer with 1 to {n} short questions, one per line, each starting with "Q: ". Nothing else. Write them in {lang}.',
+    heading: 'What the PO clarified:', q: 'Q:', a: 'A:', noAnswer: '(no answer: decide reasonably and note it)',
+    skipped: 'The PO leaves the open points to the team: make reasonable assumptions and note them in your summary.',
+    unknown: 'unknown clarification', notAsking: 'that brief is no longer waiting for answers',
+    ui: {
+      title: '{name} has questions about your brief', reviewing: '{name} is reviewing your brief for {project}…', placeholder: 'Your answer…',
+      send: '▶ Send it to work', skip: 'Let the team decide', cancel: 'Cancel the brief', sent: 'Brief sent to work.', hint: 'Answer what you can: an empty answer is left to the team.',
+    },
+  },
+  // the screen's signal when an agent (or the analyst) waits for you
+  attention: {
+    one: '{who} is waiting for you', many: '{n} are waiting for you', since: '{min} min', answer: 'Answer', terminal: 'answer in its terminal', see: 'See',
+    question: 'asks you: {text}', clarify: '{name} has {n} question(s) about your brief', title: '✋ ({n}) waiting for you',
+    sound: 'A sound when they wait for you', notify: 'A system notification when they wait for you', notifyTitle: 'Dev Team Office: waiting for you',
+  },
   // the instructions on top of a brief (server/guides.js)
-  guide: { department: 'Instructions of the department «{name}»:', project: 'Instructions of the project «{name}»:' },
+  guide: {
+    department: 'Instructions of the department «{name}»:', project: 'Instructions of the project «{name}»:',
+    autonomous: 'Autonomous mode: work on it to the end on your own (plan, implement, test and check it; use subagents if it helps). Ask only what only the PO can answer, with your question tool; otherwise make reasonable assumptions and note them.',
+  },
 
   // ---------------------------------------------------------------- the two shared floors: the executive one and the archive
   directiveStatus: { running: 'running', done: 'accomplished', partial: 'partly accomplished', failed: 'failed', cancelled: 'cancelled', interrupted: 'interrupted' },
@@ -465,6 +490,7 @@ export default {
     keys: { field: 'field', change: 'change', action: 'action', save: 'save', close: 'close', tabs: '◂ ▸ switch tab' },
     yes: 'yes', no: 'no',
     general: {
+      autonomy: 'Autonomy', clarify: 'Before a brief goes to work, the analyst checks it has everything (and asks you only what is missing)', autonomous: 'The agents work on their own to the end (they ask only what only you can answer)',
       language: 'Language', timezone: 'Time zone', tzSystem: 'the system one ({tz})', tzHint: 'The time zone gives the date, the time and the country. Each office can have its own (⚙ › Offices).',
       city: 'City', cityZone: 'the time zone’s ({city})', cityHint: 'The city gives the weather, the sun and the moon. Type to search among the cities of the time zone’s country: in Chile, for example, Concepción and Punta Arenas share Santiago’s time zone.',
       cityNone: 'no city like that in {country}', cityOffline: 'no connection: write the city or its coordinates (lat, lon)',

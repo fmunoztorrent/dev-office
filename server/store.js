@@ -52,6 +52,9 @@ export const DEFAULT_PREFS = {
   log: { life: false },         // the terminal log also shows the office's life
   view: { office: MAIN_OFFICE, mode: 'flat', floor: 'office' }, // the office being watched, how it looks (front: flat, or isometric top-down: iso) and the floor (an office, the executive one or the archive)
   models: DEFAULT_MODELS,       // the model profiles (public/models.js) and the one used by default
+  // how a brief is worked: the analyst first checks it has everything (and asks you only what is missing),
+  // and the agent works on its own to the end (it asks only if it gets stuck)
+  autonomy: { clarify: true, autonomous: true },
 };
 
 // The default language (until one is chosen in ⚙): $DEV_TEAM_OFFICE_LANG, otherwise English.
@@ -427,6 +430,13 @@ export class Store {
             if (v.office !== undefined) next.view.office = this.getOffice(v.office)?.id || fail(t('err.unknownOffice', { office: v.office }));
             if (v.mode !== undefined) next.view.mode = ['flat', 'iso'].includes(v.mode) ? v.mode : fail(t('err.prefValue', { key: 'view.mode' }));
             if (v.floor !== undefined) next.view.floor = FLOORS.includes(v.floor) ? v.floor : fail(t('err.prefValue', { key: 'view.floor' }));
+            break;
+          case 'autonomy':
+            if (!isObj(v)) fail(t('err.prefValue', { key: k }));
+            for (const [ak, av] of Object.entries(v)) {
+              if (ak === 'clarify' || ak === 'autonomous') next.autonomy[ak] = bool(`autonomy.${ak}`, av);
+              else fail(t('err.pref', { key: `autonomy.${ak}` }));
+            }
             break;
           case 'models': {
             // a whole set ({ active, profiles }) or just which one is active ({ active })

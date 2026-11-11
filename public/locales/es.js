@@ -72,6 +72,7 @@ export default {
     askYou: '{name}, te tengo una pregunta ❓',
     chatReplies: ['¡Anotado! 📝', 'Lo vemos en la daily 👍', 'Entendido 🙌', '¡Buena idea!'],
     btwThinking: ['Mmm, buena pregunta… 🤔', 'Déjame revisar… 🔍', 'Un segundo, lo busco 📚'],
+    clarify: { review: ['Déjame leerlo con calma 🔍', 'Reviso que tengamos todo 📋', 'Antes de partir, lo reviso 🤓'], ask: 'Tengo {n} pregunta(s) antes de empezar 📝', sent: ['Todo claro: ¡a trabajar! 🚀', 'Listo para el equipo 💪'], cancelled: 'Ok, lo dejamos' },
     btwFail: 'No logré averiguarlo 🤷',
     poke: '{from} te saluda 👋',
     turnEnd: '✔ Termino mi turno',
@@ -241,6 +242,7 @@ export default {
     cd: 'Entrando a {dir}', background: '{what} (en segundo plano)', mcp: 'Usando {server}: {what}', toolUse: 'Usando {tool}',
   },
   events: {
+    clarify: { review: '🔍 Revisando el encargo para {project}', ask: '❓ {n} pregunta(s) para ti: {text}', sent: '📨 El encargo pasa a trabajo: {text}', failed: '✖ No se pudo enviar el encargo: {text}', cancelled: '⊘ Encargo cancelado' },
     updateBoard: 'Actualiza el tablero', newCard: 'Nueva tarjeta: {text}', moveCard: 'Mueve una tarjeta', failed: 'Falló: {text}{detail}',
     thinking: 'Pensando…', waiting: 'El agente espera tu aprobación', error: 'Algo salió mal', compact: 'Ordena las notas (compacta el contexto)',
     done: '¡Tarea terminada!', sessionStart: 'Nueva sesión de trabajo', sessionEnd: 'Sesión cerrada', serviceUp: 'Levantó un servicio: {name}', serviceDown: 'El servicio se detuvo: {name}', you: 'Tú', office: 'Oficina', subtask: 'Subtarea',
@@ -264,8 +266,31 @@ export default {
   },
   targets: { openSession: 'sesión abierta', claudeTurn: 'Claude, al terminar su turno' },
   offices: { main: 'Oficina principal' },
+  // la analista revisa un encargo antes de que pase a trabajo (server/clarify.js)
+  clarify: {
+    promptHead: '[revisión] Antes de que un encargo pase a trabajo, revisa si tiene todo lo necesario para hacerlo de punta a punta sin preguntarle a nadie. No cambies ningún archivo ni empieces el trabajo: sólo revísalo.',
+    promptProject: 'Proyecto: {name} ({dir})',
+    promptBrief: 'El encargo:\n{text}',
+    promptRules: 'Si se puede hacer bien con lo que hay (o con supuestos razonables y seguros), contesta exactamente: LISTO\nSi falta algo que sólo la PO sabe y que cambiaría el resultado (el alcance, los criterios de aceptación, una decisión de negocio), contesta con 1 a {n} preguntas cortas, una por línea, cada una empezando con «P: ». Nada más. Escríbelas en {lang}.',
+    heading: 'Lo que aclaró la PO:', q: 'P:', a: 'R:', noAnswer: '(sin respuesta: decide de forma razonable y anótalo)',
+    skipped: 'La PO le deja los puntos abiertos al equipo: toma supuestos razonables y anótalos en tu resumen.',
+    unknown: 'aclaración desconocida', notAsking: 'ese encargo ya no espera respuestas',
+    ui: {
+      title: '{name} tiene preguntas sobre tu encargo', reviewing: '{name} revisa tu encargo para {project}…', placeholder: 'Tu respuesta…',
+      send: '▶ Mandarlo a trabajar', skip: 'Que decida el equipo', cancel: 'Cancelar el encargo', sent: 'Encargo enviado a trabajar.', hint: 'Contesta lo que puedas: lo que dejes vacío lo decide el equipo.',
+    },
+  },
+  // la señal en la pantalla cuando un agente (o la analista) te espera
+  attention: {
+    one: '{who} te está esperando', many: '{n} te están esperando', since: '{min} min', answer: 'Responder', terminal: 'responde en su terminal', see: 'Ver',
+    question: 'te pregunta: {text}', clarify: '{name} tiene {n} pregunta(s) sobre tu encargo', title: '✋ ({n}) te esperan',
+    sound: 'Un sonido cuando te esperan', notify: 'Una notificación del sistema cuando te esperan', notifyTitle: 'Dev Team Office: te esperan',
+  },
   // las indicaciones arriba de un encargo (server/guides.js)
-  guide: { department: 'Indicaciones del departamento «{name}»:', project: 'Indicaciones del proyecto «{name}»:' },
+  guide: {
+    department: 'Indicaciones del departamento «{name}»:', project: 'Indicaciones del proyecto «{name}»:',
+    autonomous: 'Modo autónomo: trabájalo hasta terminar por tu cuenta (planifica, implementa, prueba y verifica; usa subagentes si conviene). Pregunta sólo lo que únicamente la PO puede responder, con tu herramienta de preguntas; si no, toma supuestos razonables y anótalos.',
+  },
 
   // ---------------------------------------------------------------- the two shared floors: the executive one and the archive
   directiveStatus: { running: 'en curso', done: 'cumplida', partial: 'cumplida a medias', failed: 'falló', cancelled: 'cancelada', interrupted: 'interrumpida' },
@@ -465,6 +490,7 @@ export default {
     keys: { field: 'campo', change: 'cambia', action: 'acción', save: 'guardar', close: 'cerrar', tabs: '◂ ▸ cambia de pestaña' },
     yes: 'sí', no: 'no',
     general: {
+      autonomy: 'Autonomía', clarify: 'Antes de que un encargo pase a trabajo, la analista revisa que tenga todo (y te pregunta sólo lo que falta)', autonomous: 'Los agentes trabajan solos hasta terminar (preguntan sólo lo que únicamente tú puedes responder)',
       language: 'Idioma', timezone: 'Zona horaria', tzSystem: 'la del sistema ({tz})', tzHint: 'De la zona horaria salen la fecha, la hora y el país. Cada oficina puede tener la suya (⚙ › Oficinas).',
       city: 'Ciudad', cityZone: 'la de la zona horaria ({city})', cityHint: 'De la ciudad salen el clima, el sol y la luna. Escribe para buscar entre las ciudades del país de la zona horaria: en Chile, por ejemplo, Concepción y Punta Arenas comparten la zona horaria de Santiago.',
       cityNone: 'no hay una ciudad así en {country}', cityOffline: 'sin conexión: escribe la ciudad o sus coordenadas (lat, lon)',

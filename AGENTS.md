@@ -32,6 +32,7 @@ Dev Team Office es una oficina en pixel art que muestra en vivo lo que hacen los
 | `server/herdr.js` · `server/subpanes.js` | herdr: un agente por pane, y un pane por subagente |
 | `server/mcp.js` | El servidor MCP: `join_office`, `register_project`, `report_activity`, `send_task`… y el prompt `join` |
 | `server/store.js` | La base SQLite: oficinas, agentes, ajustes (`prefs`), apariencia, historial, directivas y el archivo (`knowledge`) |
+| `server/clarify.js` | La autonomía: antes de que un encargo pase a trabajo, la analista se lo da a revisar al agente del proyecto (sólo lectura) y te trae sólo las preguntas que cambiarían el resultado |
 | `server/guides.js` | Las indicaciones de cada departamento (una oficina) y de cada proyecto (su carpeta): van arriba de cada encargo, pipeline, directiva y pregunta, bajo la línea 📁 |
 | `server/directives.js` · `server/archive.js` | Los dos pisos compartidos: la dirección (una directiva = un encargo por proyecto, a varias oficinas) y el archivo (notas, decisiones, documentos, actas, skills y conectores; instala skills y conectores en cada proyecto) |
 | `public/sim.js` | La simulación (personajes, rutas, vida de la oficina). La comparten el navegador y la terminal |

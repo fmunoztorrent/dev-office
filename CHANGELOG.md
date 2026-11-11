@@ -4,6 +4,17 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-11
+
+### Added
+
+- **Autonomy: you brief, the team does the rest.** Before a brief goes to work, the analyst has the project's agent check it (read-only) with the project's and department's instructions: if something only you know is missing, she brings you up to 3 questions (at your desk, hand up); your answers go with the brief, or you let the team decide. Otherwise it goes straight to work. Every brief also asks the agent to work on its own to the end and to ask only what only you can answer. Both in ⚙ › General › Autonomy; `/v1/clarifications`.
+- **A strong signal when they wait for you:** an agent's question (its question tool), a permission, a question on its screen inside herdr, or the analyst's questions show as a big pulsing yellow banner at the top (on every floor), the screen's edge lit up and `✋ (n)` in the tab's title, until you answer. Optional sound and system notification (⚙ › General). The terminal game shows a pulsing strip.
+
+### Changed
+
+- A session waiting for you carries what it waits for (`waiting: { text, since, question }`), and an agent asking with its question tool counts as waiting.
+
 ## [0.12.0] - 2026-11-11
 
 ### Added
@@ -179,7 +190,8 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/fmunoztorrent/dev-office/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.10.0...v0.11.0

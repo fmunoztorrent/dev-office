@@ -46,6 +46,15 @@
         </button>
       </div>
 
+      <!-- Waiting for you: an agent (or the analyst) needs your answer. Big, at the top, pulsing, with
+           the screen's edge lit up: it does not go away until you answer. -->
+      <div id="attention" class="attention" hidden role="alert" aria-live="assertive">
+        <span class="attention-hand" aria-hidden="true">✋</span>
+        <span class="attention-text"><b id="attention-who"></b><span id="attention-what"></span></span>
+        <span id="attention-since" class="attention-since"></span>
+        <button id="attention-go" class="attention-go" type="button"></button>
+      </div>
+
       <!-- btw: a side question to the agent on duty, and its answer -->
       <aside id="btw-card" class="btw-card" hidden aria-live="polite" aria-labelledby="btw-q">
         <header class="btw-head">
@@ -257,6 +266,27 @@
         <ul id="team" class="team"></ul>
       </div>
     </div>
+  </dialog>
+
+  <!-- The analyst's questions about your brief: answer them (or let the team decide) and it goes to work. -->
+  <dialog id="clarify" class="brief clarify" aria-labelledby="cl-title">
+    <form id="cl-form" method="dialog">
+      <header class="brief-head">
+        <span class="pin" aria-hidden="true"></span>
+        <h2 id="cl-title"></h2>
+        <button type="button" class="brief-x" id="cl-close" data-i18n-aria="settings.close">✕</button>
+      </header>
+      <div class="brief-body">
+        <blockquote id="cl-brief" class="cl-brief"></blockquote>
+        <ol id="cl-questions" class="cl-questions"></ol>
+        <p class="muted" data-i18n="clarify.ui.hint">Answer what you can.</p>
+      </div>
+      <footer class="brief-foot">
+        <button type="button" class="btn ghost danger" id="cl-cancel" data-i18n="clarify.ui.cancel">Cancel the brief</button>
+        <button type="button" class="btn ghost" id="cl-skip" data-i18n="clarify.ui.skip">Let the team decide</button>
+        <button type="submit" class="btn" id="cl-send" data-i18n="clarify.ui.send">▶ Send it to work</button>
+      </footer>
+    </form>
   </dialog>
 
   <!-- The elevator: its panel of buttons, one per floor (the executive floor, each office, the archive). -->

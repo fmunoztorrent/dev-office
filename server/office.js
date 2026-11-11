@@ -23,6 +23,8 @@ function normTodos(list) {
 }
 
 const SESSION_STATUS = { waiting: 'waiting', done: 'done', session_end: 'ended' };
+// the agent's tool to ask you something (Claude Code's AskUserQuestion, Pi's and OpenCode's question)
+const ASK_TOOL = /^(askuserquestion|question|ask_user_choice|ask_user_question|ask_user)$/i;
 // What a subagent with its own process tells about its own session (not the team's).
 const CHILD_OWN = new Set(['session_start', 'session_end', 'turn_end', 'done', 'compact', 'todos', 'agent_roles', 'phase_end', 'stage_end']);
 // The TDD phase the parent put in a QA subagent's label ("RED tests for total()",
@@ -40,7 +42,7 @@ function excerpt(text, { max = 1200, lines = 14, head = false } = {}) {
   return kept.length > max ? (head ? `${kept.slice(0, max - 1)}…` : `…${kept.slice(-(max - 1))}`) : kept;
 }
 /** Announcements: they are logged but do not change any role's state. */
-const ANNOUNCEMENTS = new Set(['dispatch', 'pane_open', 'pane_close', 'pane_state', 'service_up', 'service_down']);
+const ANNOUNCEMENTS = new Set(['dispatch', 'clarify', 'pane_open', 'pane_close', 'pane_state', 'service_up', 'service_down']);
 /** What state a character ends up in after one of its events (shared by the office and the monitor);
  *  `null` for announcements, which do not change the state (nor set it to idle). */
 export const roleStatus = (ev) => (ANNOUNCEMENTS.has(ev.kind) ? null : ev.phase === 'red' ? 'red' : ev.kind === 'tool_end' && !ev.ok ? 'blocked' : ev.kind === 'waiting' ? 'waiting' : ev.kind === 'done' ? 'done' : ev.kind === 'turn_end' || ev.kind === 'session_end' ? 'idle' : 'working');
@@ -268,6 +270,12 @@ export class Office extends EventEmitter {
       case 'agent_roles':
         if (r.roles && typeof r.roles === 'object') this.setAgentRoles(s.id, Object.fromEntries(Object.entries(r.roles).map(([k, v]) => [k, agentRole(v)]).filter(([, v]) => v).slice(0, 40)));
         return null;
+      // The analyst reviews a brief before it goes to work (server/clarify.js): reviewing it, her
+      // questions for you, and when it is handed over.
+      case 'clarify': {
+        const phase = ['review', 'ask', 'sent', 'failed', 'cancelled'].includes(r.phase) ? r.phase : 'review';
+        return { ...ev, role: 'analyst', phase, clarifyId: clip(r.clarifyId, 40), n: Number(r.n) || 0, project: clip(r.project, 60), text: clip(r.text, 600) };
+      }
       case 'dispatch': return { ...ev, role: 'po', from: clip(r.from || t('events.you'), 30), agent: clip(r.agent, 30), mode: r.mode === 'launch' ? 'launch' : 'session', text: clip(r.text, 200) };
       case 'poke': return normRole(r.role) ? { ...ev, role: normRole(r.role), from: clip(r.from || t('events.you'), 30), text: '👋' } : null;
       // a service the agent left running in the background starts or ends (server/services.js)
@@ -352,7 +360,12 @@ export class Office extends EventEmitter {
     if (ev.kind === 'tool_start') s.tools++;
     // In RED (TDD) a failing test is expected: it does not count as an error.
     if ((ev.kind === 'tool_end' && !ev.ok && ev.phase !== 'red') || ev.kind === 'error') s.errors++;
-    if (!['chat', 'poke', 'dispatch', 'btw'].includes(ev.kind)) s.status = SESSION_STATUS[ev.kind] || 'active';
+    // an agent that asks you something with its question tool is waiting for you too
+    const asksYou = ev.kind === 'tool_start' && ASK_TOOL.test(ev.tool || '');
+    if (!['chat', 'poke', 'dispatch', 'btw', 'clarify'].includes(ev.kind)) s.status = asksYou ? 'waiting' : SESSION_STATUS[ev.kind] || 'active';
+    // what it is waiting for, and since when: the screen's "they are waiting for you" signal
+    if (s.status === 'waiting') s.waiting = { text: ev.text || s.waiting?.text || '', since: s.waiting?.since || ev.ts, question: asksYou || !!s.waiting?.question, role: ev.role || null };
+    else delete s.waiting;
 
     // a side question does not change what each role is doing; announcements (dispatch, panes)
     // do not either: roleStatus returns null and they stay only in the log.

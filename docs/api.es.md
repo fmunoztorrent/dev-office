@@ -206,6 +206,7 @@ Formato y protocolo con los agentes: [pipelines.es.md](pipelines.es.md).
 | `view` | `{ office: <id>, mode: "flat" \| "iso" }`: la oficina que se mira y cómo se ve en el navegador (frontal, por defecto, o cenital isométrica) |
 | `herdr` | `{ launch: bool, subagents: bool, direction: "right" \| "down", startAgent: "auto" \| "none" \| <id de agente> }` (`subagents`: un pane por subagente) |
 | `log` | `{ life: bool }` (la vida de la oficina en la bitácora) |
+| `autonomy` | `{ clarify: bool, autonomous: bool }`: la analista revisa cada encargo primero; cada encargo le pide al agente trabajar solo hasta terminar (los dos encendidos por defecto) |
 
 - **Validación:** todo se valida antes de escribir. Si hay un error, la respuesta es `400 { error }` (en el idioma del juego) y no se toca nada.
 - **En vivo:** al cambiar los ajustes el servidor difunde `{ type: "prefs", prefs }`; la apariencia, `{ type: "appearance", appearance, office }` a quienes miran esa oficina; los agentes o las sesiones, `{ type: "targets", targets }`.
@@ -222,6 +223,20 @@ Formato y protocolo con los agentes: [pipelines.es.md](pipelines.es.md).
 - `sunrise` y `sunset`: ms de época.
 
 `GET /v1/weather?office=<id>` da el de esa oficina. También llega en el snapshot (`state.weather`) y, cuando cambia, en `{ type: "weather", weather, office }`. El lugar es el `place` de la oficina: su `location`, la `prefs.city` de la empresa o, sin ninguna, `DEV_TEAM_OFFICE_LOCATION` o la ciudad de la zona horaria.
+
+## La revisión de la analista (autonomía)
+
+Un encargo tuyo (`run` por WebSocket, `POST /v1/run`, `POST /v1/agents/<id>/prompt`) se revisa primero cuando `prefs.autonomy.clarify` está encendido (por defecto): la respuesta es `{ ok, clarify: { id, status: "reviewing", … } }` y el encargo pasa a trabajo cuando el agente del proyecto dice que está listo, o después de que contestas las preguntas de la analista.
+
+| Método | Ruta | Cuerpo | Respuesta |
+|---|---|---|---|
+| `GET` | `/v1/clarifications?office=<id>` | | `{ ok, clarifications }`: cada una `{ id, office, target, name, text, status: reviewing \| asking \| sent \| failed \| cancelled, questions, answers, createdAt }` |
+| `POST` | `/v1/clarifications/<id>/answer` | `{ answers: [..] }` o `{ skip: true }` (decide el equipo) | lo que devuelve mandar el encargo, con `clarify` |
+| `POST` | `/v1/clarifications/<id>/cancel` | | `{ ok }` |
+
+Por WebSocket: `{ type: "clarify_answer", id, answers?, skip? }` y `{ type: "clarify_cancel", id }`; los cambios llegan como `{ type: "clarify", clarify }` (y `clarifications` en el snapshot). La bitácora de la oficina recibe eventos `clarify` (`phase`: review, ask, sent, failed, cancelled; con el rol de la analista). `prefs.autonomy.autonomous` (encendido por defecto) agrega la línea del modo autónomo a cada encargo.
+
+**Te esperan:** una sesión que espera algo tuyo (un evento `waiting`, o un `tool_start` de la herramienta de preguntas del agente) tiene `status: "waiting"` y `waiting: { text, since, question, role }` hasta su próximo evento.
 
 ## Tareas para los agentes
 

@@ -106,7 +106,7 @@ function cityInput({ value, timezone, placeholder, label, onPick }) {
  * @param getPrefs/getHerdr     the general settings and herdr's state (they arrive over WebSocket)
  * @param onView                (id) => watch another office
  */
-export function createSettings({ getTargets = () => [], getOffices = () => [], getOffice = () => null, getPrefs = () => null, getHerdr = () => null, onPrompt, onView, onSaved } = {}) {
+export function createSettings({ getTargets = () => [], getOffices = () => [], getOffice = () => null, getPrefs = () => null, getHerdr = () => null, onPrompt, onView, onSaved, alerts } = {}) {
   const st = { tab: 'general', data: null, looks: null, form: emptyForm(), office: emptyOffice() };
   const msg = (text, ok = false) => { $('s-msg').textContent = text; $('s-msg').style.color = ok ? '#2a9d8f' : ''; };
   const here = () => getOffice()?.id || 'main';
@@ -181,6 +181,17 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       el('p', { class: 'hint' }, G('cityHint')),
       check(p.weather, `${G('weather')}: ${G(p.weather ? 'weatherOn' : 'weatherOff')}`, (e) => setPref({ weather: e.target.checked })),
       check(p.log?.life, G('life'), (e) => setPref({ log: { life: e.target.checked } })),
+      // autonomy: the analyst reviews each brief first, and the agents work to the end on their own
+      el('h3', {}, G('autonomy')),
+      check(p.autonomy?.clarify !== false, G('clarify'), (e) => setPref({ autonomy: { clarify: e.target.checked } })),
+      check(p.autonomy?.autonomous !== false, G('autonomous'), (e) => setPref({ autonomy: { autonomous: e.target.checked } })),
+      // when they wait for you (this browser's own: a sound, a system notification)
+      alerts ? check(alerts.get().sound, t('attention.sound'), (e) => alerts.set({ sound: e.target.checked })) : null,
+      alerts && 'Notification' in window ? check(alerts.get().notify, t('attention.notify'), async (e) => {
+        const on = e.target.checked && (Notification.permission === 'granted' || (await Notification.requestPermission()) === 'granted');
+        alerts.set({ notify: on });
+        e.target.checked = on;
+      }) : null,
       el('label', { class: 'b-field' }, el('span', {}, G('viewMode')),
         el('select', { 'aria-label': G('viewMode'), onchange: (e) => setPref({ view: { mode: e.target.value } }) }, ['flat', 'iso'].map((m) => option(m, G(`view_${m}`), m === (p.view?.mode || 'flat'))))),
       el('h3', {}, G('herdr')),
