@@ -23,9 +23,10 @@
         </label>
         <span id="conn" class="conn off">offline</span>
         <span id="wx" class="wx" hidden></span>
-        <!-- the agent's context, small, next to the weather: it empties as the context fills up.
-             It shows up when an agent reports it (the focused session's, or the latest that does). -->
+        <!-- the agent's context as a health bar, next to the weather: it empties as the context fills
+             up (the focused session's, or the latest that reports it; grey until one does). -->
         <span class="ctx-chip" id="ctx-bar" hidden>
+          <span class="ctx-heart" aria-hidden="true">♥</span>
           <b id="ctx-who"></b>
           <span class="ctx-track" id="ctx-meter" role="meter" aria-valuemin="0" aria-valuemax="100"><span class="ctx-trail" id="ctx-trail"></span><span class="ctx-fill" id="ctx-fill"></span></span>
           <span class="ctx-pct" id="ctx-pct"></span>
@@ -56,7 +57,8 @@
         <p id="btw-a" class="btw-a"></p>
       </aside>
 
-      <!-- The selected character's sheet (like in The Sims) -->
+      <!-- Talking to a character (or a newcomer, a subagent): who they are and what they are doing on
+           top, the conversation filling the rest, and where you write at the bottom. -->
       <aside id="sheet" class="sheet" hidden aria-labelledby="sheet-name">
         <header class="sheet-head">
           <canvas id="sheet-portrait" width="64" height="100" aria-hidden="true"></canvas>
@@ -65,19 +67,18 @@
             <p id="sheet-role"></p>
             <p id="sheet-mood" class="sheet-mood"></p>
           </div>
+          <button id="poke" class="sheet-icon" type="button" data-i18n-title="ui.poke" data-i18n-aria="ui.poke">👋</button>
           <button id="sheet-close" class="sheet-x" type="button" data-i18n-aria="ui.sheetClose">✕</button>
         </header>
-        <dl id="sheet-needs" class="needs"></dl>
-        <ul id="sheet-history" class="sheet-history"></ul>
-        <!-- talking to them: what you say and what they answer (a question goes to their agent) -->
         <ol id="sheet-talk" class="talk" aria-live="polite"></ol>
+        <details class="sheet-more">
+          <summary data-i18n="ui.lately">What they did lately</summary>
+          <ul id="sheet-history" class="sheet-history"></ul>
+        </details>
         <form id="sheet-say" class="say">
-          <input id="say-text" maxlength="300" autocomplete="off">
-          <button id="say-go" class="pix-btn" type="submit" data-i18n-aria="ui.send">➤</button>
+          <textarea id="say-text" rows="2" maxlength="2000" autocomplete="off"></textarea>
+          <button id="say-go" class="say-go" type="submit" data-i18n-aria="ui.send">➤</button>
         </form>
-        <footer class="sheet-foot">
-          <button id="poke" class="pix-btn" type="button" data-i18n="ui.poke">👋 Say hi</button>
-        </footer>
       </aside>
 
       <!-- Bottom left: the activity (what the agents do and the office's life) and the work
@@ -250,6 +251,17 @@
         <h3 class="w-h" data-i18n="ui.team">The team</h3>
         <ul id="team" class="team"></ul>
       </div>
+    </div>
+  </dialog>
+
+  <!-- The elevator: its panel of buttons, one per floor (the executive floor, each office, the archive). -->
+  <dialog id="lift" class="lift" aria-labelledby="lift-title">
+    <div class="lift-panel">
+      <header class="lift-head">
+        <h2 id="lift-title" data-i18n="floors.lift.title">Elevator</h2>
+        <button type="button" class="lift-x" id="lift-close" data-i18n-aria="settings.close">✕</button>
+      </header>
+      <ol id="lift-floors" class="lift-floors"></ol>
     </div>
   </dialog>
 

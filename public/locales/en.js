@@ -269,6 +269,7 @@ export default {
   directiveStatus: { running: 'running', done: 'accomplished', partial: 'partly accomplished', failed: 'failed', cancelled: 'cancelled', interrupted: 'interrupted' },
   knowledgeKind: { note: 'note', decision: 'decision', doc: 'doc', minute: 'minutes', skill: 'skill', connector: 'connector' },
   floors: {
+    lift: { title: 'Elevator', here: 'you are here' },
     name: { exec: '🏛 Executive floor', archive: '📚 Archive' }, key: 'Pick the floor: the executive one, an office or the archive (o · PgUp/PgDn)', going: 'Floor: {name}',
     elevator: 'the elevator',
     // the game (floors.js): each floor's scene, its people and what they say
@@ -499,6 +500,8 @@ export default {
     },
   },
   ui: {
+    lately: 'What they did lately', newcomerOf: 'Newcomer · {role} · {project}', talkEmpty: 'Ask {name} something about what they are doing (end with ?) and their agent answers. Anything else, they answer in their own words.', talkEmptyTeam: 'Say something to the whole team.',
+    contextNone: 'The agent’s context, as a health bar: it shows up when an agent reports it (Claude Code, Pi and OpenCode do while they work).',
     context: 'Context · {agent}', contextAria: 'Context: {pct}% free ({used} of {max} used)',
     canvas: 'The office: click a character to see their card, the board for a new brief',
     settings: 'Settings', settingsKey: 'Settings (c)', fullscreen: 'Fullscreen', fullscreenKey: 'Fullscreen (f)', view: 'Front or top-down view', viewKey: 'Front or top-down view (v)', servicesKey: 'Background services: {n} running (l)',

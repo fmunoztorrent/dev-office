@@ -1,5 +1,5 @@
 import { createGame, TEAM, phaseInfo } from './game.js';
-import { applyAppearance, needsOf, DREAMS } from './sim.js';
+import { applyAppearance, DREAMS, teamNames } from './sim.js';
 import { AGENT_NAME, TASK_STATUS } from './targets.js';
 import { briefOptions, briefProblem, briefMessage, defaultTarget, targetLabel } from './brief.js';
 import { createSettings } from './settings-ui.js';
@@ -9,7 +9,7 @@ import { createPrompts } from './prompts-ui.js';
 import { createDirectivesUi, createArchiveUi } from './floors-ui.js';
 import { drawSprite } from './sprite.js';
 import { season, isSouth, daylight, weatherIcon } from './sky.js';
-import { t, setLanguage, onLanguage, getLanguage, timeOf } from './i18n.js';
+import { t, ta, setLanguage, onLanguage, getLanguage, timeOf } from './i18n.js';
 import { countryName } from './clock.js';
 
 const $ = (id) => document.getElementById(id);
@@ -40,7 +40,7 @@ const game = createGame($('office'), {
   onRackClick: () => servicesUi.open(),
   // the shared floors: the board and the screen (directives), the shelves, the rack and the patch panel (the archive), the elevator
   onFloorClick: (floor, what) => {
-    if (what === 'lift') return moveFloor(floor === 'exec' ? 1 : -1);
+    if (what === 'lift') return openLift();
     if (floor === 'exec') return directivesUi.open();
     return archiveUi.open({ kind: what === 'knowledge' ? '' : what });
   },
@@ -279,6 +279,37 @@ function moveFloor(step) {
   const next = stops[(i + step + stops.length) % stops.length];
   pickFloor(next);
 }
+/**
+ * The elevator: clicking it (on any floor) opens its panel, a button per floor — the executive floor
+ * on top, each office, the archive in the basement — and takes you to the one you press.
+ */
+function openLift() {
+  const dlg = $('lift');
+  const here = game.floor === 'office' ? wanted || office?.id : FLOOR_VALUE[game.floor];
+  const stops = [
+    { value: FLOOR_VALUE.exec, label: t('floors.name.exec'), mark: '▲' },
+    ...offices.map((o, i) => ({ value: o.id, label: `🏢 ${o.name}`, mark: String(offices.length - i) })),
+    { value: FLOOR_VALUE.archive, label: t('floors.name.archive'), mark: '▼' },
+  ];
+  const ol = $('lift-floors');
+  ol.innerHTML = '';
+  for (const st of stops) {
+    const on = st.value === here;
+    const b = el('button', `lift-btn${on ? ' here' : ''}`);
+    b.type = 'button';
+    b.append(el('span', 'lift-dot', st.mark), el('span', 'lift-name', st.label), ...(on ? [el('span', 'lift-here', t('floors.lift.here'))] : []));
+    if (on) b.setAttribute('aria-current', 'true');
+    b.onclick = () => { dlg.close(); if (!on) { game.sim.elevator.doorAt = performance.now(); pickFloor(st.value); } };
+    const li = el('li');
+    li.append(b);
+    ol.append(li);
+  }
+  if (!dlg.open) dlg.showModal();
+  (ol.querySelector('.here') || ol.querySelector('button'))?.focus();
+}
+$('lift-close').onclick = () => $('lift').close();
+$('lift').onclick = (e) => { if (e.target === $('lift')) $('lift').close(); }; // a click outside the panel closes it
+
 function pickFloor(value) {
   if (value === FLOOR_VALUE.exec) return setFloor('exec');
   if (value === FLOOR_VALUE.archive) return setFloor('archive');
@@ -384,20 +415,31 @@ $('feed-life').onchange = (e) => {
 // ---------------------------------------------------------------- the context bar
 
 const kTokens = (n) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}M` : `${Math.round(n / 1000)}k`);
-/** The context left, as a small health bar next to the weather: the focused session's or, without a
- * chosen one, the latest session whose agent reports it. Hidden if none does. */
+/** The context left, as a health bar next to the weather: the focused session's or, without a
+ * chosen one, the latest session whose agent reports it. It is always there on an office's floor:
+ * empty and grey until an agent reports its context (Claude Code, Pi and OpenCode do). */
 function renderContext() {
   const cur = currentSession();
   const s = cur?.context?.max > 0 || focus ? cur : [...sessions.values()].filter((x) => x.context?.max > 0).sort((a, b) => b.lastAt - a.lastAt)[0];
-  const c = s?.context;
+  const c = s?.context?.max > 0 ? s.context : null;
   const bar = $('ctx-bar');
-  bar.hidden = !c || !(c.max > 0) || game.floor !== 'office';
-  if (bar.hidden) return;
+  bar.hidden = game.floor !== 'office';
+  bar.classList.toggle('none', !c);
+  if (!c) {
+    $('ctx-fill').style.width = $('ctx-trail').style.width = '0%';
+    $('ctx-who').textContent = '';
+    $('ctx-pct').textContent = '—';
+    bar.title = t('ui.contextNone');
+    $('ctx-meter').removeAttribute('aria-valuenow');
+    $('ctx-meter').setAttribute('aria-label', bar.title);
+    bar.classList.remove('mid', 'low');
+    return;
+  }
   const left = Math.max(0, Math.min(1, 1 - c.used / c.max));
   const pct = Math.round(left * 100);
   $('ctx-fill').style.width = `${left * 100}%`;
   $('ctx-trail').style.width = `${left * 100}%`;
-  $('ctx-who').textContent = AGENT_NAME[s.source] || s.source || '';
+  $('ctx-who').textContent = '';
   $('ctx-pct').textContent = `${pct}%`;
   const label = t('ui.contextAria', { pct, used: kTokens(c.used), max: kTokens(c.max) });
   bar.title = `${t('ui.context', { agent: AGENT_NAME[s.source] || s.source || '' })} · ${projectOf(s.id) || ''}`.replace(/ · $/, '') + `\n${label}`;
@@ -473,14 +515,26 @@ function talk(role, line) {
   return line;
 }
 
+const asked = new Map(); // a question (its text, then its id) → whose chat it goes to (a newcomer's is not their role's)
 function say(text) {
   const q = String(text || '').trim();
   if (!q || !selected) return;
   if (ws?.readyState !== 1) { talk(selected, { who: 'them', text: t('conn.offline'), status: 'failed' }); return; }
   talk(selected, { who: 'you', text: q });
+  const p = who();
   if (selected !== 'po' && isQuestion(q)) {
     talk(selected, { who: 'them', text: '', status: 'asking', ask: 'pending', question: q });
-    return askBtw(q, selected);
+    asked.set(q, selected);
+    // a newcomer answers from their own session (their subagent's), as one of their role
+    return p.ghost ? askBtw(q, p.role, p.session, p.subId) : askBtw(q, selected);
+  }
+  if (p?.ghost) {
+    // a newcomer is only in this office's game: they answer here, in their own words
+    const lines = ta('sim.chatReplies', teamNames());
+    const line = lines[Math.floor(Math.random() * lines.length)] || '👍';
+    p.say(line, 3500);
+    setTimeout(() => talk(p.id, { who: 'them', text: line, by: p.id }), 300);
+    return;
   }
   send({ type: 'chat', text: q, role: selected === 'po' ? undefined : selected });
 }
@@ -489,14 +543,15 @@ function say(text) {
 // in a forked session, without interrupting it; the answer shows on that character's sheet (or, if
 // it is not open, in a card at the top) and in the log.
 let btwTimer = null;
-function askBtw(question, role = selected) {
+function askBtw(question, role = selected, session = focus, subId) {
   // the character you asked answers, from the project and the task it is working on (or the chosen session)
-  send({ type: 'ask', text: question, role: role || undefined, session: focus || undefined });
+  send({ type: 'ask', text: question, role: role || undefined, session: session || undefined, subId: subId || undefined });
 }
 function onAsk(a) {
   if (!a || (office && a.office !== office.id)) return;
   // the conversation with whom was asked: its pending line becomes the answer
-  const role = a.role || 'tl';
+  if (!asked.has(a.id) && asked.has(a.question)) { asked.set(a.id, asked.get(a.question)); asked.delete(a.question); }
+  const role = asked.get(a.id) || a.role || 'tl';
   const list = talks.get(role) || [];
   let line = list.find((x) => x.ask === a.id) || list.findLast((x) => x.ask === 'pending' && x.question === a.question);
   if (!line && a.status === 'asking') line = talk(role, { who: 'them', text: '', status: 'asking', question: a.question });
@@ -533,9 +588,9 @@ function renderTalk() {
   const ol = $('sheet-talk');
   const list = talks.get(selected) || [];
   ol.innerHTML = '';
-  ol.hidden = !list.length;
+  if (!list.length && who()) ol.append(el('li', 'talk-empty', selected === 'po' ? t('ui.talkEmptyTeam') : t('ui.talkEmpty', { name: who().cfg.name })));
   for (const x of list.slice(-12)) {
-    const by = x.who === 'you' ? null : TEAM[x.by || selected];
+    const by = x.who === 'you' ? null : who(x.by || selected)?.cfg;
     const li = el('li', `${x.who}${x.status ? ` ${x.status}` : ''}`);
     const name = el('b', '', x.who === 'you' ? (x.from && x.from !== t('events.you') ? x.from : t('ui.you')) : by?.name || '');
     if (by) name.style.color = by.shirt;
@@ -628,49 +683,68 @@ function renderTeam() {
 // ---------------------------------------------------------------- the selected character's sheet
 
 let portraitOf = null;
+/** Who is selected: one of the team, or a newcomer (a subagent: 'new:<id>'). */
+const who = (id = selected) => (id ? game.person(id) : null);
+const isNewcomer = (id = selected) => !!who(id)?.ghost;
+
 function select(id) {
+  if (id && !who(id)) id = null;
+  const changed = id !== selected;
   selected = id;
   game.select(id);
   renderTeam();
   renderSheet(true);
   renderTalk();
-  if (id) { $('say-text').placeholder = id === 'po' ? t('ui.talkTeamPh') : t('ui.talkPh', { name: TEAM[id].name }); $('say-text').value = ''; }
+  if (id && changed) {
+    const p = who(id);
+    $('say-text').placeholder = id === 'po' ? t('ui.talkTeamPh') : t('ui.talkPh', { name: p.cfg.name });
+    $('say-text').value = '';
+    fitSay();
+  }
 }
 
-/** Each need as a "how well it is" bar (full green = satisfied), like in The Sims. */
+/** Their card: who they are, what they are doing right now and, in a corner, what they did lately. */
 function renderSheet(full) {
   const box = $('sheet');
-  if (!selected) { box.hidden = true; return; }
-  const cfg = TEAM[selected], a = game.agents[selected];
+  const a = who();
+  if (!a) { box.hidden = true; if (selected) select(null); return; }
+  const cfg = a.cfg;
   box.hidden = false;
-  if (full || portraitOf !== `${selected}:${cfg.shirt}${cfg.hair}${cfg.skin}${cfg.pants}${cfg.long}${cfg.beard}${cfg.glasses}`) {
-    portraitOf = `${selected}:${cfg.shirt}${cfg.hair}${cfg.skin}${cfg.pants}${cfg.long}${cfg.beard}${cfg.glasses}`;
-    drawSprite($('sheet-portrait'), cfg, { P: 4, bg: '#c9b48a' });
+  const look = `${selected}:${cfg.shirt}${cfg.hair}${cfg.skin}${cfg.pants}${cfg.long}${cfg.beard}${cfg.glasses}${cfg.sex}`;
+  if (full || portraitOf !== look) {
+    portraitOf = look;
+    drawSprite($('sheet-portrait'), cfg, { P: 4, bg: a.ghost ? '#c7d6e6' : '#c9b48a' });
     $('sheet-name').textContent = cfg.name;
     $('sheet-name').style.color = cfg.shirt;
-    $('sheet-role').textContent = `${cfg.title}${a.badges.size ? ` · ${t('ui.subagents', { n: a.badges.size })}` : ''}`;
+    const role = a.ghost ? t('ui.newcomerOf', { role: TEAM[a.role]?.title || a.role, project: a.project || '' }).replace(/ · $/, '') : cfg.title;
+    $('sheet-role').textContent = `${role}${a.badges.size ? ` · ${t('ui.subagents', { n: a.badges.size })}` : ''}`;
   }
   $('sheet-mood').textContent = `${moodOf(a)}${a.text && ['working', 'thinking', 'red'].includes(a.state) ? `: ${a.text}` : ''}`;
-  const dl = $('sheet-needs');
-  const needs = needsOf(selected);
-  if (full || dl.children.length !== needs.length * 2) {
-    dl.innerHTML = '';
-    for (const [, label] of needs) { const dd = el('dd'); dd.append(el('span')); dl.append(el('dt', '', label), dd); }
+  if (box.querySelector('.sheet-more').open || full) {
+    const ul = $('sheet-history');
+    ul.innerHTML = '';
+    if (!a.history.length) ul.append(el('li', '', t('ui.nothingYet')));
+    for (const h of a.history.slice(0, 8)) ul.append(el('li', '', `${hhmm(h.ts)} — ${h.text}`));
   }
-  needs.forEach(([key], i) => {
-    const ok = 1 - Math.max(0, Math.min(1, a.mind[key] ?? 0));
-    const bar = dl.children[i * 2 + 1].firstChild;
-    bar.style.width = `${Math.round(ok * 100)}%`;
-    bar.style.setProperty('--c', ok > 0.6 ? '#3fd16b' : ok > 0.3 ? '#ffd166' : '#ef476f');
-  });
-  const ul = $('sheet-history');
-  ul.innerHTML = '';
-  if (!a.history.length) ul.append(el('li', '', t('ui.nothingYet')));
-  for (const h of a.history.slice(0, 4)) ul.append(el('li', '', `${hhmm(h.ts)} — ${h.text}`));
 }
 setInterval(() => { renderSheet(); if ($('work').open) renderTeam(); }, 500);
 $('sheet-close').onclick = () => select(null);
-$('poke').onclick = () => selected && send({ type: 'poke', role: selected });
+$('poke').onclick = () => {
+  if (!selected) return;
+  // a newcomer is only in this office's game: they answer here
+  if (isNewcomer()) { const g = who(); g.jumpUntil = performance.now() + 700; g.say(t('sim.poke', { from: t('events.you') }), 2500); return; }
+  send({ type: 'poke', role: selected });
+};
+// Enter sends; Shift+Enter, a new line. The box grows with what you write.
+function fitSay() {
+  const box = $('say-text');
+  box.style.height = 'auto';
+  box.style.height = `${Math.min(box.scrollHeight, 180)}px`;
+}
+$('say-text').oninput = fitSay;
+$('say-text').onkeydown = (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('sheet-say').requestSubmit(); }
+};
 
 // ---------------------------------------------------------------- tasks for the agents
 

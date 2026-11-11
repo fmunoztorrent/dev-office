@@ -1615,7 +1615,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     drawParticlesIso();
     drawLightsIso(now, light);
     for (const a of Object.values(agents)) { use(personM(a)); drawDream(a, now); }
-    if (agents[selected]) { use(personM(agents[selected])); drawPlumbob(agents[selected], now); }
+    if (person(selected)) { use(personM(person(selected))); drawPlumbob(person(selected), now); }
     for (const a of Object.values(agents)) { use(personM(a)); drawBubble(a, now); }
     for (const g of sim.ghosts) if (g.fade > 0.5) { use(personM(g)); drawBubble(g, now); }
     use(ID);
@@ -1697,7 +1697,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     drawParticles();
     drawLights(now, light);
     for (const a of Object.values(agents)) drawDream(a, now);
-    drawPlumbob(agents[selected], now);
+    drawPlumbob(person(selected), now);
     for (const a of Object.values(agents)) drawBubble(a, now);
     for (const g of sim.ghosts) if (g.fade > 0.5) drawBubble(g, now);
     use(ID);
@@ -1709,9 +1709,11 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
 
   // ---------------------------------------------------------------- interaction
 
+  /** A character of the team, or a newcomer ('new:<subId>') while they are in the office. */
+  const person = (id) => agents[id] || sim.ghosts.find((g) => g.id === id && !g.gone) || null;
   function agentAt(mx, my) {
     let best = null, bestD = iso ? 40 * SP : 40;
-    for (const a of Object.values(agents)) {
+    for (const a of [...Object.values(agents), ...sim.ghosts.filter((g) => g.fade > 0.3 && !g.gone)]) {
       if (a.hidden) continue;
       const [hx, hy] = apply(personM(a), a.x, feetY(a) - 33);
       const d = Math.hypot(mx - hx, my - hy);
@@ -1720,6 +1722,11 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     return best;
   }
   /** Is the pointer over the whiteboard? (in the isometric view, it is mapped to the whiteboard's plane) */
+  /** Is the pointer over the elevator's doors (at the end of the hallway, on the back wall)? */
+  const overLift = (x, y) => {
+    const [wx, wy] = iso ? unapply(cam.front(BACK), x, y) : [x + LEFT, y];
+    return wx >= ELEVATOR.x && wx <= ELEVATOR.x + ELEVATOR.w && wy >= 8 && wy <= 122;
+  };
   const overBoard = (x, y) => (iso ? onBoard(...unapply(BOARD_M(), x, y)) : onBoard(x + LEFT, y));
   /** The pointer, in the canvas's own pixels (the front view's world is shifted by LEFT). */
   const toWorld = (e) => {
@@ -1738,7 +1745,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     hover = agentAt(x, y);
     hoverBoard = !hover && overBoard(x, y);
     hoverRack = !hover && !hoverBoard && !!onRackClick && overRack(x, y);
-    canvas.style.cursor = hover || hoverBoard || hoverRack ? 'pointer' : 'default';
+    canvas.style.cursor = hover || hoverBoard || hoverRack || overLift(x, y) ? 'pointer' : 'default';
     if (was !== hover) onHover?.(hover);
   });
   canvas.addEventListener('mouseleave', () => { hover = null; hoverBoard = false; hoverRack = false; });
@@ -1752,6 +1759,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
       return;
     }
     const who = agentAt(x, y);
+    if (!who && overLift(x, y)) return onFloorClick?.('office', 'lift');
     if (!who && overBoard(x, y)) return onBoardClick?.();
     if (!who && onRackClick && overRack(x, y)) return onRackClick();
     selected = who;
@@ -1764,6 +1772,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     sim,
     setBoard: sim.setBoard,
     select(id) { selected = id; },
+    person,
     reset: sim.reset,
     /** 'flat' (the front view, the default) or 'iso' (the isometric top-down one): the office view. */
     get view() { return iso ? 'iso' : 'flat'; },

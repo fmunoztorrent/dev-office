@@ -260,7 +260,7 @@ export class Office extends EventEmitter {
       // A side question (btw) to the agent on duty: the question, and its answer (or why there was none).
       case 'btw': {
         const phase = ['ask', 'answer', 'failed'].includes(r.phase) ? r.phase : 'ask';
-        return { ...ev, role: role || 'tl', phase, askId: clip(r.askId, 40), agent: clip(r.agent, 30), from: clip(r.from || t('events.you'), 30), text: clip(r.text, phase === 'answer' ? 1500 : 300) };
+        return { ...ev, role: role || 'tl', phase, askId: clip(r.askId, 40), agent: clip(r.agent, 30), from: clip(r.from || t('events.you'), 30), text: clip(r.text, phase === 'answer' ? 1500 : 300), ...(r.subId ? { subId: clip(String(r.subId), 60) } : {}) };
       }
       case 'stage_end': return role ? { ...ev, role, ok: r.ok !== false, text: clip(r.text, 160) } : null;
       // The agent says which subagent is which role (when starting a pipeline): it is not drawn, it is learned.

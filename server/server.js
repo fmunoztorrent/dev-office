@@ -36,7 +36,7 @@ import { zoneInfo, systemZone } from '../public/clock.js';
 import { insideDir as inside } from './paths.js';
 import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.10.0';
+export const VERSION = '0.11.0';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
 const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
@@ -938,7 +938,8 @@ async function listenUnix(server, file) {
 /** Who a question is for: the character asked (`role`) and/or the session chosen (only when given). */
 function askTarget(m) {
   const role = normRole(m?.role);
-  return { ...(role ? { role } : {}), ...(typeof m?.session === 'string' && m.session ? { session: m.session } : {}) };
+  // subId: a newcomer was asked (a subagent): its newcomer answers in the game, not its role's character
+  return { ...(role ? { role } : {}), ...(typeof m?.session === 'string' && m.session ? { session: m.session } : {}), ...(typeof m?.subId === 'string' && m.subId ? { subId: m.subId.slice(0, 60) } : {}) };
 }
 
 function checkBrowserAccess(req, boundHost, port) {

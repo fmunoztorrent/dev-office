@@ -269,6 +269,7 @@ export default {
   directiveStatus: { running: 'en curso', done: 'cumplida', partial: 'cumplida a medias', failed: 'falló', cancelled: 'cancelada', interrupted: 'interrumpida' },
   knowledgeKind: { note: 'nota', decision: 'decisión', doc: 'documento', minute: 'acta', skill: 'skill', connector: 'conector' },
   floors: {
+    lift: { title: 'Ascensor', here: 'estás aquí' },
     name: { exec: '🏛 Dirección', archive: '📚 Archivo' }, key: 'Elige el piso: la dirección, una oficina o el archivo (o · RePág/AvPág)', going: 'Piso: {name}',
     elevator: 'el ascensor',
     // the game (floors.js): each floor's scene, its people and what they say
@@ -499,6 +500,8 @@ export default {
     },
   },
   ui: {
+    lately: 'Lo último que hizo', newcomerOf: 'Recién llegado · {role} · {project}', talkEmpty: 'Pregúntale a {name} algo sobre lo que está haciendo (con ?) y te contesta su agente. Lo demás te lo contesta con sus palabras.', talkEmptyTeam: 'Dile algo a todo el equipo.',
+    contextNone: 'El contexto del agente, como barra de vida: aparece cuando un agente lo informa (Claude Code, Pi y OpenCode lo hacen mientras trabajan).',
     context: 'Contexto · {agent}', contextAria: 'Contexto: queda {pct}% libre ({used} de {max} usados)',
     canvas: 'La oficina: clic en un personaje para ver su ficha, en la pizarra para un nuevo encargo',
     settings: 'Ajustes', settingsKey: 'Ajustes (c)', fullscreen: 'Pantalla completa', fullscreenKey: 'Pantalla completa (f)', view: 'Vista frontal o cenital', viewKey: 'Vista frontal o cenital (v)', servicesKey: 'Servicios en segundo plano: {n} corriendo (l)',

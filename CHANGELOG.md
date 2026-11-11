@@ -4,6 +4,18 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-11
+
+### Added
+
+- **Chat with the newcomers too:** clicking a subagent's newcomer opens a chat with them; a question goes to their own subagent's session, and they answer it in the office (not their role's regular character).
+- **The elevator takes you where you choose:** clicking it, on any floor and in both views, opens its panel with a button per floor (the executive floor, each office, the archive); before, it only went one floor up or down.
+
+### Changed
+
+- **A comfortable chat:** talking to a character opens a panel on the right as tall as the screen, with the conversation filling it and a box that grows as you write (Enter sends, Shift+Enter is a new line). The needs bars are gone from it; the latest actions are one click away.
+- **The context is a health bar** ♥, always there on an office's floor: bigger and segmented, it empties as the agent's context fills up; grey until an agent reports it.
+
 ## [0.10.0] - 2026-11-11
 
 ### Added
@@ -147,7 +159,8 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.8.2...v0.9.0
 [0.8.2]: https://github.com/fmunoztorrent/dev-office/compare/v0.8.1...v0.8.2

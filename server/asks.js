@@ -31,6 +31,7 @@ const RECENT_MS = 12 * 3600_000;
 let seq = 0;
 
 export class AskDesk extends EventEmitter {
+  #subs;
   /**
    * @param company  the offices (server/company.js)
    * @param store    the database (asks)
@@ -44,6 +45,7 @@ export class AskDesk extends EventEmitter {
     this.timeoutMs = timeoutMs;
     this.officeUrl = officeUrl;
     this.running = new Map(); // oficina → pregunta en curso
+    this.#subs = new Map();   // question → the newcomer (subagent) asked, who answers it in the game
   }
 
   /**
@@ -124,7 +126,7 @@ export class AskDesk extends EventEmitter {
   }
 
   #emit(officeId, phase, ask, role, text) {
-    this.company.ingest('generic', { kind: 'btw', session: 'office', office: officeId, phase, role, askId: ask.id, agent: ask.agent, from: ask.from, text });
+    this.company.ingest('generic', { kind: 'btw', session: 'office', office: officeId, phase, role, askId: ask.id, agent: ask.agent, from: ask.from, text, ...(this.#subs.get(ask.id) ? { subId: this.#subs.get(ask.id) } : {}) });
   }
 
   list(office, limit = 20) { return this.store.listAsks({ office, limit }); }
@@ -133,7 +135,7 @@ export class AskDesk extends EventEmitter {
    * Asks the question. Returns right away { ok, ask } (the answer arrives later, via 'change' and
    * the office's events); `done` is a promise that resolves with the answered question.
    */
-  ask({ text, office = MAIN_OFFICE, from, session, role } = {}) {
+  ask({ text, office = MAIN_OFFICE, from, session, role, subId } = {}) {
     const question = String(text ?? '').trim().replace(/^\/?btw\b[:,]?\s*/i, '').trim();
     if (!question) return { ok: false, error: t('btw.empty') };
     const officeId = this.company.has(office) ? office : MAIN_OFFICE;
@@ -153,6 +155,7 @@ export class AskDesk extends EventEmitter {
     };
     this.running.set(officeId, ask);
     this.store.saveAsk(ask);
+    if (subId) this.#subs.set(ask.id, String(subId));
     this.#emit(officeId, 'ask', ask, role, ask.question);
     this.emit('change', ask);
 
@@ -168,6 +171,7 @@ export class AskDesk extends EventEmitter {
         this.store.saveAsk(ask);
         if (status === 'answered') this.#emit(officeId, 'answer', ask, role, ask.answer);
         else this.#emit(officeId, 'failed', ask, role, ask.error);
+        this.#subs.delete(ask.id);
         this.emit('change', ask);
         resolve(ask);
       };

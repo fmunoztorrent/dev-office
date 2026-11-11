@@ -64,7 +64,7 @@ What you see in the office:
 - **They walk:** their feet step (a stride, the other foot in the air, the toes pointing the way) and their arms swing.
 - **The chit-chat follows the work:** while there is a task they talk about who is doing what, how the board is going, who got stuck or that they are waiting for your OK.
 - **The whiteboard, expanded:** with tickets on it, clicking it grows it over the office and shows the tasks as **post-its** in three columns (to do, doing, done). Without tickets, the click opens a new brief.
-- **The context bar:** small, next to the connection and the weather (top left), how much context the focused session's agent has left, or the latest one that reports it (Claude Code, Pi and OpenCode do). It turns orange, then red; hovering it shows the tokens.
+- **The context, as a health bar** ♥: next to the connection and the weather (top left), how much context the focused session's agent has left, or the latest one that reports it (Claude Code, Pi and OpenCode do). It empties as the context fills up, turning orange, then red; hovering it shows the agent and the tokens. Until an agent reports it, it is there, grey.
 - **An error:** the character shakes with red sparks and the Tech Lead comes over to help.
 - **A pending permission:** the manager goes to your desk (the PO's) to ask for your OK, raises his hand and an orange banner shows up. If the agent asks you something (`AskUserQuestion`), he brings you the question.
 - **`Stop`:** confetti, and the whole team celebrates at the meeting table.
@@ -202,7 +202,7 @@ The same office can be seen in the browser at `http://127.0.0.1:4317`, **full sc
 - **⚙** (top right, or `c`): settings. **⛶** (or `f`): the browser's full screen. **🏢** (top left, or `o`): which office to watch, if the company has more than one.
 - **📰** (bottom left, or `a`): the **activity**, a log you read over the office: what the agents do and, with *office life* checked (it is saved), the chit-chat, dreams, lunch and fires. Closed, a counter tells you what is new.
 - **📋** (bottom left, or `w`): the **work**: the session you follow, its task, its progress and its flow by role, the pipelines and tasks sent (with ✕ to cancel them), the demos, a new brief, and the team, each one with what they are doing (click one to open their sheet).
-- **Click a character:** their **sheet**, like in The Sims: the green diamond over the head, what they are doing, their needs as bars, their last actions, 👋 to greet them and **a chat with them**: you write and they answer (see [btw](#btw-a-side-question)). Your own sheet (the PO's) talks to the whole team.
+- **Click a character, or a newcomer (a subagent):** **a chat with them** opens on the right, as tall as the screen: who they are and what they are doing on top, the conversation filling the rest, and the box to write at the bottom (Enter sends, Shift+Enter is a new line). A question is answered by their agent — a newcomer's, by their own subagent's session — and they say it in the office too (see [btw](#btw-a-side-question)). 👋 greets them; *What they did lately* opens their latest actions. Your own (the PO's) talks to the whole team.
 - **Click the whiteboard** (or `t`): a new brief. `esc` closes the sheet or the activity.
 - **Background services:** when an agent leaves a service running (a dev server with Claude Code's `run_in_background`, `npm run dev > dev.log 2>&1 &`…), a unit of the server rack lights up in cyan and the **▶** chip shows up in the HUD. **Click the rack** or the chip (or `l`): the list of services and a terminal with what the chosen one prints, live. Inside herdr, **⧉ Open in herdr** follows its log in a pane of its own (`tail -F`). The office only watches them: the agent starts and stops them.
 
@@ -219,7 +219,7 @@ The interfaces show **one office at a time**: the one you pick in the selector a
 
 ## Two more floors: the executive one and the archive
 
-The company's building has, besides its offices, two floors every office shares. Go up or down with the selector at the **top left** (`o`, or `PgUp`/`PgDn`; clicking the elevator also works).
+The company's building has, besides its offices, two floors every office shares. Go up or down with the selector at the **top left** (`o`, or `PgUp`/`PgDn`), or **with the elevator**: clicking it, on any floor and in both views, opens its panel with a button per floor, and it takes you to the one you press.
 
 **🏛 The executive floor**, on top: the directors, presided over by you (with your PO look). There you give **directives**: one order for several offices, departments or projects at once ("every API exposes `/health`", "update the logger everywhere"). Click the **directives board** (or `t` there), write the order and pick the offices (all their projects) or the projects one by one. The office sends each project's agent a brief with its part (to an open session of it, or a new one, like any brief) and the floor follows how each part goes; you can stop it. The company's **screen** shows what each office is doing (who is working, who is waiting for you, how many briefs). When a directive ends, its **minutes** go to the archive. Agents send them too: `send_directive` (MCP).
 

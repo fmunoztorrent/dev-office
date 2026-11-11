@@ -175,3 +175,12 @@ test('una pregunta a un personaje la contesta el agente del proyecto donde traba
   await server.asks.ask({ text: '¿en qué estás?', session: 's-tienda' }).done;
   assert.equal(readLog(log).at(-1).cwd, tienda);
 }));
+
+test('una pregunta a un recién llegado (un subagente) vuelve marcada para él: la contesta él en el juego, no el personaje de su rol', () => withServer(async (server) => {
+  const dir = tmp('dto-btw-sub-');
+  server.company.ingest('claude-code', { session_id: 'sess-sub', cwd: dir, hook_event_name: 'UserPromptSubmit', prompt: 'Carrito' });
+  const res = await fetch(`${server.url}/v1/ask`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: '¿qué te pidieron?', role: 'backend', session: 'sess-sub', subId: 'sub-7', wait: true }) }).then((r) => r.json());
+  assert.equal(res.ok, true, res.error);
+  const btw = server.office.log.filter((e) => e.kind === 'btw');
+  assert.deepEqual(btw.map((e) => [e.phase, e.role, e.subId]), [['ask', 'backend', 'sub-7'], ['answer', 'backend', 'sub-7']]);
+}));
