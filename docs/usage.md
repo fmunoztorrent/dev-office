@@ -56,9 +56,9 @@ To switch views: the ◇ button (top right), the `v` key or **⚙ › General �
 In both views (and in the terminal game):
 
 - **The bubbles say what each one is doing in words** ("Running the tests", "Reading cart.js"), never the command line. The `follow` viewer of a subagent shows the command too, dimmed, under the words.
-- **Each subagent is a newcomer:** a translucent extra of its role (another name, the same shirt) who comes in, sits at one of the two **hot desks** (bottom left; more of them, at the meeting table), does the subagent's work and leaves when it ends. Their desk's plate says who they are and which project they came for.
+- **Each subagent is a newcomer:** a translucent extra of its role (another name, the same shirt) who arrives by the elevator at the end of the hallway, gets a desk of their own in the front row (it appears with them and goes with them; past seven, at the meeting table), does the subagent's work and leaves when it ends. Their desk's plate says who they are and which project they came for.
 - **The whiteboard with tickets** expands when clicked: the tasks as post-its in three columns. In the terminal, `t` or Enter there opens a new brief.
-- **The context bar** (browser, bottom center): how much context the focused session's agent has left, like a fighting game's health bar.
+- **The context bar** (browser, small, next to the weather): how much context the focused session's agent has left, or the latest one that reports it.
 
 ## Asking the team for something
 
@@ -118,7 +118,7 @@ Your answer is pressed in the agent's pane, as if you were there: the arrows to 
 
 ## btw: a side question
 
-`btw who is on the tests?` (in the game terminal's command line, `b` in the terminal game, or `dev-team-office btw "…"`) asks the agent on duty without interrupting its work.
+`btw who is on the tests?` (in the game terminal's command line, `b` in the terminal game, or `dev-team-office btw "…"`) asks the agent on duty without interrupting its work. A question written to a selected character (ending in `?`) goes to the agent of the project and task that character is working on, and they answer it.
 
 ## The full CLI
 

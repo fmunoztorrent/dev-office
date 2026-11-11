@@ -3,7 +3,7 @@
 import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createSim, assignees, PRODUCT, TECH, TEAM, UNICORN, SKULL, PIZZA, rainbowPixels, DINING, DINING_SEATS, RACK, SOFA, TV, HOT_DESKS } from '../public/sim.js';
+import { createSim, assignees, PRODUCT, TECH, TEAM, UNICORN, SKULL, PIZZA, rainbowPixels, DINING, DINING_SEATS, RACK, SOFA, TV, HOT_DESKS, BATHROOM, ELEVATOR, OFFICE_DOOR } from '../public/sim.js';
 import { Screen } from '../tui/screen.js';
 import { computeLayout, drawFrame } from '../tui/view.js';
 
@@ -189,20 +189,27 @@ test('a las 13:00 el equipo se va a almorzar al comedor (salvo quien está traba
   assert.equal(sim.journal.filter((j) => j.kind === 'lunch').length, 1, 'se almuerza una vez al día');
 });
 
-test('el baño: de a uno, con fila si está ocupado, y todos vuelven', () => {
+test('el baño es una sala: entran caminando, dos cubículos, fila en el pasillo, se lavan las manos y todos vuelven', () => {
   const { sim, said, run } = office(8);
   for (const id of ['po', 'qa', 'manager']) sim.agents[id].mind.bladder = 1.7; // all three need it at the same time
-  let maxInside = 0, maxLine = 0;
+  let maxInside = 0, maxLine = 0, walkedIn = false, atSink = false;
   run(90, () => {
     maxInside = Math.max(maxInside, Object.values(sim.agents).filter((a) => a.hidden).length);
     maxLine = Math.max(maxLine, sim.bath.line.length);
+    for (const a of Object.values(sim.agents)) {
+      const inRoom = a.x < BATHROOM.x1 && a.y < BATHROOM.front;
+      if (inRoom && !a.hidden && a.walking) walkedIn = true; // seen inside, not teleported
+      if (!a.hidden && Math.hypot(a.x - BATHROOM.sink.x, a.y - BATHROOM.sink.y) < 20) atSink = true;
+    }
   });
-  assert.equal(maxInside, 1, 'adentro hay uno solo');
-  assert.ok(maxLine >= 2, 'los demás hacen fila');
+  assert.equal(maxInside, 2, 'uno por cubículo');
+  assert.ok(maxLine >= 1, 'el tercero hace fila en el pasillo');
+  assert.ok(walkedIn, 'se los ve caminando adentro del baño');
+  assert.ok(atSink, 'se lavan las manos en el lavamanos');
   assert.ok(sim.journal.filter((j) => j.kind === 'bathroom').length >= 3);
   assert.ok(said.some((s) => /Apúrate|Queda mucho|😬/.test(s.text)) || said.some((s) => /aguanto/.test(s.text)));
   run(60);
-  assert.ok(Object.values(sim.agents).every((a) => !a.hidden) && !sim.bath.occupant);
+  assert.ok(Object.values(sim.agents).every((a) => !a.hidden) && !sim.bath.occupant && sim.bath.stalls.every((x) => !x));
   // and they also go on their own, every so often
   const { sim: s2, run: run2 } = office(12);
   run2(30 * 60);
@@ -378,12 +385,12 @@ test('reset deja a todos en su puesto, sin conversaciones ni sueños', () => {
 test('la terminal dibuja el unicornio y el arcoíris', () => {
   const { sim, run, now } = office(2);
   run(1);
-  const L = computeLayout(220, 60); // large: the dream in pixel art (when small it goes as an emoji)
+  const L = computeLayout(280, 70); // large: the dream in pixel art (when small it goes as an emoji)
   const model = { selected: null, log: [], sessions: new Map(), connection: { ok: true, label: '' }, endpoints: [], tasks: { tasks: [], agents: [] }, pipelines: [], targets: [] };
   const render = (kind) => {
     sim.agents.designer.dream = { kind, start: now() - 1000, until: now() + 10_000 };
     const scr = new Screen({ colorMode: 'truecolor' });
-    scr.resize(220, 60);
+    scr.resize(280, 70);
     drawFrame(scr, L, sim, model, now());
     return scr.flush();
   };
@@ -492,10 +499,11 @@ test('cada subagente es alguien nuevo que llega, trabaja en un puesto temporal y
   run(2);
   for (const [subId, role] of [['a', 'backend'], ['b', 'qa'], ['c', 'frontend']]) sim.handle({ kind: 'subagent_start', role, subId, text: `parte ${subId}` });
   const [a, b, c] = sim.ghosts;
-  assert.ok(a.x < 0 && !a.seated && a.fade === 0, 'entra por la escalera, todavía invisible');
-  run(20);
-  assert.deepEqual([a.cfg.seat, b.cfg.seat], HOT_DESKS, 'los dos puestos temporales');
-  assert.ok(c.desk < 0 && c.seated, 'el tercero se sienta en la mesa de reuniones');
+  assert.deepEqual([a.x, a.y, a.fade, a.seated], [ELEVATOR.spot.x, ELEVATOR.spot.y, 0, false], 'sale del ascensor, todavía invisible');
+  assert.ok(sim.elevator.doorAt >= 0, 'las puertas del ascensor se abren');
+  run(25);
+  assert.deepEqual([a.cfg.seat, b.cfg.seat, c.cfg.seat], HOT_DESKS.slice(0, 3), 'un escritorio para cada uno');
+  assert.ok(c.seated && c.desk === 2, 'nadie queda en la mesa de reuniones');
   assert.ok(a.fade === 1 && a.seated && a.cfg.shirt === TEAM.backend.shirt && a.cfg.name !== TEAM.backend.name, 'otra persona, con la camisa de su rol');
   assert.ok(said.some((x) => x.who === 'manager' && x.text.startsWith(`${a.cfg.name}, `)), 'Marco le lleva la tarjeta');
   sim.handle({ kind: 'tool_start', role: 'backend', subId: 'a', tool: 'Bash', text: 'Corriendo los tests' });
@@ -503,11 +511,11 @@ test('cada subagente es alguien nuevo que llega, trabaja en un puesto temporal y
   assert.notEqual(sim.agents.backend.state, 'working', 'Diego no: el trabajo del subagente es del nuevo');
   sim.handle({ kind: 'subagent_end', role: 'backend', subId: 'a', text: 'listo' });
   assert.ok(a.leaving && /me voy/.test(a.bubble?.text), 'se despide');
-  run(20);
-  assert.ok(!sim.ghosts.includes(a), 'se fue');
+  run(30);
+  assert.ok(!sim.ghosts.includes(a), 'se fue (por el ascensor, y su escritorio con él)');
   assert.equal(sim.ghosts.length, 2);
   sim.handle({ kind: 'done', role: 'manager', text: 'Terminado' });
-  run(25);
+  run(35);
   assert.equal(sim.ghosts.length, 0, 'al terminar la tarea se van todos');
   assert.ok(sim.journal.some((j) => j.kind === 'newcomer') && sim.journal.some((j) => j.kind === 'farewell'));
 });
@@ -520,4 +528,33 @@ test('al terminar el turno del agente se van sus nuevos, aunque el fin de un sub
   sim.handle({ kind: 'turn_end', role: 'manager', session: 'pi-1' });
   run(20);
   assert.deepEqual(sim.ghosts.map((g) => g.subId), ['y'], 'sólo los de esa sesión');
+});
+
+test('nadie atraviesa paredes: al pasillo y al baño se entra sólo por sus puertas, y cada uno vuelve a su puesto', () => {
+  const { sim, run } = office(21);
+  for (const id of ['po', 'qa', 'manager', 'designer']) sim.agents[id].mind.bladder = 1.7;
+  for (const [subId, role] of [['n1', 'backend'], ['n2', 'qa']]) sim.handle({ kind: 'subagent_start', role, subId, text: subId });
+  const last = new Map();
+  const bad = [];
+  run(120, () => {
+    for (const a of [...Object.values(sim.agents), ...sim.ghosts]) {
+      const p = last.get(a) || { x: a.x, y: a.y };
+      // crossing the office's left wall (x = -8..0) or the bathroom's (x = -128..-120)
+      if ((p.x < -4) !== (a.x < -4) && !(a.y >= OFFICE_DOOR.y0 && a.y <= OFFICE_DOOR.y1)) bad.push(`${a.id} por la pared de la oficina en y=${Math.round(a.y)}`);
+      if (a.y < BATHROOM.front && (p.x < -124) !== (a.x < -124) && !(a.y >= BATHROOM.door.y0 && a.y <= BATHROOM.door.y1)) bad.push(`${a.id} por la pared del baño en y=${Math.round(a.y)}`);
+      last.set(a, { x: a.x, y: a.y });
+    }
+  });
+  assert.deepEqual(bad, []);
+  assert.ok(sim.journal.filter((j) => j.kind === 'bathroom').length >= 4);
+  run(60);
+  for (const a of Object.values(sim.agents)) assert.ok(a.seated || a.queue.length, `${a.id} volvió`);
+});
+
+test('las de producto a veces van juntas al baño a cuchichear frente al espejo', () => {
+  const { sim, said, run } = office(5);
+  run(40 * 60);
+  const whispers = sim.journal.filter((j) => j.kind === 'bathgossip');
+  assert.ok(whispers.length >= 1, 'cuchichean en el baño');
+  assert.ok(said.some((s) => PRODUCT.includes(s.who) && s.text.startsWith('🤫')), 'en voz baja');
 });

@@ -63,7 +63,7 @@ test('la vida de la oficina habla el idioma del juego (con los nombres actuales 
   assert.ok(said.has('Diego, pane w1:p2 is yours: API'), [...said].join(' | '));
   // a subagent is a newcomer: the card goes to them, by their name
   sim.handle({ kind: 'subagent_start', role: 'backend', subId: 's1', text: 'API' });
-  run(12);
+  run(20); // the newcomer's desk is in the front row: a longer walk for Marco
   assert.ok(said.has(`${sim.ghosts[0].cfg.name}, this one is yours: API`), [...said].join(' | '));
   applyAppearance({ backend: { name: 'Bruno' } });
   try {

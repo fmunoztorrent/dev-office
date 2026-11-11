@@ -4,6 +4,20 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-10
+
+### Added
+
+- **The office takes the whole floor:** it is bigger, its door (with an EXIT sign) opens to a **hallway** with the **elevator** at its end, where the newcomers (the subagents) arrive and leave. In both views and in the terminal game.
+- **Desks for the newcomers:** each subagent that arrives gets a desk of its own in a new front row, with its name and project, and the desk goes with it; there are no empty "free desk" places anymore, and up to seven newcomers get a desk.
+- **The bathroom is a room:** two stalls and a sink with its mirror, off the hallway. Whoever goes walks in (nobody teleports), takes a free stall, washes their hands and goes back; with both stalls taken, the queue waits in the hallway. At the mirror there is whispering 🤫, and the product team sometimes goes together just for that.
+- **Ask a character directly:** a question written to a selected character (ending in `?`, or starting with `¿`) goes to the agent of the project and task that character is working on, which answers as them; with a session chosen, that one answers. Without forking (Pi, Codex), the prompt carries that session's project, task, plan, subagents and latest steps. `POST /v1/ask` and the `ask` message take `role` and `session`.
+
+### Changed
+
+- **The context bar is small:** a mini bar next to the connection and the weather (top left), for the focused session or the latest one that reports its context; hovering it shows the tokens.
+- In the front view, the top-left HUD sits over the office's glass, so the hallway and the bathroom stay in sight.
+
 ## [0.8.2] - 2026-11-10
 
 ### Fixed
@@ -107,7 +121,8 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.8.2...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.8.2...v0.9.0
 [0.8.2]: https://github.com/fmunoztorrent/dev-office/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/fmunoztorrent/dev-office/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.7.0...v0.8.0

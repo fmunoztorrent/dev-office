@@ -57,9 +57,9 @@ Para cambiar de vista: el botón ◇ (arriba a la derecha), la tecla `v` o **⚙
 En las dos vistas (y en el juego de la terminal):
 
 - **Las burbujas dicen qué hace cada uno en palabras** («Corriendo los tests», «Leyendo cart.js»), nunca el comando. El visor `follow` de un subagente muestra además el comando, atenuado, debajo de las palabras.
-- **Cada subagente es alguien nuevo:** un extra translúcido de su rol (otro nombre, la misma camisa) que entra, se sienta en uno de los dos **puestos temporales** (abajo a la izquierda; si son más, en la mesa de reuniones), hace el trabajo del subagente y se va al terminar. La placa de su escritorio dice quién es y para qué proyecto vino.
+- **Cada subagente es alguien nuevo:** un extra translúcido de su rol (otro nombre, la misma camisa) que llega en el ascensor, al final del pasillo, recibe un escritorio propio en la fila de adelante (aparece con él y se va con él; pasados siete, en la mesa de reuniones), hace el trabajo del subagente y se va al terminar. La placa de su escritorio dice quién es y para qué proyecto vino.
 - **La pizarra con tickets** se expande al hacerle clic: las tareas como post-its en tres columnas. En la terminal, `t` o Enter ahí abre un encargo nuevo.
-- **La barra de contexto** (navegador, abajo al centro): cuánto contexto le queda al agente de la sesión enfocada, como la barra de vida de un juego de pelea.
+- **La barra de contexto** (navegador, pequeña, junto al clima): cuánto contexto le queda al agente de la sesión enfocada, o al último que lo informa.
 
 ## Pedirle algo al equipo
 
@@ -124,7 +124,7 @@ Tu respuesta se aprieta en el pane del agente, como si estuvieras ahí: las flec
 
 ## btw: una pregunta al margen
 
-`btw ¿quién está con los tests?` (en la línea de comandos de la terminal del juego, `b` en el juego de la terminal, o `dev-team-office btw "…"`) le pregunta al agente de turno sin interrumpir su trabajo.
+`btw ¿quién está con los tests?` (en la línea de comandos de la terminal del juego, `b` en el juego de la terminal, o `dev-team-office btw "…"`) le pregunta al agente de turno sin interrumpir su trabajo. Una pregunta escrita a un personaje elegido (que termine en `?` o empiece con `¿`) va al agente del proyecto y la tarea en que trabaja ese personaje, y te la contesta él.
 
 ## La CLI, completa
 

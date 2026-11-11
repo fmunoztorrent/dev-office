@@ -139,3 +139,39 @@ test('desde el juego: el mensaje "ask" por WebSocket, y el visor de esa oficina 
     assert.ok(msgs.some((m) => m.type === 'event' && m.event.kind === 'btw' && m.event.phase === 'answer'));
   } finally { ws.close(); }
 }));
+
+test('una pregunta a un personaje la contesta el agente del proyecto donde trabaja, con su tarea, su plan y lo último que hizo', () => withServer(async (server, log) => {
+  const tienda = tmp('dto-btw-tienda-'), pagos = tmp('dto-btw-pagos-');
+  for (const dir of [tienda, pagos]) assert.equal(server.store.createAgent({ path: dir, harness: 'pi', bin: FAKE }).ok, true);
+  const pi = (session, cwd, e) => server.company.ingest('pi', { session, cwd, ...e });
+  pi('s-tienda', tienda, { kind: 'task', text: 'Carrito con descuentos' });
+  pi('s-tienda', tienda, { kind: 'todos', todos: [{ content: 'Calcular el descuento', status: 'in_progress' }, { content: 'Tests del carrito', status: 'pending' }] });
+  pi('s-tienda', tienda, { kind: 'phase', role: 'backend', phase: 'implementa', text: 'Editando src/cart.js' });
+  pi('s-pagos', pagos, { kind: 'task', text: 'Landing de pagos' });
+  pi('s-pagos', pagos, { kind: 'phase', role: 'frontend', phase: 'implementa', text: 'Editando la landing' });
+
+  // Diego (backend) works in the shop, even though the latest session is the payments one
+  let done = await server.asks.ask({ text: '¿cómo vas?', role: 'backend' }).done;
+  assert.equal(done.status, 'answered');
+  assert.equal(done.role, 'backend', 'contesta el personaje al que le preguntaste');
+  let call = readLog(log).at(-1);
+  assert.equal(call.cwd, tienda);
+  const prompt = call.args.at(-1);
+  assert.match(prompt, new RegExp(`Proyecto: ${path.basename(tienda)}`));
+  assert.match(prompt, /La pregunta es para Diego \(Backend\)/);
+  assert.match(prompt, /Carrito con descuentos/);
+  assert.match(prompt, /\[~\] Calcular el descuento[\s\S]*\[ \] Tests del carrito/);
+  assert.match(prompt, /Editando src\/cart\.js/);
+  assert.doesNotMatch(prompt, /landing/i, 'nada del otro proyecto');
+
+  // Lucía (frontend) answers from the payments project
+  done = await server.asks.ask({ text: '¿qué te falta?', role: 'frontend' }).done;
+  call = readLog(log).at(-1);
+  assert.equal(call.cwd, pagos);
+  assert.match(call.args.at(-1), /Landing de pagos[\s\S]*Editando la landing/);
+  assert.equal(done.role, 'frontend');
+
+  // the session chosen in the game wins over the agent on duty
+  await server.asks.ask({ text: '¿en qué estás?', session: 's-tienda' }).done;
+  assert.equal(readLog(log).at(-1).cwd, tienda);
+}));

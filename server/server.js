@@ -23,7 +23,7 @@ import { AskDesk } from './asks.js';
 import { openStore, dbFile, MAIN_OFFICE } from './store.js';
 import { Weather, findPlaces } from './weather.js';
 import { Herdr, paneRole, quote } from './herdr.js';
-import { clip } from './roles.js';
+import { clip, normRole } from './roles.js';
 import { SubPanes } from './subpanes.js';
 import { ServiceHub } from './services.js';
 import { PromptHub } from './prompts.js';
@@ -34,7 +34,7 @@ import { zoneInfo, systemZone } from '../public/clock.js';
 import { insideDir as inside } from './paths.js';
 import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.8.2';
+export const VERSION = '0.9.0';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
 const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
@@ -366,7 +366,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         return pipelines.update(msg.id, msg);
       // btw: a side question to the office's agent on duty (it answers without being interrupted)
       case 'ask': {
-        const out = asks.ask({ text: msg.text, office: here, from: msg.from });
+        const out = asks.ask({ text: msg.text, office: here, from: msg.from, ...askTarget(msg) });
         return out.ok ? { ok: true, ask: publicAsk(out.ask) } : out;
       }
       case 'chat':
@@ -619,7 +619,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       // btw over HTTP: { text, office?, from?, wait? } (with wait, it answers when the reply arrives)
       if (req.method === 'POST' && p === '/v1/ask') {
         const b = await body(req);
-        const out = asks.ask({ text: b.text, office: valid(b.office), from: b.from });
+        const out = asks.ask({ text: b.text, office: valid(b.office), from: b.from, ...askTarget(b) });
         if (!out.ok) return json(res, 400, out);
         if (!b.wait) return json(res, 202, { ok: true, ask: publicAsk(out.ask) });
         const done = await out.done;
@@ -816,6 +816,12 @@ async function listenUnix(server, file) {
 // A website open in your browser must not be able to read or inject events into the office:
 // foreign Hosts (DNS rebinding) and Origins from other sites are rejected. Non-browser clients
 // (curl, hooks, plugins) send no Origin and pass.
+/** Who a question is for: the character asked (`role`) and/or the session chosen (only when given). */
+function askTarget(m) {
+  const role = normRole(m?.role);
+  return { ...(role ? { role } : {}), ...(typeof m?.session === 'string' && m.session ? { session: m.session } : {}) };
+}
+
 function checkBrowserAccess(req, boundHost, port) {
   const hostHeader = req.headers.host || '';
   const hostname = hostHeader.replace(/:\d+$/, '');

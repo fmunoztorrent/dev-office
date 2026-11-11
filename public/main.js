@@ -1,5 +1,5 @@
 import { createGame, TEAM, phaseInfo } from './game.js';
-import { applyAppearance, needsOf, DREAMS, BOARD, W, H } from './sim.js';
+import { applyAppearance, needsOf, DREAMS } from './sim.js';
 import { AGENT_NAME, TASK_STATUS } from './targets.js';
 import { briefOptions, briefProblem, briefMessage, defaultTarget, targetLabel } from './brief.js';
 import { createSettings } from './settings-ui.js';
@@ -34,11 +34,10 @@ const game = createGame($('office'), { onSelect: (id) => ((id === 'po' || id ===
 const boardView = createBoardView({
   getBoard: () => game.sim.board,
   onBrief: () => openBrief(),
-  // where the small whiteboard is on the page (in the top-down view, roughly: the top center)
+  // where the small whiteboard is on the page (in either view)
   boardRect: () => {
-    const r = $('office').getBoundingClientRect();
-    if (game.view === 'iso') return { left: r.left + r.width * 0.42, top: r.top + r.height * 0.1, width: r.width * 0.16, height: r.height * 0.12 };
-    return { left: r.left + (BOARD.x / W) * r.width, top: r.top + (BOARD.y / H) * r.height, width: (BOARD.w / W) * r.width, height: (BOARD.h / H) * r.height };
+    const r = $('office').getBoundingClientRect(), b = game.boardBox();
+    return { left: r.left + b.x * r.width, top: r.top + b.y * r.height, width: b.w * r.width, height: b.h * r.height };
   },
 });
 const zone = () => office?.timezone || null;
@@ -171,6 +170,7 @@ function onPrefs(p) {
   // the office view: front (the usual one) or isometric top-down, as saved in the settings
   game.setView(p.view?.mode === 'iso' ? 'iso' : 'flat');
   $('view-mode').setAttribute('aria-pressed', String(game.view === 'iso'));
+  $('screen').dataset.view = game.view;
   setLanguage(p.lang);
   settings?.refresh?.();
 }
@@ -304,9 +304,11 @@ function pushLine(li, { quiet = false } = {}) {
 // ---------------------------------------------------------------- the context bar
 
 const kTokens = (n) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}M` : `${Math.round(n / 1000)}k`);
-/** The focused session's context, as a health bar: what is left. Hidden if its agent does not say. */
+/** The context left, as a small health bar next to the weather: the focused session's or, without a
+ * chosen one, the latest session whose agent reports it. Hidden if none does. */
 function renderContext() {
-  const s = currentSession();
+  const cur = currentSession();
+  const s = cur?.context?.max > 0 || focus ? cur : [...sessions.values()].filter((x) => x.context?.max > 0).sort((a, b) => b.lastAt - a.lastAt)[0];
   const c = s?.context;
   const bar = $('ctx-bar');
   bar.hidden = !c || !(c.max > 0);
@@ -315,18 +317,15 @@ function renderContext() {
   const pct = Math.round(left * 100);
   $('ctx-fill').style.width = `${left * 100}%`;
   $('ctx-trail').style.width = `${left * 100}%`;
-  $('ctx-who').textContent = t('ui.context', { agent: AGENT_NAME[s.source] || s.source || '' });
-  $('ctx-tokens').textContent = `${kTokens(c.used)} / ${kTokens(c.max)}`;
-  $('ctx-pct').textContent = t('ui.contextLeft', { pct });
+  $('ctx-who').textContent = AGENT_NAME[s.source] || s.source || '';
+  $('ctx-pct').textContent = `${pct}%`;
+  const label = t('ui.contextAria', { pct, used: kTokens(c.used), max: kTokens(c.max) });
+  bar.title = `${t('ui.context', { agent: AGENT_NAME[s.source] || s.source || '' })} · ${projectOf(s.id) || ''}`.replace(/ · $/, '') + `\n${label}`;
   $('ctx-meter').setAttribute('aria-valuenow', String(pct));
-  $('ctx-meter').setAttribute('aria-label', t('ui.contextAria', { pct, used: kTokens(c.used), max: kTokens(c.max) }));
+  $('ctx-meter').setAttribute('aria-label', label);
   bar.classList.toggle('mid', pct <= 50 && pct > 25);
   bar.classList.toggle('low', pct <= 25);
-  $('ctx-ko').hidden = pct > 10;
 }
-
-// the bar goes up while the game shows a notice along the bottom (a permission, a celebration…)
-setInterval(() => $('ctx-bar').classList.toggle('lifted', !!game.sim.banner), 250);
 
 // An office can hold several projects (a few backends and their BFFs…): each session's project is
 // its folder, and when more than one is active the log says which one each line is about.
@@ -380,11 +379,13 @@ function sysLine(text, cls = 'sys') {
 // btw: a side question to the agent on duty (about the domain, the team or the office). It answers
 // in a forked session, without interrupting it; the answer shows in a card at the top and in the log.
 let btwTimer = null;
-function askBtw(question) {
+const isQuestion = (text) => /\?\s*$/.test(text) || /^\s*¿/.test(text);
+function askBtw(question, role = selected) {
   const q = String(question || '').trim();
   if (!q) return sysLine(t('ui.btwUsage'));
   if (ws?.readyState !== 1) return sysLine(t('conn.offline'));
-  send({ type: 'ask', text: q });
+  // the character you asked answers, from the project and the task it is working on (or the chosen session)
+  send({ type: 'ask', text: q, role: role || undefined, session: focus || undefined });
 }
 function onAsk(a) {
   if (!a || (office && a.office !== office.id)) return;
@@ -438,6 +439,8 @@ $('chat').onsubmit = (e) => {
     const cmd = commandFor(name.toLowerCase());
     return cmd ? cmd(rest.join(' ')) : sysLine(t('ui.unknownCommand'));
   }
+  // a question to a character goes to the agent: it answers about that character's project and task
+  if (selected && selected !== 'po' && isQuestion(text)) return askBtw(text, selected);
   send({ type: 'chat', text, role: selected || undefined });
 };
 $('open-term').onclick = () => toggleTerm();
@@ -772,6 +775,7 @@ $('fullscreen').onclick = toggleFullscreen;
 function toggleView() {
   game.setView(game.view === 'iso' ? 'flat' : 'iso');
   $('view-mode').setAttribute('aria-pressed', String(game.view === 'iso'));
+  $('screen').dataset.view = game.view;
   send({ type: 'prefs', prefs: { view: { mode: game.view } } });
 }
 $('view-mode').onclick = toggleView;

@@ -45,7 +45,7 @@ An event can say which **office** it goes to (`office`, or `devteam_office` in a
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| `POST` | `/v1/ask` | `{ text, office?, from?, wait? }` | `202 { ok, ask }` right away; with `wait: true`, `200 { ok, ask }` when the answer arrives |
+| `POST` | `/v1/ask` | `{ text, office?, from?, role?, session?, wait? }` (`role`: the character asked, answered from the project and task it is working on; `session`: the one that answers) | `202 { ok, ask }` right away; with `wait: true`, `200 { ok, ask }` when the answer arrives |
 | `GET` | `/v1/asks?office=<id>&limit=20` | | `{ ok, asks }`: the latest ones, with `{ id, office, agent, question, answer, status, error, from, forked, role, createdAt }` |
 
 The question is answered by the office's agent on duty (the most recent session, forked and read-only; or the office's registered agent). `status`: `asking` → `answered` | `failed`. In the office they arrive as `btw` events with `phase` `ask`, `answer` or `failed`, and to that office's viewers as `{ type: "ask", ask }`.
@@ -315,7 +315,7 @@ The client can send:
 { "type": "command", "action": "demo" | "demo-pi" | "stop-demo" | "reset" }
 { "type": "view", "office": "payments" }           // watch another office: its snapshot arrives (and it is saved)
 { "type": "prefs", "prefs": { "lang": "es" } }     // change general settings
-{ "type": "ask", "text": "who is on the tests?", "id": 2 }  // btw: the ack carries { ask } and the answer arrives as { type: "ask", ask }
+{ "type": "ask", "text": "who is on the tests?", "role": "qa", "id": 2 }  // btw (role, session: optional, as in POST /v1/ask): the ack carries { ask } and the answer arrives as { type: "ask", ask }
 { "type": "client", "app": "web" }                  // the web page says it reloads itself when `hello` brings another version
 ```
 

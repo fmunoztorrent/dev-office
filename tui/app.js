@@ -206,8 +206,11 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
           // btw <question>: a side question to the agent on duty (it answers without being interrupted)
           if (/^\/?btw\b/i.test(text)) {
             const q = text.replace(/^\/?btw\b[:,]?\s*/i, '').trim();
-            if (q) send({ type: 'ask', text: q, from: 'Terminal' }, t('tui.flash.asked'));
+            if (q) send({ type: 'ask', text: q, role: model.selected || undefined, from: 'Terminal' }, t('tui.flash.asked'));
             else flash(t('ui.btwUsage'));
+          } else if (text && model.selected && model.selected !== 'po' && (/\?\s*$/.test(text) || /^\s*¿/.test(text))) {
+            // a question to a character: the agent answers about that character's project and task
+            send({ type: 'ask', text, role: model.selected, from: 'Terminal' }, t('tui.flash.asked'));
           } else if (text) send({ type: 'chat', text, role: model.selected || undefined, from: 'Terminal' }, t('tui.flash.sent'));
         } else if (k === '\x7f' || k === '\b') model.chat = [...model.chat].slice(0, -1).join('');
         else if (k.length <= 2 && k >= ' ' && [...model.chat].length < 200) model.chat += k;

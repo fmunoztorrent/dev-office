@@ -1,7 +1,7 @@
 // Draws the simulation (public/sim.js) on the terminal framebuffer.
 // The 960×600 world is scaled to the available pixels; the text goes in cells on top.
 
-import { W, H, TEAM, SPOT, BOARD, PLANTS, STATUS_ICON, PHASE_COLOR, phaseInfo, DREAMS, DREAM_PALETTE, RAINBOW_COLORS, rainbowPixels, CAFE, DINING, DINING_SEATS, PARTITION, BATH, RACK, EXTINGUISHER, daylight, GLASS, EASEL, CLOCK, TV, SOFA, ALARM, SIGN, tvChannel, HOT_DESKS } from '../public/sim.js';
+import { W, H, LEFT, WORLD_W, BATHROOM, HALL, OFFICE_DOOR, ELEVATOR, TEAM, SPOT, BOARD, PLANTS, STATUS_ICON, PHASE_COLOR, phaseInfo, DREAMS, DREAM_PALETTE, RAINBOW_COLORS, rainbowPixels, CAFE, DINING, DINING_SEATS, PARTITION, RACK, EXTINGUISHER, daylight, GLASS, EASEL, CLOCK, TV, SOFA, ALARM, SIGN, tvChannel, HOT_DESKS } from '../public/sim.js';
 import { outdoor, lightning, weatherIcon } from '../public/sky.js';
 import { hex, mix, fit, wrap, strWidth } from './screen.js';
 import { AGENT_NAME, TASK_STATUS } from '../public/targets.js';
@@ -32,8 +32,8 @@ export function computeLayout(cols, rows, { panel = true } = {}) {
   const panelW = panel && cols >= 110 ? Math.min(54, Math.max(34, Math.floor(cols * 0.28))) : 0;
   const sceneCols = cols - panelW - (panelW ? 1 : 0);
   const sceneRows = rows - 2; // cabecera + pie
-  const s = Math.min(sceneCols / W, (sceneRows * 2) / H);
-  const pw = Math.floor(W * s), ph = Math.floor(H * s);
+  const s = Math.min(sceneCols / WORLD_W, (sceneRows * 2) / H);
+  const pw = Math.floor(WORLD_W * s), ph = Math.floor(H * s);
   const ox = Math.max(0, Math.floor((sceneCols - pw) / 2));
   const oyRow = 1 + Math.max(0, Math.floor((sceneRows - Math.ceil(ph / 2)) / 2));
   const oy = oyRow * 2;
@@ -64,7 +64,9 @@ export function drawFrame(scr, L, sim, model, now) {
     items.push({ y: s.y + 1, fn: () => drawDesk(g, a, now) });
     items.push({ y: a.seated ? s.y : a.y, fn: () => drawPerson(g, a, sim, model, now) });
   }
-  HOT_DESKS.forEach((s, i) => items.push({ y: s.y + 1, fn: () => drawHotDesk(g, sim, i, now) }));
+  // the newcomers' desks: there while their newcomer is
+  for (const a of sim.ghosts) if (a.desk >= 0 && a.fade > 0.2) items.push({ y: HOT_DESKS[a.desk].y + 1, fn: () => drawHotDesk(g, sim, a.desk, now) });
+  items.push({ y: BATHROOM.front - 1, fn: () => drawBathFront(g) });
   for (const a of sim.ghosts) if (a.fade > 0.2) items.push({ y: a.seated ? a.cfg.seat.y : a.y, fn: () => drawPerson(g, ghostly(a), sim, model, now) });
   items.push({ y: CAFE.bistro.y, fn: () => drawBistro(g) });
   items.push({ y: DINING.top + 13, fn: () => drawDiningWall(g) });
@@ -98,7 +100,7 @@ export function drawFrame(scr, L, sim, model, now) {
 
 function geometry(scr, L) {
   const { s, ox, oy } = L;
-  const X = (wx) => ox + Math.round(wx * s);
+  const X = (wx) => ox + Math.round((wx - LEFT) * s);
   const Y = (wy) => oy + Math.round(wy * s);
   return {
     scr, L, X, Y, s,
@@ -151,24 +153,17 @@ function drawRoom(g, sim, now, light, date) {
   }
   rect(GLASS.x0, 0, GLASS.x1 - GLASS.x0, GLASS.top, hex('#262c42'));
   rect(GLASS.x0, GLASS.bottom, GLASS.x1 - GLASS.x0, 116 - GLASS.bottom, hex('#3a4158'));
-  // the bathroom: a block of solid wall between the glass and the café
+  // a block of solid wall between the glass and the café, with a poster
   rect(GLASS.x1, 0, CAFE.x - GLASS.x1, 122, C.wall);
+  rect(GLASS.x1 + 14, 34, 40, 52, C.frame); rect(GLASS.x1 + 17, 37, 34, 46, C.paper); rect(GLASS.x1 + 22, 44, 24, 18, C.blue);
   rect(0, 116, CAFE.x, 6, C.baseboard);
+  drawLeftSide(g, sim, now);
   // the sign, in vinyl on the glass
   rect(SIGN.x - 39, SIGN.y, 78, 44, C.frame);
   const r = g.row(SIGN.y + 22);
   const hue = Math.floor(now / 400) % 4;
   g.centered(SIGN.x, r - (g.s > 0.12 ? 1 : 0), 'DEV TEAM', [C.accent, C.ok, C.blue, C.err][hue], C.frame);
   if (g.s > 0.12) g.centered(SIGN.x, r, 'OFFICE', C.accent, C.frame);
-  // the bathroom: a door (open for an instant when someone goes in or out) and its vacant/occupied light
-  const open = now - sim.bath.doorAt < 650;
-  rect(BATH.x, 40, BATH.w, 82, C.frame);
-  rect(BATH.x + 4, 44, BATH.w - 8, 78, open ? C.doorDark : C.door);
-  if (open) rect(BATH.x + 14, 92, 18, 16, C.white);
-  else rect(BATH.x + BATH.w - 14, 82, 6, 4, C.inkMuted);
-  rect(BATH.x + 8, 22, 30, 14, C.frame);
-  if (g.s > 0.12) g.centered(BATH.x + 23, g.row(29), t('scene.wc'), C.white, C.frame);
-  rect(BATH.x + 42, 24, 8, 8, sim.bath.occupant ? C.err : C.ok);
   // the rack's alarm, hanging from the beam
   const alarm = sim.fire && ['burning', 'fighting'].includes(sim.fire.phase);
   rect(ALARM.x, ALARM.y + 3, 10, 8, alarm && Math.floor(now / 150) % 2 ? hex('#ff3b3b') : hex('#7a1f2b'));
@@ -192,7 +187,7 @@ function drawRoom(g, sim, now, light, date) {
   // floors: tiles in the office, oak planks in the café, ceramic in the dining room
   const fy0 = Y(122), fy1 = Y(H), fx0 = X(0), fx1 = X(W), cafeX = X(CAFE.x), dineY = Y(DINING.top + 14);
   for (let y = fy0; y < fy1; y++) for (let x = fx0; x < fx1; x++) {
-    const wx2 = (x - g.L.ox) / g.s, wy2 = (y - g.L.oy) / g.s;
+    const wx2 = (x - g.L.ox) / g.s + LEFT, wy2 = (y - g.L.oy) / g.s;
     if (x < cafeX) {
       // white porcelain: 40-px tiles with their grout (the last pixel row of each tile)
       const tx = Math.floor(wx2 / 40), ty = Math.floor((wy2 - 126) / 40);
@@ -212,10 +207,55 @@ function drawRoom(g, sim, now, light, date) {
   rect(0, 122, W, 4, C.floorEdge);
   rect(SPOT.table.x - 130, SPOT.table.y - 52, 260, 126, C.rug1);
   rect(SPOT.table.x - 122, SPOT.table.y - 44, 244, 110, C.rug2);
-  rect(SOFA.x - 96, TV.feet - 10, 192, H - TV.feet + 6, hex('#5b7a8c'));
-  rect(SOFA.x - 90, TV.feet - 4, 180, H - TV.feet - 6, hex('#6a8a9c'));
+  rect(SOFA.x - 96, TV.feet - 10, 192, 600 - TV.feet + 6, hex('#5b7a8c'));
+  rect(SOFA.x - 90, TV.feet - 4, 180, 600 - TV.feet - 6, hex('#6a8a9c'));
   // planters that separate the café
   for (const [y0, y1] of PARTITION) { rect(CAFE.x - 13, y0, 14, y1 - y0, C.planter); rect(CAFE.x - 15, y0 + 2, 18, y1 - y0 - 6, C.leaf1); rect(CAFE.x - 11, y0 + 6, 10, y1 - y0 - 14, C.leaf2); }
+}
+
+// Left of the office: the bathroom (tiles, two stalls, the sink and its mirror), the hallway with
+// the elevator at its end, their floors and their low walls, with the doors and their signs.
+function drawLeftSide(g, sim, now) {
+  const { rect } = g, B = BATHROOM;
+  rect(B.x0, 0, B.x1 - B.x0, 122, hex('#d3e3e9'));
+  B.stalls.forEach((st, i) => {
+    const x0 = st.x - st.w / 2, open = now - sim.bath.doorAt[i] < 650;
+    rect(x0 - 2, 32, st.w + 4, 90, hex('#8d99ae'));
+    rect(x0, 36, st.w, 82, open ? C.doorDark : hex('#eef1f4'));
+    rect(st.x - 5, 22, 10, 7, sim.bath.stalls[i] ? C.err : C.ok);
+  });
+  const sk = B.sink;
+  rect(sk.x - sk.w / 2 + 3, 36, sk.w - 6, 50, hex('#cfeaf2')); rect(sk.x - sk.w / 2, 96, sk.w, 26, hex('#adb5bd'));
+  rect(B.x1, 0, HALL.x0 - B.x1, 122, C.baseboard);
+  rect(HALL.x0, 0, HALL.x1 - HALL.x0, 122, hex('#3b4262'));
+  const e = ELEVATOR, dt = now - sim.elevator.doorAt, open = dt >= 0 && dt < 2800;
+  rect(e.x, 24, e.w, 98, hex('#9aa3ae'));
+  rect(e.x + 8, 34, e.w - 16, 88, open ? hex('#ffe8a3') : hex('#c3cad3'));
+  if (!open) rect(e.x + e.w / 2, 34, 1, 88, hex('#868e96'));
+  rect(e.x + e.w / 2 - 18, 8, 36, 13, C.frame);
+  if (g.s > 0.12) g.centered(e.x + e.w / 2, g.row(14), `▲ ${sim.elevator.floor}`, C.err, C.frame);
+  rect(HALL.x1, 0, -HALL.x1, 122, C.baseboard);
+  rect(LEFT, 116, -LEFT, 6, C.baseboard);
+  // floors: the hallway's carpet (and the lobby) and the bathroom's small tiles
+  const carpet = hex('#4a5578');
+  rect(HALL.x0, 122, HALL.x1 - HALL.x0, H - 122, carpet);
+  rect(B.x0, B.front, HALL.x0 - B.x0, H - B.front, carpet);
+  rect(HALL.spine - 24, 122, 48, H - 122, hex('#5b6891'));
+  for (let y = 126, row = 0; y < B.front; y += 14, row++) for (let x = B.x0, col = 0; x < B.x1; x += 14, col++) rect(x, y, 14, 14, (row + col) % 2 ? hex('#eef3f6') : hex('#e2eaef'));
+  // the low walls, seen from above, with their doors
+  const wall = hex('#9aa3ae');
+  rect(HALL.x1, 122, -HALL.x1, OFFICE_DOOR.y0 - 122, wall); rect(HALL.x1, OFFICE_DOOR.y1, -HALL.x1, H - OFFICE_DOOR.y1, wall);
+  rect(B.x1, 122, HALL.x0 - B.x1, B.door.y0 - 122, wall); rect(B.x1, B.door.y1, HALL.x0 - B.x1, B.front - B.door.y1, wall);
+  if (g.s > 0.12) {
+    g.centered(-4, g.row(OFFICE_DOOR.y0 - 14), ` ${t('scene.exit')} `, C.white, hex('#1e7f4a'));
+    g.centered(B.x1 + 4, g.row(B.door.y0 - 14), ` ${t('scene.wc')} `, C.white, C.frame);
+  }
+}
+// The bathroom's front wall: low, like the dining room's.
+function drawBathFront(g) {
+  const y = BATHROOM.front - 14;
+  g.rect(BATHROOM.x0, y, HALL.x0 - BATHROOM.x0, 14, hex('#9aa3ae'));
+  g.rect(BATHROOM.x0, y, HALL.x0 - BATHROOM.x0, 3, hex('#c9ced6'));
 }
 
 // The café's high table.
@@ -418,7 +458,7 @@ function drawHotDesk(g, sim, i, now) {
   const mx = X(s.x + 4), my = Y(s.y - 32), mw = Math.max(2, X(s.x + 28) - mx), mh = Math.max(1, Y(s.y - 18) - my);
   screenPixels(g, mx, my, mw, mh, !!a && ['working', 'thinking', 'red'].includes(a.state), hex(a?.cfg.shirt || '#8d99ae'), now);
   if (a?.badges.size) rect(s.x - 30, s.y - 24, 16, 11, C.folder);
-  g.centered(s.x, g.row(s.y + 9), a ? ` ${a.cfg.name} ` : ` ${t('sim.newcomer.hotDesk')} `, a ? hex(washed(a.cfg.shirt)) : hex('#8d99ae'), C.frame);
+  if (a) g.centered(s.x, g.row(s.y + 9), ` ${a.cfg.name} `, hex(washed(a.cfg.shirt)), C.frame);
 }
 
 function drawProps(g, sim, now, model = {}) {
@@ -563,7 +603,7 @@ function drawDream(g, a, now) {
   }
   // glow around the cloud (the rainbow changes color)
   const glowColor = hex(d.kind === 'rainbow' ? RAINBOW_COLORS[Math.floor(now / 300) % RAINBOW_COLORS.length] : info.glow);
-  const cx = (x0 + w / 2 - L.ox) / g.s, cy = (y0 + h / 2 - L.oy) / g.s;
+  const cx = (x0 + w / 2 - L.ox) / g.s + LEFT, cy = (y0 + h / 2 - L.oy) / g.s;
   g.tint(cx, cy, (w + 8) / g.s * 0.75, glowColor, 0.28 + 0.04 * Math.sin(now / 420));
   const cloud = hex(info.cloud);
   scr.rect(x0 - 1, y0 - 1, w + 2, h + 2, cloud); // the cloud
@@ -585,7 +625,8 @@ function drawLights(g, sim, now, light) {
   }
   const n = light.night;
   g.tint(840, 30, 56, C.neon, 0.1 + n * 0.1);
-  g.tint(BATH.x + 46, 28, 12, sim.bath.occupant ? C.err : C.ok, 0.2);
+  BATHROOM.stalls.forEach((st, i) => g.tint(st.x, 25, 10, sim.bath.stalls[i] ? C.err : C.ok, 0.2));
+  for (const y of [220, 420, 620]) if (n > 0.3) g.tint(HALL.spine, y, 60, C.accent, n * 0.08);
   for (const a of Object.values(sim.agents)) {
     const busy = ['working', 'thinking', 'red'].includes(a.state);
     if (busy || n > 0.3) g.tint(a.cfg.seat.x + 34, a.cfg.seat.y - 34, 32, a.state === 'red' ? C.err : C.blue, (busy ? 0.06 : 0.02) + n * 0.06);
@@ -596,7 +637,7 @@ function drawLights(g, sim, now, light) {
   if (f?.level > 0) g.tint(RACK.x + RACK.w / 2, RACK.y + 10, 70 + 120 * f.level, C.fire2, (0.25 + 0.05 * Math.sin(now / 70)) * f.level);
   // lightning lights up the office for an instant
   const bolt = lightning(now, sim.weather);
-  if (bolt.flash > 0) g.blend(0, 0, W, H, C.white, 0.08 * bolt.flash);
+  if (bolt.flash > 0) g.blend(LEFT, 0, WORLD_W, H, C.white, 0.08 * bolt.flash);
 }
 
 // The selected one wears a green diamond on top, like in The Sims.
@@ -637,7 +678,7 @@ function drawBubble(g, a, placed) {
 function drawParticles(g, sim) {
   const { scr, X, Y, L } = g;
   for (const p of sim.particles) {
-    if (p.x < 0 || p.x >= W || p.y < 0 || p.y >= H) continue;
+    if (p.x < LEFT || p.x >= W || p.y < 0 || p.y >= H) continue;
     const x = X(p.x), y = Y(p.y);
     if (p.kind === 'code') scr.text(x, Math.floor(y / 2), p.ch, hex(p.color), -1, L.ox + L.pw - x);
     else if (p.kind === 'check') scr.text(x, Math.floor(y / 2), '✓', C.ok, -1, L.ox + L.pw - x);
@@ -911,7 +952,7 @@ export function officeAtCell(L, col, row) {
 /** Does that cell fall on the whiteboard? (a click opens the brief dialog) */
 export function boardAtCell(L, col, row) {
   if (L.tooSmall) return false;
-  const x0 = L.ox + Math.round(BOARD.x * L.s), x1 = L.ox + Math.round((BOARD.x + BOARD.w) * L.s);
+  const x0 = L.ox + Math.round((BOARD.x - LEFT) * L.s), x1 = L.ox + Math.round((BOARD.x + BOARD.w - LEFT) * L.s);
   const r0 = Math.floor((L.oy + Math.round(BOARD.y * L.s)) / 2), r1 = Math.floor((L.oy + Math.round((BOARD.y + BOARD.h) * L.s)) / 2);
   return col >= x0 && col <= x1 && row >= r0 && row <= r1;
 }
@@ -919,7 +960,7 @@ export function boardAtCell(L, col, row) {
 /** Does that cell fall on the server rack? (a click lists the services running in the background) */
 export function rackAtCell(L, col, row) {
   if (L.tooSmall) return false;
-  const x0 = L.ox + Math.round(RACK.x * L.s), x1 = L.ox + Math.round((RACK.x + RACK.w) * L.s);
+  const x0 = L.ox + Math.round((RACK.x - LEFT) * L.s), x1 = L.ox + Math.round((RACK.x + RACK.w - LEFT) * L.s);
   const r0 = Math.floor((L.oy + Math.round(RACK.y * L.s)) / 2), r1 = Math.floor((L.oy + Math.round((RACK.y + RACK.h) * L.s)) / 2);
   return col >= x0 && col <= x1 && row >= r0 && row <= r1;
 }
@@ -1114,7 +1155,7 @@ export function agentAtCell(L, sim, col, row) {
   let best = null, bestD = 4;
   for (const a of Object.values(sim.agents)) {
     if (a.hidden) continue;
-    const x = L.ox + Math.round(a.x * L.s);
+    const x = L.ox + Math.round((a.x - LEFT) * L.s);
     const y = Math.floor((L.oy + Math.round((a.seated || a.perch ? a.y - 20 : a.y - 30) * L.s)) / 2);
     const d = Math.abs(col - x) / 2 + Math.abs(row - y);
     if (d < bestD) { best = a.id; bestD = d; }

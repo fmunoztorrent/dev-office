@@ -2,11 +2,13 @@
 // something about the domain, the team or the office — in practice they are the same — without
 // interrupting its work. It is Claude Code's /btw brought to every harness:
 //
-//   1. the office's agent on duty: the session that worked most recently (its CLI and its folder)
-//      or, if there is none, the office's registered agent;
+//   1. who answers: the session you chose, or the one the character you asked is working in (its
+//      project and its task), or else the office's agent on duty: the session that worked most
+//      recently (its CLI and its folder) or, if there is none, the office's registered agent;
 //   2. its CLI answers in a forked session that is not saved (claude --fork-session, opencode
-//      --fork, pi --fork) or, if it cannot fork, in a new one with what the team is doing;
-//      always read-only;
+//      --fork, pi --fork) or, if it cannot fork, in a new one with what that session is doing
+//      (its project, its task, its plan, its latest steps); always read-only, and as the
+//      character asked;
 //   3. the question and the answer show up in the game (a character answers it) and in the log,
 //      and are saved in the database (asks table).
 
@@ -19,6 +21,7 @@ import { clip } from './roles.js';
 import { MAIN_OFFICE } from './store.js';
 import { realDir } from './paths.js';
 import { childEnv } from './tasks.js';
+import { DEFAULT_TEAM } from '../public/sim.js';
 
 const ANSI = /\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07/g;
 const SOURCE_HARNESS = { 'claude-code': 'claude-code', claude: 'claude-code', codex: 'codex', opencode: 'opencode', pi: 'pi' };
@@ -43,41 +46,75 @@ export class AskDesk extends EventEmitter {
     this.running = new Map(); // oficina → pregunta en curso
   }
 
-  /** An office's agent on duty: { harness, session?, cwd, agentId?, name } | null */
-  onDuty(officeId) {
+  /**
+   * Who answers in an office: { harness, session?, sessionId, cwd, agentId?, name } | null.
+   * `session`: the one chosen; `role`: the character asked, answered from the session it is working
+   * in (or the latest one where it did something). Without either, the agent on duty.
+   */
+  onDuty(officeId, { session, role } = {}) {
     const office = this.company.get(officeId);
-    let best = null;
-    for (const s of office?.sessions?.values() || []) {
-      const harness = SOURCE_HARNESS[s.source];
-      if (s.id === 'office' || !harness || !s.cwd || Date.now() - s.lastAt > RECENT_MS) continue;
-      if (!best || s.lastAt > best.lastAt) best = s;
+    const usable = (s) => !!s && s.id !== 'office' && !!SOURCE_HARNESS[s.source] && !!s.cwd;
+    let best = session ? office?.sessions?.get(session) : null;
+    if (!usable(best) && role) {
+      best = office?.sessions?.get(office.roles?.[role]?.session);
+      if (!usable(best)) {
+        const ev = [...(office?.log || [])].reverse().find((e) => e.role === role && e.kind !== 'btw' && usable(office.sessions.get(e.session)));
+        best = ev ? office.sessions.get(ev.session) : null;
+      }
+    }
+    if (!usable(best)) {
+      best = null;
+      for (const s of office?.sessions?.values() || []) {
+        if (!usable(s) || Date.now() - s.lastAt > RECENT_MS) continue;
+        if (!best || s.lastAt > best.lastAt) best = s;
+      }
     }
     if (best) {
       const harness = SOURCE_HARNESS[best.source];
       const agent = this.store.listAgents().find((a) => a.harness === harness && realDir(a.path) === realDir(best.cwd));
-      return { harness, session: FORKABLE.has(harness) ? best.id : null, cwd: best.cwd, agentId: agent?.id || null, bin: agent?.bin, turn: best.turn, title: best.title, name: agent?.name || null };
+      return { harness, session: FORKABLE.has(harness) ? best.id : null, sessionId: best.id, cwd: best.cwd, agentId: agent?.id || null, bin: agent?.bin, turn: best.turn, title: best.title, name: agent?.name || null };
     }
     const agents = this.store.listAgents().filter((a) => (a.office || MAIN_OFFICE) === officeId && fs.existsSync(a.path));
     const a = agents[0];
-    return a ? { harness: a.harness, session: null, cwd: a.path, agentId: a.id, bin: a.bin, turn: null, title: '', name: a.name } : null;
+    return a ? { harness: a.harness, session: null, sessionId: null, cwd: a.path, agentId: a.id, bin: a.bin, turn: null, title: '', name: a.name } : null;
   }
 
-  /** What the team is doing, in a few lines, so a new session has context. */
-  #context(officeId, duty) {
+  /** The character asked, with the office's names: "Diego (Backend)". */
+  #who(officeId, role) {
+    const look = this.store.getAppearance?.(officeId)?.[role] || {};
+    return `${look.name || DEFAULT_TEAM[role]?.name || role} (${look.title || t(`team.titles.${role}`)})`;
+  }
+
+  /**
+   * What the answer is about: the project and, when its CLI cannot fork the session (it does not
+   * know what it was doing), the session's task, plan, subagents and latest steps.
+   */
+  #context(officeId, duty, role, forked) {
     const info = this.company.info(officeId);
     const office = this.company.get(officeId);
+    const s = duty.sessionId ? office?.sessions?.get(duty.sessionId) : null;
     const lines = [t('btw.ctxOffice', { office: info?.name || officeId })];
+    if (duty.cwd) lines.push(t('btw.ctxProject', { project: duty.cwd.split('/').filter(Boolean).pop() || duty.cwd, dir: duty.cwd }));
+    if (role) lines.push(t('btw.ctxRole', { who: this.#who(officeId, role) }));
+    if (forked) return lines.join('\n');
     if (duty.title) lines.push(t('btw.ctxTask', { task: clip(duty.title, 200) }));
     if (duty.turn) lines.push(t('btw.ctxTurn', { role: t(`team.titles.${duty.turn}`) }));
-    const recent = (office?.log || []).filter((e) => e.text && e.session !== 'office').slice(-8).map((e) => `- ${clip(e.text, 120)}`);
+    const todos = (s?.todos || []).slice(0, 12);
+    if (todos.length) lines.push(t('btw.ctxPlan'), ...todos.map((x) => `- [${x.status === 'completed' ? 'x' : x.status === 'in_progress' ? '~' : ' '}] ${clip(x.content || x.text || '', 120)}`));
+    const subs = (s?.subagents || []).filter((x) => x.open && (!role || x.role === role));
+    if (subs.length) lines.push(t('btw.ctxSubagents'), ...subs.slice(0, 5).map((x) => `- ${clip(x.desc || x.agentType || '', 120)}${x.task ? `: ${clip(x.task.replace(/\s+/g, ' '), 200)}` : ''}`));
+    // its latest steps (the character's, if it did any): not those of other projects
+    const mine = (office?.log || []).filter((e) => e.text && e.kind !== 'btw' && (!s || e.session === s.id));
+    const own = role ? mine.filter((e) => e.role === role) : [];
+    const recent = (own.length >= 3 ? own : mine).slice(-8).map((e) => `- ${clip(e.text, 120)}`);
     if (recent.length) lines.push(t('btw.ctxRecent'), ...recent);
     return lines.join('\n');
   }
 
-  #prompt(question, officeId, duty) {
+  #prompt(question, officeId, duty, role, forked) {
     return [
       t('btw.promptHead'),
-      duty.session ? '' : this.#context(officeId, duty),
+      this.#context(officeId, duty, role, forked),
       t('btw.promptQuestion', { question }),
       t('btw.promptRules', { lang: LANGUAGES[getLanguage()] || 'English' }),
     ].filter(Boolean).join('\n\n');
@@ -93,17 +130,20 @@ export class AskDesk extends EventEmitter {
    * Asks the question. Returns right away { ok, ask } (the answer arrives later, via 'change' and
    * the office's events); `done` is a promise that resolves with the answered question.
    */
-  ask({ text, office = MAIN_OFFICE, from } = {}) {
+  ask({ text, office = MAIN_OFFICE, from, session, role } = {}) {
     const question = String(text ?? '').trim().replace(/^\/?btw\b[:,]?\s*/i, '').trim();
     if (!question) return { ok: false, error: t('btw.empty') };
     const officeId = this.company.has(office) ? office : MAIN_OFFICE;
     if (this.running.has(officeId)) return { ok: false, error: t('btw.busy') };
-    const duty = this.onDuty(officeId);
+    const asked = DEFAULT_TEAM[role] && role !== 'po' ? role : null; // you are the PO: you do not ask yourself
+    const duty = this.onDuty(officeId, { session: typeof session === 'string' ? session : undefined, role: asked });
     if (!duty) return { ok: false, error: t('btw.noAgent') };
-    const cmd = askCommand(duty.harness, { question: this.#prompt(clip(question, 600), officeId, duty), session: duty.session, bin: duty.bin });
+    const prompt = (forked) => this.#prompt(clip(question, 600), officeId, duty, asked, forked);
+    let cmd = askCommand(duty.harness, { question: prompt(true), session: duty.session, bin: duty.bin });
+    if (!cmd.error && !cmd.forked) cmd = askCommand(duty.harness, { question: prompt(false), session: duty.session, bin: duty.bin });
     if (cmd.error) return { ok: false, error: cmd.code === 'missing' ? t('err.notInstalled', { bin: cmd.bin }) : cmd.error };
 
-    const role = duty.turn || 'tl'; // who answers you (you, the PO, are the one asking)
+    role = asked || duty.turn || 'tl'; // who answers you (you, the PO, are the one asking)
     const ask = {
       id: `btw-${Date.now().toString(36)}-${++seq}`, office: officeId, agent: duty.harness, agentId: duty.agentId, session: duty.session, cwd: duty.cwd,
       question: clip(question, 600), answer: null, status: 'asking', error: null, from: clip(from || t('events.you'), 30), forked: !!cmd.forked, role, createdAt: Date.now(),

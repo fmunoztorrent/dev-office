@@ -108,7 +108,8 @@ Más detalle en [docs/conventions.es.md](docs/conventions.es.md) y [CONTRIBUTING
   - Un agente nunca la juega: `agentRole` (`server/roles.js` e `integrations/common/devteam.mjs`) convierte en `analyst` el `po` que declare un agente, un subagente o una etapa.
   - Lo que hace el usuario es de la PO (`task`, `dispatch`, la pregunta de un `btw`), y las preguntas y permisos del agente van a su escritorio.
   - En la simulación cotorrea, pero no decide nada sola: no lleva ideas al backlog ni contesta alcances.
-- **Cada subagente es alguien nuevo** en la simulación (`sim.ghosts`): un extra translúcido de su rol en un puesto temporal (`HOT_DESKS`). Los eventos con `subId` son suyos, no del personaje fijo del rol.
+- **Cada subagente es alguien nuevo** en la simulación (`sim.ghosts`): un extra translúcido de su rol que llega por el ascensor (`ELEVATOR`) y se sienta en un escritorio propio, que existe mientras él está (`HOT_DESKS` son los lugares). Los eventos con `subId` son suyos, no del personaje fijo del rol.
+- **El mundo va de `x = LEFT` (negativo) a `W`:** la oficina es `x ≥ 0`; a su izquierda, el pasillo (`HALL`) y el baño (`BATHROOM`). La vista frontal dibuja con el mundo corrido (`FLAT` en `game.js`), la terminal resta `LEFT` al convertir, y la ruta (`route` en `sim.js`) pasa por las puertas: nadie cruza una pared.
 - **Un encargo lleva su alcance delante:** una línea que empieza con `📁` (`server/tasks.js`, `scoped`): sólo la carpeta del proyecto y sólo lo pedido. La oficina la saca del título de la pizarra; a OpenCode además le llega como regla (`fenced`).
 - **El contexto** llega como evento `context` (o el campo `context` de cualquier evento): sólo actualiza `session.context`, no va a la bitácora ni mueve a nadie.
 - **Los roles de los subagentes** salen de, en este orden:

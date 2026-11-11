@@ -55,7 +55,7 @@ test('flush sólo reescribe lo que cambió', () => {
   assert.ok(scr.flush().length < first / 20);
 });
 
-test('en la terminal también llegan los nuevos: un puesto temporal con su nombre, y el otro libre', () => {
+test('en la terminal también llegan los nuevos: aparece su escritorio con su nombre, y no quedan puestos vacíos', () => {
   let now = 0;
   const sim = createSim({ clock: () => now });
   sim.handle({ kind: 'subagent_start', role: 'backend', subId: 's1', text: 'pagos' });
@@ -66,7 +66,7 @@ test('en la terminal también llegan los nuevos: un puesto temporal con su nombr
   drawFrame(scr, computeLayout(200, 60), sim, model(), now);
   const text = rowsText(scr).join('\n');
   assert.ok(nuevo.seated && text.includes(nuevo.cfg.name), 'su placa');
-  assert.ok(text.includes('Puesto libre'), 'el otro puesto');
+  assert.ok(!text.includes('Puesto libre'), 'sin puestos vacíos');
 });
 
 test('en la terminal la pizarra con tareas se expande: los post-its en tres columnas', () => {

@@ -1,5 +1,6 @@
 // Canvas renderer (browser) of the sim.js simulation.
-// The world is W×H; the canvas is drawn at an integer multiple of that size so that in full screen
+// The world is x LEFT..W by y 0..H (the office, and left of it the hallway with the elevator and the
+// bathroom); the canvas is drawn at an integer multiple of that size so that in full screen
 // the "pixels" stay crisp. There are two views of the same office, to choose from (⚙ › General,
 // the ◇ button or the v key): the usual front view (the default) and the isometric top-down view
 // (the floor as a rhombus, the back and left walls, furniture as volumes and people standing,
@@ -9,9 +10,9 @@
 // (lamps, neon, monitors, the TV, the fire and the glow of the dreams).
 
 import {
-  createSim, W, H, SPOT, PLANTS, STATUS_ICON, PHASE_COLOR, phaseInfo, onBoard, tvChannel,
-  DREAMS, DREAM_PALETTE, rainbowPixels, CAFE, DINING, DINING_SEATS, PARTITION, BATH, RACK, EXTINGUISHER, daylight,
-  BOARD, EASEL, CLOCK, GLASS, TV, SOFA, ALARM, SIGN, HOT_DESKS, TEAM,
+  createSim, W, H, LEFT, WORLD_W, SPOT, PLANTS, STATUS_ICON, PHASE_COLOR, phaseInfo, onBoard, tvChannel,
+  DREAMS, DREAM_PALETTE, rainbowPixels, CAFE, DINING, DINING_SEATS, PARTITION, RACK, EXTINGUISHER, daylight,
+  BOARD, EASEL, CLOCK, GLASS, TV, SOFA, ALARM, SIGN, HOT_DESKS, TEAM, BATHROOM, HALL, OFFICE_DOOR, ELEVATOR,
 } from './sim.js';
 import { outdoor, lightning, colorHex, weatherIcon } from './sky.js';
 import { isoCamera, apply, unapply, scaled, BACK, WALL_H } from './iso.js';
@@ -34,7 +35,8 @@ const hslRgb = (h, s, l) => {
 export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHover, now: clockNow = () => new Date(), zone = null, view = 'flat' } = {}) {
   const ctx = canvas.getContext('2d');
   let iso = view !== 'flat';
-  const cam = isoCamera();
+  // the camera fits the whole floor (the office and the hallway, left of it) in the canvas
+  const cam = isoCamera({ ox: 560, oy: 195 });
   const sim = createSim({ wall: () => clockNow().getTime(), zone });
   const { agents } = sim;
   let selected = null;
@@ -48,8 +50,8 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   // Resolution: an integer multiple of the world, the smallest that covers the canvas's real pixels.
   function fitResolution() {
     const r = canvas.getBoundingClientRect();
-    const k = Math.max(1, Math.min(4, Math.ceil((r.width * (window.devicePixelRatio || 1)) / W)));
-    if (k !== scale || canvas.width !== W * k) { scale = k; canvas.width = W * k; canvas.height = H * k; }
+    const k = Math.max(1, Math.min(4, Math.ceil((r.width * (window.devicePixelRatio || 1)) / WORLD_W)));
+    if (k !== scale || canvas.width !== WORLD_W * k) { scale = k; canvas.width = WORLD_W * k; canvas.height = H * k; }
   }
   if (typeof ResizeObserver === 'function') new ResizeObserver(fitResolution).observe(canvas);
   fitResolution();
@@ -58,6 +60,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
 
   // The transform used to draw (the isometric camera's, or none), times the canvas scale.
   const ID = [1, 0, 0, 1, 0, 0];
+  const FLAT = [1, 0, 0, 1, -LEFT, 0]; // the front view: the world shifted so that x = LEFT is the canvas's edge
   const use = (m) => ctx.setTransform(...scaled(m, scale));
   const FS = 1.35; // in the isometric view the sprites' texts get bigger (the sprite gets smaller)
   const fpx = (n) => Math.round(n * (iso ? FS : 1));
@@ -88,11 +91,13 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   function drawRoom(t, now, light) {
     drawGlass(now, light);
     drawSign(t);
-    drawBathWall();
-    drawBathDoor(now);
+    drawWallBlock();
+    drawLeftBackWall(now);
     drawAlarm(now);
     drawTiles();
     drawRugs();
+    drawLeftFloors();
+    drawSideWalls();
     drawCafeRoom(now);
   }
 
@@ -104,11 +109,14 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     ctx.fillStyle = `hsl(${(t * 40) % 360} 85% 68%)`; ctx.fillText('DEV TEAM', SIGN.x, SIGN.y + 14);
     ctx.fillStyle = '#ffd166'; ctx.fillText('OFFICE', SIGN.x, SIGN.y + 32);
   }
-  // the bathroom: a block of solid wall between the glass and the café
-  function drawBathWall() {
+  // a block of solid wall between the glass and the café, with a framed poster
+  function drawWallBlock() {
     R(GLASS.x1, 0, CAFE.x - GLASS.x1, 122, '#2e3550');
     R(GLASS.x1, 0, 3, 116, '#262c42');
     for (let x = GLASS.x1 + 24; x < CAFE.x; x += 24) R(x, 0, 2, 116, '#333b59');
+    const px = GLASS.x1 + 14;
+    R(px, 34, 40, 52, '#1b1f33'); R(px + 3, 37, 34, 46, '#f1faee'); R(px + 8, 44, 24, 18, '#3f73f0'); R(px + 12, 50, 16, 8, '#ffd166');
+    R(px + 8, 66, 24, 2, '#8d99ae'); R(px + 8, 71, 18, 2, '#8d99ae');
     R(0, 116, CAFE.x, 6, '#232840');
   }
   // alarm, hanging from the beam (off by default; with the fire it spins and lights up)
@@ -122,8 +130,8 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     R(SPOT.table.x - 130, SPOT.table.y - 52, 260, 126, '#6d597a');
     R(SPOT.table.x - 122, SPOT.table.y - 44, 244, 110, '#7f6a8c');
     // the living room rug (under the TV and the sofa)
-    R(SOFA.x - 96, TV.feet - 10, 192, H - TV.feet + 6, '#5b7a8c');
-    R(SOFA.x - 90, TV.feet - 4, 180, H - TV.feet - 6, '#6a8a9c');
+    R(SOFA.x - 96, TV.feet - 10, 192, 600 - TV.feet + 6, '#5b7a8c');
+    R(SOFA.x - 90, TV.feet - 4, 180, 600 - TV.feet - 6, '#6a8a9c');
   }
 
   // The office floor: large white porcelain tiles, with their grout, a light edge on each tile
@@ -163,24 +171,111 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     ctx.globalAlpha = 1;
   }
 
-  // The bathroom: a door in the wall with its vacant/occupied sign.
-  function drawBathDoor(now) {
-    const { x, w } = BATH, open = now - sim.bath.doorAt < 650;
-    R(x, 40, w, 82, '#1b1f33');
-    if (open) {
-      R(x + 4, 44, w - 8, 78, '#11131c');
-      R(x + 14, 92, 18, 14, '#e9ecf5'); R(x + 12, 104, 22, 6, '#c9ccd6'); // the toilet, barely
-      R(x + w - 12, 44, 8, 78, '#a9b8c4'); // the open door, edge-on
-    } else {
-      R(x + 4, 44, w - 8, 78, '#c9d6df');
-      R(x + 8, 50, w - 16, 30, '#d8e2ea'); R(x + 8, 86, w - 16, 30, '#d8e2ea');
-      R(x + w - 14, 82, 6, 3, '#6c757d');
+  // ---------------------------------------------------------------- the hallway, the elevator and the bathroom
+
+  const BW = BATHROOM;
+  /** The back wall left of the office: the bathroom's tiles (stalls, sink, mirror), a pillar, and
+   * the hallway's wall with the elevator at its end. */
+  function drawLeftBackWall(now) {
+    R(BW.x0, 0, BW.x1 - BW.x0, 122, '#d3e3e9');
+    for (let y = 0, row = 0; y < 116; y += 12, row++) {
+      R(BW.x0, y, BW.x1 - BW.x0, 1, '#b9ced6');
+      for (let x = BW.x0 + (row % 2 ? 6 : 0); x < BW.x1; x += 12) R(x, y, 1, 12, '#b9ced6');
     }
-    // letrero
-    R(x + 8, 22, 30, 14, '#1b1f33');
-    ctx.font = `14px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#e8e9f1';
-    ctx.fillText(t('scene.wc'), x + 23, 29);
-    R(x + 42, 25, 8, 8, '#1b1f33'); R(x + 43, 26, 6, 6, sim.bath.occupant ? '#ff4d4d' : '#3ddc84');
+    BW.stalls.forEach((s, i) => drawStall(s, i, now));
+    drawSink();
+    R(BW.x1, 0, HALL.x0 - BW.x1, 122, '#262c42');                      // pillar
+    R(HALL.x0, 0, HALL.x1 - HALL.x0, 122, '#3b4262');                 // the hallway's wall
+    for (let x = HALL.x0 + 4; x < HALL.x1; x += 18) R(x, 0, 1, 116, '#363d5b');
+    drawElevator(now);
+    R(HALL.x1, 0, -HALL.x1, 122, '#262c42');                          // the office's corner
+    R(LEFT, 116, -LEFT, 6, '#232840');
+  }
+  // a stall: its partitions and door (open for a moment when someone goes in or out) and its sign
+  function drawStall(s, i, now) {
+    const x0 = s.x - s.w / 2, open = now - sim.bath.doorAt[i] < 650, busy = !!sim.bath.stalls[i];
+    R(x0 - 2, 32, s.w + 4, 90, '#8d99ae');
+    R(x0, 36, s.w, 82, open ? '#2b2d42' : '#eef1f4');
+    if (open) {
+      R(x0 + 9, 90, 16, 12, '#f8f9fa'); R(x0 + 7, 100, 20, 6, '#ced4da'); // the toilet, barely
+      R(x0 + s.w - 6, 36, 4, 82, '#c9ccd6');                              // the open door, edge-on
+    } else {
+      R(x0 + 3, 42, s.w - 6, 34, '#f8f9fa'); R(x0 + 3, 80, s.w - 6, 34, '#f8f9fa');
+      R(x0 + s.w - 8, 76, 4, 3, '#6c757d');
+    }
+    R(x0, 118, s.w, 4, '#495057'); // the gap under the door
+    R(s.x - 5, 22, 10, 7, '#1b1f33'); R(s.x - 4, 23, 8, 5, busy ? '#ff4d4d' : '#3ddc84');
+  }
+  // the sink: a counter with its basin and faucet, and the mirror above
+  function drawSink() {
+    const { x, w } = BW.sink;
+    R(x - w / 2 + 3, 36, w - 6, 50, '#8d99ae'); R(x - w / 2 + 5, 38, w - 10, 46, '#cfeaf2');
+    R(x - w / 2 + 8, 42, 5, 36, '#ffffff99'); R(x - w / 2 + 16, 42, 2, 20, '#ffffff66');
+    R(x - w / 2, 96, w, 6, '#f1f3f5'); R(x - w / 2, 102, w, 20, '#adb5bd'); R(x - w / 2, 102, w, 2, '#868e96');
+    R(x - 10, 94, 20, 4, '#ffffff'); R(x - 1, 87, 3, 8, '#8d99ae'); R(x - 1, 87, 7, 2, '#8d99ae');
+  }
+  // the elevator, at the end of the hallway: steel doors that slide open when someone arrives or leaves
+  function drawElevator(now) {
+    const { x, w } = ELEVATOR, e = sim.elevator, dt = now - e.doorAt;
+    const open = dt < 0 ? 0 : dt < 400 ? dt / 400 : dt < 2400 ? 1 : dt < 2800 ? 1 - (dt - 2400) / 400 : 0;
+    R(x, 24, w, 98, '#9aa3ae'); R(x + 3, 27, w - 6, 95, '#6c757d');
+    const inner = w - 16, half = inner / 2, gap = Math.round(half * open), cx = x + w / 2;
+    R(x + 8, 34, inner, 88, '#ffe8a3'); R(x + 8, 34, inner, 6, '#fff3cc'); R(x + 8, 112, inner, 10, '#c9a86a'); // the lit cabin
+    R(x + 8, 34, half - gap, 88, '#c3cad3'); R(cx + gap, 34, half - gap, 88, '#c3cad3');                      // the doors
+    R(x + 8 + half - gap - 1, 34, 1, 88, '#868e96'); R(cx + gap, 34, 1, 88, '#868e96');
+    R(x + 12, 40, 3, 70, '#d9dee4'); R(x + w - 15, 40, 3, 70, '#d9dee4');
+    R(cx - 18, 8, 36, 13, '#1b1f33');
+    ctx.font = `13px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#ff6b6b';
+    ctx.fillText(`${open > 0 ? '◆' : '▲'} ${e.floor}`, cx, 15);
+    R(x + w + 1, 64, 5, 14, '#1b1f33'); R(x + w + 2, 66, 3, 4, dt < 2800 ? '#ffd166' : '#495057'); R(x + w + 2, 72, 3, 4, '#495057');
+  }
+  // the floors: the hallway's carpet (and the lobby below the bathroom) and the bathroom's small tiles
+  function drawLeftFloors() {
+    R(HALL.x0, 126, HALL.x1 - HALL.x0, H - 126, '#4a5578');
+    R(BW.x0, BW.front, HALL.x0 - BW.x0, H - BW.front, '#4a5578');
+    for (let y = 132; y < H; y += 8) { R(HALL.x0, y, HALL.x1 - HALL.x0, 1, '#46516f'); if (y > BW.front) R(BW.x0, y, HALL.x0 - BW.x0, 1, '#46516f'); }
+    R(HALL.spine - 24, 126, 48, H - 126, '#5b6891'); R(HALL.spine - 24, 126, 2, H - 126, '#6f7caa'); R(HALL.spine + 22, 126, 2, H - 126, '#6f7caa');
+    for (let y = 126, row = 0; y < BW.front; y += 14, row++) {
+      for (let x = BW.x0, col = 0; x < BW.x1; x += 14, col++) {
+        R(x, y, Math.min(14, BW.x1 - x), Math.min(14, BW.front - y), (row + col) % 2 ? '#eef3f6' : '#e2eaef');
+        R(x, y, Math.min(14, BW.x1 - x), 1, '#d3dde3');
+      }
+    }
+    R(-24, OFFICE_DOOR.y0 + 8, 30, OFFICE_DOOR.y1 - OFFICE_DOOR.y0 - 16, '#6c4f3a'); // the doormat at the office's door
+    R(-22, OFFICE_DOOR.y0 + 10, 26, OFFICE_DOOR.y1 - OFFICE_DOOR.y0 - 20, '#7d5c45');
+  }
+  // the low walls (cut away, like a dollhouse) that run in depth: the office's left wall, with its
+  // door, and the bathroom's, with its own; seen from above, their top
+  const sideWall = (x0, x1, y0, y1) => { R(x0, y0, x1 - x0, y1 - y0, '#9aa3ae'); R(x0, y0, x1 - x0, 2, '#c9ced6'); R(x1 - 2, y0, 2, y1 - y0, '#7d8692'); };
+  function drawSideWalls() {
+    sideWall(HALL.x1, 0, 122, OFFICE_DOOR.y0); sideWall(HALL.x1, 0, OFFICE_DOOR.y1, H);
+    sideWall(BW.x1, HALL.x0, 122, BW.door.y0); sideWall(BW.x1, HALL.x0, BW.door.y1, BW.front);
+    for (const y of [OFFICE_DOOR.y0, OFFICE_DOOR.y1 - 6]) R(HALL.x1 - 2, y, 12, 6, '#5c636e'); // door posts
+    for (const y of [BW.door.y0, BW.door.y1 - 6]) R(BW.x1 - 2, y, 12, 6, '#5c636e');
+  }
+  // the bathroom's front wall: low, like the dining room's
+  function drawBathFront() {
+    const y = BW.front - 14;
+    R(BW.x0, y, HALL.x0 - BW.x0, 14, '#9aa3ae'); R(BW.x0, y, HALL.x0 - BW.x0, 3, '#c9ced6'); R(BW.x0, y + 12, HALL.x0 - BW.x0, 2, '#7d8692');
+  }
+  // the signs: EXIT over the office's door, WC at the bathroom's (x, y: where they hang from)
+  const SIGNS = [
+    { x: -4, y: OFFICE_DOOR.y0 - 8, text: () => t('scene.exit'), bg: '#1e7f4a', fg: '#e9fff2' },
+    { x: BW.x1 + 4, y: BW.door.y0 - 8, text: () => t('scene.wc'), bg: '#1b1f33', fg: '#e8e9f1' },
+  ];
+  function drawSignPlate({ x, y, text, bg, fg }) {
+    ctx.font = `13px ${FONT}`;
+    const s = text(), w = Math.ceil(ctx.measureText(s).width) + 10;
+    R(x - w / 2, y - 14, w, 14, bg); R(x - w / 2, y - 14, w, 1, '#ffffff33');
+    ctx.fillStyle = fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(s, x, y - 7);
+  }
+  const drawSigns = () => SIGNS.forEach(drawSignPlate);
+  // the lobby's water cooler
+  const COOLER = { x: -212, y: 476 };
+  function drawCooler() {
+    const { x, y } = COOLER;
+    R(x - 10, y - 62, 20, 24, '#9ad1ff'); R(x - 8, y - 60, 6, 18, '#c7e7ff'); R(x - 12, y - 38, 24, 38, '#e9ecef'); R(x - 12, y - 38, 24, 3, '#ced4da');
+    R(x - 5, y - 28, 4, 4, '#3f73f0'); R(x + 2, y - 28, 4, 4, '#ef476f'); R(x - 10, y - 2, 20, 2, '#adb5bd');
   }
 
   // The café: tiles with neon, a fridge, a marble counter with an espresso machine and a display case.
@@ -672,6 +767,9 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   // ---------------------------------------------------------------- the newcomers (subagents)
 
   const atDesk = (i) => sim.ghosts.find((g) => g.desk === i);
+  /** The desks in use: each one is there while its newcomer is (it fades in and out with them). */
+  const desksInUse = () => sim.ghosts.filter((g) => g.desk >= 0 && g.fade > 0).map((g) => ({ i: g.desk, s: HOT_DESKS[g.desk], alpha: Math.min(1, g.fade * 1.4) }));
+  const faded = (alpha, fn) => () => { ctx.save(); ctx.globalAlpha *= alpha; fn(); ctx.restore(); };
   function drawHotChair(i) {
     const s = HOT_DESKS[i];
     R(s.x - 14, s.y - 36, 28, 30, '#3a3f58');
@@ -691,8 +789,8 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     R(s.x - 33, s.y + 5, 66, 13, '#1b1f33');
     ctx.font = `${fpx(13)}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = g ? g.cfg.shirt : '#8d99ae';
-    // who sits there and for which project (an office can hold several), or that it is free
-    ctx.fillText(fit(g ? `${g.cfg.name} · ${g.project || TEAM[g.role]?.title || ''}` : t('sim.newcomer.hotDesk'), 62), s.x, s.y + 12);
+    // who sits there and for which project (an office can hold several)
+    ctx.fillText(fit(g ? `${g.cfg.name} · ${g.project || TEAM[g.role]?.title || ''}` : '', 62), s.x, s.y + 12);
   }
   function drawLaptop(i, now) {
     const s = HOT_DESKS[i], g = atDesk(i);
@@ -720,7 +818,6 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   function drawProps(now) {
     drawRack(now);
     drawExtinguisher();
-    for (const [x, y] of PLANTS) drawPlant(x, y);
     drawMeetingTable();
   }
 
@@ -920,7 +1017,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     const head = feetY(a) - 21 * P;
     const k = Math.min(1, (now - d.start) / 350, (d.until - now) / 400); // fades in and out
     if (k <= 0) return;
-    const cx = Math.max(52, Math.min(W - 52, x + 62)), cy = Math.max(46, head - 34 + Math.sin(now / 400) * 3);
+    const cx = Math.max(LEFT + 52, Math.min(W - 52, x + 62)), cy = Math.max(46, head - 34 + Math.sin(now / 400) * 3);
     const rgb = d.kind === 'rainbow' ? hslRgb((now / 6) % 360, 0.9, 0.6) : rgbOf(info.glow);
     // glow: a faint halo that breathes behind the cloud
     const pulse = 0.92 + 0.08 * Math.sin(now / 420);
@@ -967,7 +1064,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     const lines = wrap(b.text, fpx(176), 3);
     const w = Math.min(fpx(190), Math.max(...lines.map((l) => ctx.measureText(l).width)) + 14);
     const h = lines.length * lh + 8;
-    const bx = iso ? x - w / 2 : Math.max(4, Math.min(W - w - 4, x - w / 2)), by = iso ? y - h : Math.max(4, y - h);
+    const bx = iso ? x - w / 2 : Math.max(LEFT + 4, Math.min(W - w - 4, x - w / 2)), by = iso ? y - h : Math.max(4, y - h);
     const fade = Math.min(1, (b.until - now) / 300);
     ctx.globalAlpha = Math.max(0, fade);
     const border = b.tone === 'error' ? '#e63946' : b.tone === 'warn' ? '#f4a261' : '#2b2d42';
@@ -1020,11 +1117,16 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     const [sr, sg, sb] = light.shade;
     if (sr + sg + sb < 2.995) {
       ctx.globalCompositeOperation = 'multiply';
-      R(0, 0, W, H, `rgb(${Math.round(sr * 255)},${Math.round(sg * 255)},${Math.round(sb * 255)})`);
+      R(LEFT, 0, WORLD_W, H, `rgb(${Math.round(sr * 255)},${Math.round(sg * 255)},${Math.round(sb * 255)})`);
     }
     ctx.globalCompositeOperation = 'screen';
     const n = light.night;
     const flick = Math.sin(now / 900) > 0.97 ? 0.6 : 1;
+    // the hallway's ceiling lights, the bathroom's, the stalls' signs and the elevator's display
+    for (const y of [220, 420, 620]) glow(HALL.spine, y, 70, '255,226,170', 0.02 + n * 0.08);
+    glow((BW.x0 + BW.x1) / 2, 260, 90, '235,245,255', 0.02 + n * 0.07);
+    BW.stalls.forEach((s, i) => glow(s.x, 25, 10, sim.bath.stalls[i] ? '255,60,60' : '60,255,120', 0.22));
+    glow(ELEVATOR.x + ELEVATOR.w / 2, 14, 22, '255,90,90', 0.12 + n * 0.08);
     // the café's neon and the light under the shelf
     glow(840, 30, 60, '255,95,162', (0.1 + n * 0.1) * flick);
     glow(791, 29, 24, '127,247,255', (0.1 + n * 0.1) * flick);
@@ -1034,8 +1136,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     glow(CAFE.fridge.x + 14, 100, 38, '150,215,255', 0.04 + n * 0.08);
     // the dining room lamps, warm at night
     for (const lx of [DINING.table.x - 34, DINING.table.x + 34]) glow(lx, DINING.table.y - 52, 70, '255,206,140', 0.03 + n * 0.11);
-    // the bathroom sign, the dot clock and the TV
-    glow(BATH.x + 46, 29, 12, sim.bath.occupant ? '255,60,60' : '60,255,120', 0.25);
+    // the dot clock and the TV
     glow(CLOCK.x + CLOCK.w / 2, CLOCK.y + CLOCK.h / 2, 48, '255,59,48', 0.04 + n * 0.05);
     const tvRgb = { breaking: '255,60,40', sports: '80,200,110', news: '90,140,220', weather: '150,190,255' }[tvChannel(sim, now)];
     glow(TV.x, TV.feet - 18 - TV.h / 2, 84, tvRgb, 0.04 + n * 0.08);
@@ -1052,7 +1153,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
       const busy = ['working', 'thinking', 'red'].includes(a.state);
       if (busy || n > 0.3) glow(a.cfg.seat.x + 34, a.cfg.seat.y - 34, 34, a.state === 'red' ? '255,80,100' : '120,190,255', (busy ? 0.06 : 0.02) + n * 0.06);
     }
-    for (const g of sim.ghosts) if (g.desk >= 0 && ['working', 'thinking'].includes(g.state)) glow(HOT_DESKS[g.desk].x + 16, HOT_DESKS[g.desk].y - 26, 26, '150,210,255', 0.05 + n * 0.06);
+    for (const g of sim.ghosts) if (g.desk >= 0 && g.fade > 0 && ['working', 'thinking'].includes(g.state)) glow(HOT_DESKS[g.desk].x + 16, HOT_DESKS[g.desk].y - 26, 26, '150,210,255', 0.05 + n * 0.06);
     // the office sign
     glow(SIGN.x, SIGN.y + 22, 56, '255,209,102', 0.03 + n * 0.05);
     // the fire: flickering orange light and the alarm spinning
@@ -1067,16 +1168,17 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     }
     ctx.globalCompositeOperation = 'source-over';
     // with the fire, the office turns red in pulses
-    if (f && ['burning', 'fighting'].includes(f.phase)) R(0, 0, W, H, `rgba(255,40,20,${0.03 + 0.02 * Math.sin(now / 160)})`);
+    if (f && ['burning', 'fighting'].includes(f.phase)) R(LEFT, 0, WORLD_W, H, `rgba(255,40,20,${0.03 + 0.02 * Math.sin(now / 160)})`);
     // lightning lights up the office for an instant
     const bolt = lightning(now, sim.weather);
-    if (bolt.flash > 0) R(0, 0, W, H, `rgba(220,230,255,${0.08 * bolt.flash})`);
+    if (bolt.flash > 0) R(LEFT, 0, WORLD_W, H, `rgba(220,230,255,${0.08 * bolt.flash})`);
   }
 
+  // (on the canvas, in its own pixels: the transform is the identity)
   function drawVignette() {
-    const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.6, W / 2, H / 2, W * 0.66);
+    const g = ctx.createRadialGradient(WORLD_W / 2, H / 2, H * 0.6, WORLD_W / 2, H / 2, WORLD_W * 0.66);
     g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.12)');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, WORLD_W, H);
   }
 
   function drawBanner(now) {
@@ -1085,10 +1187,10 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     const colors = { warn: ['#f4a261', '#2b2d42'], done: ['#2a9d8f', '#fff'], chat: ['#3f73f0', '#fff'], fire: ['#e85d04', '#fff'] }[banner.tone] || ['#2b2d42', '#fff'];
     const pulse = banner.tone === 'warn' || banner.tone === 'fire' ? 0.85 + Math.sin(now / 200) * 0.15 : 1;
     ctx.globalAlpha = pulse;
-    R(0, H - 34, W, 34, colors[0]);
+    R(0, H - 34, WORLD_W, 34, colors[0]);
     ctx.globalAlpha = 1;
     ctx.font = `20px ${FONT}`; ctx.fillStyle = colors[1]; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(fit(banner.text, W - 260), W / 2, H - 17);
+    ctx.fillText(fit(banner.text, WORLD_W - 260), WORLD_W / 2, H - 17);
   }
 
   // ---------------------------------------------------------------- the isometric view
@@ -1126,7 +1228,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   }
   /** The matrix a person is drawn with (and what goes above them: bubble, dream, diamond). */
   function personM(a) {
-    if (!iso) return ID;
+    if (!iso) return FLAT;
     const [x, y] = anchor(a);
     return cam.billboard(a.x, feetY(a), x, y);
   }
@@ -1144,7 +1246,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   const rgb = (c) => `rgb(${c.join(',')})`;
   function drawIsoBackdrop(now, light) {
     use([BACKDROP_PX, 0, 0, BACKDROP_PX, 0, 0]);
-    drawOutdoor(outdoor({ date: sim.date(), weather: sim.weather, light, now, x0: 0, x1: W / BACKDROP_PX, top: 0, bottom: H / BACKDROP_PX, glass: false, arc: 165 }));
+    drawOutdoor(outdoor({ date: sim.date(), weather: sim.weather, light, now, x0: 0, x1: WORLD_W / BACKDROP_PX, top: 0, bottom: H / BACKDROP_PX, glass: false, arc: 165 }));
     drawTower(light);
   }
   /** The tower's colors: by day and by night, greyer on a grey day and warmer at sunset. */
@@ -1165,7 +1267,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
       const at = (u) => [ax + (bx - ax) * u, ay + (by - ay) * u];
       poly([P0(...at(u0), z0), P0(...at(u1), z0), P0(...at(u1), z1), P0(...at(u0), z1)], color);
     };
-    const faces = [[[0, H], [W, H]], [[W, H], [W, BACK]]];
+    const faces = [[[LEFT, H], [W, H]], [[W, H], [W, BACK]]];
     const lit = `rgba(255,214,140,${0.55 * n})`;
     for (let k = 1; k <= FLOORS; k++) {
       const z = -k * STOREY; // the floor of the k-th one below
@@ -1183,7 +1285,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     }
     // the tower's edges, from the street to the office
     ctx.strokeStyle = c.edge; ctx.lineWidth = 1;
-    for (const [x, y] of [[0, H], [W, H], [W, BACK]]) {
+    for (const [x, y] of [[LEFT, H], [W, H], [W, BACK]]) {
       ctx.beginPath(); ctx.moveTo(...P0(x, y, -(FLOORS + 1) * STOREY)); ctx.lineTo(...P0(x, y, 0)); ctx.stroke();
     }
   }
@@ -1194,34 +1296,36 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     const P0 = (x, y, z = 0) => cam.proj(x, y, z);
     // the floor: a rhombus with its model-like thickness on the two front edges
     const slab = 12;
-    poly([P0(0, H), P0(W, H), P0(W, BACK), [P0(W, BACK)[0], P0(W, BACK)[1] + slab], [P0(W, H)[0], P0(W, H)[1] + slab], [P0(0, H)[0], P0(0, H)[1] + slab]], '#23283f');
+    poly([P0(LEFT, H), P0(W, H), P0(W, BACK), [P0(W, BACK)[0], P0(W, BACK)[1] + slab], [P0(W, H)[0], P0(W, H)[1] + slab], [P0(LEFT, H)[0], P0(LEFT, H)[1] + slab]], '#23283f');
     poly([P0(W, H), P0(W, BACK), [P0(W, BACK)[0], P0(W, BACK)[1] + slab], [P0(W, H)[0], P0(W, H)[1] + slab]], '#1b1f33');
     ctx.save();
     use(cam.floor(0));
-    ctx.beginPath(); ctx.rect(0, BACK, W, H - BACK); ctx.clip();
+    ctx.beginPath(); ctx.rect(LEFT, BACK, WORLD_W, H - BACK); ctx.clip();
     drawTiles();
     drawRugs();
+    drawLeftFloors();
     drawCafeFloor();
     drawDiningFloor(false);
     ctx.restore();
-    // the left wall (x = 0): plain, with its skirting, two pictures and a door
-    const side = (u0, v0, u1, v1, color) => poly([P0(0, u0, v0), P0(0, u1, v0), P0(0, u1, v1), P0(0, u0, v1)], color);
+    // the building's left wall (x = LEFT): the bathroom's tiles, then the lobby's paint with two pictures
+    const side = (u0, v0, u1, v1, color) => poly([P0(LEFT, u0, v0), P0(LEFT, u1, v0), P0(LEFT, u1, v1), P0(LEFT, u0, v1)], color);
     use(ID);
     side(BACK, 0, H, WALL_H, '#2b3150');
+    side(BACK, 0, BW.front, WALL_H, '#d3e3e9');
+    for (let z = 12; z < WALL_H; z += 12) side(BACK, z, BW.front, z + 1, '#b9ced6');
     side(BACK, WALL_H - 6, H, WALL_H, '#232840');
-    side(BACK, 0, H, 5, '#9aa3ae');
-    side(BACK, 0, H, 1, '#7d8692');
-    side(170, 30, 250, 92, '#1b1f33'); side(174, 34, 246, 88, '#3f73f0'); side(186, 46, 234, 76, '#ffd166');  // a picture
-    side(290, 40, 340, 86, '#1b1f33'); side(294, 44, 336, 82, '#e9ecf5'); side(300, 56, 330, 60, '#2a9d8f'); side(300, 66, 322, 70, '#ef476f');
-    side(430, 0, 492, 96, '#1b1f33'); side(434, 0, 488, 92, '#8c5a33'); side(476, 44, 482, 50, '#ffd166');      // the door
-    // the back wall: the window with the city, the sign, the bathroom, the alarm and the café
+    side(BW.front, 0, H, 5, '#9aa3ae');
+    side(BW.front, 0, H, 1, '#7d8692');
+    side(520, 30, 600, 92, '#1b1f33'); side(524, 34, 596, 88, '#3f73f0'); side(536, 46, 584, 76, '#ffd166');  // a picture
+    side(640, 40, 690, 86, '#1b1f33'); side(644, 44, 686, 82, '#e9ecf5'); side(650, 56, 680, 60, '#2a9d8f'); side(650, 66, 672, 70, '#ef476f');
+    // the back wall: the bathroom and the elevator, the window with the city, the sign, the alarm and the café
     ctx.save();
     use(cam.front(BACK));
-    ctx.beginPath(); ctx.rect(0, 0, W, BACK); ctx.clip();
+    ctx.beginPath(); ctx.rect(LEFT, 0, WORLD_W, BACK); ctx.clip();
     drawGlass(now, light);
     drawSign(t);
-    drawBathWall();
-    drawBathDoor(now);
+    drawWallBlock();
+    drawLeftBackWall(now);
     drawAlarm(now);
     drawCafeWall(now);
     drawSkirting();
@@ -1230,7 +1334,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     // the corner where the two walls meet
     use(ID);
     ctx.strokeStyle = '#151827'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(...P0(0, BACK, 0)); ctx.lineTo(...P0(0, BACK, WALL_H)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(...P0(LEFT, BACK, 0)); ctx.lineTo(...P0(LEFT, BACK, WALL_H)); ctx.stroke();
   }
 
   // the office chair: wheeled base, seat and backrest (the backrest stays behind whoever sits)
@@ -1249,6 +1353,17 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     drawNamePlate(a);
     use(cam.front(s.y - 6, s.y - 12, 26));
     drawDeskProps(a, now);
+  }
+
+  // a low wall (cut away), in sections so that people sort well with it
+  const LOW_WALL = 34;
+  function isoWall(x0, y0, x1, y1, add) {
+    const along = y1 - y0 > x1 - x0, len = along ? y1 - y0 : x1 - x0;
+    for (let u = 0; u < len; u += 36) {
+      const a = u, b = Math.min(len, u + 36);
+      const [bx0, by0, bx1, by1] = along ? [x0, y0 + a, x1, y0 + b] : [x0 + a, y0, x0 + b, y1];
+      add((bx0 + bx1) / 2, (by0 + by1) / 2, () => box(bx0, by0, bx1, by1, LOW_WALL, { top: '#c9ced6', front: '#9aa3ae', side: '#7d8692' }));
+    }
   }
 
   function isoHotDesk(i, now) {
@@ -1274,7 +1389,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   /** Is the pointer over the rack? (in the isometric view, its volume on the screen) */
   function overRack(mx, my) {
     const { x, y, w, h } = RACK, gy = y + h;
-    if (!iso) return mx >= x && mx <= x + w && my >= y && my <= gy;
+    if (!iso) return mx + LEFT >= x && mx + LEFT <= x + w && my >= y && my <= gy;
     const pts = [];
     for (const px of [x, x + w]) for (const py of [gy - 22, gy]) for (const z of [0, h]) pts.push(cam.proj(px, py, z));
     const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
@@ -1345,7 +1460,13 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     const items = [];
     const add = (x, y, fn) => items.push({ d: cam.depth(x, y), fn });
     const at = (m, fn) => () => { use(m); fn(); };
-    HOT_DESKS.forEach((s, i) => { add(s.x, s.y - 40, () => isoChair(s)); add(s.x, s.y + 4, () => isoHotDesk(i, now)); });
+    for (const { i, s, alpha } of desksInUse()) { add(s.x, s.y - 40, faded(alpha, () => isoChair(s))); add(s.x, s.y + 4, faded(alpha, () => isoHotDesk(i, now))); }
+    // the hallway and the bathroom: their low walls, the water cooler and the signs
+    isoWall(HALL.x1, BACK, 0, OFFICE_DOOR.y0, add); isoWall(HALL.x1, OFFICE_DOOR.y1, 0, H, add);
+    isoWall(BW.x1, BACK, HALL.x0, BW.door.y0, add); isoWall(BW.x1, BW.door.y1, HALL.x0, BW.front, add);
+    isoWall(BW.x0, BW.front - 8, HALL.x0, BW.front, add);
+    add(COOLER.x, COOLER.y, at(cam.billboard(COOLER.x, COOLER.y, COOLER.x, COOLER.y), drawCooler));
+    for (const sg of SIGNS) add(sg.x + 6, sg.y + 8, at(cam.billboard(sg.x, sg.y, sg.x, sg.y + 8, LOW_WALL + 22), () => drawSignPlate(sg)));
     for (const g of sim.ghosts) { const [x, y] = anchor(g); add(x, y, at(personM(g), () => drawGhost(g, now))); }
     for (const a of Object.values(agents)) {
       const s = a.cfg.seat;
@@ -1402,7 +1523,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     use(ID);
     if (sr + sg + sb < 2.995) {
       ctx.globalCompositeOperation = 'multiply';
-      R(0, 0, W, H, `rgb(${Math.round(sr * 255)},${Math.round(sg * 255)},${Math.round(sb * 255)})`);
+      R(0, 0, WORLD_W, H, `rgb(${Math.round(sr * 255)},${Math.round(sg * 255)},${Math.round(sb * 255)})`);
     }
     ctx.globalCompositeOperation = 'screen';
     const n = light.night;
@@ -1410,7 +1531,8 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     use(cam.front(BACK));
     glow(840, 30, 60, '255,95,162', (0.1 + n * 0.1) * flick);
     glow(791, 29, 24, '127,247,255', (0.1 + n * 0.1) * flick);
-    glow(BATH.x + 46, 29, 12, sim.bath.occupant ? '255,60,60' : '60,255,120', 0.25);
+    BW.stalls.forEach((s, i) => glow(s.x, 25, 10, sim.bath.stalls[i] ? '255,60,60' : '60,255,120', 0.22));
+    glow(ELEVATOR.x + ELEVATOR.w / 2, 14, 22, '255,90,90', 0.12 + n * 0.08);
     glow(SIGN.x, SIGN.y + 22, 56, '255,209,102', 0.03 + n * 0.05);
     const f = sim.fire;
     if (f && ['burning', 'fighting'].includes(f.phase)) glow(ALARM.x + 5, ALARM.y + 7, 34, '255,40,40', 0.15 + 0.2 * Math.max(0, Math.sin(now / 110)));
@@ -1447,9 +1569,9 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     }
     use(ID);
     ctx.globalCompositeOperation = 'source-over';
-    if (f && ['burning', 'fighting'].includes(f.phase)) R(0, 0, W, H, `rgba(255,40,20,${0.03 + 0.02 * Math.sin(now / 160)})`);
+    if (f && ['burning', 'fighting'].includes(f.phase)) R(0, 0, WORLD_W, H, `rgba(255,40,20,${0.03 + 0.02 * Math.sin(now / 160)})`);
     const bolt = lightning(now, sim.weather);
-    if (bolt.flash > 0) R(0, 0, W, H, `rgba(220,230,255,${0.08 * bolt.flash})`);
+    if (bolt.flash > 0) R(0, 0, WORLD_W, H, `rgba(220,230,255,${0.08 * bolt.flash})`);
   }
 
   function frameIso(now, t, light) {
@@ -1475,6 +1597,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     const light = daylight(sim.date(), sim.weather);
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     ctx.imageSmoothingEnabled = false;
+    if (!iso) use(FLAT);
     if (iso) {
       frameIso(now, t, light);
       requestAnimationFrame(frame);
@@ -1491,7 +1614,10 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
       items.push({ y: s.y + 1, fn: () => drawDesk(a, now) });
       items.push({ y: a.seated ? s.y : a.y, fn: () => drawPerson(a, now) });
     }
-    HOT_DESKS.forEach((s, i) => { items.push({ y: s.y - 1, fn: () => drawHotChair(i) }); items.push({ y: s.y + 1, fn: () => drawHotDesk(i, now) }); });
+    for (const { i, s, alpha } of desksInUse()) { items.push({ y: s.y - 1, fn: faded(alpha, () => drawHotChair(i)) }); items.push({ y: s.y + 1, fn: faded(alpha, () => drawHotDesk(i, now)) }); }
+    for (const [x, y] of PLANTS) items.push({ y, fn: () => drawPlant(x, y) });
+    items.push({ y: COOLER.y, fn: drawCooler });
+    items.push({ y: BW.front - 1, fn: drawBathFront });
     for (const g of sim.ghosts) items.push({ y: g.seated ? g.cfg.seat.y : g.y, fn: () => drawGhost(g, now) });
     items.push({ y: CAFE.bistro.y, fn: () => drawBistro() });
     items.push({ y: DINING.top + 13, fn: () => drawDiningWall() });
@@ -1502,6 +1628,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     items.push({ y: TV.feet, fn: () => drawTV(now) });
     items.push({ y: SOFA.y + 8, fn: () => drawSofa() });
     items.sort((p, q) => p.y - q.y).forEach((i) => i.fn());
+    drawSigns();
     drawSpray(now);
     drawParticles();
     drawLights(now, light);
@@ -1509,6 +1636,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     drawPlumbob(agents[selected], now);
     for (const a of Object.values(agents)) drawBubble(a, now);
     for (const g of sim.ghosts) if (g.fade > 0.5) drawBubble(g, now);
+    use(ID);
     drawVignette();
     drawBanner(now);
     requestAnimationFrame(frame);
@@ -1528,10 +1656,11 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     return best;
   }
   /** Is the pointer over the whiteboard? (in the isometric view, it is mapped to the whiteboard's plane) */
-  const overBoard = (x, y) => (iso ? onBoard(...unapply(BOARD_M(), x, y)) : onBoard(x, y));
+  const overBoard = (x, y) => (iso ? onBoard(...unapply(BOARD_M(), x, y)) : onBoard(x + LEFT, y));
+  /** The pointer, in the canvas's own pixels (the front view's world is shifted by LEFT). */
   const toWorld = (e) => {
     const r = canvas.getBoundingClientRect();
-    return [((e.clientX - r.left) / r.width) * W, ((e.clientY - r.top) / r.height) * H];
+    return [((e.clientX - r.left) / r.width) * WORLD_W, ((e.clientY - r.top) / r.height) * H];
   };
   canvas.addEventListener('mousemove', (e) => {
     const [x, y] = toWorld(e);
@@ -1564,5 +1693,12 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     setView(v) { iso = v !== 'flat'; },
     /** The services left running in the background (server/services.js): the rack shows them. */
     setServices(list) { services = Array.isArray(list) ? list : []; },
+    /** Where the whiteboard is on the canvas, as fractions of it ({ x, y, w, h }), in either view. */
+    boardBox() {
+      const m = iso ? BOARD_M() : FLAT;
+      const pts = [[BOARD.x, BOARD.y], [BOARD.x + BOARD.w, BOARD.y + BOARD.h]].map(([x, y]) => apply(m, x, y));
+      const [x0, x1] = [pts[0][0], pts[1][0]].sort((a, b) => a - b), [y0, y1] = [pts[0][1], pts[1][1]].sort((a, b) => a - b);
+      return { x: x0 / WORLD_W, y: y0 / H, w: (x1 - x0) / WORLD_W, h: (y1 - y0) / H };
+    },
   };
 }

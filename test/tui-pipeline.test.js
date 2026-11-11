@@ -10,7 +10,7 @@ import { startServer } from '../server/server.js';
 import { runTui } from '../tui/app.js';
 import { localFeed } from '../tui/feeds.js';
 import { computeLayout } from '../tui/view.js';
-import { BOARD } from '../public/sim.js';
+import { BOARD, LEFT } from '../public/sim.js';
 import { startFakeAgent } from './fixtures/fake-agent.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -40,7 +40,7 @@ test('desde la terminal: clic en la pizarra → elegir el pipeline del agente �
   try {
     await sleep(120);
     const L = computeLayout(cols, rows);
-    const col = L.ox + Math.round((BOARD.x + BOARD.w / 2) * L.s) + 1;
+    const col = L.ox + Math.round((BOARD.x - LEFT + BOARD.w / 2) * L.s) + 1;
     const row = Math.floor((L.oy + Math.round((BOARD.y + BOARD.h / 2) * L.s)) / 2) + 1;
     type(`\x1b[<0;${col};${row}M`); // click on the whiteboard
     await until(() => stdout.out.includes('Nuevo encargo') && stdout.out.includes('● abierta'));

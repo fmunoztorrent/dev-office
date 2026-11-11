@@ -24,6 +24,19 @@ after(async () => {
 
 const freePort = () => new Promise((resolve) => { const s = net.createServer().listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); }); });
 
+/** A copy of this checkout's project files (the ones git knows, committed or not): never the
+ * temporary files other tests may be writing in it at the same time. */
+function copyProject(dest) {
+  const r = spawnSync('git', ['-C', ROOT, 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], { encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  for (const rel of r.stdout.split('\0').filter(Boolean)) {
+    const src = path.join(ROOT, rel);
+    if (!fs.existsSync(src) || fs.statSync(src).isDirectory()) continue;
+    fs.mkdirSync(path.dirname(path.join(dest, rel)), { recursive: true });
+    fs.copyFileSync(src, path.join(dest, rel));
+  }
+}
+
 async function sandbox() {
   const home = tmp('dto-life-');
   const port = await freePort();
@@ -91,7 +104,7 @@ test('update: la oficina en segundo plano que quedó con la versión vieja se re
   const { home, base, env, cli } = await sandbox();
   // an "old" install in the temp HOME: this checkout with a lower version, serving in the background
   const app = path.join(home, '.dev-team-office', 'app');
-  fs.cpSync(ROOT, app, { recursive: true, filter: (src) => !/\/(\.git|node_modules|\.claude)(\/|$)/.test(src.slice(ROOT.length)) });
+  copyProject(app);
   const pkg = path.join(app, 'package.json');
   const setVersion = (file, v) => {
     fs.writeFileSync(pkg, JSON.stringify({ ...JSON.parse(fs.readFileSync(pkg, 'utf8')), version: v }, null, 2));
@@ -127,7 +140,7 @@ test('update en un clon de git: hace git pull --ff-only, corre setup y reinicia 
   const git = (cwd, ...a) => { const r = spawnSync('git', ['-C', cwd, '-c', 'user.name=t', '-c', 'user.email=t@localhost', ...a], { env, encoding: 'utf8' }); assert.equal(r.status, 0, r.stderr); return r.stdout.trim(); };
   // the "remote" (this checkout's files) and the user's clone of it
   const origin = path.join(home, 'origin');
-  fs.cpSync(ROOT, origin, { recursive: true, filter: (src) => !/\/(\.git|node_modules|\.claude)(\/|$)/.test(src.slice(ROOT.length)) });
+  copyProject(origin);
   git(origin, 'init', '-q', '-b', 'main');
   git(origin, 'add', '-A');
   git(origin, 'commit', '-qm', 'base');

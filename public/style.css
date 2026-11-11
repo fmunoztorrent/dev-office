@@ -30,7 +30,7 @@ body {
 /* ---------- the full-screen game: 16:10 centered, as big as it fits ---------- */
 .stage { position: fixed; inset: 0; display: grid; place-items: center; background: radial-gradient(ellipse at center, #151829 0%, var(--bg) 70%); }
 .screen {
-  position: relative; width: min(100vw, 160vh); aspect-ratio: 960 / 600; overflow: hidden;
+  position: relative; width: min(100vw, 160vh); aspect-ratio: 1216 / 760; overflow: hidden;
   container-type: inline-size;
 }
 canvas#office { position: absolute; inset: 0; width: 100%; height: 100%; display: block; image-rendering: auto; }
@@ -38,23 +38,20 @@ canvas#office { position: absolute; inset: 0; width: 100%; height: 100%; display
 /* ---------- HUD inside the screen ---------- */
 .hud { position: absolute; display: flex; gap: 8px; align-items: center; z-index: 2; }
 .hud-tl { top: 1.4cqi; left: 1.4cqi; }
+/* in the front view, over the office's glass: the hallway and the bathroom (left of it) stay in sight */
+.screen[data-view="flat"] .hud-tl { left: calc(256 / 1216 * 100cqi + 1.4cqi); }
 .hud-tr { top: 1.4cqi; right: 1.4cqi; }
-/* the context, as a fighting game's health bar: bottom center, it empties as the context fills up */
-.ctx-bar { bottom: 1.6cqi; left: 50%; transform: translateX(-50%); width: min(46cqi, 520px); flex-direction: column; align-items: stretch; gap: 2px; pointer-events: none; font-family: "VT323", monospace; transition: bottom .2s steps(3); }
-/* above the game's notice along the bottom (34 of the canvas's 600 px) */
-.ctx-bar.lifted { bottom: calc(34 / 600 * 100% + 1cqi); }
-.ctx-label { display: flex; justify-content: space-between; gap: 10px; color: #fff; font-size: max(13px, 1.7cqi); line-height: 1; text-shadow: 2px 0 #000, -2px 0 #000, 0 2px #000, 0 -2px #000; letter-spacing: 1px; text-transform: uppercase; }
-.ctx-label span { color: #ffe066; }
-.ctx-track { position: relative; height: max(14px, 2.2cqi); background: #2a0c0c; box-shadow: 0 0 0 2px #000, 0 0 0 4px #e9ecef, 0 0 0 6px #000, 4px 6px 0 6px #00000055; overflow: hidden; }
+/* the agent's context: a small chip next to the weather (a mini health bar that empties as it fills up) */
+.ctx-chip { display: inline-flex; align-items: center; gap: 6px; font: 18px/1 "VT323", monospace; padding: 4px 8px 3px; background: rgba(18, 20, 33, .82); color: #dfe6f5; box-shadow: 0 0 0 2px #0b0c14, inset 0 0 0 2px #3a3f58; white-space: nowrap; }
+.ctx-chip b { font-weight: normal; color: #9aa3c0; }
+.ctx-track { position: relative; width: 54px; height: 8px; background: #2a0c0c; box-shadow: 0 0 0 1px #000; overflow: hidden; }
 .ctx-trail, .ctx-fill { position: absolute; inset: 0 auto 0 0; width: 100%; }
 .ctx-trail { background: #e63946; transition: width 900ms ease-out 450ms; }
-.ctx-fill { background: linear-gradient(#fff6a8 0 22%, #ffd400 22% 70%, #e0a800 70%); transition: width 260ms steps(8), background 300ms; }
-.ctx-bar.mid .ctx-fill { background: linear-gradient(#ffd8a8 0 22%, #ff922b 22% 70%, #d9480f 70%); }
-.ctx-bar.low .ctx-fill { background: linear-gradient(#ffb3b3 0 22%, #f03e3e 22% 70%, #a51111 70%); }
-.ctx-pct { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: max(12px, 1.5cqi); color: #fff; text-shadow: 1px 0 #000, -1px 0 #000, 0 1px #000, 0 -1px #000; text-transform: uppercase; }
-.ctx-ko { position: absolute; left: 50%; bottom: max(18px, 2.8cqi); transform: translateX(-50%); font: max(22px, 3.6cqi)/1 "VT323", monospace; color: #ff3b30; text-shadow: 2px 2px #000, -2px -2px #000, 2px -2px #000, -2px 2px #000; animation: ctx-ko 600ms steps(2) infinite; }
-@keyframes ctx-ko { 50% { opacity: .2; } }
-@media (prefers-reduced-motion: reduce) { .ctx-bar, .ctx-trail, .ctx-fill { transition: none; } .ctx-ko { animation: none; } }
+.ctx-fill { background: linear-gradient(#fff6a8 0 30%, #ffd400 30%); transition: width 260ms steps(8), background 300ms; }
+.ctx-chip.mid .ctx-fill { background: linear-gradient(#ffd8a8 0 30%, #ff922b 30%); }
+.ctx-chip.low .ctx-fill { background: linear-gradient(#ffb3b3 0 30%, #f03e3e 30%); }
+.ctx-chip.low .ctx-pct { color: #ff6b6b; }
+@media (prefers-reduced-motion: reduce) { .ctx-trail, .ctx-fill { transition: none; } }
 .hud-btn {
   position: relative; width: var(--hud); height: var(--hud); padding: calc(var(--hud) * .2); cursor: pointer;
   display: grid; place-items: center; color: var(--accent);

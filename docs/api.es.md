@@ -45,7 +45,7 @@ Un evento puede decir a qué **oficina** va (`office`, o `devteam_office` en el 
 
 | Método | Ruta | Cuerpo | Respuesta |
 |---|---|---|---|
-| `POST` | `/v1/ask` | `{ text, office?, from?, wait? }` | `202 { ok, ask }` enseguida; con `wait: true`, `200 { ok, ask }` cuando llega la respuesta |
+| `POST` | `/v1/ask` | `{ text, office?, from?, role?, session?, wait? }` (`role`: el personaje al que le preguntas, que contesta desde el proyecto y la tarea en que trabaja; `session`: la que contesta) | `202 { ok, ask }` enseguida; con `wait: true`, `200 { ok, ask }` cuando llega la respuesta |
 | `GET` | `/v1/asks?office=<id>&limit=20` | | `{ ok, asks }`: las últimas, con `{ id, office, agent, question, answer, status, error, from, forked, role, createdAt }` |
 
 La pregunta la contesta el agente de turno de la oficina (la sesión más reciente, bifurcada y en sólo lectura; o el agente registrado de la oficina). `status`: `asking` → `answered` | `failed`. En la oficina llegan como eventos `btw` con `phase` `ask`, `answer` o `failed`, y a los visores de esa oficina como `{ type: "ask", ask }`.
@@ -314,7 +314,7 @@ El cliente puede enviar:
 { "type": "command", "action": "demo" | "demo-pi" | "stop-demo" | "reset" }
 { "type": "view", "office": "pagos" }              // mirar otra oficina: llega su snapshot (y queda guardada)
 { "type": "prefs", "prefs": { "lang": "es" } }     // cambiar ajustes generales
-{ "type": "ask", "text": "¿quién está con los tests?", "id": 2 }  // btw: el ack trae { ask } y la respuesta llega como { type: "ask", ask }
+{ "type": "ask", "text": "¿quién está con los tests?", "role": "qa", "id": 2 }  // btw (role, session: opcionales, como en POST /v1/ask): el ack trae { ask } y la respuesta llega como { type: "ask", ask }
 { "type": "client", "app": "web" }                  // la página web dice que se recarga sola cuando `hello` trae otra versión
 ```
 

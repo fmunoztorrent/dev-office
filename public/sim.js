@@ -1,6 +1,6 @@
 // The office simulation, without drawing: characters, routes, reactions to events and particles.
 // Used by the canvas renderer (browser, game.js) and the terminal renderer (tui/).
-// All coordinates are in a W×H world.
+// All coordinates are in a world from x = LEFT to W and from y = 0 to H.
 //
 // Besides reacting to what the agent does, each character has its own "brain": needs that grow
 // over time (talking, coffee, bathroom, consulting, dreaming) and a personality that decides what
@@ -11,8 +11,10 @@
 // requests, the agent's questions and permissions go to the PO's desk, and the PO never decides
 // anything alone (chit-chat yes; pitching ideas or answering scope questions, no). The office
 // also has its own life: at 13:00 the team goes to lunch in the dining room, there is a bathroom
-// (one at a time, with a queue) and sometimes the server catches fire and the technical team puts
-// it out and repairs it.
+// (a room off the hallway, with two stalls, a queue and gossip at the mirror) and sometimes the
+// server catches fire and the technical team puts it out and repairs it. The office takes the
+// whole floor of a building: its door opens to a hallway with the elevator at its end, where the
+// newcomers (the subagents) arrive and leave; each one gets a desk that is there while it works.
 // The texts (dialogs, log) are in the game's languages (i18n.js, locales/).
 // What happens "sometimes" always has a random factor: the need fills up and then a roll has to
 // be won for it to happen.
@@ -22,7 +24,10 @@ import { t, ta, listOf, onLanguage } from './i18n.js';
 import { zoned, zoneInfo, systemZone, validZone } from './clock.js';
 export { daylight } from './sky.js';
 
-export const W = 960, H = 600;
+// The office is x 0..W; to its left, the hallway (with the elevator) and the bathroom; below the
+// living room, the newcomers' desks. The canvas shows the whole floor: (W - LEFT) × H.
+export const LEFT = -256, W = 960, H = 760;
+export const WORLD_W = W - LEFT;
 
 // Top row: the product corner (designer, PO and analyst, together) and the manager.
 // Bottom row: the technical team, with the TL a bit apart (people go consult them).
@@ -108,8 +113,18 @@ export const DINING_SEATS = {
 };
 const COUNTER_SPOTS = [{ x: 836, y: 150 }, { x: 872, y: 150 }, { x: 908, y: 150 }];
 export const PARTITION = [[190, 296], [340, 440], [484, 600]]; // planters at x = CAFE.x - 6, with gaps at the aisles
-// The bathroom: a door in the wall, between the clock and the café. One at a time.
-export const BATH = { x: 714, w: 52, door: { x: 740, y: 126 }, front: { x: 740, y: 150 }, line: { x: 694, y: 154 } };
+// The bathroom: a room left of the hallway, with two stalls and a sink with its mirror on the back
+// wall. Its walls are low (cut away, like a dollhouse) so what happens inside shows: whoever goes
+// in walks to a free stall and closes its door, then washes their hands; at the mirror, they chat.
+export const BATHROOM = {
+  x0: LEFT, x1: -128, front: 420,                   // its floor: x0..x1, from the back wall to `front`
+  door: { y0: 262, y1: 318 },                       // the gap in its wall to the hallway (x1..x1 + 8)
+  stalls: [{ x: -234, w: 34 }, { x: -194, w: 34 }], // their doors, on the back wall (x: the middle)
+  sink: { x: -156, y: 150, w: 44 },                 // the counter with the mirror (x: the middle)
+};
+const BATH_IN = { x: -150, y: 290 }, BATH_OUT = { x: -100, y: 290 };
+const BATH_LINE = { x: -96, y: 340 };               // the queue, along the hallway's wall
+const inBath = (p) => p.x < BATHROOM.x1 + 4 && p.y < BATHROOM.front;
 // The server rack (the one that catches fire) and its extinguisher, on the floor to its left.
 export const RACK = { x: 572, y: 150, w: 42, h: 92 };
 export const EXTINGUISHER = { x: 561, y: 242 };
@@ -127,15 +142,22 @@ export const SPOT = {
   table: { x: 600, y: 515 },
   sofa: { x: 236, y: 520 }, // next to the sofa, to chat standing up
 };
-export const PLANTS = [[20, 560], [700, 400], [944, 590]];
+export const PLANTS = [[700, 400], [944, 590], [16, 744], [748, 744], [944, 744], [-236, 744], [-142, 470]];
 const TABLE_SEATS = [[-75, -40], [-25, -42], [25, -42], [75, -40], [-108, 0], [108, 0], [-100, 42], [100, 42]];
-const CORRIDOR_TOP = 148, CORRIDOR_MID = 318, CORRIDOR_LOW = 462;
-const LANES = [25, 445, 637]; // gaps between desks where people switch aisles
-// Hot desks: where the newcomers sit. Each subagent is a new employee who comes in for its subtask
-// and leaves when it is done: a translucent extra of its role's character. More newcomers than
-// desks sit at the meeting table.
-export const HOT_DESKS = [{ x: 78, y: 560 }, { x: 166, y: 560 }];
-export const STAIRS = { x: -14, y: CORRIDOR_LOW }; // where the newcomers come in and go out
+const CORRIDOR_TOP = 148, CORRIDOR_MID = 318, CORRIDOR_LOW = 462, CORRIDOR_FRONT = 624;
+const LANES = [25, 445, 637];   // gaps between desks where people switch aisles
+const FRONT_LANES = [240, 748]; // from the lower aisle to the front one: around the sofa and the meeting table
+// The newcomers' desks: each subagent is a new employee who comes in for its subtask and leaves
+// when it is done (a translucent extra of its role's character). Its desk appears with it, in the
+// row in front of the living room, and goes with it; more newcomers than places sit at the
+// meeting table.
+export const HOT_DESKS = [70, 170, 270, 370, 470, 570, 670].map((x) => ({ x, y: 704 }));
+// The hallway: from the office's door (in its left wall, at the lower aisle) to the elevator, at
+// its end on the back wall. The newcomers arrive and leave by the elevator.
+export const HALL = { x0: -120, x1: -8, spine: -64 };
+export const OFFICE_DOOR = { y0: 430, y1: 494 };      // the gap in the office's left wall (x -8..0)
+export const ELEVATOR = { x: -112, w: 96, spot: { x: HALL.spine, y: 134 } };
+const DOOR_IN = { x: 14, y: CORRIDOR_LOW }, DOOR_OUT = { x: HALL.spine, y: CORRIDOR_LOW };
 const NEWCOMER_NAMES = ['Nico', 'Sam', 'Alex', 'Robin', 'Fran', 'Dani', 'Cami', 'Juli', 'Ale', 'Gabi', 'Santi', 'Vale', 'Noa', 'Eli'];
 const FADE_MS = 900;
 const DEVS = ['backend', 'frontend', 'designer'];
@@ -305,7 +327,7 @@ export function assignees(text) {
 }
 
 // Conversations that are cut short if real work reaches the character (consulting the TL is not).
-const LEISURE = new Set(['gossip', 'deskchat', 'coffee', 'lunchtalk', 'archchat', 'idea', 'rounds', 'tv']);
+const LEISURE = new Set(['gossip', 'deskchat', 'bathgossip', 'coffee', 'lunchtalk', 'archchat', 'idea', 'rounds', 'tv']);
 
 // When the weather outside changes (the real one, or the simulated one when offline)
 const SKY_GROUP = { clear: 'fair', partly: 'fair', cloudy: 'cloudy', fog: 'fog', drizzle: 'wet', rain: 'wet', storm: 'storm', snow: 'snow' };
@@ -321,7 +343,7 @@ function describe(kind, who, extra) {
     case 'archchat': case 'assign': return t(`sim.journal.${kind}`, { ...vars, names: listOf((extra.with || []).map(name)) });
     case 'dream': return t(extra.dream === 'skull' ? 'sim.journal.nightmare' : 'sim.journal.dream', { ...vars, dream: DREAMS[extra.dream]?.label || extra.dream, emoji: DREAMS[extra.dream]?.emoji || '' });
     case 'weather': return extra.text;
-    case 'deskchat': case 'gossip': case 'idea': case 'feasibility': case 'consult': case 'rounds': case 'coffee': case 'requirement':
+    case 'deskchat': case 'gossip': case 'bathgossip': case 'idea': case 'feasibility': case 'consult': case 'rounds': case 'coffee': case 'requirement':
     case 'bathroom': case 'lunch': case 'lunchend': case 'fire': case 'repaired': case 'tv': case 'pane': case 'paneDone':
       return t(`sim.journal.${kind}`, vars);
     case 'newcomer': case 'farewell': return t(`sim.journal.${kind}`, { ...vars, name: extra.name || '', role: TEAM[who]?.title || who });
@@ -426,20 +448,47 @@ class Agent {
   }
 }
 
-// Aisles: behind row 1, between rows, and in front of row 2 (the table area).
-function corridor(y) { return y < 270 ? CORRIDOR_TOP : y < 450 ? CORRIDOR_MID : CORRIDOR_LOW; }
-function route(a, b) {
+// Aisles: behind row 1, between rows, in front of row 2 (the table area) and behind the newcomers' row.
+function corridor(y) { return y < 270 ? CORRIDOR_TOP : y < 450 ? CORRIDOR_MID : y < 600 ? CORRIDOR_LOW : CORRIDOR_FRONT; }
+const nearest = (lanes, ax, bx) => lanes.reduce((best, l) => (Math.abs(ax - l) + Math.abs(bx - l) < Math.abs(ax - best) + Math.abs(bx - best) ? l : best));
+/** Inside the office: along the aisles, switching between them at the gaps. */
+function officeRoute(a, b) {
   const ca = corridor(a.y), cb = corridor(b.y);
   const pts = [{ x: a.x, y: ca }];
-  if (ca !== cb) {
-    const lane = LANES.reduce((best, l) => (Math.abs(a.x - l) + Math.abs(b.x - l) < Math.abs(a.x - best) + Math.abs(b.x - best) ? l : best));
-    pts.push({ x: lane, y: ca }, { x: lane, y: cb });
-  }
+  let x = a.x, c = ca;
+  const hop = (lanes, to) => { const l = nearest(lanes, x, b.x); pts.push({ x: l, y: c }, { x: l, y: to }); x = l; c = to; };
+  if (c === CORRIDOR_FRONT && cb !== c) hop(FRONT_LANES, CORRIDOR_LOW);
+  const mid = cb === CORRIDOR_FRONT ? CORRIDOR_LOW : cb;
+  if (c !== mid) hop(LANES, mid);
+  if (cb === CORRIDOR_FRONT && c !== cb) hop(FRONT_LANES, CORRIDOR_FRONT);
   pts.push({ x: b.x, y: cb }, { x: b.x, y: b.y });
+  return pts;
+}
+/** In the hallway: along its middle. */
+const hallRoute = (a, b) => [{ x: HALL.spine, y: a.y }, { x: HALL.spine, y: b.y }, { x: b.x, y: b.y }];
+const zoneOf = (p) => (p.x >= 0 ? 'office' : inBath(p) ? 'bath' : 'hall');
+/** From a to b: through the office's door and the bathroom's when they are in different rooms. */
+function route(a, b) {
+  const za = zoneOf(a), zb = zoneOf(b);
+  if (za === zb) return za === 'office' ? officeRoute(a, b) : za === 'bath' ? [{ x: b.x, y: b.y }] : hallRoute(a, b);
+  const pts = [];
+  let cur = a;
+  const go = (list) => { pts.push(...list); cur = list[list.length - 1]; };
+  if (za === 'bath') go([BATH_IN, BATH_OUT]);
+  else if (za === 'office') go([...officeRoute(a, DOOR_IN), DOOR_OUT]);
+  if (zb === 'office') go([...hallRoute(cur, DOOR_OUT), ...officeRoute(DOOR_IN, b)]);
+  else if (zb === 'bath') go([...hallRoute(cur, BATH_OUT), BATH_IN, { x: b.x, y: b.y }]);
+  else go(hallRoute(cur, b));
   return pts;
 }
 
 // ------------------------------------------------------------------------------------
+
+/** The bathroom's state: who is in each stall (and when its door moved) and who waits outside. */
+function freshBath() {
+  const stalls = BATHROOM.stalls.map(() => null);
+  return { stalls, doorAt: BATHROOM.stalls.map(() => -Infinity), line: [], get occupant() { return stalls.find(Boolean) || null; } };
+}
 
 const pathLength = (pts, from) => pts.reduce((acc, p) => { const d = Math.hypot(p.x - from.x, p.y - from.y); from = p; return acc + d; }, 0);
 
@@ -475,7 +524,8 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   let lastRequirement = { text: '', at: -Infinity };
   const memory = { task: '', lastError: null, lastGreen: null, fails: [], work: {}, doing: {} }; // what the office talks about and how the work is going
   // Office life
-  let bath = { occupant: null, line: [], doorAt: -Infinity };
+  let bath = freshBath();
+  let elevator = { doorAt: -Infinity, floor: 12 }; // the doors open when someone arrives or leaves
   let lunch = null;          // { endMin, nextTalk } mientras almuerzan
   let lunchDay = null;       // the day they already had lunch
   let fire = null;           // { phase: 'burning' | 'fighting' | 'repair' | 'done', start, at, level, crew, fighter, sprinklers }
@@ -522,7 +572,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
 
   /** Empties what they planned to do, except finishing in the bathroom if they already went in. */
   function clearQueue(a) {
-    a.queue = a.queue.filter((j) => j.bath && bath.occupant === a.id);
+    a.queue = a.queue.filter((j) => j.bath && bath.stalls.includes(a.id));
     if (bath.line.includes(a.id)) bath.line = bath.line.filter((id) => id !== a.id);
     a.dance = false;
     if (a.carry === 'ext') { a.carry = false; extinguisher = 'floor'; }
@@ -905,7 +955,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
    *  and go back to your desk. */
   function summon(po) {
     interrupt(po);
-    if (po.hidden || bath.occupant === po.id) return;
+    if (po.hidden || bath.stalls.includes(po.id)) return;
     clearQueue(po);
     if (!po.seated) po.goHome();
   }
@@ -921,7 +971,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
       members.forEach((id, i) => {
         const a = agents[id];
         const off = members.length === 1 ? 0 : (i - (members.length - 1) / 2) * 44;
-        const pt = { x: Math.max(30, Math.min(W - 30, spot.x + off)), y: spot.y + (i % 2 ? 6 : 0) };
+        const pt = { x: Math.max(LEFT + 30, Math.min(W - 30, spot.x + off)), y: spot.y + (i % 2 ? 6 : 0) };
         const from = { x: a.x, y: a.y };
         arrive = Math.max(arrive, simNow + (pathLength(route(from, pt), from) / SPEED) * 1000);
         a.goTo(pt);
@@ -997,13 +1047,14 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     const name = P(NEWCOMER_NAMES.filter((n) => !used.has(n))) || `${look.name} 2`;
     const cfg = { ...look, title: look.title, name, seat, prop: 'laptop', hair: P(LOOK_PALETTES.hair), skin: P(LOOK_PALETTES.skin), long: chance(0.5), beard: chance(0.25), glasses: chance(0.3) };
     const g = new Agent(`new:${ev.subId}`, cfg, now_, random);
-    Object.assign(g, { ghost: true, role: ev.role, subId: ev.subId, session: ev.session || null, project: ev.project || '', desk, x: STAIRS.x, y: STAIRS.y, seated: false, born: simNow, fade: 0, leaving: false, gone: false });
+    Object.assign(g, { ghost: true, role: ev.role, subId: ev.subId, session: ev.session || null, project: ev.project || '', desk, x: ELEVATOR.spot.x, y: ELEVATOR.spot.y, seated: false, born: simNow, fade: 0, leaving: false, gone: false });
+    elevator.doorAt = simNow; // it arrives by the elevator
     g.goHome();
     ghosts.set(ev.subId, g);
     return g;
   }
 
-  /** Its subtask is done: says goodbye, walks to the stairs and fades away. */
+  /** Its subtask is done: says goodbye, walks to the elevator and fades away (its desk goes with it). */
   function farewell(g) {
     if (!g || g.leaving) return;
     g.leaving = true;
@@ -1012,7 +1063,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     g.setState('done', 2500);
     g.jumpUntil = simNow + 700;
     g.say(T('sim.newcomer.bye'), 2600);
-    g.wait(1600).goTo(STAIRS).then((x) => { x.gone = true; });
+    g.wait(1600).goTo(ELEVATOR.spot).then((x) => { elevator.doorAt = simNow; x.gone = true; });
   }
 
   /** The answer to a line: about the work if the line was about the work. */
@@ -1021,6 +1072,8 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   function gossip(a) {
     const others = PRODUCT.filter((id) => id !== a.id && agents[id].free);
     if (!others.length) return false;
+    // sometimes the two of them go to whisper at the bathroom's mirror
+    if (chance(0.2) && !bath.line.length) return bathGossip(a, P(others));
     const members = [a.id, ...others.slice(0, chance(0.5) ? 2 : 1)];
     const first = gossipLine(a.id);
     const lines = [[a.id, first.text], [members[1], replyTo(first)]];
@@ -1036,6 +1089,17 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
       after: () => { if (pitcher) pitchIdea(pitcher); emit(agents[members[0]].x, agents[members[0]].y - 70, 3, 'emote', null, P(['😂', '💬', '✨', '💜'])); },
     });
     for (const id of members) { agents[id].mind.social = -R(0, 0.4); agents[id].setState('talking', 4000); }
+    return true;
+  }
+
+  /** Two of product go to the bathroom together and whisper at the mirror. */
+  function bathGossip(a, other) {
+    const first = bathLine();
+    const lines = [[a.id, first.text], [other, replyTo(first)], [a.id, bathLine().text]];
+    if (chance(0.6)) lines.push([other, P(L('sim.bathGossipEnd'))]);
+    scene('bathgossip', [a.id, other], lines, { spot: { x: BATHROOM.sink.x, y: BATHROOM.sink.y + 2 }, gap: 2200,
+      after: () => emit(BATHROOM.sink.x, BATHROOM.sink.y - 70, 2, 'emote', null, P(['🤫', '😏', '💅', '👀'])) });
+    for (const id of [a.id, other]) { agents[id].mind.social = -R(0, 0.4); agents[id].setState('talking', 4000); }
     return true;
   }
 
@@ -1175,26 +1239,60 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     return true;
   }
 
-  /** To the bathroom: one at a time. If it is occupied, they wait outside (restless). */
+  /** A spot at the bathroom's sink (two fit in front of the mirror). */
+  const sinkSpot = (i = 0) => ({ x: BATHROOM.sink.x + (i ? 16 : -16), y: BATHROOM.sink.y + (i ? 4 : 0) });
+
+  /**
+   * To the bathroom: they walk in, take a free stall and close its door; then they wash their hands
+   * at the mirror (where, if someone else is there, they whisper) and go back. With both stalls
+   * taken, they wait in the hallway (restless).
+   */
   function bathroom(a, urgent = false) {
-    if (bath.line.includes(a.id) || bath.occupant === a.id || a.hidden) return false;
+    if (bath.line.includes(a.id) || bath.stalls.includes(a.id) || a.hidden) return false;
     bath.line.push(a.id);
     const place = bath.line.length - 1;
     note('bathroom', a.id);
     if (urgent) a.say(P(L('sim.bathUrgent')), 2400);
     a.mind.bladder = -R(0, 0.3);
-    const n0 = a.queue.length;
-    a.goTo({ x: BATH.line.x - place * 30, y: BATH.line.y })
-      .then((x) => { if (bath.occupant || bath.line[0] !== x.id) { x.dance = true; if (chance(0.6)) x.say(P(L('sim.bathWait')), 2600); } })
-      .waitFor(() => !bath.occupant && bath.line[0] === a.id)
-      .then((x) => { x.dance = false; bath.occupant = x.id; bath.line.shift(); })
-      .goTo(BATH.door)
-      .then((x) => { x.hidden = true; x.bubble = null; bath.doorAt = simNow; })
-      .wait(R(5000, 11_000))
-      .then((x) => { x.hidden = false; bath.doorAt = simNow; bath.occupant = null; x.say(P(L('sim.bathDone')), 2400); });
-    a.queue.slice(n0).forEach((j) => { j.bath = true; });
-    a.goHome();
+    const free = () => bath.stalls.findIndex((x) => x === null);
+    a.goTo({ x: BATH_LINE.x, y: BATH_LINE.y + place * 26 })
+      .then((x) => { if (free() < 0 || bath.line[0] !== x.id) { x.dance = true; if (chance(0.6)) x.say(P(L('sim.bathWait')), 2600); } })
+      .waitFor(() => free() >= 0 && bath.line[0] === a.id)
+      .then((x) => {
+        x.dance = false;
+        const i = free();
+        bath.stalls[i] = x.id;
+        bath.line.shift();
+        // the rest is decided now (which stall), and goes first in their queue
+        const door = { x: BATHROOM.stalls[i].x, y: 142 }, sink = sinkSpot(i);
+        const jobs = [
+          { t: 'walk', path: route({ x: x.x, y: x.y }, door), end: door },
+          { t: 'fn', fn: (y) => { y.hidden = true; y.bubble = null; bath.doorAt[i] = simNow; } },
+          { t: 'wait', ms: R(4000, 9000) },
+          { t: 'fn', fn: (y) => { y.hidden = false; bath.doorAt[i] = simNow; bath.stalls[i] = null; } },
+          { t: 'walk', path: [sink], end: sink },
+          { t: 'fn', fn: (y) => { y.face = -1; y.say(P(L('sim.bathDone')), 2400); emit(sink.x, sink.y - 40, 2, 'emote', null, P(['💧', '🧼', '🫧'])); whisperAtSink(y); } },
+          { t: 'wait', ms: 1800 },
+        ];
+        for (const j of jobs) j.bath = true;
+        x.queue.unshift(...jobs);
+      })
+      .then((x) => { if (!x.queue.length) x.goHome(); });
     return true;
+  }
+
+  /** At the mirror, if someone else is washing their hands too: a whisper and its answer. */
+  function whisperAtSink(a) {
+    const other = Object.values(agents).find((b) => b !== a && !b.hidden && !b.scene && Math.hypot(b.x - BATHROOM.sink.x, b.y - BATHROOM.sink.y) < 30);
+    if (!other || !chance(0.7)) return;
+    const first = bathLine();
+    scene('bathgossip', [a.id, other.id], [[a.id, first.text], [other.id, replyTo(first)]], { gap: 1400 });
+  }
+  /** What is whispered at the bathroom's mirror: office gossip or, with work going on, about it. */
+  function bathLine() {
+    const live = liveTopics(null);
+    if (lively() && live.length && chance(0.5)) return { text: `🤫 ${P(live)}`, live: true };
+    return { text: P(L('sim.bathGossip')), live: false };
   }
 
   /**
@@ -1498,7 +1596,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     if (lunch) lunchTick();
     else if (lunchTime && lunchDay !== dayKey() && !fire) startLunch();
     weatherTick();
-    if (bath.occupant && random() < dt * 0.25) emit(BATH.door.x + R(-10, 10), BATH.door.y - 50, 1, 'emote', null, P(['🎵', '🎶', '🧻', '🚿']));
+    bath.stalls.forEach((id, i) => { if (id && random() < dt * 0.2) emit(BATHROOM.stalls[i].x + R(-6, 6), 84, 1, 'emote', null, P(['🎵', '🎶', '🧻'])); });
     // the rack heats up with the backend's load; when hot, it smokes and may catch fire
     if (!fire && heat > 0.75 && random() < dt * 0.6) emit(R(RACK.x + 6, RACK.x + RACK.w - 6), RACK.y - 4, 1, 'smoke', '#9095b0');
     const hazard = (0.5 + heat) / (18 * 60); // per second: ~1 every 36 min when calm, ~1 every 12 min with the rack red-hot
@@ -1655,6 +1753,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     get fire() { return fire; },
     get lunch() { return lunch; },
     get bath() { return bath; },
+    get elevator() { return elevator; },
     get extinguisher() { return extinguisher; },
     get heat() { return heat; },
     /** The weather outside: the real one if it came from the server, otherwise one simulated by season. */
@@ -1680,7 +1779,8 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
       ghosts.clear();
       banner = null; particles = []; board = { title: '', todos: [] }; turn = turnPhase = lastDev = lastBlocked = null;
       scenes = []; timers = []; memory.task = ''; memory.lastError = memory.lastGreen = null; memory.fails = []; memory.work = {}; memory.doing = {};
-      bath = { occupant: null, line: [], doorAt: -Infinity };
+      bath = freshBath();
+      elevator = { doorAt: -Infinity, floor: 12 };
       // if it is lunchtime, they go out again on the next tick
       lunch = null; lunchDay = null; fire = null; extinguisher = 'floor'; heat = 0; timers = [];
     },
