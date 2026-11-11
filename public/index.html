@@ -18,9 +18,9 @@
       <!-- HUD: everything goes inside the game screen. Top left, the office selector (only if
            the company has more than one), the connection and the weather. -->
       <div class="hud hud-tl">
-        <label class="office-pick" id="office-pick" hidden data-i18n-title="ui.officeKey">
+        <label class="office-pick" id="office-pick" data-i18n-title="floors.key">
           <span aria-hidden="true">🏢</span>
-          <select id="office-select" data-i18n-aria="ui.office"></select>
+          <select id="office-select" data-i18n-aria="ui.floor"></select>
         </label>
         <span id="conn" class="conn off">offline</span>
         <span id="wx" class="wx" hidden></span>
@@ -188,6 +188,56 @@
       <footer class="bv-foot">
         <span class="bv-tray" aria-hidden="true"><i></i><i></i><i></i></span>
         <button type="button" id="bv-brief" class="bv-brief" data-i18n="board.newBrief">✚ New brief</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <!-- The executive floor: a directive (one order for several offices or projects) and the latest
+       ones, with how each project is doing (floors-ui.js). -->
+  <dialog id="directives" class="brief floors-dlg" aria-labelledby="dv-title">
+    <form id="dv-form" method="dialog">
+      <header class="brief-head">
+        <span class="pin" aria-hidden="true"></span>
+        <h2 id="dv-title" data-i18n="exec.ui.title">🏛 Directives</h2>
+        <button type="button" class="brief-x" id="dv-close" data-i18n-aria="settings.close">✕</button>
+      </header>
+      <div class="brief-body">
+        <label class="note"><span data-i18n="exec.ui.text">What must they do?</span><textarea id="dv-text" rows="3" maxlength="4000" data-i18n-ph="exec.ui.placeholder"></textarea></label>
+        <div class="fl-scope-box">
+          <span class="fl-label" data-i18n="exec.ui.scope">Who</span>
+          <div id="dv-offices" class="fl-scope"></div>
+          <p id="dv-none" class="fl-dim" data-i18n="exec.ui.noAgents" hidden></p>
+        </div>
+        <p id="dv-msg" class="b-problem" role="status" aria-live="polite"></p>
+        <span class="fl-label" data-i18n="exec.ui.recent">The latest</span>
+        <ul id="dv-list" class="dv-list"></ul>
+      </div>
+      <footer class="brief-foot">
+        <span class="muted" data-i18n="brief.send">⌘↵ to send</span>
+        <button type="button" class="btn ghost" id="dv-cancel" data-i18n="brief.cancelBtn">Cancel</button>
+        <button type="submit" class="btn" id="dv-go" data-i18n="exec.ui.send">▶ Make it happen!</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- The archive: the company's knowledge, its skills and its connectors (floors-ui.js). -->
+  <dialog id="archive" class="brief floors-dlg archive-dlg" aria-labelledby="ar-title">
+    <div class="ar-card">
+      <header class="brief-head">
+        <span class="pin" aria-hidden="true"></span>
+        <h2 id="ar-title" data-i18n="archive.ui.title">📚 Archive</h2>
+        <input id="ar-q" type="search" autocomplete="off" data-i18n-ph="archive.ui.search" data-i18n-aria="archive.ui.search">
+        <button type="button" class="brief-x" id="ar-close" data-i18n-aria="settings.close">✕</button>
+      </header>
+      <nav id="ar-tabs" class="tabs ar-tabs" role="tablist"></nav>
+      <div class="ar-panes">
+        <ul id="ar-list" class="ar-list"></ul>
+        <section id="ar-detail" class="ar-detail"></section>
+      </div>
+      <footer class="brief-foot">
+        <p id="ar-msg" class="b-problem muted" role="status" aria-live="polite"></p>
+        <button type="button" class="btn ghost" id="ar-ask" data-i18n="archive.ui.ask">✨ Ask an agent</button>
+        <button type="button" class="btn" id="ar-new" data-i18n="archive.ui.new">✚ New</button>
       </footer>
     </div>
   </dialog>

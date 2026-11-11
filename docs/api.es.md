@@ -66,6 +66,24 @@ La pregunta la contesta el agente de turno de la oficina (la sesión más recien
 |---|---|---|
 | `GET` | `/v1/places?q=<texto>&timezone=<zona>` (o `&office=<id>`) | `{ ok, country, places, offline? }`: las ciudades del país de esa zona que empiezan con `q` (el geocodificador de Open-Meteo), cada una con `{ name, region, country, lat, lon, label, location }`; `location` es lo que se guarda. Con `DEV_TEAM_OFFICE_WEATHER=off` o sin conexión, `offline: true` y sin ciudades |
 
+## Los pisos compartidos: directivas y archivo
+
+La dirección y el archivo sirven a todas las oficinas (no dependen de la oficina que se mira).
+
+| Método | Ruta | Cuerpo | Respuesta |
+|---|---|---|---|
+| `GET` | `/v1/directives?limit=` | | `{ ok, directives, overview }`: cada directiva `{ id, title, text, status, source, done, total, parts: [{ target, name, harness, office, kind: task \| run, ref, status, detail }], createdAt, updatedAt }`; `overview`, cada oficina `{ id, name, agents, working, waiting, tasks, title, lastAt }` |
+| `POST` | `/v1/directives` | `{ text, title?, offices?: [id \| nombre \| "all"], targets?: [id de agente \| ruta], from? }` | `201 { ok, directive }`; una parte que no se pudo mandar queda `failed` con el motivo |
+| `GET` | `/v1/directives/<id>` | | `{ ok, directive }` |
+| `POST` | `/v1/directives/<id>/cancel` | | `{ ok, directive }`: cancela lo que sigue en curso |
+| `GET` | `/v1/knowledge?q=&kind=&office=&limit=&from=agent` | | `{ ok, entries, counts }`: sin su texto (en su lugar, un `excerpt`); con `q`, las que mejor coinciden. `from=agent` le cuenta al archivo que busca un agente |
+| `POST` | `/v1/knowledge` | `{ kind, title, body?, name?, tags?, office?, source?, config?: { command, args } \| { url } }` | `201 { ok, entry, created }` (una skill o un conector con un `name` que ya existe: `200`, actualizado) |
+| `GET` · `PUT` · `DELETE` | `/v1/knowledge/<id>` (`?from=agent`: cuenta como una lectura) | `PUT`: los campos a cambiar | `{ ok, entry }` · `{ ok }` |
+| `POST` | `/v1/knowledge/<id>/install` | `{ targets: [id de agente] }` | `{ ok, results: [{ target, name, harness, ok, action: created \| updated \| same, reason?: exists \| manual \| invalid \| harness \| unknown, file, rel }] }` |
+| `POST` | `/v1/knowledge/generate` | `{ kind: skill \| connector \| note \| doc, text, target }` | Como un encargo: `{ ok, task \| run }` (el agente guarda el resultado con `save_knowledge`) |
+
+`kind` es `note`, `decision`, `doc`, `minute` (el acta de una directiva), `skill` o `connector`. Por WebSocket todos los espectadores reciben `{ type: "directives", directives }`, `{ type: "overview", overview }`, `{ type: "archive", archive: { counts, recent } }` y lo que pasa en los pisos, `{ type: "floor", event: { floor: exec \| archive, kind, text, … } }`; el cliente puede mandar `{ type: "directive", text, offices?, targets? }` y `{ type: "directive_cancel", id }`. El piso que se mira es `prefs.view.floor` (`exec`, `office` o `archive`).
+
 ## Servicios en segundo plano
 
 Los servicios que un agente deja corriendo (un servidor de desarrollo, un watcher, una cola…). La oficina los lista y muestra lo que imprimen; nunca los levanta ni los detiene.

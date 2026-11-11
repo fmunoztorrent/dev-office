@@ -27,6 +27,11 @@ This page explains what it does and how to register it by hand in another client
 | `report_activity` | `kind`, `text?`, `role?`, `phase?`, `from?`, `todos?`, `roles?`, `cwd?` | `task` · `phase` · `phase_end` · `todos` · `waiting` · `error` · `turn_end` · `done` · `chat` · `agent_roles`. It does not fail without an office: it returns `delivered: false` |
 | `send_task` | `project` (id or path), `text`, `entry?`, `newSession?` | Sends a prompt to a registered project's agent, through an entry of its harness |
 | `open_pane` | `command?` \| `agent?` + `prompt?`, `role?`, `title?`, `direction?` | Inside herdr: opens a pane with an activity and tells the office |
+| `send_directive` | `text`, `title?`, `offices?` (ids or names, or `["all"]`), `projects?` (ids or paths) | **The executive floor:** one order for several offices or projects. Each project's agent gets a brief with its part (it starts with 🏛); the office follows each part and, when all end, archives the minutes |
+| `list_directives` | — | The latest directives, how each project is doing, and what each office is doing right now |
+| `search_knowledge` | `query?`, `kind?`, `limit?` | **The archive:** the entries that best match (notes, decisions, docs, minutes, skills, connectors), with an excerpt. Works with the office off too |
+| `get_knowledge` | `id` \| `name` + `kind?` | An entry whole (a skill or connector also by its name). It counts as a read |
+| `save_knowledge` | `kind`, `title`, `body?`, `name?`, `tags?`, `office?`, `command?` + `args?` \| `url?`, `id?` | Saves a note, decision, doc, skill (`name`, `title`: what it does and when to use it, `body`: its instructions) or connector (`name`, `command`/`args` or `url`; no secrets). The same `name` (or `id`) updates it. Works with the office off too |
 | `list_teams` · `install_team` | `team`, `harness`, `project?` | The team packs (one subagent per role), for Pi, Claude Code, OpenCode or Codex |
 
 Results are text: a line to read and, below it, the JSON with the data.

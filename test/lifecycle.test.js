@@ -137,7 +137,7 @@ test('update: la oficina en segundo plano que quedó con la versión vieja se re
 test('update en un clon de git: hace git pull --ff-only, corre setup y reinicia la oficina de ese clon; sin cambios no la toca', async () => {
   const { home, base, env } = await sandbox();
   Object.assign(env, { DEV_TEAM_OFFICE_BIN_DIR: path.join(home, 'bin'), DEV_TEAM_OFFICE_SETUP_CLI: '0', DEV_TEAM_OFFICE_MODIFY_PATH: '0', GIT_CONFIG_NOSYSTEM: '1' });
-  const git = (cwd, ...a) => { const r = spawnSync('git', ['-C', cwd, '-c', 'user.name=t', '-c', 'user.email=t@localhost', ...a], { env, encoding: 'utf8' }); assert.equal(r.status, 0, r.stderr); return r.stdout.trim(); };
+  const git = (cwd, ...a) => { const r = spawnSync('git', ['-C', cwd, '-c', 'user.name=t', '-c', 'user.email=t@localhost', '-c', 'gc.auto=0', ...a], { env, encoding: 'utf8' }); assert.equal(r.status, 0, r.stderr); return r.stdout.trim(); };
   // the "remote" (this checkout's files) and the user's clone of it
   const origin = path.join(home, 'origin');
   copyProject(origin);
@@ -145,7 +145,9 @@ test('update en un clon de git: hace git pull --ff-only, corre setup y reinicia 
   git(origin, 'add', '-A');
   git(origin, 'commit', '-qm', 'base');
   const clone = path.join(home, 'clone');
-  assert.equal(spawnSync('git', ['clone', '-q', origin, clone], { env }).status, 0);
+  // --no-local: a real clone (no hard links to the origin's objects while git may still be tidying them)
+  const cloned = spawnSync('git', ['-c', 'gc.auto=0', 'clone', '-q', '--no-local', origin, clone], { env, encoding: 'utf8' });
+  assert.equal(cloned.status, 0, cloned.stderr);
   const cloneCli = (...args) => spawnSync(process.execPath, [path.join(clone, 'bin', 'dev-team-office.js'), ...args], { env, encoding: 'utf8', timeout: 60000 });
 
   assert.equal(cloneCli('start').status, 0);

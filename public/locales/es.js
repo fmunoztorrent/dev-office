@@ -249,6 +249,90 @@ export default {
   },
   targets: { openSession: 'sesión abierta', claudeTurn: 'Claude, al terminar su turno' },
   offices: { main: 'Oficina principal' },
+
+  // ---------------------------------------------------------------- the two shared floors: the executive one and the archive
+  directiveStatus: { running: 'en curso', done: 'cumplida', partial: 'cumplida a medias', failed: 'falló', cancelled: 'cancelada', interrupted: 'interrumpida' },
+  knowledgeKind: { note: 'nota', decision: 'decisión', doc: 'documento', minute: 'acta', skill: 'skill', connector: 'conector' },
+  floors: {
+    name: { exec: '🏛 Dirección', archive: '📚 Archivo' }, key: 'Elige el piso: la dirección, una oficina o el archivo (o · RePág/AvPág)', going: 'Piso: {name}',
+    elevator: 'el ascensor',
+    // the game (floors.js): each floor's scene, its people and what they say
+    exec: {
+      sign: 'DIRECCIÓN', board: 'DIRECTIVAS', none: 'Sin directivas: clic aquí', wall: 'LA EMPRESA',
+      working: '{n} trabajando', waiting: '{n} te espera(n) ✋', idle: 'tranquila', tasks: '{n} encargo(s)',
+      chat: [
+        '¿Cómo van las oficinas?', 'Hay que alinear a todos los equipos', 'Revisemos el tablero', '¿Alguien vio el informe de Pagos?',
+        'Necesitamos una regla común para todos los proyectos', 'La próxima directiva tiene que ser clara', 'Pidamos al archivo lo que ya sabemos de esto',
+      ],
+      at: {
+        coffee: ['Un café antes del directorio ☕', 'Este café es mejor que el de las oficinas'],
+        window: ['Qué vista hay desde acá arriba', 'Desde aquí se ve toda la ciudad'],
+        screen: ['Las oficinas van bien', 'Hay una oficina esperando respuesta', '¿Quién está trabajando ahora?'],
+        board: ['Repasemos las directivas', 'Ésta ya casi está cumplida'],
+      },
+      react: {
+        order: 'Necesito que todos hagan esto: «{title}»',
+        split: 'Lo reparto a {n} proyecto(s): {offices}',
+        tech: ['Reviso que cada uno lo haga a su manera', 'Que cada equipo use su propio harness', 'Ojo con romper las APIs entre proyectos'],
+        done: '¡Directiva cumplida! «{title}» ({done}/{total}) 🎉', trouble: 'La directiva «{title}» tuvo problemas: {done} de {total} bien',
+      },
+      who: {
+        ceo: 'Presido la empresa (soy tú): doy las órdenes que cruzan oficinas', coo: 'Operaciones: reparto cada directiva entre las oficinas y sigo cómo van',
+        cto: 'Tecnología: cuido que las directivas tengan sentido en cada proyecto', assistant: 'Llevo las directivas a cada oficina en el ascensor',
+      },
+    },
+    archive: {
+      sign: 'ARCHIVO', entries: '{n} entradas', connectors: 'CONECTORES · {n}', skills: 'SKILLS · {n}',
+      chat: ['Hay que etiquetar mejor las actas', '¿Alguien pidió la decisión sobre la API?', 'Este conocimiento vale oro', 'Una skill nueva para todos los equipos'],
+      at: { shelf: ['Lo archivo con lo demás', 'Aquí están todas las decisiones'], patch: ['Reviso que los conectores respondan', 'Otro cable hacia afuera'], rack: ['Las skills, listas para instalar', 'Ésta la usan todos los equipos'] },
+      react: {
+        saved: 'Archivado: {kind} «{title}»', read: '📖 Un agente consulta: «{title}»', search: '🔎 Un agente busca: «{title}»',
+        installed: '«{name}» instalada en {n} proyecto(s)', generate: 'Le pido a un agente un(a) {kind}: «{text}»', removed: 'Retiro «{title}» del archivo',
+      },
+      who: {
+        archivist: 'Archivista: guardo lo que la empresa sabe y se lo busco a los agentes', skills: 'Skills: las preparo y las instalo en cada proyecto',
+        connectors: 'Conectores: conecto a los agentes con información de afuera (servidores MCP)',
+      },
+    },
+  },
+  exec: {
+    from: 'Dirección',
+    brief: '🏛 Directiva de la dirección: «{title}». También la trabajan: {others}. Haz la parte de este proyecto.',
+    interrupted: 'la oficina se reinició antes de que terminara',
+    minuteTitle: 'Acta: {title}', minuteAsked: 'Pedido por: {who}', minuteParts: 'Cómo terminó en cada proyecto:',
+    log: { created: '🏛 Directiva «{title}» a {n} proyecto(s): {offices}', ended: '🏛 Directiva «{title}»: {status} ({done}/{total})' },
+    ui: {
+      title: '🏛 Directivas', text: '¿Qué tienen que hacer?', placeholder: 'Una orden para varias oficinas o proyectos: «Que todas las APIs expongan /health»',
+      scope: 'A quién', all: 'todos sus proyectos ({n})', none: 'sin proyectos registrados', noAgents: 'Registra los proyectos de cada oficina en ⚙ › Agentes para darles directivas.',
+      send: '▶ ¡Que lo hagan!', recent: 'Las últimas', empty: 'Todavía no hay directivas.', pick: 'Elige al menos un proyecto', write: 'Escribe la directiva',
+      sent: 'Directiva enviada a {n} proyecto(s)', stop: '⏹ Detener', progress: '{done} de {total}', by: 'por {who}',
+    },
+  },
+  archive: {
+    from: 'Archivo',
+    generate: {
+      skill: 'El archivo de la empresa te pide una skill: {text}\n\nEscríbela y guárdala en el archivo con la herramienta MCP save_knowledge de dev-team-office (kind "skill", name en minúsculas con guiones, title: qué hace y cuándo usarla, body: las instrucciones en Markdown). No cambies archivos del proyecto.',
+      connector: 'El archivo de la empresa te pide un conector a información externa: {text}\n\nBusca el servidor MCP adecuado y guárdalo en el archivo con la herramienta MCP save_knowledge de dev-team-office (kind "connector", name, title: qué información da, command + args para uno local o url para uno remoto, body: cómo se configura y qué credenciales pide, sin escribir ningún secreto). No cambies archivos del proyecto.',
+      note: 'El archivo de la empresa te pide una nota: {text}\n\nInvestiga lo necesario y guárdala con la herramienta MCP save_knowledge de dev-team-office (kind "note", title y body en Markdown). No cambies archivos del proyecto.',
+      doc: 'El archivo de la empresa te pide un documento: {text}\n\nEscríbelo y guárdalo con la herramienta MCP save_knowledge de dev-team-office (kind "doc", title y body en Markdown). No cambies archivos del proyecto.',
+    },
+    log: {
+      saved: '📚 {who} guardó en el archivo: {kind} «{title}»', updated: '📚 {who} actualizó en el archivo: {kind} «{title}»',
+      installed: '📚 {kind} «{name}» instalada en: {projects}', generate: '📚 El archivo le pidió a un agente: {kind} «{text}»',
+    },
+    reason: { exists: 'ya tiene uno propio con ese nombre', manual: 'tiene opencode.jsonc: agrégalo a mano', invalid: 'su archivo de configuración no es JSON válido', harness: 'su agente no lo admite', unknown: 'no está registrado', error: 'no se pudo escribir' },
+    action: { created: 'instalada', updated: 'agregada', same: 'ya la tenía' },
+    ui: {
+      title: '📚 Archivo', search: 'Buscar en el archivo…', all: 'Todo', kinds: { note: 'Notas', decision: 'Decisiones', doc: 'Docs', minute: 'Actas', skill: 'Skills', connector: 'Conectores' },
+      empty: 'El archivo está vacío. Guarda lo que la empresa sabe, o pídeselo a un agente.', none: 'Nada coincide con «{q}».', pickOne: 'Elige una entrada para leerla.',
+      new: '✚ Nueva', ask: '✨ Pedírsela a un agente', edit: '✎ Editar', remove: '🗑 Eliminar', removeAsk: '¿Eliminar «{title}» del archivo?', save: 'Guardar', back: '← Volver',
+      kind: 'Tipo', name: 'Nombre', titleField: 'Título', descField: 'Descripción (qué hace y cuándo usarla)', infoField: 'Qué información da', body: 'Texto (Markdown)', instructions: 'Instrucciones (Markdown)', setup: 'Cómo se configura (sin secretos)',
+      tags: 'Etiquetas', office: 'Para', company: 'toda la empresa', command: 'Comando (servidor MCP local)', args: 'Argumentos', url: 'o URL (servidor MCP remoto)',
+      install: 'Instalar en', installGo: '⬇ Instalar', installHint: 'Se escribe en la carpeta de cada proyecto, en el formato de su agente (Claude Code: .claude/; Pi, OpenCode y Codex: .agents/ o su config MCP).',
+      uses: '{n} lectura(s)', by: 'por {who}', saved: 'Guardado', removed: 'Eliminado', describe: '¿Qué necesitas?', describePh: 'Una skill para desplegar a staging con nuestro pipeline…', agent: 'Agente',
+      asked: 'Se lo pediste a {agent}: lo guardará en el archivo cuando termine', noTargets: 'Registra un agente en ⚙ › Agentes para pedírselo',
+    },
+  },
   services: {
     title: 'Servicios en segundo plano', running: 'corriendo', since: 'desde las {time}', stopped: 'se detuvo a las {time}',
     empty: 'No hay nada corriendo en segundo plano. Cuando un agente deja un servicio corriendo (un servidor de desarrollo, un watcher…), aparece aquí y enciende una unidad del rack.',
@@ -284,6 +368,11 @@ export default {
     unknownType: 'tipo desconocido: {type}', notFound: 'ruta no encontrada', fullPath: 'usa la ruta completa', hostDenied: 'host no permitido', originDenied: 'origen no permitido',
     tooLarge: 'payload demasiado grande', noHerdr: 'no estás dentro de herdr (HERDR_ENV=1)', unknownService: 'no existe ese servicio', serviceNoLog: 'ese servicio no tiene un log que seguir', herdrFailed: 'herdr: {error}', paneMissing: 'falta el pane',
     promptGone: 'esa pregunta ya no está', promptChanged: 'la pregunta cambió en la pantalla del agente: ésta es la que muestra ahora', promptOption: 'esa opción no existe',
+    knowledgeKind: 'tipo desconocido: usa {kinds}', knowledgeTitle: 'ponle un título (en una skill: qué hace y cuándo usarla)', knowledgeTooLong: 'el texto supera {n} KB',
+    knowledgeName: 'ponle un nombre (letras, números y guiones)', knowledgeExists: 'ya hay otra con el nombre «{name}»', knowledgeMax: 'el archivo guarda como máximo {n} entradas',
+    connectorUrl: 'la URL del conector debe empezar con http:// o https://', connectorHow: 'un conector necesita un comando (servidor MCP local) o una URL (remoto)',
+    unknownKnowledge: 'no existe esa entrada del archivo', notInstallable: 'sólo las skills y los conectores se instalan en un proyecto', installFailed: 'no se instaló en ningún proyecto',
+    pickProjects: 'elige al menos una oficina o un proyecto registrado', unknownProject: 'proyecto desconocido: {project}', tooManyProjects: 'como máximo {n} proyectos por directiva', unknownDirective: 'no existe esa directiva',
   },
   server: {
     started: 'Dev Team Office {version} en {url}', browser: '  Ábrela en el navegador: {urls}', api: '  API: POST /v1/events/<source> · GET /v1/state · WS /v1/ws{socket}',
@@ -302,6 +391,7 @@ export default {
   },
   // the activity monitor (inside herdr, instead of the game)
   monitor: {
+    directives: '{n} directiva(s) en curso', knowledge: '{n} en el archivo',
     agents: '{n} agente(s) activo(s)', waiting: '{n} esperándote', subagents: '{n} subagente(s) corriendo', working: '{n} del equipo trabajando',
     panes: '{n} pane(s)', tasks: '{n} tarea(s) en curso', agentsTitle: 'AGENTES', subDone: 'terminó', teamIdle: 'todos libres', more: '{n} más',
     none: 'Sin agentes todavía: abre uno (pi, claude, opencode…) en otro pane, o pide algo desde el juego en la web (o).',
@@ -396,7 +486,7 @@ export default {
     context: 'Contexto · {agent}', contextAria: 'Contexto: queda {pct}% libre ({used} de {max} usados)',
     canvas: 'La oficina: clic en un personaje para ver su ficha, en la pizarra para un nuevo encargo',
     settings: 'Ajustes', settingsKey: 'Ajustes (c)', fullscreen: 'Pantalla completa', fullscreenKey: 'Pantalla completa (f)', view: 'Vista frontal o cenital', viewKey: 'Vista frontal o cenital (v)', servicesKey: 'Servicios en segundo plano: {n} corriendo (l)',
-    office: 'Oficina', officeKey: 'Elige qué oficina ver (o)',
+    office: 'Oficina', officeKey: 'Elige qué oficina ver (o)', floor: 'Piso',
     sheetClose: 'Cerrar ficha', poke: '👋 Saludar', message: '✉ Mensaje', subagents: '{n} subagente(s)', nothingYet: 'Todavía no ha hecho nada en esta sesión.',
     mood: { bath: 'en el baño 🚻', bathWait: 'esperando el baño 😣', dream: 'sueña con {dream} {emoji}', lunch: 'almorzando {food}', fire: '¡apagando el incendio! 🧯', talking: 'conversando 💬' },
     term: 'Actividad del equipo', termKey: 'Actividad del equipo (a)', termClose: 'Cerrar terminal',

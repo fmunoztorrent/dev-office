@@ -20,6 +20,8 @@ import { TaskHub, AGENT_LABEL } from './tasks.js';
 import { PipelineHub } from './pipeline.js';
 import { AgentRegistry } from './registry.js';
 import { AskDesk } from './asks.js';
+import { Archive } from './archive.js';
+import { DirectiveDesk } from './directives.js';
 import { openStore, dbFile, MAIN_OFFICE } from './store.js';
 import { Weather, findPlaces } from './weather.js';
 import { Herdr, paneRole, quote } from './herdr.js';
@@ -108,6 +110,9 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   // side questions (btw) to each office's agent on duty
   const asks = new AskDesk({ company, store, officeUrl, ...asksOpt });
   const publicAsk = ({ id, office: o, agent, question, answer, status, error, from, forked, role, createdAt, updatedAt }) => ({ id, office: o, agent, question, answer, status, error, from, forked, role, createdAt, updatedAt });
+  // the two floors that serve every office: the archive (the company's knowledge) and the executive one (directives)
+  const archive = new Archive({ store, registry });
+  const directives = new DirectiveDesk({ store, registry, hub, pipelines, archive, company });
   const startedAt = Date.now();
   const bus = new EventEmitter(); // changes the interfaces see: settings, appearance, weather, offices, log
   const prefs = () => store.getPrefs();
@@ -154,8 +159,26 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       appearance: store.getAppearance(id), weather: weatherOf(id)?.current || null,
       office: company.info(id), offices: company.list(), prefs: prefs(), herdr: herdr ? herdr.status() : { available: false, panes: [] },
       asks: asks.list(id, 10), services: services.list(id), prompts: promptsOf(id),
+      directives: directives.list(), archive: archive.snapshot(), overview: overview(),
     };
   };
+
+  /** What the executive floor sees of each office: who is working, who waits for you, what is running. */
+  function overview() {
+    const now = Date.now();
+    const agents = store.listAgents();
+    return company.ids().map((id) => {
+      const o = company.get(id);
+      const live = [...o.sessions.values()].filter((s) => s.id !== 'office' && ['active', 'waiting'].includes(s.status) && now - s.lastAt < 15 * 60_000);
+      const last = [...o.sessions.values()].filter((s) => s.id !== 'office').sort((a, b) => b.lastAt - a.lastAt)[0];
+      return {
+        id, name: company.info(id)?.name || id, agents: agents.filter((a) => a.office === id).length,
+        working: live.filter((s) => s.status === 'active').length, waiting: live.filter((s) => s.status === 'waiting').length,
+        tasks: [...hub.tasks.values()].filter((x) => (x.office || MAIN_OFFICE) === id && ['queued', 'sent', 'running'].includes(x.status)).length,
+        title: live.sort((a, b) => b.lastAt - a.lastAt)[0]?.title || '', lastAt: last?.lastAt || null,
+      };
+    });
+  }
   let stopDemo = null;
 
   // ---------- the services an agent leaves running in the background (server/services.js) ----------
@@ -293,6 +316,36 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     }
   }
 
+  // ---------- what happens on the executive floor and in the archive (the game animates it, the log tells it) ----------
+
+  function floor(where, kind, extra = {}) {
+    bus.emit('floor', { floor: where, kind, ts: Date.now(), ...extra });
+  }
+  const officeName = (id) => company.info(id)?.name || id;
+  directives.on('created', (d) => {
+    const offices = [...new Set(d.parts.map((p) => p.office))];
+    floor('exec', 'directive', { text: d.title, offices: offices.map(officeName), total: d.total });
+    say(t('exec.log.created', { title: d.title, n: d.total, offices: offices.map(officeName).join(', ') }), { floor: 'exec' });
+  });
+  directives.on('ended', (d) => {
+    floor('exec', 'directive_end', { text: d.title, status: d.status, done: d.done, total: d.total });
+    say(t('exec.log.ended', { title: d.title, status: t(`directiveStatus.${d.status}`), done: d.done, total: d.total }), { floor: 'exec' });
+  });
+  archive.on('saved', (e, created) => {
+    floor('archive', 'saved', { text: e.title, entryKind: e.kind, source: e.source, created });
+    if (e.kind !== 'minute') say(t(created ? 'archive.log.saved' : 'archive.log.updated', { kind: t(`knowledgeKind.${e.kind}`), title: e.title, who: e.source || t('events.you') }), { floor: 'archive' });
+  });
+  archive.on('removed', (e) => e && floor('archive', 'removed', { text: e.title, entryKind: e.kind }));
+  archive.on('installed', (e, results) => {
+    const ok = results.filter((r) => r.ok);
+    floor('archive', 'installed', { text: e.name, entryKind: e.kind, count: ok.length });
+    if (ok.length) say(t('archive.log.installed', { kind: t(`knowledgeKind.${e.kind}`), name: e.name, projects: ok.map((r) => r.name).join(', ') }), { floor: 'archive' });
+  });
+  archive.on('generate', (g) => {
+    floor('archive', 'generate', { text: g.text, entryKind: g.kind });
+    say(t('archive.log.generate', { kind: t(`knowledgeKind.${g.kind}`), text: clip(g.text, 80) }), { floor: 'archive' });
+  });
+
   // ---------- actions shared by HTTP, WebSocket and the local interface ----------
 
   function command(action, { speed, office: id } = {}) {
@@ -357,6 +410,11 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       // A prompt for an agent, through an entry of its harness (what the whiteboard sends).
       case 'run':
         return registry.run(msg);
+      // the executive floor: one order for several offices or projects, and cancelling it
+      case 'directive':
+        return directives.create({ text: msg.text, title: msg.title, offices: msg.offices, targets: msg.targets, from: msg.from });
+      case 'directive_cancel':
+        return directives.cancel(msg.id);
       case 'pipeline_start':
         return pipelines.start(msg);
       case 'pipeline_cancel':
@@ -626,6 +684,54 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         return json(res, 200, { ok: done.status === 'answered', ask: publicAsk(done), ...(done.error ? { error: done.error } : {}) });
       }
       if (req.method === 'GET' && p === '/v1/asks') return json(res, 200, { ok: true, asks: asks.list(valid(q('office')), Number(q('limit')) || 20) });
+      // The executive floor: directives (one order for several offices or projects) and how each office is doing
+      if (req.method === 'GET' && p === '/v1/directives') return json(res, 200, { ok: true, directives: directives.list(Number(q('limit')) || 12), overview: overview() });
+      if (req.method === 'POST' && p === '/v1/directives') {
+        const b = await body(req);
+        const out = directives.create({ text: b.text, title: b.title, offices: b.offices, targets: b.targets ?? b.projects, from: b.from });
+        return json(res, out.ok ? 201 : 400, out);
+      }
+      if ((m = p.match(/^\/v1\/directives\/([^/]+)(\/cancel)?$/))) {
+        const id = decodeURIComponent(m[1]);
+        if (req.method === 'GET' && !m[2]) { const d = directives.get(id); return d ? json(res, 200, { ok: true, directive: d }) : json(res, 404, { ok: false, error: t('err.unknownDirective') }); }
+        if (req.method === 'POST' && m[2]) { const out = directives.cancel(id); return json(res, out.ok ? 200 : out.status || 400, out); }
+      }
+      // The archive: the company's knowledge (notes, decisions, docs, minutes), its skills and its connectors
+      if (req.method === 'GET' && p === '/v1/knowledge') {
+        const query = q('q');
+        const entries = archive.list({ kind: q('kind'), q: query, office: q('office'), limit: q('limit') });
+        if (query && q('from') === 'agent') floor('archive', 'search', { text: query });
+        return json(res, 200, { ok: true, entries, counts: archive.counts() });
+      }
+      if (req.method === 'POST' && p === '/v1/knowledge') {
+        const out = archive.save(await body(req), { source: t('events.you') });
+        return json(res, out.ok ? (out.created ? 201 : 200) : out.status || 400, out);
+      }
+      if (req.method === 'POST' && p === '/v1/knowledge/generate') {
+        const out = archive.generate(await body(req));
+        return json(res, out.ok ? 200 : 400, out);
+      }
+      if ((m = p.match(/^\/v1\/knowledge\/([^/]+)(\/install)?$/))) {
+        const id = decodeURIComponent(m[1]);
+        if (m[2] && req.method === 'POST') {
+          const b = await body(req);
+          const out = archive.install(id, b.targets ?? b.projects);
+          return json(res, out.ok ? 200 : out.status || 400, out);
+        }
+        if (!m[2] && req.method === 'GET') {
+          const e = archive.get(id, { touch: q('from') === 'agent' });
+          if (e && q('from') === 'agent') floor('archive', 'read', { text: e.title, entryKind: e.kind });
+          return e ? json(res, 200, { ok: true, entry: e }) : json(res, 404, { ok: false, error: t('err.unknownKnowledge') });
+        }
+        if (!m[2] && (req.method === 'PUT' || req.method === 'PATCH')) {
+          const out = archive.save({ ...(await body(req)), id });
+          return json(res, out.ok ? 200 : out.status || 400, out);
+        }
+        if (!m[2] && req.method === 'DELETE') {
+          const out = archive.remove(id);
+          return json(res, out.ok ? 200 : out.status || 400, out);
+        }
+      }
       if (req.method === 'POST' && p === '/v1/messages') {
         const out = handleMessage(await body(req));
         return json(res, out.ok ? 200 : 400, out);
@@ -679,6 +785,15 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   bus.on('offices', (list) => broadcast({ type: 'offices', offices: list }));
   bus.on('herdr', (st) => broadcast({ type: 'herdr', herdr: st }));
   asks.on('change', (a) => toOffice(a.office, { type: 'ask', ask: publicAsk(a) }));
+  // the two floors every office shares: the directives, the archive and what happens on them
+  directives.on('change', (list) => broadcast({ type: 'directives', directives: list }));
+  archive.on('change', () => broadcast({ type: 'archive', archive: archive.snapshot() }));
+  bus.on('floor', (ev) => broadcast({ type: 'floor', event: ev }));
+  // how each office is doing (the executive floor's wall): at most once a second
+  let overviewTimer = null;
+  const overviewSoon = () => { overviewTimer ??= setTimeout(() => { overviewTimer = null; broadcast({ type: 'overview', overview: overview() }); }, 1000); overviewTimer.unref?.(); };
+  company.on('event', overviewSoon);
+  hub.on('change', overviewSoon);
   for (const id of company.ids()) weatherOf(id);
 
   wss.on('connection', (ws, req) => {
@@ -753,6 +868,9 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     pipelines,
     registry,
     asks,
+    archive,
+    directives,
+    overview,
     bus,
     herdr,
     subPanes,
@@ -773,6 +891,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     store,
     async close() {
       stopDemo?.();
+      clearTimeout(overviewTimer);
       for (const w of weathers.values()) w.stop();
       weatherShared?.stop?.();
       herdr?.stop();

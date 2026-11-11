@@ -144,6 +144,8 @@ To connect any other harness (or understand the role contract), see [docs/connec
 | `report_activity` | Which role and phase you are in (`task`, `phase`, `todos`, `waiting`, `done`…) |
 | `send_task` | Sends a prompt to another registered project's agent |
 | `open_pane` | Inside herdr, opens a pane with an activity (tests in watch mode, another agent…) |
+| `search_knowledge` · `get_knowledge` · `save_knowledge` | The company archive: notes, decisions, docs, skills and connectors |
+| `send_directive` · `list_directives` | The executive floor: one order for several offices or projects |
 | `list_teams` · `install_team` | The team packs (one subagent per role) |
 
 With the office off, whatever you register is kept in the database and shows up when it opens.
@@ -210,7 +212,22 @@ One office instance is a **company**: you can keep adding **offices** (teams or 
 - **its time zone** (otherwise the company's; otherwise the system's), and with it its time, its lunch, its day and night, its season and **its weather**;
 - **its activity**: each agent event goes to its office — the one the agent itself states (the office passes it when opening it), its session's, its herdr pane's, or the one of the registered agent whose path contains its folder; otherwise, the main one.
 
-The interfaces show **one office at a time**: the one you pick in the selector at the **top left** (web and terminal; also with `o`). If there is only one, it does not show. The choice is saved. The terminal log shows the activity of all of them.
+The interfaces show **one office at a time**: the one you pick in the selector at the **top left** (web and terminal; also with `o`). The choice is saved. The terminal log shows the activity of all of them.
+
+## Two more floors: the executive one and the archive
+
+The company's building has, besides its offices, two floors every office shares. Go up or down with the selector at the **top left** (`o`, or `PgUp`/`PgDn`; clicking the elevator also works).
+
+**🏛 The executive floor**, on top: the directors, presided over by you (with your PO look). There you give **directives**: one order for several offices, departments or projects at once ("every API exposes `/health`", "update the logger everywhere"). Click the **directives board** (or `t` there), write the order and pick the offices (all their projects) or the projects one by one. The office sends each project's agent a brief with its part (to an open session of it, or a new one, like any brief) and the floor follows how each part goes; you can stop it. The company's **screen** shows what each office is doing (who is working, who is waiting for you, how many briefs). When a directive ends, its **minutes** go to the archive. Agents send them too: `send_directive` (MCP).
+
+**📚 The archive**, in the basement: what the company knows, shared by every office and every agent.
+
+- **Notes, decisions and docs** (and the directives' minutes): search them, read them, write them. Agents search and add to them through MCP (`search_knowledge`, `get_knowledge`, `save_knowledge`), and the MCP server asks them to look there before starting and to save what they settle.
+- **Skills:** written once, installed in the projects you pick, in each agent's format (`.claude/skills/` for Claude Code, `.agents/skills/` for Pi, OpenCode and Codex). A project's own skill with the same name is never overwritten.
+- **Connectors:** MCP servers that bring outside information (the issue tracker, the docs, a database), with their command or their URL. Installed in each project's MCP config (`.mcp.json`, `.pi/mcp.json`, `opencode.json`, `.codex/config.toml`) without touching the rest; each agent asks you to trust them the first time. Never write a secret in one.
+- **✨ Ask an agent:** describe the skill, connector or doc you need and pick an agent: it writes it and saves it in the archive with `save_knowledge`.
+
+Click the shelves, the skills rack or the connectors' patch panel to open it (or `t` there). The terminal monitor shows the directives running and how many entries the archive keeps; its log tells what happens on both floors.
 
 ## herdr: the agent in a pane, and each subagent in its own
 
@@ -387,6 +404,8 @@ bin/team.js             the team packs, in each harness's format, and the team `
 install.sh              the one-line installer (curl … | sh)
 server/mcp.js           the MCP server (stdio)
 server/asks.js          btw: side questions to the agent on duty
+server/directives.js    the executive floor: one order for several offices' projects, and how each part goes
+server/archive.js       the archive: the company's knowledge, and installing its skills and connectors in a project
 server/ws.js            dependency-free WebSocket (RFC 6455)
 server/server.js        HTTP + WebSocket API over TCP and a Unix socket
 server/adapters.js      native payload → generic format
@@ -411,6 +430,8 @@ public/brief.js         the whiteboard dialog (terminal and browser)
 public/settings-ui.js   ⚙ Settings on the web
 public/sprite.js        a character's portrait (sheet and settings)
 public/game.js          the office on canvas, for the browser (glass, lights, night, effects), in front or top-down view
+public/floors.js        the two shared floors on canvas (the executive one and the archive): their scenes and people
+public/floors-ui.js     their dialogs: directives and the archive
 public/iso.js           the top-down view's isometric camera (floor, walls and sprites with affine transforms)
 tui/                    the office in the terminal: half-block framebuffer, view, keyboard and mouse
 tui/settings.js         ⚙ Settings in the terminal

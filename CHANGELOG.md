@@ -4,6 +4,13 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+### Added
+
+- **Two more floors:** besides its offices, the company's building has an **executive floor** on top and an **archive** in the basement, shared by every office. Go up or down with the selector at the top left (now always visible), `o`, `PgUp`/`PgDn` or the elevator. Both are drawn in the front and the top-down views, with their own people.
+- **Directives (the executive floor):** one order for several offices, departments or projects at once. Each project's agent gets a brief with its part, the floor follows each part (and can stop them), the company's screen shows what each office is doing, and the minutes go to the archive. `POST /v1/directives`, and `send_directive` / `list_directives` over MCP.
+- **The archive:** the company's notes, decisions, docs and minutes, searchable by you and by every agent (`search_knowledge`, `get_knowledge`, `save_knowledge` over MCP, which asks agents to look there first and to save what they settle). **Skills** are installed in the projects you pick in each agent's format, and **connectors** (MCP servers to outside information) in each project's MCP config, never overwriting what is there. **✨ Ask an agent** has one write a skill, connector or doc for it. `/v1/knowledge`.
+- The terminal monitor shows the directives running and the archive's size, and its log tells what happens on both floors.
+
 ## [0.9.0] - 2026-11-10
 
 ### Added

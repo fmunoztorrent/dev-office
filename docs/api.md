@@ -66,6 +66,24 @@ The question is answered by the office's agent on duty (the most recent session,
 |---|---|---|
 | `GET` | `/v1/places?q=<text>&timezone=<zone>` (or `&office=<id>`) | `{ ok, country, places, offline? }`: the cities of that zone's country starting with `q` (Open-Meteo's geocoder), each with `{ name, region, country, lat, lon, label, location }`; `location` is what to save. With `DEV_TEAM_OFFICE_WEATHER=off` or without a connection, `offline: true` and no places |
 
+## The shared floors: directives and the archive
+
+The executive floor and the archive serve every office (they do not depend on the office being watched).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| `GET` | `/v1/directives?limit=` | | `{ ok, directives, overview }`: each directive `{ id, title, text, status, source, done, total, parts: [{ target, name, harness, office, kind: task \| run, ref, status, detail }], createdAt, updatedAt }`; `overview`, each office `{ id, name, agents, working, waiting, tasks, title, lastAt }` |
+| `POST` | `/v1/directives` | `{ text, title?, offices?: [id \| name \| "all"], targets?: [agent id \| path], from? }` | `201 { ok, directive }`; a part that could not be sent shows as `failed` with why |
+| `GET` | `/v1/directives/<id>` | | `{ ok, directive }` |
+| `POST` | `/v1/directives/<id>/cancel` | | `{ ok, directive }`: cancels what is still running |
+| `GET` | `/v1/knowledge?q=&kind=&office=&limit=&from=agent` | | `{ ok, entries, counts }`: without their body (an `excerpt` instead); with `q`, the best matches. `from=agent` tells the archive floor an agent is searching |
+| `POST` | `/v1/knowledge` | `{ kind, title, body?, name?, tags?, office?, source?, config?: { command, args } \| { url } }` | `201 { ok, entry, created }` (a skill or connector with an existing `name`: `200`, updated) |
+| `GET` · `PUT` · `DELETE` | `/v1/knowledge/<id>` (`?from=agent`: counts as a read) | `PUT`: the fields to change | `{ ok, entry }` · `{ ok }` |
+| `POST` | `/v1/knowledge/<id>/install` | `{ targets: [agent id] }` | `{ ok, results: [{ target, name, harness, ok, action: created \| updated \| same, reason?: exists \| manual \| invalid \| harness \| unknown, file, rel }] }` |
+| `POST` | `/v1/knowledge/generate` | `{ kind: skill \| connector \| note \| doc, text, target }` | Like a brief: `{ ok, task \| run }` (the agent saves the result with `save_knowledge`) |
+
+`kind` is `note`, `decision`, `doc`, `minute` (a directive's minutes), `skill` or `connector`. Over WebSocket every viewer gets `{ type: "directives", directives }`, `{ type: "overview", overview }`, `{ type: "archive", archive: { counts, recent } }` and what happens on the floors, `{ type: "floor", event: { floor: exec \| archive, kind, text, … } }`; the client may send `{ type: "directive", text, offices?, targets? }` and `{ type: "directive_cancel", id }`. The floor being watched is `prefs.view.floor` (`exec`, `office` or `archive`).
+
 ## Background services
 
 The services an agent leaves running (a dev server, a watcher, a queue…). The office lists them and shows what they print; it never starts or stops them.

@@ -27,6 +27,11 @@ página sirve para entender qué hace y para registrarlo a mano en otro cliente.
 | `report_activity` | `kind`, `text?`, `role?`, `phase?`, `from?`, `todos?`, `roles?`, `cwd?` | `task` · `phase` · `phase_end` · `todos` · `waiting` · `error` · `turn_end` · `done` · `chat` · `agent_roles`. Sin oficina no falla: devuelve `delivered: false` |
 | `send_task` | `project` (id o ruta), `text`, `entry?`, `newSession?` | Le manda un prompt al agente de un proyecto registrado, por una entrada de su harness |
 | `open_pane` | `command?` \| `agent?` + `prompt?`, `role?`, `title?`, `direction?` | Dentro de herdr: abre un pane con una actividad y se lo cuenta a la oficina |
+| `send_directive` | `text`, `title?`, `offices?` (ids o nombres, o `["all"]`), `projects?` (ids o rutas) | **La dirección:** una orden para varias oficinas o proyectos. El agente de cada proyecto recibe un encargo con su parte (empieza con 🏛); la oficina sigue cada parte y, cuando terminan todas, archiva el acta |
+| `list_directives` | — | Las últimas directivas, cómo va cada proyecto y qué hace cada oficina ahora |
+| `search_knowledge` | `query?`, `kind?`, `limit?` | **El archivo:** las entradas que mejor coinciden (notas, decisiones, documentos, actas, skills, conectores), con un extracto. Funciona también con la oficina apagada |
+| `get_knowledge` | `id` \| `name` + `kind?` | Una entrada completa (una skill o un conector también por su nombre). Cuenta como una lectura |
+| `save_knowledge` | `kind`, `title`, `body?`, `name?`, `tags?`, `office?`, `command?` + `args?` \| `url?`, `id?` | Guarda una nota, decisión, documento, skill (`name`, `title`: qué hace y cuándo usarla, `body`: sus instrucciones) o conector (`name`, `command`/`args` o `url`; sin secretos). El mismo `name` (o el `id`) la actualiza. Funciona también con la oficina apagada |
 | `list_teams` · `install_team` | `team`, `harness`, `project?` | Los team packs (un subagente por rol), para Pi, Claude Code, OpenCode o Codex |
 
 Los resultados son texto: una línea para leer y, debajo, el JSON con los datos.
