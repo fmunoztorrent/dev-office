@@ -4,7 +4,7 @@
 export default {
   team: {
     you: 'tú', // the PO is the user
-    titles: { designer: 'Diseñadora', po: 'Product Owner', analyst: 'Analista de negocio', manager: 'Manager', frontend: 'Frontend', backend: 'Backend', qa: 'QA', tl: 'Tech Lead' },
+    titles: { designer: '{g:Diseñadora|Diseñador}', po: 'Product Owner', analyst: 'Analista de negocio', manager: 'Manager', frontend: 'Frontend', backend: 'Backend', qa: 'QA', tl: 'Tech Lead' },
   },
   needs: { social: 'Social', coffee: 'Café', bladder: 'Baño', dream: 'Imaginación', doubt: 'Dudas' },
   dream: { unicorn: 'un unicornio', rainbow: 'un arcoíris', skull: 'una calavera', pizza: 'pizza' },
@@ -15,7 +15,7 @@ export default {
     'plan-pruebas': 'Plan de pruebas', red: 'RED', green: 'GREEN', regresion: 'Regresión', bug: 'Bug', verifica: 'Verifica',
     implementa: 'Implementa', fix: 'Fix', migracion: 'Migración', ux: 'UX', ui: 'UI', 'revision-visual': 'Revisión visual', bloqueado: 'Bloqueado',
   },
-  state: { idle: 'libre', working: 'trabajando', thinking: 'pensando', blocked: 'bloqueado', waiting: 'esperando', done: 'listo', coffee: 'café', talking: 'hablando', red: 'en rojo', lunch: 'almorzando', alarm: 'emergencia' },
+  state: { idle: 'libre', working: 'trabajando', thinking: 'pensando', blocked: '{g:bloqueada|bloqueado}', waiting: 'esperando', done: '{g:lista|listo}', coffee: 'café', talking: 'hablando', red: 'en rojo', lunch: 'almorzando', alarm: 'emergencia' },
   sessionStatus: { active: 'en curso', waiting: 'esperándote', done: 'terminada', ended: 'cerrada' },
   taskStatus: { queued: 'en cola', sent: 'enviada', running: 'en curso', done: 'hecha', failed: 'falló', cancelled: 'cancelada' },
   runStatus: { running: 'en curso', done: 'terminado', failed: 'falló', cancelled: 'cancelado', queued: 'en cola', sent: 'enviado' },
@@ -25,6 +25,8 @@ export default {
   // ---------------------------------------------------------------- office life (sim.js)
   sim: {
     journal: {
+      workcoffeeAlone: '{who} va por un café a pensar en lo que está haciendo ☕',
+      workcoffee: '{who} va por un café con {names} a contar en qué anda ☕',
       newcomer: '{name} llega a dar una mano en {role}: {text}', farewell: '{name} terminó su parte y se va',
       deskchat: '{names} cotorrean desde sus escritorios 💬',
       gossip: '{names} se juntan a conversar 💬',
@@ -86,7 +88,7 @@ export default {
       designer: ['¿Y si todo fuera violeta? 💜', 'Ese botón me quita el sueño 😱', 'Le falta aire a esa pantalla ✨', 'Les traje una paleta nueva 🎨', '¿Quién usó Comic Sans? 😤'],
     },
     // the chit-chat about what is going on (sim.js liveTopics)
-    newcomer: { welcome: '¡Bienvenido, {name}! 👋', bye: '¡Listo, me voy! 👋' },
+    newcomer: { welcome: '¡{g:Bienvenida|Bienvenido}, {name}! 👋', bye: '¡Listo, me voy! 👋' },
     live: {
       board: 'Vamos {done} de {total} en el tablero 📋', doing: '{name} anda {action} 👀', stuck: '{name} se trabó {action} 😬',
       waitingYou: 'Estamos esperando el OK de {po} ✋', newcomer: 'Llegó {name} a dar una mano con {role} 👋',
@@ -136,10 +138,23 @@ export default {
     pizzaReward: '¡Esto se merece una pizza! 🍕',
     pizzaParty: ['¡Esto se celebra con pizza! 🍕', '¿Pedimos pizza para celebrar? 🍕'],
     rounds: ['¿Cómo vas, {name}?', '{name}, ¿necesitas algo?', '¿Todo bien por aquí, {name}?'],
-    roundsReplies: ['Bien, avanzando 💪', 'Todo bajo control 👍', 'Un poco trabado, pero sale 😅', 'Casi listo 🙌'],
+    roundsReplies: ['Bien, avanzando 💪', 'Todo bajo control 👍', 'Un poco {g:trabada|trabado}, pero sale 😅', 'Casi listo 🙌'],
     tv: ['¿Qué están dando? 📺', '5 minutitos y vuelvo 😅', '¡Gooool! ⚽', 'Esta serie está buenísima 🍿'],
     tvForecast: 'El pronóstico: {label}{temp} {icon}',
     tvTask: 'Ni en la tele se olvidan de «{task}» 😅',
+    // un respiro en medio de una tarea: a la cafetería, hablando de lo que hace ({action}:
+    // «editando api.js»; {task}: la tarea de la pizarra), y de vuelta pensando cómo resolverlo
+    workCoffee: {
+      open: ['Estoy {action} y no veo cómo manejar los errores 🤔', 'Llevo un rato {action}… ¿tú cómo lo harías?', 'Esto de «{task}» me tiene dando vueltas ☕', 'Un café primero: estoy {action} y ya tengo la cabeza frita', 'Voy por la mitad de «{task}», creo 😅', 'Estoy {action}: funciona, pero quedó feo'],
+      reply: ['¿Qué es lo que se complica?', '¿Probaste partirlo en dos?', 'Me pasó la semana pasada, espera…', 'Explícamelo como si tuviera cinco años 😄', '¿Y los tests qué dicen?', 'Uf, suena a caso borde'],
+      tlReply: ['Parte por el caso más simple y de ahí creces', '¿Hay un test que diga qué debería hacer?', 'No lo sobrediseñes: primero que funcione', 'Dibújalo en la pizarra y lo vemos'],
+      more: ['Es que si falla a la mitad lo deja todo roto', 'Creo que estoy mezclando dos problemas en uno', 'Son tres casos y cubrí uno solo', 'El código viejo hace algo raro ahí'],
+      advice: ['Entonces maneja el error en el borde, no adentro 👍', 'Escribe el test primero, te va a decir', 'Sepáralos: una función por caso', 'Pregúntale al agente, seguro sabe 😉', 'Pruébalo con un ejemplo a mano'],
+      alone: ['Mmm… {action}… ☕', 'Café y a pensar. {action}, {action}… 🤔', 'A ver, «{task}»: ¿en qué iba?'],
+      aloneMore: ['¿Y si parto por el final?', 'Tiene que ser una tontera…', 'Ya, un sorbo más y lo tengo'],
+      back: ['💭 ¿Y si separo la validación del guardado…?', '💭 Quizás una función más chica…', '💭 Primero el test, después lo demás', '💭 Tiene que haber una forma más simple…', '💭 ¿Y si la lista viene vacía…?'],
+      eureka: ['¡Eso es! 💡', '¡Ya lo tengo! 💡', '¡Vamos! 💪', 'Ahh, claro 💡'],
+    },
     coffee: ['☕', 'Mmm, café…', '🎵', '¿Alguien quiere café?', 'Pausa activa 🙆', 'Un cortado, por favor ☕'],
     bathUrgent: ['¡No aguanto más! 😣', '¡Permiso, permiso! 🏃'],
     bathWait: ['¡Apúrate! 😣', '¿Queda mucho? 🙏', '🚻😬'],
@@ -352,7 +367,7 @@ export default {
     pathMissing: 'falta la ruta', pathRelative: '{path}: usa la ruta completa (p. ej. ~/Workspace/mi-proyecto)', pathNotFound: '{path}: no existe esa carpeta',
     harness: 'elige el agente que atiende esa ruta: claude-code, opencode o pi', args: '{name}: args debe ser una lista de textos',
     agentExists: 'ese agente ya está registrado en esa ruta', saveFailed: 'no se pudo guardar: {error}', agentsMax: 'como máximo {n} agentes',
-    unknownAgent: 'agente desconocido', unknownRole: 'rol desconocido: {role}', notEditable: '{role}: no se puede cambiar "{key}"',
+    unknownAgent: 'agente desconocido', unknownRole: 'rol desconocido: {role}', oneOf: '{role}: «{key}» debe ser uno de: {values}', notEditable: '{role}: no se puede cambiar "{key}"',
     color: '{role}.{key}: usa un color como #3f73f0', empty: '{role}.{key} no puede quedar vacío',
     unknownOffice: 'oficina desconocida: {office}', officeName: 'ponle un nombre a la oficina', officeExists: 'ya hay una oficina con ese nombre',
     officesMax: 'como máximo {n} oficinas', mainOffice: 'la oficina principal no se puede eliminar', timezone: 'zona horaria desconocida: {tz}',
@@ -478,6 +493,7 @@ export default {
     look: {
       hint: 'Cómo se ven y cómo se llaman los personajes de esta oficina. Cada uno sigue representando su rol (QA, backend…).',
       character: 'Personaje', name: 'Nombre', title: 'Cargo', shirt: 'Camisa', pants: 'Pantalón', hair: 'Pelo', skin: 'Piel', long: 'Pelo largo', beard: 'Barba', glasses: 'Lentes',
+      sex: 'Sexo', sexes: { f: 'Mujer', m: 'Hombre' }, personality: 'Personalidad', personalities: { chatty: 'Conversador(a): habla mucho, en el escritorio y en la cafetería', focused: 'Concentrado(a): casi no se para del escritorio', anxious: 'Ansioso(a): muchas dudas, café seguido', calm: 'Tranquilo(a): se toma sus pausas, sin apuro', dreamer: 'Soñador(a): sueña despierto(a) mientras trabaja' }, traits: { chatty: '{g:conversadora|conversador}', focused: '{g:concentrada|concentrado}', anxious: '{g:ansiosa|ansioso}', calm: '{g:tranquila|tranquilo}', dreamer: '{g:soñadora|soñador}' }, pickColor: 'Elige un color', moreColors: 'Otro color…',
       random: '🎲 Al azar', reset: '↺ Volver al original', randomTitle: 'Al azar', resetTitle: 'Volver al original', role: 'rol: {role}', you: 'eres tú', preview: 'Vista previa de {name}', of: '{label} de {name}',
       saved: 'Listo: el equipo ya luce así en la oficina.',
     },
@@ -487,22 +503,20 @@ export default {
     canvas: 'La oficina: clic en un personaje para ver su ficha, en la pizarra para un nuevo encargo',
     settings: 'Ajustes', settingsKey: 'Ajustes (c)', fullscreen: 'Pantalla completa', fullscreenKey: 'Pantalla completa (f)', view: 'Vista frontal o cenital', viewKey: 'Vista frontal o cenital (v)', servicesKey: 'Servicios en segundo plano: {n} corriendo (l)',
     office: 'Oficina', officeKey: 'Elige qué oficina ver (o)', floor: 'Piso',
-    sheetClose: 'Cerrar ficha', poke: '👋 Saludar', message: '✉ Mensaje', subagents: '{n} subagente(s)', nothingYet: 'Todavía no ha hecho nada en esta sesión.',
+    sheetClose: 'Cerrar ficha', poke: '👋 Saludar', subagents: '{n} subagente(s)', nothingYet: 'Todavía no ha hecho nada en esta sesión.',
     mood: { bath: 'en el baño 🚻', bathWait: 'esperando el baño 😣', dream: 'sueña con {dream} {emoji}', lunch: 'almorzando {food}', fire: '¡apagando el incendio! 🧯', talking: 'conversando 💬' },
-    term: 'Actividad del equipo', termKey: 'Actividad del equipo (a)', termClose: 'Cerrar terminal',
-    tabs: { activity: 'actividad', team: 'equipo', work: 'encargos' },
-    promptTeam: 'equipo@oficina:~$', promptOne: '{name}@oficina:~$', chatPh: 'mensaje al equipo · /ayuda',
     session: 'sesión', sessionLabel: 'Sesión', latest: 'más reciente', noTaskYet: 'Sesión sin tarea todavía', waitingAgent: 'Esperando eventos de un agente…',
     stats: { tools: 'acciones', errors: 'errores', subs: 'subagentes', status: 'estado' },
     newBrief: '📋 Nuevo encargo', demo: '▶ Demo', demoTdd: '▶ Demo TDD', reset: '⟲ Reiniciar', connected: '{n} agente(s) conectado(s)',
     cancel: 'Cancelar', cancelRun: '✕ cancelar', runBy: 'Lo ejecuta {agent}: {task}', isNew: ' (nuevo)', flow: 'Flujo por roles', noActivity: 'sin actividad',
-    help: 'comandos: /encargo · /demo · /tdd · /reset · /ajustes · /oficina <nombre> · /vida (mostrar u ocultar la vida de la oficina) · /limpiar · /pantalla · btw <pregunta> (una pregunta al margen al agente de turno). Sin barra: mensaje al equipo (o al seleccionado).',
-    commands: { help: 'ayuda', brief: 'encargo', demo: 'demo', tdd: 'tdd', reset: 'reset', settings: 'ajustes', office: 'oficina', life: 'vida', clear: 'limpiar', screen: 'pantalla', btw: 'btw' },
     btwUsage: 'btw <pregunta>: una pregunta al margen al agente de turno sobre el equipo, el dominio o la oficina', btwThinking: 'pensando…', btwFailed: 'sin respuesta: {error}', btwClose: 'Cerrar',
-    unknownCommand: 'comando desconocido · /ayuda', lifeOn: 'vida de la oficina: visible', lifeOff: 'vida de la oficina: oculta', noOffice: 'no hay ninguna oficina «{name}»',
-    welcome: 'dev-team-office · la actividad del equipo aparece aquí · /ayuda para los comandos',
+    lifeOn: 'vida de la oficina: visible', lifeOff: 'vida de la oficina: oculta',
+    welcome: 'dev-team-office · aquí aparece la actividad del equipo',
     viewing: '🏢 Mirando: {name} ({tz})',
     weatherTitle: '{label}{temp} · {season} · {where}', weatherReal: '{place} (Open-Meteo)', weatherSim: 'simulado según la estación', here: 'tu ciudad',
+    feed: 'Actividad', feedKey: 'Actividad: lo que hacen los agentes y la vida de la oficina (a)', feedClose: 'Cerrar la actividad', life: 'vida de la oficina', lifeKey: 'Mostrar también la vida de la oficina: conversaciones, sueños, almuerzo, incendios…', clear: 'limpiar',
+    work: '📋 Trabajo', workKey: 'Trabajo: la tarea, los pipelines, los encargos y las demos (w)', team: 'El equipo',
+    you: 'Tú', send: 'Enviar', talkPh: 'Escríbele a {name}… (una pregunta la contesta su agente)', talkTeamPh: 'Dile algo al equipo…',
   },
   console: {
     web: 'Web', webHint: '(o: abrirla en el navegador)', game: 'Juego', gameHint: 'g: abrirlo en esta terminal (q vuelve a la bitácora)', keys: 'Teclas',

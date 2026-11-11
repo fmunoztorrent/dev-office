@@ -21,6 +21,7 @@ import { normRole } from './roles.js';
 import { t, isLanguage, DEFAULT_LANGUAGE } from '../public/i18n.js';
 import { validZone } from '../public/clock.js';
 import { DEFAULT_MODELS, normalizeModels } from '../public/models.js';
+import { SEXES, PERSONALITIES } from '../public/sim.js';
 
 const HARNESS_IDS = ['claude-code', 'opencode', 'pi', 'codex'];
 const ASKS_KEEP = 500;
@@ -33,7 +34,8 @@ export const KNOWLEDGE_KINDS = ['note', 'decision', 'doc', 'minute', 'skill', 'c
 const NAMED = new Set(['skill', 'connector']); // they are installed in a project by their name
 const BODY_MAX = 64 * 1024;
 const COLOR_RX = /^#[0-9a-f]{6}$/i;
-const APPEARANCE = { name: 'text', title: 'text', shirt: 'color', pants: 'color', hair: 'color', skin: 'color', long: 'bool', beard: 'bool', glasses: 'bool' };
+// what can be changed of each character, and how it is checked (a list: one of those values)
+const APPEARANCE = { name: 'text', title: 'text', sex: SEXES, personality: Object.keys(PERSONALITIES), shirt: 'color', pants: 'color', hair: 'color', skin: 'color', long: 'bool', beard: 'bool', glasses: 'bool' };
 export const MAIN_OFFICE = 'main';
 /** The building's floors: the executive one on top, the offices, and the archive in the basement. */
 export const FLOORS = ['exec', 'office', 'archive'];
@@ -412,7 +414,7 @@ export class Store {
   #appearanceKey(office) { return !office || office === MAIN_OFFICE ? 'appearance' : `appearance:${office}`; }
   getAppearance(office = MAIN_OFFICE) { return this.#get(this.#appearanceKey(office), {}) || {}; }
 
-  /** patch: { role: { name, title, shirt, pants, hair, skin, long, beard, glasses } | null } (null = the original) */
+  /** patch: { role: { name, title, sex, personality, shirt, pants, hair, skin, long, beard, glasses } | null } (null = the original) */
   setAppearance(patch = {}, office = MAIN_OFFICE) {
     return this.#write(() => {
       if (!this.getOffice(office)) fail(t('err.unknownOffice', { office }));
@@ -425,6 +427,7 @@ export class Store {
           const type = APPEARANCE[k] || fail(t('err.notEditable', { role, key: k }));
           if (type === 'color') { if (!COLOR_RX.test(String(v))) fail(t('err.color', { role, key: k })); clean[k] = String(v).toLowerCase(); }
           else if (type === 'bool') clean[k] = !!v;
+          else if (Array.isArray(type)) { if (!type.includes(v)) fail(t('err.oneOf', { role, key: k, values: type.join(', ') })); clean[k] = v; }
           else {
             const s = String(v ?? '').trim();
             if (!s) fail(t('err.empty', { role, key: k }));

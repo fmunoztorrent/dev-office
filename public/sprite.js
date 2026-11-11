@@ -15,5 +15,8 @@ export function drawSprite(canvas, c, { P = 4, bg = '#c9b48a' } = {}) {
   if (c.glasses) px(-3, -18, 6, 1, '#cfe8ff');
   px(-2, -18, 1, 1, '#1a1a1a'); px(1, -18, 1, 1, '#1a1a1a');
   if (c.glasses) px(-3, -19, 6, 1, '#2b2b2b');
-  px(-1, -16, 2, 1, '#7a2e2e');
+  // the face's sex, as in the office: her lashes and lips, his brows
+  else if (c.sex === 'f') { px(-3, -19, 1, 1, '#1a1a1a'); px(2, -19, 1, 1, '#1a1a1a'); }
+  else { px(-2, -19, 1, 1, '#00000066'); px(1, -19, 1, 1, '#00000066'); }
+  px(-1, -16, 2, 1, c.sex === 'f' ? '#c45a6a' : '#7a2e2e');
 }

@@ -216,7 +216,7 @@ export function renderMonitor(mon, { cols = 100, rows = 30, color = true, colorM
   // ---- the team: who is doing something ----
   const busy = Object.entries(m.roles).filter(([, r]) => r.status && r.status !== 'idle' && now - (r.ts || 0) < 10 * 60_000);
   const teamParts = busy.length
-    ? busy.flatMap(([role, r], i) => [[i ? ' · ' : '  ', D], [`${mon.person(role).name || role}`, `${B}${paint(mon.person(role).shirt)}`], [` ${t(`state.${r.status}`) || r.status}`, paint(r.status === 'red' || r.status === 'blocked' ? TONE.err : r.status === 'waiting' ? TONE.warn : null)]])
+    ? busy.flatMap(([role, r], i) => [[i ? ' · ' : '  ', D], [`${mon.person(role).name || role}`, `${B}${paint(mon.person(role).shirt)}`], [` ${t(`state.${r.status}`, { g: mon.person(role).sex }) || r.status}`, paint(r.status === 'red' || r.status === 'blocked' ? TONE.err : r.status === 'waiting' ? TONE.warn : null)]])
     : [[`  ${t('monitor.teamIdle')}`, D]];
 
   // ---- the services left running in the background: a number each (its logs in a pane) ----

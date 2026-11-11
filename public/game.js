@@ -14,7 +14,7 @@
 import {
   createSim, W, H, LEFT, WORLD_W, SPOT, PLANTS, STATUS_ICON, PHASE_COLOR, phaseInfo, onBoard, tvChannel,
   DREAMS, DREAM_PALETTE, rainbowPixels, CAFE, DINING, DINING_SEATS, PARTITION, RACK, EXTINGUISHER, daylight,
-  BOARD, EASEL, CLOCK, GLASS, TV, SOFA, ALARM, SIGN, HOT_DESKS, TEAM, BATHROOM, HALL, OFFICE_DOOR, ELEVATOR,
+  BOARD, EASEL, CLOCK, GLASS, TV, SOFA, ALARM, SIGN, HOT_DESKS, TEAM, BATHROOM, HALL, OFFICE_DOOR, ELEVATOR, gait, screenLines, screenMode,
 } from './sim.js';
 import { outdoor, lightning, colorHex, weatherIcon } from './sky.js';
 import { isoCamera, apply, unapply, scaled, BACK, WALL_H } from './iso.js';
@@ -23,6 +23,8 @@ import { createFloors, drawFloor, floorHit } from './floors.js';
 export { TEAM, PHASES, phaseInfo } from './sim.js';
 
 const P = 3; // size of a sprite "pixel"
+/** A darker shade of a #rrggbb color (the eyebrows, from the hair). */
+const shade = (hex, k = 0.6) => `#${[1, 3, 5].map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * k).toString(16).padStart(2, '0')).join('')}`;
 const FONT = '"VT323", ui-monospace, monospace';
 const EMOJI = 'system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
 const rgbOf = (hex) => { const n = parseInt(hex.slice(1), 16); return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`; };
@@ -590,16 +592,24 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     if (now < a.shakeUntil) x += Math.sin(now / 25) * 3;
     if (a.dance && !walking) x += Math.sin(now / 55) * 2; // waiting for the bathroom
     const px = (gx, gy, gw, gh, col) => R(x + gx * P, y + gy * P, gw * P, gh * P, col);
-    const step = walking ? Math.sin(a.walkT * 14) : 0;
+    const g = gait(a);
+    const fem = c.sex === 'f';
 
     // sombra
     if (!sitting(a)) { ctx.fillStyle = '#00000030'; ctx.beginPath(); ctx.ellipse(x, y, 14, 4, 0, 0, Math.PI * 2); ctx.fill(); }
-    // piernas
+    // legs: the thigh stays under the hip and the shin steps (forward, back, in the air), with its shoe
     if (!sitting(a)) {
       const dance = a.dance && !walking && Math.floor(now / 160) % 2;
-      px(-3, -6 + (step > 0 || dance ? -1 : 0), 2, 6, c.pants);
-      px(1, -6 + (step < 0 || (a.dance && !dance) ? -1 : 0), 2, 6, c.pants);
-      px(-3, -1, 2, 1, '#222'); px(1, -1, 2, 1, '#222');
+      const toe = g && a.sideways !== false ? (a.face || 1) : 0;
+      [-3, 1].forEach((hip, i) => {
+        const reach = g ? g.reach[i] : 0;
+        const up = g ? g.lift[i] : a.dance && (i ? !dance : dance) ? 1 : 0;
+        px(hip, -6, 2, 3, c.pants);
+        px(hip + reach, -3 - up, 2, 2, c.pants);
+        if (reach && !up) px(hip + reach / 2, -4, 2, 1, c.pants); // the knee, between thigh and shin
+        px(hip + reach + Math.min(0, toe), -1 - up, toe ? 3 : 2, 1, '#222');
+      });
+      if (g?.bob) y -= 2; // while passing, the body rises a little
     }
     // torso
     px(-4, -13, 8, 7, c.shirt);
@@ -609,10 +619,11 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     const typing = working && Math.floor(now / 140) % 2;
     const typing2 = working && !typing;
     const eating = a.perch && a.food && Math.floor(now / 600) % 3 === 0;
+    const swing = g ? g.swing : 0;
     if (a.handUp) { px(-6, -19, 2, 7, c.shirt); px(-6, -20, 2, 2, c.skin); }
-    else px(-6, -13 + (typing ? 1 : 0), 2, 6, c.shirt), px(-6, -7 + (typing ? 1 : 0), 2, 1, c.skin);
+    else px(-6, -13 + (typing ? 1 : 0) - swing, 2, 6, c.shirt), px(-6, -7 + (typing ? 1 : 0) - swing, 2, 1, c.skin);
     if (eating) { px(4, -15, 2, 5, c.shirt); px(4, -16, 2, 1, c.skin); }
-    else { px(4, -13 + (typing2 ? 1 : 0), 2, 6, c.shirt); px(4, -7 + (typing2 ? 1 : 0), 2, 1, c.skin); }
+    else { px(4, -13 + (typing2 ? 1 : 0) + swing, 2, 6, c.shirt); px(4, -7 + (typing2 ? 1 : 0) + swing, 2, 1, c.skin); }
     if (a.carry === 'ext') {
       px(5, -12, 3, 8, '#d62828'); px(5, -13, 3, 1, '#2b2d42'); px(6, -12, 1, 6, '#ff6b6b');
       px(8, -13, 2, 1, '#2b2d42'); px(9, -12, 1, 2, '#2b2d42');
@@ -633,8 +644,14 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     if (c.glasses) px(-3, -18, 6, 1, '#cfe8ff');
     if (!blink) { px(-2 + (look > 0 ? 1 : 0), -18, 1, 1, '#1a1a1a'); px(1 + (look > 0 ? 1 : 0) - (look < 0 ? 1 : 0), -18, 1, 1, '#1a1a1a'); }
     if (c.glasses) px(-3, -19, 6, 1, '#2b2b2b');
+    if (!blink && !c.glasses) {
+      // the face's sex: her lashes at the outer corners; his brows over the eyes
+      if (fem) { px(-3 + (look > 0 ? 1 : 0), -19, 1, 1, '#1a1a1a'); px(2 + (look > 0 ? 1 : 0) - (look < 0 ? 1 : 0), -19, 1, 1, '#1a1a1a'); }
+      else { px(-2 + (look > 0 ? 1 : 0), -19, 1, 1, shade(c.hair)); px(1 + (look > 0 ? 1 : 0) - (look < 0 ? 1 : 0), -19, 1, 1, shade(c.hair)); }
+    }
     if (a.state === 'done' || now < a.jumpUntil || eating) px(-1, -16, 2, 1, '#7a2e2e');
     else if (a.state === 'blocked' || a.state === 'alarm' || a.dance) px(-1, -16, 2, 1, '#333');
+    else if (fem) px(-1, -16, 2, 1, '#c45a6a');
 
     // name if walking, status icon
     if (!sitting(a)) {
@@ -707,22 +724,30 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     // the PO is you (the user): the plate says so
     ctx.fillStyle = c.shirt; ctx.fillText(fit(`${c.name} · ${a.id === 'po' ? t('team.you') : c.title}`, 72), s.x, s.y + 13);
   }
+  /**
+   * A screen: off, or on with code (typed line by line and scrolling while they work; still, with
+   * the cursor blinking, while they think or are away with a task going on).
+   */
+  function drawScreen(id, sx, sy, sw, sh, mode, accent, now) {
+    R(sx - 2, sy - 2, sw + 4, sh + 4, '#20232f');
+    R(sx, sy, sw, sh, mode === 'off' ? '#1d2433' : '#0d1b2a');
+    if (mode === 'off') return;
+    const colors = ['#06d6a0', '#ffd166', '#9ad1ff', accent];
+    const rows = Math.max(1, Math.floor((sh - 2) / 4)), cols = Math.max(3, Math.floor((sw - 3) / 2));
+    const { rows: lines, cursor, blink } = screenLines(id, now, rows, cols, mode);
+    ctx.save();
+    if (mode === 'on') ctx.globalAlpha *= 0.55;
+    lines.forEach((segs, r) => { for (const s of segs) R(sx + 2 + s.x * 2, sy + 2 + r * 4, s.w * 2, 2, colors[s.c]); });
+    if (blink || mode === 'type') R(sx + 2 + (cursor.x + 1) * 2, sy + 1 + cursor.y * 4, 2, 3, '#e8e9f1');
+    ctx.restore();
+    R(sx, sy, sw, 1, '#ffffff14'); // the glass's shine
+  }
   // what is on the desk: the screens and each role's things, the keyboard and the folders
   function drawDeskProps(a, now) {
     const s = a.cfg.seat, c = a.cfg;
     const busy = a.state === 'working' || a.state === 'thinking' || a.state === 'red';
-
-    const screen = (sx, sy, sw, sh) => {
-      R(sx - 2, sy - 2, sw + 4, sh + 4, '#20232f');
-      R(sx, sy, sw, sh, busy ? '#0d1b2a' : '#1d2433');
-      if (busy) {
-        const off = Math.floor(now / 160);
-        for (let i = 0; i < Math.floor(sh / 4); i++) {
-          const len = ((i * 7 + off) * 13) % (sw - 4);
-          R(sx + 2 + ((i * 5) % 6), sy + 2 + i * 4, Math.max(4, len), 2, ['#06d6a0', '#ffd166', '#9ad1ff', c.shirt][(i + off) % 4]);
-        }
-      }
-    };
+    const mode = screenMode(a, now);
+    const screen = (sx, sy, sw, sh) => drawScreen(a.id, sx, sy, sw, sh, mode, a.state === 'red' ? '#ef476f' : c.shirt, now);
     // props per role
     switch (c.prop) {
       case 'dual': screen(s.x + 14, s.y - 44, 22, 18); screen(s.x + 38, s.y - 44, 22, 18); R(s.x + 34, s.y - 24, 4, 10, '#20232f'); break;
@@ -802,13 +827,8 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   }
   function drawLaptop(i, now) {
     const s = HOT_DESKS[i], g = atDesk(i);
-    const busy = g && ['working', 'thinking', 'red'].includes(g.state);
     R(s.x + 2, s.y - 34, 28, 19, '#2b2d42');
-    R(s.x + 4, s.y - 32, 24, 15, busy ? '#0d1b2a' : '#1d2433');
-    if (busy) {
-      const off = Math.floor(now / 160);
-      for (let k = 0; k < 3; k++) R(s.x + 6 + ((k * 5) % 6), s.y - 30 + k * 4, Math.max(4, ((k * 7 + off) * 13) % 18), 2, ['#06d6a0', '#ffd166', g.cfg.shirt][(k + off) % 3]);
-    }
+    drawScreen(g?.id || `hot${i}`, s.x + 4, s.y - 32, 24, 15, screenMode(g, now), g?.cfg.shirt || '#8d99ae', now);
     R(s.x - 2, s.y - 15, 36, 3, '#adb5bd');
     if (g?.badges.size) { R(s.x - 30, s.y - 24, 16, 11, '#ffb703'); R(s.x - 30, s.y - 26, 7, 3, '#fb8500'); }
   }

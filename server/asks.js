@@ -79,10 +79,13 @@ export class AskDesk extends EventEmitter {
     return a ? { harness: a.harness, session: null, sessionId: null, cwd: a.path, agentId: a.id, bin: a.bin, turn: null, title: '', name: a.name } : null;
   }
 
-  /** The character asked, with the office's names: "Diego (Backend)". */
+  /** The character asked, with the office's names and their way of being: "Diego (Backend, focused)". */
   #who(officeId, role) {
     const look = this.store.getAppearance?.(officeId)?.[role] || {};
-    return `${look.name || DEFAULT_TEAM[role]?.name || role} (${look.title || t(`team.titles.${role}`)})`;
+    const g = look.sex || DEFAULT_TEAM[role]?.sex;
+    const way = look.personality || DEFAULT_TEAM[role]?.personality;
+    const title = look.title || t(`team.titles.${role}`, { g });
+    return `${look.name || DEFAULT_TEAM[role]?.name || role} (${[title, way && t(`settings.look.traits.${way}`, { g })].filter(Boolean).join(', ')})`;
   }
 
   /**

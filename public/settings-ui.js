@@ -6,7 +6,7 @@
 //                detected, and a prompt sent from the whiteboard starts THAT pipeline.
 //   Characters   how the characters of the office being watched look.
 
-import { TEAM, DEFAULT_TEAM, APPEARANCE_KEYS, LOOK_PALETTES } from './sim.js';
+import { TEAM, DEFAULT_TEAM, APPEARANCE_KEYS, LOOK_PALETTES, SEXES, PERSONALITIES, randomLook, lookForSex } from './sim.js';
 import { drawSprite } from './sprite.js';
 import { t, LANGUAGES, getLanguage } from './i18n.js';
 import { allZones, zoneInfo, countryName } from './clock.js';
@@ -357,8 +357,26 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
 
   // ------------------------------------------------------------ Personajes
 
-  const pickOne = (list) => list[Math.floor(Math.random() * list.length)];
   const LK = (k, v) => t(`settings.look.${k}`, v);
+
+  /**
+   * A color: its palette as swatches (one click) and, at the end, the browser's color picker for
+   * any other one (the chosen color shows there if it is not in the palette).
+   */
+  function colorField(look, k, set) {
+    const palette = LOOK_PALETTES[k];
+    const name = LK('of', { label: LK(k), name: look.name });
+    const custom = !palette.includes(look[k]);
+    return el('div', { class: 's-color', role: 'radiogroup', 'aria-label': name },
+      el('span', { class: 's-color-k' }, LK(k)),
+      palette.map((c) => el('button', {
+        type: 'button', class: 's-swatch', role: 'radio', 'aria-checked': String(look[k] === c), 'aria-label': `${LK(k)} ${c}`, title: c,
+        style: `--c:${c}`, onclick: () => set(k, c),
+      })),
+      el('label', { class: `s-swatch s-more${custom ? ' on' : ''}`, title: LK('moreColors'), style: `--c:${look[k]}` },
+        el('input', { type: 'color', value: look[k], 'aria-label': `${name} · ${LK('pickColor')}`, oninput: (e) => set(k, e.target.value, false), onchange: () => renderLook() }),
+        '+'));
+  }
 
   function renderLook() {
     st.looks ||= Object.fromEntries(ROLE_ORDER.map((r) => [r, Object.fromEntries(APPEARANCE_KEYS.map((k) => [k, TEAM[r][k]]))]));
@@ -367,26 +385,36 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       const look = st.looks[role];
       const canvas = el('canvas', { 'aria-label': LK('preview', { name: look.name }) });
       const redraw = () => drawSprite(canvas, look);
-      const set = (k, v) => { look[k] = v; redraw(); };
-      const color = (k) => el('label', {}, el('input', { type: 'color', value: look[k], 'aria-label': LK('of', { label: LK(k), name: look.name }), oninput: (e) => set(k, e.target.value) }), LK(k));
-      const toggle = (k) => el('label', {}, el('input', { type: 'checkbox', checked: look[k] ? true : undefined, onchange: (e) => set(k, e.target.checked) }), LK(k));
+      // a click on a swatch redraws the card (to mark it); the free picker only the preview while dragging
+      const set = (k, v, again = true) => { look[k] = v; if (again) renderLook(); else redraw(); };
+      const toggle = (k) => el('label', {}, el('input', { type: 'checkbox', checked: look[k] ? true : undefined, onchange: (e) => set(k, e.target.checked, false) }), LK(k));
+      const select = (k, values, label) => el('label', { class: 's-pick' }, el('span', {}, LK(k)),
+        el('select', { 'aria-label': LK('of', { label: LK(k), name: look.name }), onchange: (e) => (k === 'sex' ? (Object.assign(look, lookForSex(e.target.value)), renderLook()) : set(k, e.target.value, false)) },
+          values.map((v) => option(v, label(v), look[k] === v))));
       redraw();
       return el('div', { class: 's-look' },
         canvas,
         el('div', { class: 'pair' },
           el('input', { type: 'text', value: look.name, maxlength: 20, 'aria-label': LK('name'), oninput: (e) => { look.name = e.target.value; } }),
           el('input', { type: 'text', value: look.title, maxlength: 30, 'aria-label': LK('title'), oninput: (e) => { look.title = e.target.value; } })),
-        el('div', { class: 'colors' }, color('shirt'), color('pants'), color('hair'), color('skin')),
+        el('div', { class: 'pair' },
+          select('sex', SEXES, (v) => LK(`sexes.${v}`)),
+          select('personality', Object.keys(PERSONALITIES), (v) => LK(`personalities.${v}`))),
+        el('div', { class: 'colors' }, colorField(look, 'skin', set), colorField(look, 'hair', set), colorField(look, 'shirt', set), colorField(look, 'pants', set)),
         el('div', { class: 'toggles' }, toggle('long'), toggle('beard'), toggle('glasses')),
         el('div', { class: 'toggles' },
           el('span', { class: 'hint' }, role === 'po' ? `${LK('role', { role })} · ${LK('you')}` : LK('role', { role })),
-          el('button', { type: 'button', class: 's-mini', title: LK('randomTitle'), onclick: () => { Object.assign(look, { shirt: pickOne(LOOK_PALETTES.shirt), hair: pickOne(LOOK_PALETTES.hair), skin: pickOne(LOOK_PALETTES.skin), pants: pickOne(LOOK_PALETTES.pants), long: Math.random() < 0.5, beard: Math.random() < 0.3, glasses: Math.random() < 0.3 }); renderLook(); } }, '🎲'),
+          el('button', { type: 'button', class: 's-mini', title: LK('randomTitle'), onclick: () => { Object.assign(look, randomLook(look.sex)); renderLook(); } }, '🎲'),
           el('button', { type: 'button', class: 's-mini', title: LK('resetTitle'), onclick: () => { Object.assign(look, DEFAULT_TEAM[role]); renderLook(); } }, '↺')),
       );
     });
+    // keep the scroll and the focus where they were (a swatch redraws the panel)
+    const box = panel.closest('.brief-body'), top = box?.scrollTop, focus = document.activeElement?.getAttribute('aria-label');
     put(panel,
       el('p', { class: 'hint' }, `${getOffice()?.name ? `🏢 ${getOffice().name} · ` : ''}${LK('hint')}`),
       el('div', { class: 's-looks' }, cards));
+    if (box) box.scrollTop = top;
+    if (focus) [...panel.querySelectorAll('[aria-label]')].find((x) => x.getAttribute('aria-label') === focus)?.focus();
   }
 
   async function saveLook() {

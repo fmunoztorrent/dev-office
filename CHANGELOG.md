@@ -10,6 +10,20 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 - **Directives (the executive floor):** one order for several offices, departments or projects at once. Each project's agent gets a brief with its part, the floor follows each part (and can stop them), the company's screen shows what each office is doing, and the minutes go to the archive. `POST /v1/directives`, and `send_directive` / `list_directives` over MCP.
 - **The archive:** the company's notes, decisions, docs and minutes, searchable by you and by every agent (`search_knowledge`, `get_knowledge`, `save_knowledge` over MCP, which asks agents to look there first and to save what they settle). **Skills** are installed in the projects you pick in each agent's format, and **connectors** (MCP servers to outside information) in each project's MCP config, never overwriting what is there. **✨ Ask an agent** has one write a skill, connector or doc for it. `/v1/knowledge`.
 - The terminal monitor shows the directives running and the archive's size, and its log tells what happens on both floors.
+- **Talk to the characters directly:** clicking one opens their sheet with a chat: you write and they answer, and the conversation stays there. A question goes to the agent of the project and task they are working on (they answer in their bubble and on the sheet); anything else is said out loud. Your own sheet (the PO's) talks to the whole team.
+- **Screens with code:** while someone works, their screen (and a newcomer's laptop) shows code being typed line by line and scrolling; it stays on, still, while they think or step away with a task going on, and turns off when there is nothing.
+- **Coffee breaks about the work:** in the middle of a task they often go to the café to tell someone what they are stuck on (or think out loud), and walk back thinking how to solve it until it clicks. New dialogue in English and Spanish.
+- **Feet that step:** a four-frame walk cycle (stride, the other foot in the air, toes pointing the way, arms swinging) in the browser and the terminal game.
+- **Sex and personality** for each character (⚙ › Characters, web and terminal). The sex changes their face (her lashes and lips, his brows), the default look when it changes, and the Spanish texts that talk about them (*Diseñadora*/*Diseñador*, *lista*/*listo*). The personality (chatty, focused, anxious, calm, dreamer) changes how often they chat, take breaks, doubt, watch TV or daydream; the defaults behave as before. An agent answering as a character is told their personality.
+- **Colors with a palette:** skin, hair, shirt and pants are picked from swatches, with a free color picker for any other one; in the terminal, ◂ ▸ go through the palette (shown next to the field) and typing `#rrggbb` sets any color.
+
+### Changed
+
+- **The game's simulated terminal (`>_`) is gone.** Its log is now **📰 Activity** (`a`), a panel you read over the office, with the *office life* toggle and *clear*; the task, flow, pipelines, tasks, demos and the team moved to **📋 Work** (`w`); talking to the team is done on the characters' sheets. The `/commands` are gone: each has its key or button (`t`, `c`, `o`, `f`, the settings' *office life*). The terminal game, the monitor and the CLI log are unchanged.
+
+### Fixed
+
+- The floor selector showed the 🏢 icon twice.
 
 ## [0.9.0] - 2026-11-10
 

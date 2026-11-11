@@ -185,7 +185,8 @@ $('ask-chip').onclick = () => promptsUi.open();
 
 function onPrefs(p) {
   prefs = p;
-  term.life = !!p.log?.life;
+  feed.life = !!p.log?.life;
+  $('feed-life').checked = feed.life;
   // the office view: front (the usual one) or isometric top-down, as saved in the settings
   game.setView(p.view?.mode === 'iso' ? 'iso' : 'flat');
   if (p.view?.floor && p.view.floor !== game.floor) setFloor(p.view.floor, { save: false });
@@ -329,6 +330,7 @@ function onEvent(ev, session) {
   const current = currentSession();
   // Events from other sessions move the team all the same, but the board shows the focused session.
   game.handle(ev.kind === 'subagent_start' ? { ...ev, project: projectOf(ev.session) } : ev);
+  if (ev.kind === 'chat') heardReply(ev);
   if (!current || ev.session === current.id) { game.setBoard(currentSession()); boardView.refresh(); }
   addLog(ev);
   renderSessions();
@@ -338,31 +340,22 @@ function onEvent(ev, session) {
   if (selected === ev.role) renderSheet();
 }
 
-// ---------------------------------------------------------------- the terminal: the team's activity
+// ---------------------------------------------------------------- the activity (bottom left)
 
-const term = { open: false, tab: 'activity', unread: 0, life: true };
+// What the agents do and the office's life, as a log you read. It opens with 📰 or `a`; closed, a
+// counter tells you what is new.
+const feed = { open: false, unread: 0, life: true };
 
-function toggleTerm(open = !term.open) {
-  term.open = open;
-  $('term').hidden = !open;
-  $('open-term').setAttribute('aria-expanded', String(open));
-  if (open) {
-    term.unread = 0;
-    renderBadge();
-    scrollLog(true);
-    $('chat-text').focus();
-  }
-}
-function setTab(tab) {
-  term.tab = tab;
-  for (const b of document.querySelectorAll('.term-tabs [role=tab]')) b.setAttribute('aria-selected', String(b.dataset.tab === tab));
-  for (const p of document.querySelectorAll('.t-panel')) p.hidden = p.dataset.panel !== tab;
-  if (tab === 'activity') scrollLog(true);
+function toggleFeed(open = !feed.open) {
+  feed.open = open;
+  $('feed').hidden = !open;
+  $('open-log').setAttribute('aria-expanded', String(open));
+  if (open) { feed.unread = 0; renderBadge(); scrollLog(true); }
 }
 function renderBadge() {
-  const b = $('term-badge');
-  b.hidden = !term.unread;
-  b.textContent = term.unread > 99 ? '99+' : String(term.unread);
+  const b = $('feed-badge');
+  b.hidden = !feed.unread;
+  b.textContent = feed.unread > 99 ? '99+' : String(feed.unread);
 }
 /** Follows the end of the log, unless the user scrolled up to read. */
 function scrollLog(force) {
@@ -376,8 +369,17 @@ function pushLine(li, { quiet = false } = {}) {
   ol.append(li);
   while (ol.children.length > 300) ol.firstChild.remove();
   if (stick) scrollLog(true);
-  if (!term.open && !quiet) { term.unread++; renderBadge(); }
+  if (!feed.open && !quiet) { feed.unread++; renderBadge(); }
 }
+$('open-log').onclick = () => toggleFeed();
+$('feed-close').onclick = () => toggleFeed(false);
+$('feed-clear').onclick = () => { $('log').innerHTML = ''; };
+// the office's life in the log (chit-chat, dreams, lunch, fires): shown or not, and it is saved
+$('feed-life').onchange = (e) => {
+  feed.life = e.target.checked;
+  send({ type: 'prefs', prefs: { log: { life: feed.life } } });
+  sysLine(t(feed.life ? 'ui.lifeOn' : 'ui.lifeOff'));
+};
 
 // ---------------------------------------------------------------- the context bar
 
@@ -440,7 +442,7 @@ function pollLife() {
   for (const j of game.sim.journal) {
     if (seenLife.has(j)) continue;
     seenLife.add(j);
-    if (!term.life || NOISY.has(j.kind)) continue;
+    if (!feed.life || NOISY.has(j.kind)) continue;
     const li = el('li', `life${j.kind === 'fire' ? ' event-fire' : ''}`);
     li.append(el('time', '', hhmm(j.ts)), el('b', '', '* '), document.createTextNode(j.text));
     pushLine(li, { quiet: !['fire', 'repaired', 'lunch', 'requirement'].includes(j.kind) });
@@ -454,19 +456,57 @@ function sysLine(text, cls = 'sys') {
   return li;
 }
 
-// btw: a side question to the agent on duty (about the domain, the team or the office). It answers
-// in a forked session, without interrupting it; the answer shows in a card at the top and in the log.
-let btwTimer = null;
+// ---------------------------------------------------------------- talking to the characters
+
+// You talk to each one on their sheet: what you say and what they answer stay there, like a chat.
+// A question goes to the agent of the project and the task that character is working on, and they
+// answer it (btw: in a forked session, without interrupting it). Anything else is said out loud and
+// they answer in their own words. On your own sheet (the PO's) you talk to the whole team.
+const talks = new Map(); // role → [{ who: 'you' | 'them', text, ts, ask?, status? }]
 const isQuestion = (text) => /\?\s*$/.test(text) || /^\s*¿/.test(text);
+function talk(role, line) {
+  const list = talks.get(role) || [];
+  list.push({ ts: Date.now(), ...line });
+  while (list.length > 30) list.shift();
+  talks.set(role, list);
+  if (selected === role) renderTalk();
+  return line;
+}
+
+function say(text) {
+  const q = String(text || '').trim();
+  if (!q || !selected) return;
+  if (ws?.readyState !== 1) { talk(selected, { who: 'them', text: t('conn.offline'), status: 'failed' }); return; }
+  talk(selected, { who: 'you', text: q });
+  if (selected !== 'po' && isQuestion(q)) {
+    talk(selected, { who: 'them', text: '', status: 'asking', ask: 'pending', question: q });
+    return askBtw(q, selected);
+  }
+  send({ type: 'chat', text: q, role: selected === 'po' ? undefined : selected });
+}
+
+// btw: a side question to the agent on duty (about the domain, the team or the office). It answers
+// in a forked session, without interrupting it; the answer shows on that character's sheet (or, if
+// it is not open, in a card at the top) and in the log.
+let btwTimer = null;
 function askBtw(question, role = selected) {
-  const q = String(question || '').trim();
-  if (!q) return sysLine(t('ui.btwUsage'));
-  if (ws?.readyState !== 1) return sysLine(t('conn.offline'));
   // the character you asked answers, from the project and the task it is working on (or the chosen session)
-  send({ type: 'ask', text: q, role: role || undefined, session: focus || undefined });
+  send({ type: 'ask', text: question, role: role || undefined, session: focus || undefined });
 }
 function onAsk(a) {
   if (!a || (office && a.office !== office.id)) return;
+  // the conversation with whom was asked: its pending line becomes the answer
+  const role = a.role || 'tl';
+  const list = talks.get(role) || [];
+  let line = list.find((x) => x.ask === a.id) || list.findLast((x) => x.ask === 'pending' && x.question === a.question);
+  if (!line && a.status === 'asking') line = talk(role, { who: 'them', text: '', status: 'asking', question: a.question });
+  if (line) {
+    line.ask = a.id;
+    line.status = a.status;
+    line.text = a.status === 'answered' ? a.answer : a.status === 'failed' ? t('ui.btwFailed', { error: a.error || '' }) : '';
+    if (selected === role) renderTalk();
+  }
+  if (selected === role && !$('sheet').hidden) { $('btw-card').hidden = true; return; } // it is already on their sheet
   const card = $('btw-card');
   clearTimeout(btwTimer);
   card.hidden = false;
@@ -480,53 +520,38 @@ function onAsk(a) {
 }
 $('btw-close').onclick = () => { clearTimeout(btwTimer); $('btw-card').hidden = true; };
 
-// The terminal's command line: a message to the team, or a /command (in the game's language;
-// the English names always work too).
-const COMMANDS = {
-  help: () => sysLine(t('ui.help')),
-  brief: () => openBrief(),
-  demo: () => send({ type: 'command', action: 'demo' }),
-  tdd: () => send({ type: 'command', action: 'demo-pi' }),
-  reset: () => send({ type: 'command', action: 'reset' }),
-  settings: () => settings.open(),
-  office: (arg) => {
-    if (!arg) return nextOffice();
-    const q = arg.toLowerCase();
-    for (const f of ['exec', 'archive']) if (t(`floors.name.${f}`).toLowerCase().includes(q) || f === q) return setFloor(f);
-    const o = offices.find((x) => x.id === q || x.name.toLowerCase() === q) || offices.find((x) => x.name.toLowerCase().includes(q));
-    return o ? pickFloor(o.id) : sysLine(t('ui.noOffice', { name: arg }));
-  },
-  clear: () => { $('log').innerHTML = ''; },
-  life: () => {
-    term.life = !term.life;
-    send({ type: 'prefs', prefs: { log: { life: term.life } } }); // queda guardado
-    sysLine(t(term.life ? 'ui.lifeOn' : 'ui.lifeOff'));
-  },
-  screen: () => toggleFullscreen(),
-  btw: (arg) => askBtw(arg),
-};
-const commandFor = (name) => COMMANDS[name] || COMMANDS[Object.keys(COMMANDS).find((k) => t(`ui.commands.${k}`) === name)];
-$('chat').onsubmit = (e) => {
-  e.preventDefault();
-  const text = $('chat-text').value.trim();
-  $('chat-text').value = '';
-  if (!text) return;
-  sysLine(`$ ${text}`, 'echo');
-  if (/^btw\b/i.test(text)) return askBtw(text.replace(/^btw\b[:,]?\s*/i, ''));
-  if (text.startsWith('/')) {
-    const [name, ...rest] = text.slice(1).split(/\s+/);
-    const cmd = commandFor(name.toLowerCase());
-    return cmd ? cmd(rest.join(' ')) : sysLine(t('ui.unknownCommand'));
-  }
-  // a question to a character goes to the agent: it answers about that character's project and task
-  if (selected && selected !== 'po' && isQuestion(text)) return askBtw(text, selected);
-  send({ type: 'chat', text, role: selected || undefined });
-};
-$('open-term').onclick = () => toggleTerm();
-$('term-close').onclick = () => toggleTerm(false);
-for (const b of document.querySelectorAll('.term-tabs [role=tab]')) b.onclick = () => setTab(b.dataset.tab);
+/** Someone said something out loud: whoever answers in the office (their bubble) goes to the chat. */
+function heardReply(ev) {
+  const role = ev.role && ev.role !== 'po' ? ev.role : 'po';
+  const who = role === 'po' ? 'manager' : role; // you are the PO: the team answers you
+  const text = game.agents[who]?.bubble?.text;
+  if (!talks.get(role)?.some((x) => x.who === 'you' && x.text === ev.text)) talk(role, { who: 'you', text: ev.text, from: ev.from });
+  if (text) talk(role, { who: 'them', text, by: who });
+}
 
-// ---------------------------------------------------------------- briefs (terminal tab)
+function renderTalk() {
+  const ol = $('sheet-talk');
+  const list = talks.get(selected) || [];
+  ol.innerHTML = '';
+  ol.hidden = !list.length;
+  for (const x of list.slice(-12)) {
+    const by = x.who === 'you' ? null : TEAM[x.by || selected];
+    const li = el('li', `${x.who}${x.status ? ` ${x.status}` : ''}`);
+    const name = el('b', '', x.who === 'you' ? (x.from && x.from !== t('events.you') ? x.from : t('ui.you')) : by?.name || '');
+    if (by) name.style.color = by.shirt;
+    li.append(name, el('span', '', x.status === 'asking' ? t('ui.btwThinking') : x.text));
+    ol.append(li);
+  }
+  ol.scrollTop = ol.scrollHeight;
+}
+$('sheet-say').onsubmit = (e) => {
+  e.preventDefault();
+  const text = $('say-text').value;
+  $('say-text').value = '';
+  say(text);
+};
+
+// ---------------------------------------------------------------- the work (📋): the session, its task and its flow
 
 function currentSession() {
   if (focus && sessions.has(focus)) return sessions.get(focus);
@@ -579,7 +604,7 @@ function moodOf(a) {
   if (a.lunch) return t('ui.mood.lunch', { food: a.food || '🍽️' });
   if (a.state === 'alarm') return t('ui.mood.fire');
   if (a.scene && a.scene.kind !== 'consult') return t('ui.mood.talking');
-  return t(`state.${a.state}`);
+  return t(`state.${a.state}`, { g: a.cfg.sex });
 }
 
 function renderTeam() {
@@ -589,7 +614,7 @@ function renderTeam() {
     const a = game.agents[id];
     const li = document.createElement('li');
     li.className = selected === id ? 'sel' : '';
-    li.onclick = () => select(id);
+    li.onclick = () => { $('work').close(); select(id); };
     const dot = el('span', 'dot'); dot.style.background = cfg.shirt; dot.style.color = cfg.shirt;
     const who = el('div');
     const name = el('span', 'who', `${cfg.name} · ${cfg.title}`);
@@ -606,9 +631,10 @@ let portraitOf = null;
 function select(id) {
   selected = id;
   game.select(id);
-  $('prompt-label').textContent = id ? t('ui.promptOne', { name: TEAM[id].name.toLowerCase() }) : t('ui.promptTeam');
   renderTeam();
   renderSheet(true);
+  renderTalk();
+  if (id) { $('say-text').placeholder = id === 'po' ? t('ui.talkTeamPh') : t('ui.talkPh', { name: TEAM[id].name }); $('say-text').value = ''; }
 }
 
 /** Each need as a "how well it is" bar (full green = satisfied), like in The Sims. */
@@ -642,10 +668,9 @@ function renderSheet(full) {
   if (!a.history.length) ul.append(el('li', '', t('ui.nothingYet')));
   for (const h of a.history.slice(0, 4)) ul.append(el('li', '', `${hhmm(h.ts)} — ${h.text}`));
 }
-setInterval(() => { renderSheet(); if (term.open && term.tab === 'team') renderTeam(); }, 500);
+setInterval(() => { renderSheet(); if ($('work').open) renderTeam(); }, 500);
 $('sheet-close').onclick = () => select(null);
 $('poke').onclick = () => selected && send({ type: 'poke', role: selected });
-$('sheet-msg').onclick = () => { toggleTerm(true); setTab('activity'); $('chat-text').focus(); };
 
 // ---------------------------------------------------------------- tasks for the agents
 
@@ -693,7 +718,7 @@ function renderPanes() {
 function alertTask(error) {
   if ($('brief').open) { $('b-problem').textContent = t('brief.failed', { error }); return; }
   sysLine(`✖ ${t('brief.failed', { error })}`, 'echo');
-  toggleTerm(true);
+  toggleFeed(true);
 }
 
 // ---------------------------------------------------------------- pipelines en curso
@@ -837,10 +862,20 @@ function el(tag, cls, text) {
 }
 
 $('session').onchange = (e) => { focus = e.target.value || null; renderSessions(); renderContext(); };
-$('demo').onclick = () => COMMANDS.demo();
-$('demo-pi').onclick = () => COMMANDS.tdd();
-$('reset').onclick = () => COMMANDS.reset();
-setInterval(() => { if (term.open && term.tab === 'team') return; renderTeam(); }, 2000); // statuses expire on the client
+$('demo').onclick = () => send({ type: 'command', action: 'demo' });
+$('demo-pi').onclick = () => send({ type: 'command', action: 'demo-pi' });
+$('reset').onclick = () => send({ type: 'command', action: 'reset' });
+setInterval(() => { if (!$('work').open) renderTeam(); }, 2000); // statuses expire on the client
+
+/** 📋 (or w): the work — the session's task, its flow, the pipelines, the tasks, the demos and the team. */
+function openWork() {
+  const dlg = $('work');
+  if (!dlg.open) dlg.showModal();
+  renderSessions();
+  renderTeam();
+}
+$('open-work').onclick = () => openWork();
+$('work-close').onclick = () => $('work').close();
 
 // ---------------------------------------------------------------- full screen and shortcuts
 
@@ -868,12 +903,13 @@ document.addEventListener('keydown', (e) => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName);
   if (e.key === 'Escape') {
     if (typing) document.activeElement.blur();
-    if (term.open) toggleTerm(false); else if (selected) select(null);
+    if (selected) select(null); else if (feed.open) toggleFeed(false);
     return;
   }
   if (typing) return;
   const k = e.key.toLowerCase();
-  if (k === 'a') { e.preventDefault(); toggleTerm(); }
+  if (k === 'a') { e.preventDefault(); toggleFeed(); }
+  else if (k === 'w') { e.preventDefault(); openWork(); }
   else if (k === 't') { e.preventDefault(); if (game.floor === 'exec') directivesUi.open(); else if (game.floor === 'archive') archiveUi.open({ create: true }); else openBrief(); }
   else if (e.key === 'PageUp' || e.key === 'PageDown') { e.preventDefault(); moveFloor(e.key === 'PageUp' ? -1 : 1); }
   else if (k === 'c') { e.preventDefault(); settings.open(); }

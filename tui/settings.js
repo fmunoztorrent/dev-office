@@ -7,7 +7,7 @@
 // Everything is saved in the SQLite database (through the office's API).
 // Keys: ↑↓/tab field · ◂▸ change · typing edits · Enter action · ctrl+s save · esc close
 
-import { TEAM, DEFAULT_TEAM, APPEARANCE_KEYS, LOOK_PALETTES } from '../public/sim.js';
+import { TEAM, DEFAULT_TEAM, APPEARANCE_KEYS, LOOK_PALETTES, SEXES, PERSONALITIES, randomLook, lookForSex } from '../public/sim.js';
 import { t, LANGUAGES } from '../public/i18n.js';
 import { allZones, zoneInfo, countryName } from '../public/clock.js';
 import { parsePlace } from '../public/sky.js';
@@ -241,15 +241,27 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
       f.push({ type: 'select', label: L('character'), value: () => `${look.name} (${s.role}${s.role === 'po' ? ` · ${t('team.you')}` : ''})`, cycle: (d) => { s.role = cycle(ROLES, s.role, d); } });
       f.push({ type: 'text', label: L('name'), value: () => look.name, edit: (v) => { look.name = v.slice(0, 20); } });
       f.push({ type: 'text', label: L('title'), value: () => look.title, edit: (v) => { look.title = v.slice(0, 30); } });
-      for (const k of ['shirt', 'pants', 'hair', 'skin']) {
+      f.push({ type: 'select', label: L('sex'), value: () => t(`settings.look.sexes.${look.sex}`), cycle: (d) => { Object.assign(look, lookForSex(cycle(SEXES, look.sex, d))); } });
+      f.push({ type: 'select', label: L('personality'), value: () => t(`settings.look.personalities.${look.personality}`), cycle: (d) => { look.personality = cycle(Object.keys(PERSONALITIES), look.personality, d); } });
+      // a color: ◂ ▸ go through its palette (shown next to it, the chosen one marked) and typing
+      // #rrggbb gives any other one
+      for (const k of ['skin', 'hair', 'shirt', 'pants']) {
         const palette = () => (LOOK_PALETTES[k].includes(look[k]) ? LOOK_PALETTES[k] : [look[k], ...LOOK_PALETTES[k]]);
-        f.push({ type: 'select', label: L(k), swatch: () => look[k], value: () => look[k], cycle: (d) => { look[k] = cycle(palette(), look[k], d); } });
+        const draft = () => (s.draft?.key === `${s.role}.${k}` ? s.draft.text : null);
+        f.push({
+          type: 'select', label: L(k), swatch: () => look[k], palette: () => LOOK_PALETTES[k], chosen: () => look[k],
+          value: () => draft() ?? look[k],
+          cycle: (d) => { s.draft = null; look[k] = cycle(palette(), look[k], d); },
+          edit: (v) => {
+            const typed = draft() ?? '';
+            const next = v.length < String(draft() ?? look[k]).length ? (draft() ?? look[k]).slice(0, -1) : `${typed || '#'}${v.slice(-1)}`.replace(/^##/, '#');
+            const text = next.replace(/[^#0-9a-f]/gi, '').slice(0, 7).toLowerCase();
+            if (/^#[0-9a-f]{6}$/.test(text)) { look[k] = text; s.draft = null; } else s.draft = { key: `${s.role}.${k}`, text };
+          },
+        });
       }
       for (const k of ['long', 'beard', 'glasses']) f.push({ type: 'select', label: L(k), value: () => yesNo(look[k]), cycle: () => { look[k] = !look[k]; } });
-      f.push({ type: 'action', label: '', value: () => L('random'), run: () => {
-        const pick = (l) => l[Math.floor(Math.random() * l.length)];
-        Object.assign(look, { shirt: pick(LOOK_PALETTES.shirt), pants: pick(LOOK_PALETTES.pants), hair: pick(LOOK_PALETTES.hair), skin: pick(LOOK_PALETTES.skin), long: Math.random() < 0.5, beard: Math.random() < 0.3, glasses: Math.random() < 0.3 });
-      } });
+      f.push({ type: 'action', label: '', value: () => L('random'), run: () => { Object.assign(look, randomLook(look.sex)); } });
       f.push({ type: 'action', label: '', value: () => L('reset'), run: () => { Object.assign(look, DEFAULT_TEAM[s.role]); } });
     }
     return f;
@@ -364,8 +376,18 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
           if (suffix) scr.text(c + boxW + 1, row, fit(suffix, room - boxW - 1), C.ok, C.paper);
         } else if (f.type === 'select') {
           v = fit(v, room - 6);
-          if (focus) scr.text(c, row, ` ◂ ${v} ▸ `, C.accent, C.ink);
-          else scr.text(c, row, `   ${v}`, C.ink, C.paper);
+          const w = focus ? scr.text(c, row, ` ◂ ${v} ▸ `, C.accent, C.ink) : scr.text(c, row, `   ${v}`, C.ink, C.paper);
+          // a color's palette: a swatch each, the chosen one between ▸ ◂
+          if (f.palette) {
+            let x = c + Math.max(w, 13) + 1;
+            for (const color of f.palette()) {
+              if (x + 3 > col + fw) break;
+              const on = color === f.chosen();
+              scr.text(x, row, on ? '▸' : ' ', C.ink, C.paper);
+              scr.text(x + 1, row, '██', hex(color), C.paper);
+              x += 3;
+            }
+          }
         } else if (f.type === 'action') {
           scr.text(c, row, ` ${fit(v, room - 2)} `, focus ? C.accent : C.ink, focus ? C.ink : C.field);
         }

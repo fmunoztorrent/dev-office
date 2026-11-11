@@ -119,7 +119,7 @@ Your answer is pressed in the agent's pane, as if you were there: the arrows to 
 
 ## btw: a side question
 
-`btw who is on the tests?` (in the game terminal's command line, `b` in the terminal game, or `dev-team-office btw "…"`) asks the agent on duty without interrupting its work. A question written to a selected character (ending in `?`) goes to the agent of the project and task that character is working on, and they answer it.
+A question written on a character's sheet in the browser ("who is on the tests?", ending in `?`), `b` in the terminal game or `dev-team-office btw "…"` asks the agent without interrupting its work: the agent of the project and task that character is working on (or the one on duty), and the character answers it on their sheet and in their bubble. Anything else you write there is said out loud, and they answer in their own words.
 
 ## The full CLI
 
@@ -153,4 +153,4 @@ Your answer is pressed in the agent's pane, as if you were there: the arrows to 
 | Monitor | `o` browser · `g` game · `←→` office · `r` answer the agent's question · `1`–`9`/`l` a service's logs · `q` quit |
 | Log | `g` game · `o` browser · `h` help · `q` close |
 | Game (terminal) | `t` brief · click the whiteboard: its tasks (with tickets) or a brief · `c` settings · `o` office · `a` activity · `tab`/arrows pick · `m` message · `b` btw · `s` greet · `x` cancel · `l` services (or click the rack) · `d`/`p` demos · `r` restart · `q` back |
-| Game (browser) | `t` brief (on the executive floor, a directive; in the archive, a new entry) · `c` settings · `o` next floor · `PgUp`/`PgDn` floor up or down · `a` activity terminal · `f` full screen · `v` front or top-down view · `l` services (or click the rack) · `r` answer the agent's question (or the ✋ chip) · `esc` close |
+| Game (browser) | `t` brief (on the executive floor, a directive; in the archive, a new entry) · `c` settings · `o` next floor · `PgUp`/`PgDn` floor up or down · `a` activity · `w` work (the task, pipelines, tasks, demos and the team) · `f` full screen · `v` front or top-down view · `l` services (or click the rack) · `r` answer the agent's question (or the ✋ chip) · `esc` close |

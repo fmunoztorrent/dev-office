@@ -158,7 +158,7 @@ test('una pregunta a un personaje la contesta el agente del proyecto donde traba
   assert.equal(call.cwd, tienda);
   const prompt = call.args.at(-1);
   assert.match(prompt, new RegExp(`Proyecto: ${path.basename(tienda)}`));
-  assert.match(prompt, /La pregunta es para Diego \(Backend\)/);
+  assert.match(prompt, /La pregunta es para Diego \(Backend, concentrado\)/);
   assert.match(prompt, /Carrito con descuentos/);
   assert.match(prompt, /\[~\] Calcular el descuento[\s\S]*\[ \] Tests del carrito/);
   assert.match(prompt, /Editando src\/cart\.js/);

@@ -33,14 +33,14 @@ export const WORLD_W = W - LEFT;
 // Bottom row: the technical team, with the TL a bit apart (people go consult them).
 // The job title comes from the game's language, unless customized in ⚙ › Characters.
 export const TEAM = {
-  designer: { name: 'Camila', title: 'Diseñadora', shirt: '#c86bfa', pants: '#3a2f45', hair: '#f2d16b', skin: '#f0c8a8', long: true, seat: { x: 100, y: 228 }, prop: 'tablet' },
-  po: { name: 'Sofía', title: 'Product Owner', shirt: '#e0607e', pants: '#3b3355', hair: '#5a3214', skin: '#f2c9a0', long: true, seat: { x: 210, y: 228 }, prop: 'notes' },
-  analyst: { name: 'Valentina', title: 'Analista de negocio', shirt: '#f0a73a', pants: '#2f3b52', hair: '#21160f', skin: '#c98e62', long: true, seat: { x: 320, y: 228 }, prop: 'chart' },
-  manager: { name: 'Marco', title: 'Manager', shirt: '#3f73f0', pants: '#2a2d3a', hair: '#8d8d8d', skin: '#e8b98f', seat: { x: 710, y: 228 }, prop: 'phone' },
-  frontend: { name: 'Lucía', title: 'Frontend', shirt: '#ff7a45', pants: '#2d3a4f', hair: '#b8322a', skin: '#f5d0b0', long: true, seat: { x: 110, y: 418 }, prop: 'dual' },
-  backend: { name: 'Diego', title: 'Backend', shirt: '#6b5bd6', pants: '#22222e', hair: '#151515', skin: '#b07a52', seat: { x: 220, y: 418 }, prop: 'terminal' },
-  qa: { name: 'Andrés', title: 'QA', shirt: '#8ac926', pants: '#2b3a2e', hair: '#3d2817', skin: '#e0ac7e', glasses: true, seat: { x: 330, y: 418 }, prop: 'qa' },
-  tl: { name: 'Tomás', title: 'Tech Lead', shirt: '#22a68e', pants: '#26313a', hair: '#2b1b12', skin: '#d9a273', beard: true, seat: { x: 560, y: 418 }, prop: 'big' },
+  designer: { name: 'Camila', title: 'Diseñadora', sex: 'f', personality: 'dreamer', shirt: '#c86bfa', pants: '#3a2f45', hair: '#f2d16b', skin: '#f0c8a8', long: true, seat: { x: 100, y: 228 }, prop: 'tablet' },
+  po: { name: 'Sofía', title: 'Product Owner', sex: 'f', personality: 'chatty', shirt: '#e0607e', pants: '#3b3355', hair: '#5a3214', skin: '#f2c9a0', long: true, seat: { x: 210, y: 228 }, prop: 'notes' },
+  analyst: { name: 'Valentina', title: 'Analista de negocio', sex: 'f', personality: 'chatty', shirt: '#f0a73a', pants: '#2f3b52', hair: '#21160f', skin: '#c98e62', long: true, seat: { x: 320, y: 228 }, prop: 'chart' },
+  manager: { name: 'Marco', title: 'Manager', sex: 'm', personality: 'chatty', shirt: '#3f73f0', pants: '#2a2d3a', hair: '#8d8d8d', skin: '#e8b98f', seat: { x: 710, y: 228 }, prop: 'phone' },
+  frontend: { name: 'Lucía', title: 'Frontend', sex: 'f', personality: 'focused', shirt: '#ff7a45', pants: '#2d3a4f', hair: '#b8322a', skin: '#f5d0b0', long: true, seat: { x: 110, y: 418 }, prop: 'dual' },
+  backend: { name: 'Diego', title: 'Backend', sex: 'm', personality: 'focused', shirt: '#6b5bd6', pants: '#22222e', hair: '#151515', skin: '#b07a52', seat: { x: 220, y: 418 }, prop: 'terminal' },
+  qa: { name: 'Andrés', title: 'QA', sex: 'm', personality: 'anxious', shirt: '#8ac926', pants: '#2b3a2e', hair: '#3d2817', skin: '#e0ac7e', glasses: true, seat: { x: 330, y: 418 }, prop: 'qa' },
+  tl: { name: 'Tomás', title: 'Tech Lead', sex: 'm', personality: 'calm', shirt: '#22a68e', pants: '#26313a', hair: '#2b1b12', skin: '#d9a273', beard: true, seat: { x: 560, y: 418 }, prop: 'big' },
 };
 export const PRODUCT = ['po', 'analyst', 'designer']; // business NPCs: they talk among themselves and bring the requirements
 export const TECH = ['backend', 'frontend', 'qa'];      // they work and sometimes consult the TL
@@ -58,10 +58,28 @@ export const onBoard = (x, y) => x >= BOARD.x && x <= BOARD.x + BOARD.w && y >= 
 
 // Customizable appearance (⚙ Settings › Characters). TEAM is modified in place so both
 // renderers and the simulation see the change instantly.
-export const APPEARANCE_KEYS = ['name', 'title', 'shirt', 'pants', 'hair', 'skin', 'long', 'beard', 'glasses'];
+export const APPEARANCE_KEYS = ['name', 'title', 'sex', 'personality', 'shirt', 'pants', 'hair', 'skin', 'long', 'beard', 'glasses'];
+/** Sex: their face, their default look and how the texts that talk about them are written. */
+export const SEXES = ['f', 'm'];
+/**
+ * Personality: how fast each need fills up (a factor: < 1, sooner) and what they do about it.
+ *   chatty   — talks a lot: chit-chat at the desks and at the café, even if they are technical
+ *   focused  — barely leaves the desk: few breaks, no TV, holds on to their doubts
+ *   anxious  — many doubts (to the TL's desk), coffee and bathroom often
+ *   calm     — takes it easy: coffee breaks and TV, no rush
+ *   dreamer  — daydreams (unicorns and rainbows) while they work
+ */
+export const PERSONALITIES = {
+  chatty: { social: 0.5, coffee: 0.9, doubt: 1, dream: 1.2, breaks: 0.6, chats: true, tv: true },
+  focused: { social: 2.2, coffee: 1.3, doubt: 1.5, dream: 1.6, breaks: 2.2, chats: false, tv: false },
+  anxious: { social: 1, coffee: 0.75, bladder: 0.7, doubt: 0.5, dream: 0.8, breaks: 0.9, chats: false, tv: true },
+  calm: { social: 1.2, coffee: 0.8, doubt: 1.2, dream: 1, breaks: 0.7, chats: false, tv: true },
+  dreamer: { social: 1, coffee: 1, doubt: 1, dream: 0.45, breaks: 1, chats: false, tv: true, dreams: ['unicorn', 'rainbow'] },
+};
 export const DEFAULT_TEAM = Object.fromEntries(Object.entries(TEAM).map(([id, c]) => {
   const look = Object.fromEntries(APPEARANCE_KEYS.filter((k) => k !== 'title').map((k) => [k, c[k] ?? false]));
-  Object.defineProperty(look, 'title', { get: () => t(`team.titles.${id}`), enumerable: true });
+  // the title follows the language and, where the language has it, their sex (Diseñadora / Diseñador)
+  Object.defineProperty(look, 'title', { get: () => t(`team.titles.${id}`, { g: TEAM[id]?.sex || c.sex }), enumerable: true });
   return [id, look];
 }));
 // Palettes to pick colors without typing hex (the terminal cycles them with ◂ ▸; the web also has a free picker).
@@ -71,12 +89,21 @@ export const LOOK_PALETTES = {
   hair: ['#151515', '#21160f', '#3d2817', '#5a3214', '#8d8d8d', '#b8322a', '#f2d16b', '#e8e9f1'],
   skin: ['#f5d0b0', '#f2c9a0', '#f0c8a8', '#e8b98f', '#e0ac7e', '#d9a273', '#c98e62', '#b07a52', '#8d5a3b'],
 };
+/** A random look (🎲), believable for their sex: long hair more often for her, a beard only for him. */
+export function randomLook(sex = 'f', rnd = Math.random) {
+  const pick = (list) => list[Math.floor(rnd() * list.length)];
+  return { shirt: pick(LOOK_PALETTES.shirt), pants: pick(LOOK_PALETTES.pants), hair: pick(LOOK_PALETTES.hair), skin: pick(LOOK_PALETTES.skin), long: rnd() < (sex === 'f' ? 0.75 : 0.12), beard: sex === 'm' && rnd() < 0.35, glasses: rnd() < 0.3 };
+}
+/** Changing the sex changes the look too: she gets long hair and no beard; he, short hair. */
+export const lookForSex = (sex) => (sex === 'f' ? { sex, long: true, beard: false } : { sex, long: false });
+
 let appearance = {};
 export function applyAppearance(overrides = {}) {
   appearance = overrides || {};
   for (const [id, cfg] of Object.entries(TEAM)) {
     const o = appearance[id] || {};
-    for (const k of APPEARANCE_KEYS) cfg[k] = o[k] ?? DEFAULT_TEAM[id][k];
+    for (const k of APPEARANCE_KEYS) if (k !== 'title') cfg[k] = o[k] ?? DEFAULT_TEAM[id][k];
+    cfg.title = o.title ?? DEFAULT_TEAM[id].title; // after the sex: the default title agrees with it
   }
 }
 applyAppearance();
@@ -304,11 +331,40 @@ const PERSONALITY = {
 /** Needs from 0 to 1 (on reaching 1, they want to act). They start uneven so not everyone acts at once. */
 function freshMind(random) {
   const r = () => random() * 0.6;
-  return { social: r(), coffee: r(), doubt: r(), dream: r() + 0.2, rounds: r(), bladder: r(), product: r(), nextThink: 0 };
+  return { social: r(), coffee: r(), doubt: r(), dream: r() + 0.2, rounds: r(), bladder: r(), product: r(), brk: 0, nextThink: 0 };
 }
 /** The needs shown in the character's sheet (0 = satisfied, 1 = urgent). */
 export const NEEDS = ['social', 'coffee', 'bladder', 'dream', 'doubt'];
-export const needsOf = (id) => NEEDS.filter((k) => k !== 'dream' || DREAMERS[id]).filter((k) => k !== 'doubt' || PERSONALITY[id]?.doubt).map((k) => [k, t(`needs.${k}`)]);
+export const needsOf = (id) => { const r = traitsOf(id); return NEEDS.filter((k) => k !== 'dream' || r.dream).filter((k) => k !== 'doubt' || r.doubt).map((k) => [k, t(`needs.${k}`)]); };
+
+/**
+ * How `id` behaves with the personality chosen for them (⚙ › Characters): their role's rhythm
+ * (PERSONALITY) scaled by how their personality differs from the role's default one, so the
+ * defaults behave as always and a different one shows (a chatty QA chats, a focused PO barely does).
+ *   social, coffee, bladder, doubt, dream, breaks: seconds for each need to fill up (doubt and
+ *   dream only for whom they apply); chats: joins the chit-chat; tv: watches TV when free;
+ *   dreams: what they daydream about.
+ */
+export function traitsOf(id) {
+  const base = PERSONALITY[id] || PERSONALITY.qa;
+  const now = PERSONALITIES[TEAM[id]?.personality] || PERSONALITIES[DEFAULT_TEAM[id]?.personality] || PERSONALITIES.calm;
+  const def = PERSONALITIES[DEFAULT_TEAM[id]?.personality] || now;
+  const f = (k) => (now[k] ?? 1) / (def[k] ?? 1);
+  const own = now !== def;
+  const dreams = DREAMERS[id] || now.dreams;
+  return {
+    ...base,
+    social: base.social * f('social'),
+    coffee: base.coffee * f('coffee'),
+    bladder: base.bladder * f('bladder'),
+    doubt: base.doubt ? base.doubt * f('doubt') : 0,
+    dream: base.dream ? base.dream * f('dream') : now.dreams ? 90 : 0,
+    breaks: 150 * f('breaks'),
+    chats: PRODUCT.includes(id) ? !own || now.chats || now.social <= 1 : own && now.chats,
+    tv: TECH.includes(id) || id === 'tl' ? !own || now.tv : own && now.tv,
+    dreams: dreams || [],
+  };
+}
 
 const short = (t, n = 28) => { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 
@@ -327,7 +383,7 @@ export function assignees(text) {
 }
 
 // Conversations that are cut short if real work reaches the character (consulting the TL is not).
-const LEISURE = new Set(['gossip', 'deskchat', 'bathgossip', 'coffee', 'lunchtalk', 'archchat', 'idea', 'rounds', 'tv']);
+const LEISURE = new Set(['gossip', 'deskchat', 'bathgossip', 'coffee', 'workcoffee', 'lunchtalk', 'archchat', 'idea', 'rounds', 'tv']);
 
 // When the weather outside changes (the real one, or the simulated one when offline)
 const SKY_GROUP = { clear: 'fair', partly: 'fair', cloudy: 'cloudy', fog: 'fog', drizzle: 'wet', rain: 'wet', storm: 'storm', snow: 'snow' };
@@ -343,6 +399,7 @@ function describe(kind, who, extra) {
     case 'archchat': case 'assign': return t(`sim.journal.${kind}`, { ...vars, names: listOf((extra.with || []).map(name)) });
     case 'dream': return t(extra.dream === 'skull' ? 'sim.journal.nightmare' : 'sim.journal.dream', { ...vars, dream: DREAMS[extra.dream]?.label || extra.dream, emoji: DREAMS[extra.dream]?.emoji || '' });
     case 'weather': return extra.text;
+    case 'workcoffee': return extra.with?.length ? t('sim.journal.workcoffee', { ...vars, names: listOf(extra.with.map(name)) }) : t('sim.journal.workcoffeeAlone', vars);
     case 'deskchat': case 'gossip': case 'bathgossip': case 'idea': case 'feasibility': case 'consult': case 'rounds': case 'coffee': case 'requirement':
     case 'bathroom': case 'lunch': case 'lunchend': case 'fire': case 'repaired': case 'tv': case 'pane': case 'paneDone':
       return t(`sim.journal.${kind}`, vars);
@@ -365,6 +422,7 @@ class Agent {
     this.bubble = null;
     this.badges = new Map(); // assigned subagents: id → description
     this.walkT = 0;
+    this.taskAt = -Infinity; // the last time they did real work (their screen stays on a while)
     this.lastActive = clock() + random() * 20_000;
     this.carry = false;      // true: a card; 'ext': the extinguisher
     this.jumpUntil = 0;
@@ -430,6 +488,7 @@ class Agent {
       if (d <= step) { this.x = target.x; this.y = target.y; job.path.shift(); }
       else { this.x += (dx / d) * step; this.y += (dy / d) * step; }
       if (Math.abs(dx) > 1) this.face = Math.sign(dx);
+      this.sideways = Math.abs(dx) >= Math.abs(dy); // across the screen (a stride) or up and down it (steps)
       this.walkT += dt;
       if (!job.path.length) this.queue.shift();
     } else if (job.t === 'wait') {
@@ -446,6 +505,76 @@ class Agent {
       job.fn(this);
     }
   }
+}
+
+const hash = (n) => { n = Math.imul((n | 0) ^ 0x9e3779b9, 0x85ebca6b); n ^= n >>> 13; n = Math.imul(n, 0xc2b2ae35); return (n ^ (n >>> 16)) >>> 0; };
+const seedOf = (id) => [...String(id)].reduce((s, ch) => (s * 31 + ch.charCodeAt(0)) | 0, 7);
+
+/**
+ * What a desk's screen shows (both renderers):
+ *   'type'  — at the desk working: code being typed, line after line, scrolling up
+ *   'think' — at the desk thinking (or with a task going on): the code stays, the cursor blinks
+ *   'on'    — away from the desk with a task going on (at the café, at the TL's): still on, dimmer
+ *   'off'   — nothing going on
+ */
+export function screenMode(a, now) {
+  if (!a) return 'off';
+  const onTask = now - (a.taskAt ?? -Infinity) < 150_000;
+  if (a.seated && (a.state === 'working' || a.state === 'red')) return 'type';
+  if (a.seated && (a.state === 'thinking' || onTask)) return 'think';
+  return onTask || ['working', 'thinking', 'red'].includes(a.state) ? 'on' : 'off';
+}
+
+/**
+ * The lines of code on a screen of `rows` × `cols` cells: each row is a list of segments
+ * { x, w, c } (c: which of 4 colors). While typing, the last line grows character by character and
+ * then everything scrolls up one line; otherwise the screen is still. cursor: where it blinks.
+ */
+export function screenLines(id, now, rows, cols, mode = 'type') {
+  const period = 1100;
+  const typing = mode === 'type';
+  const clock = typing ? now : 0;
+  const k = Math.floor(clock / period) + 40, p = typing ? Math.min(1, (clock % period) / (period * 0.7)) : 1;
+  const seed = seedOf(id);
+  const out = [];
+  let cursor = { x: 0, y: rows - 1 };
+  for (let r = 0; r < rows; r++) {
+    const h = hash(seed + k - rows + 1 + r);
+    const indent = Math.min(cols - 2, (h % 3) * 2);
+    let len = Math.max(1, 2 + ((h >>> 3) % Math.max(1, cols - indent - 2)));
+    if (r === rows - 1) len = Math.max(0, Math.round(len * p));
+    const segs = [];
+    let x = indent, left = len;
+    while (left > 0) {
+      const w = Math.min(left, 1 + ((h >>> (8 + segs.length * 3)) % 5));
+      segs.push({ x, w, c: ((h >>> 20) + segs.length) % 4 });
+      x += w + 1; left -= w + 1;
+    }
+    out.push(segs);
+    if (r === rows - 1) cursor = { x: Math.min(cols - 1, segs.length ? x - 1 : indent), y: r };
+  }
+  return { rows: out, cursor, blink: Math.floor(now / 450) % 2 === 0 };
+}
+
+/**
+ * The walk cycle, shared by both renderers: four frames per stride, so the feet step instead of
+ * gliding. null when standing still.
+ *   frame 0: the left foot ahead · 1: passing, the right one lifted · 2: the right ahead · 3: the left lifted
+ * reach: how far each foot (left, right) is ahead, in sprite pixels (only when walking across the
+ * screen); lift: whether it is in the air; bob: the body rises while passing; swing: the arms go
+ * opposite to the legs.
+ */
+export function gait(a) {
+  if (!a.walking) return null;
+  const frame = Math.floor(a.walkT * 9) % 4;
+  const side = a.sideways === false ? 0 : (a.face || 1);
+  return {
+    frame,
+    reach: [frame === 0 ? side : frame === 2 ? -side : 0, frame === 2 ? side : frame === 0 ? -side : 0].map((x) => x || 0),
+    lift: [frame === 3 ? 1 : 0, frame === 1 ? 1 : 0],
+    bob: frame % 2,
+    swing: frame === 0 ? 1 : frame === 2 ? -1 : 0,
+  };
 }
 
 // Aisles: behind row 1, between rows, in front of row 2 (the table area) and behind the newcomers' row.
@@ -592,6 +721,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     // real work comes first: they leave the conversation or lunch and go back to their spot
     if (a.lunch || LEISURE.has(a.scene?.kind)) { interrupt(a); emit(a.x, a.y - 70, 1, 'emote', null, '🏃'); }
     a.text = text;
+    a.taskAt = simNow; // their screen stays on while the task lasts
     a.setState(state, ms);
     a.say(text);
     a.handUp = false;
@@ -690,7 +820,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
           g.badges.set(ev.subId, ev.text);
           note('newcomer', ev.role, { name: g.cfg.name, text: ev.text });
           const main = agents[ev.role];
-          if (main?.free) later(R(900, 1800), () => main.say(T('sim.newcomer.welcome', { name: g.cfg.name }), 2600));
+          if (main?.free) later(R(900, 1800), () => main.say(T('sim.newcomer.welcome', { name: g.cfg.name, g: g.cfg.sex }), 2600));
           const busy = () => work(g, T('sim.subtask', { text: ev.text }), 'working', 7000);
           if (ev.role !== 'manager') visit(agents.manager, g.cfg.seat, T('sim.assignSub', { name: g.cfg.name, text: ev.text }), { carry: true, after: busy });
           else busy();
@@ -1001,6 +1131,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   const lower = (s) => String(s || '').replace(/^./, (c) => c.toLocaleLowerCase());
   const nameOf = (id) => TEAM[id]?.name || [...ghosts.values()].find((g) => g.id === id)?.cfg.name || '';
   /** Is the office busy with real work? (something happened in the last minutes) */
+  const onTask = (a) => simNow - (a.taskAt ?? -Infinity) < 150_000;
   const lively = () => Object.values(memory.doing).some((d) => simNow - d.at < 180_000) || (board.todos.length > 0 && board.todos.some((x) => x.status !== 'completed'));
 
   /** What is going on right now, said by `id`: the board, who is doing what, who got stuck, the
@@ -1070,7 +1201,9 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   const replyTo = (line) => P(L(line.live ? 'sim.live.replies' : 'sim.replies'));
 
   function gossip(a) {
-    const others = PRODUCT.filter((id) => id !== a.id && agents[id].free);
+    // product chit-chats among themselves; a chatty technical person, with whoever is free
+    const pool = PRODUCT.includes(a.id) ? PRODUCT : [...TECH, 'tl', 'manager', 'analyst', 'designer'];
+    const others = pool.filter((id) => id !== a.id && agents[id].free && agents[id].state !== 'working');
     if (!others.length) return false;
     // sometimes the two of them go to whisper at the bathroom's mirror
     if (chance(0.2) && !bath.line.length) return bathGossip(a, P(others));
@@ -1124,7 +1257,8 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     return 1;
   }
 
-  function imagine(a, { kind = P(DREAMERS[a.id]), line, cause } = {}) {
+  function imagine(a, { kind = P(traitsOf(a.id).dreams), line, cause } = {}) {
+    if (!kind) return false;
     if (a.hidden || a.state === 'alarm' || a.dream) return false;
     a.dream = { kind, start: simNow, until: simNow + 4800 };
     a.say(line || P(L(`sim.dreamLines.${kind}`)), 4200);
@@ -1189,7 +1323,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     const sc = scene('rounds', ['manager'], [['manager', ask]],
       { spot: { x: who.cfg.seat.x + 62, y: who.cfg.seat.y - 6 } });
     const at = sc.lines[0].at + 2200;
-    join(sc, who.id, [[P(L('sim.roundsReplies')), at]], at + 800);
+    join(sc, who.id, [[P(ta('sim.roundsReplies', { ...teamNames(), g: who.cfg.sex })), at]], at + 800);
     m.mind.rounds = -R(0, 0.6);
     return true;
   }
@@ -1236,6 +1370,46 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     a.state = 'coffee'; a.stateUntil = simNow + 9000;
     a.mind.coffee = -R(0, 0.4);
     a.mind.bladder += 0.25; // the coffee kicks in later
+    return true;
+  }
+
+  /**
+   * A break in the middle of a task: they go to the café with what they are doing in their head,
+   * tell someone about it (or think out loud, if nobody comes) and walk back "thinking" how to
+   * solve it; at the desk the idea clicks. Real work calls them back at any moment (LEISURE).
+   */
+  function workCoffee(a) {
+    if (a.ghost || !a.free || scenes.filter((x) => x.kind === 'workcoffee').length >= 2) return false;
+    const d = memory.doing[a.id];
+    const what = d && simNow - d.at < 150_000 ? d.text : a.text || memory.task;
+    if (!what) return false;
+    const vars = { action: lower(short(what, 40)), task: short(memory.task || what, 28), g: a.cfg.sex };
+    const line = (key, who = a) => P(ta(key, { ...teamNames(), ...vars, name: a.cfg.name, g: who.cfg.sex }));
+    // who comes along: someone free who is not in the middle of something (the chatty ones, more)
+    const free = Object.values(agents).filter((o) => o !== a && o.free && o.state !== 'working' && !o.hidden && (traitsOf(o.id).chats || chance(0.5)));
+    const mate = chance(0.8) ? P(free) : null;
+    const counter = COUNTER_SPOTS[1];
+    const spot = { x: counter.x + (mate ? 0 : R(-16, 16)), y: counter.y + 6 };
+    const lines = mate
+      ? [[a.id, line('sim.workCoffee.open')], [mate.id, line(mate.id === 'tl' ? 'sim.workCoffee.tlReply' : 'sim.workCoffee.reply', mate)], [a.id, line('sim.workCoffee.more')], [mate.id, line('sim.workCoffee.advice', mate)]]
+      : [[a.id, line('sim.workCoffee.alone')], [a.id, line('sim.workCoffee.aloneMore')]];
+    scene('workcoffee', mate ? [a.id, mate.id] : [a.id], lines, {
+      spot, gap: 2600, quiet: true,
+      after: () => {
+        // on the way back: thinking how to solve it (and at the desk it clicks)
+        a.setState('thinking', 16_000);
+        a.say(line('sim.workCoffee.back'), 4200);
+        emit(a.x, a.y - 80, 1, 'emote', null, P(['💭', '🤔', '💡']));
+        a.then((x) => { if (x.state === 'thinking') { x.say(line('sim.workCoffee.eureka'), 3000); x.taskAt = simNow; } });
+      },
+    });
+    note('workcoffee', a.id, { with: mate ? [mate.id] : [], text: what });
+    a.state = 'coffee'; a.stateUntil = simNow + 12_000;
+    a.mind.brk = -R(0, 0.3);
+    a.mind.coffee = -R(0, 0.3);
+    a.mind.social = Math.min(a.mind.social, 0);
+    a.mind.bladder += 0.15;
+    if (mate) { mate.setState('talking', 9000); mate.mind.social = -R(0, 0.3); mate.mind.coffee = Math.min(mate.mind.coffee, 0); }
     return true;
   }
 
@@ -1567,7 +1741,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
       // failing tests keep QA up at night
       if (isTest) later(R(1200, 3200), () => { if (chance(0.85)) imagine(agents.qa, { kind: 'skull', line: P(L('sim.nightmares')), cause: t('sim.cause.testsFailed') }); });
       // whoever failed is left with doubts: soon they go consult the TL
-      if (a && PERSONALITY[a.id]?.doubt) a.mind.doubt = Math.max(a.mind.doubt, 0.95);
+      if (a && traitsOf(a.id).doubt) a.mind.doubt = Math.max(a.mind.doubt, 0.95);
       // errors overheat the server; if they pile up, it catches fire
       heat = Math.min(1.3, heat + (a?.id === 'backend' || ev.kind === 'error' ? 0.3 : 0.12));
       if (memory.fails.length >= 3 && heat >= 0.9 && !fire && !lunch && simNow - lastFireAt > 4 * 60_000 && chance(0.5)) {
@@ -1650,7 +1824,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
 
   /** Every so often, each character decides what to do based on their needs and personality. */
   function brain(a, dt) {
-    const mind = a.mind, pers = PERSONALITY[a.id];
+    const mind = a.mind, pers = traitsOf(a.id);
     // needs grow over time
     if (a.free && a.state !== 'working') mind.social += dt / pers.social;
     mind.coffee += (dt / pers.coffee) * (a.state === 'working' ? 1.6 : 1); // working tires them faster
@@ -1659,6 +1833,8 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     if (pers.dream) mind.dream += (dt / pers.dream) * dreamBoost(a);
     if (pers.rounds && a.free) mind.rounds += dt / pers.rounds;
     if (pers.product && a.free) mind.product += dt / pers.product;
+    // with a task going on, they want a break: to the café to talk about it (and back thinking)
+    if (onTask(a) && a.seated && a.state !== 'working') mind.brk += dt / pers.breaks;
 
     if (simNow < mind.nextThink) return;
     mind.nextThink = simNow + R(1200, 2600);
@@ -1673,11 +1849,12 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     if (mind.bladder >= 1.6 && a.seated && !a.queue.length && !a.scene && !a.lunch) { bathroom(a, true); return; }
     if (!a.free) return;
     if (mind.bladder >= 1 && chance(0.4)) { bathroom(a); return; }
-    if (PRODUCT.includes(a.id) && mind.social >= 1) { if (gossip(a)) return; mind.social = 0.6; }
+    if (mind.brk >= 1 && onTask(a) && !lunch && chance(0.6)) { if (workCoffee(a)) return; mind.brk = 0.7; }
+    if (pers.chats && mind.social >= 1) { if (gossip(a)) return; mind.social = 0.6; }
     if (pers.product && mind.product >= 1 && !['working', 'thinking', 'red'].includes(a.state) && chance(0.5)) { if (archChat(a)) return; mind.product = 0.7; }
     if (pers.rounds && mind.rounds >= 1 && a.state === 'idle') { if (rounds(a)) return; mind.rounds = 0.5; }
     // the technical people, with nothing to do, sometimes sit down to watch TV (more with rain)
-    if ((TECH.includes(a.id) || a.id === 'tl') && mind.social >= 1 && a.state === 'idle' && !lunch) {
+    if (pers.tv && mind.social >= 1 && a.state === 'idle' && !lunch) {
       if (chance(WET.has(currentWeather().kind) ? 0.7 : 0.45) && watchTV(a)) return;
       mind.social = 0.6;
     }
@@ -1773,7 +1950,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     },
     reset() {
       for (const a of Object.values(agents)) {
-        Object.assign(a, { queue: [], seated: true, x: a.cfg.seat.x, y: a.cfg.seat.y, state: 'idle', bubble: null, handUp: false, history: [], dream: null, scene: null, carry: false, perch: false, hidden: false, dance: false, food: null, lunch: null, back: false, tvSeat: null, diningSeat: null });
+        Object.assign(a, { taskAt: -Infinity, queue: [], seated: true, x: a.cfg.seat.x, y: a.cfg.seat.y, state: 'idle', bubble: null, handUp: false, history: [], dream: null, scene: null, carry: false, perch: false, hidden: false, dance: false, food: null, lunch: null, back: false, tvSeat: null, diningSeat: null });
         a.badges.clear();
       }
       ghosts.clear();

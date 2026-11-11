@@ -1,7 +1,7 @@
 // Draws the simulation (public/sim.js) on the terminal framebuffer.
 // The 960×600 world is scaled to the available pixels; the text goes in cells on top.
 
-import { W, H, LEFT, WORLD_W, BATHROOM, HALL, OFFICE_DOOR, ELEVATOR, TEAM, SPOT, BOARD, PLANTS, STATUS_ICON, PHASE_COLOR, phaseInfo, DREAMS, DREAM_PALETTE, RAINBOW_COLORS, rainbowPixels, CAFE, DINING, DINING_SEATS, PARTITION, RACK, EXTINGUISHER, daylight, GLASS, EASEL, CLOCK, TV, SOFA, ALARM, SIGN, tvChannel, HOT_DESKS } from '../public/sim.js';
+import { W, H, LEFT, WORLD_W, BATHROOM, HALL, OFFICE_DOOR, ELEVATOR, TEAM, SPOT, BOARD, PLANTS, STATUS_ICON, PHASE_COLOR, phaseInfo, DREAMS, DREAM_PALETTE, RAINBOW_COLORS, rainbowPixels, CAFE, DINING, DINING_SEATS, PARTITION, RACK, EXTINGUISHER, daylight, GLASS, EASEL, CLOCK, TV, SOFA, ALARM, SIGN, tvChannel, HOT_DESKS, gait, screenLines, screenMode } from '../public/sim.js';
 import { outdoor, lightning, weatherIcon } from '../public/sky.js';
 import { hex, mix, fit, wrap, strWidth } from './screen.js';
 import { AGENT_NAME, TASK_STATUS } from '../public/targets.js';
@@ -387,17 +387,16 @@ function drawChair(g, a) {
   g.rect(s.x - 16, s.y - 40, 32, 34, C.chair);
 }
 
-function screenPixels(g, x, y, w, h, busy, accent, now) {
+/** A screen: off, or on with code (typed line by line while they work; still while they think). */
+function screenPixels(g, x, y, w, h, mode, accent, now, id = '') {
   const { scr } = g;
   scr.rect(x - 1, y - 1, w + 2, h + 2, C.monitor);
-  scr.rect(x, y, w, h, busy ? C.screenOn : C.screenOff);
-  if (!busy) return;
-  const off = Math.floor(now / 160);
-  const colors = [C.ok, C.accent, C.blue, accent];
-  for (let r = 0; r < h; r++) {
-    const len = 1 + ((r * 7 + off) * 13) % Math.max(1, w - 1);
-    scr.rect(x + (r % 2), y + r, Math.min(len, w - (r % 2)), 1, colors[(r + off) % 4]);
-  }
+  scr.rect(x, y, w, h, mode === 'off' ? C.screenOff : C.screenOn);
+  if (mode === 'off') return;
+  const colors = mode === 'on' ? [C.ok, C.accent, C.blue, accent].map((c) => mix(c, C.screenOn, 0.5)) : [C.ok, C.accent, C.blue, accent];
+  const { rows, cursor, blink } = screenLines(id, now, h, Math.max(2, w), mode);
+  rows.forEach((segs, r) => { for (const sg of segs) scr.rect(x + sg.x, y + r, Math.min(sg.w, w - sg.x), 1, colors[sg.c]); });
+  if ((blink || mode === 'type') && cursor.x + 1 < w) scr.pset(x + cursor.x + 1, y + cursor.y, C.white);
 }
 
 function drawDesk(g, a, now) {
@@ -428,7 +427,7 @@ function drawDesk(g, a, now) {
       });
     }
   } else {
-    screenPixels(g, mx, my, mw, mh, busy, hex(c.shirt), now);
+    screenPixels(g, mx, my, mw, mh, screenMode(a, now), a.state === 'red' ? C.err : hex(c.shirt), now, a.id);
   }
   scr.rect(X(s.x + 33), my + mh + 1, 1, Math.max(1, Y(s.y - 14) - (my + mh + 1)), C.monitor); // monitor stand
   // carpetas = subagentes asignados
@@ -440,6 +439,7 @@ function drawDesk(g, a, now) {
 // The newcomers (one per running subagent): the terminal has no transparency, so their colors are
 // washed towards a pale blue, like a ghost.
 const PALE = hex('#dce9f5');
+const LIPS = hex('#c45a6a');
 const washed = (c) => `#${mix(hex(c), PALE, 0.55).toString(16).padStart(6, '0')}`;
 function ghostly(a) {
   const p = Object.create(a);
@@ -456,7 +456,7 @@ function drawHotDesk(g, sim, i, now) {
   rect(s.x - 36, s.y - 2, 72, 22, C.woodFront);
   rect(s.x - 36, s.y - 2, 72, 2, C.woodEdge);
   const mx = X(s.x + 4), my = Y(s.y - 32), mw = Math.max(2, X(s.x + 28) - mx), mh = Math.max(1, Y(s.y - 18) - my);
-  screenPixels(g, mx, my, mw, mh, !!a && ['working', 'thinking', 'red'].includes(a.state), hex(a?.cfg.shirt || '#8d99ae'), now);
+  screenPixels(g, mx, my, mw, mh, screenMode(a, now), hex(a?.cfg.shirt || '#8d99ae'), now, a?.id || `hot${i}`);
   if (a?.badges.size) rect(s.x - 30, s.y - 24, 16, 11, C.folder);
   if (a) g.centered(s.x, g.row(s.y + 9), ` ${a.cfg.name} `, hex(washed(a.cfg.shirt)), C.frame);
 }
@@ -523,7 +523,8 @@ function drawPerson(g, a, sim, model, now) {
   const blink = Math.floor(now / 100) % 40 === 0;
   const eye = blink ? skin : C.black;
   const walking = a.walking;
-  const step = walking ? Math.sin(a.walkT * 14) > 0 : false;
+  const gt = gait(a); // the walk cycle: each foot steps forward, back or in the air
+  const toe = gt && a.sideways !== false ? (a.face || 1) : 0;
   const typing = a.seated && a.state === 'working' && Math.floor(now / 140) % 2;
 
   scr.clearText(x0 - 1, top, sw + 2, rowsToDraw); // covers the text left behind it
@@ -545,15 +546,20 @@ function drawPerson(g, a, sim, model, now) {
     if (side) { P(0, 2, side); P(4, 2, side); P(0, 3, side); P(4, 3, side); }
     for (const x of [1, 2, 3]) P(x, 3, c.beard ? hair : skin);
     if (a.state === 'done' || now < a.jumpUntil) P(2, 3, hex('#7a2e2e'));
+    else if (c.sex === 'f') P(2, 3, LIPS); // hers: the lips
     for (let y = 4; y <= 6; y++) for (let x = 0; x < 5; x++) P(x, y, shirt);
     P(0, 6, typing ? shirt : skin); P(4, 6, typing ? skin : shirt);
     if (a.handUp) { P(-1, 1, skin); P(-1, 2, shirt); P(-1, 3, shirt); P(-1, 4, shirt); }
     if (a.carry) { P(5, 4, a.carry === 'ext' ? C.ext : C.white); P(5, 5, a.carry === 'ext' ? C.ext : C.white); }
     if (!sitting) {
-      for (const y of [7, 8]) { P(1, y, pants); P(3, y, pants); }
-      // when walking the shoes alternate
-      const [l, rr] = !walking ? [1, 3] : step ? [0, 3] : [1, 4];
-      P(l, 9, C.shoe); P(rr, 9, C.shoe);
+      [1, 3].forEach((hip, i) => {
+        const reach = gt ? gt.reach[i] : 0, up = gt ? gt.lift[i] : 0;
+        P(hip, 7, pants);
+        if (up) { P(hip + reach, 8, C.shoe); return; } // the foot in the air
+        P(hip + reach, 8, pants);
+        P(hip + reach, 9, C.shoe);
+        if (toe) P(hip + reach + toe, 9, C.shoe);
+      });
     }
   } else {
     for (const x of [0, 1, 2]) P(x, 0, hair);
@@ -561,7 +567,7 @@ function drawPerson(g, a, sim, model, now) {
     for (const x of [0, 1, 2]) { P(x, 2, shirt); P(x, 3, shirt); }
     if (a.handUp) P(-1, 1, skin);
     if (a.carry) P(3, 2, a.carry === 'ext' ? C.ext : C.white);
-    if (!sitting) { P(0, 4, pants); P(2, 4, pants); P(step ? 0 : 2, 5, C.shoe); P(step ? 2 : 0, 5, C.shoe); }
+    if (!sitting) [0, 2].forEach((hip, i) => { P(hip, 4, pants); if (!gt?.lift[i]) P(hip + (gt ? gt.reach[i] : 0), 5, C.shoe); });
   }
 
   const headRow = Math.floor(top / 2);
@@ -895,7 +901,7 @@ function drawPanel(scr, L, sim, model) {
     scr.fill(x, r, w, bg);
     scr.text(x + 1, r, '■', hex(cfg.shirt), bg);
     scr.text(x + 3, r, fit(`${cfg.name} · ${cfg.title}`, inner - 14), C.text, bg);
-    const st = t(`state.${a.state}`);
+    const st = t(`state.${a.state}`, { g: cfg.sex });
     scr.text(x + w - 1 - strWidth(st), r, st, STATE_COLOR[a.state] || C.muted, bg);
     r++;
     if (!compact && r <= maxR) {

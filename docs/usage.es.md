@@ -125,7 +125,7 @@ Tu respuesta se aprieta en el pane del agente, como si estuvieras ahí: las flec
 
 ## btw: una pregunta al margen
 
-`btw ¿quién está con los tests?` (en la línea de comandos de la terminal del juego, `b` en el juego de la terminal, o `dev-team-office btw "…"`) le pregunta al agente de turno sin interrumpir su trabajo. Una pregunta escrita a un personaje elegido (que termine en `?` o empiece con `¿`) va al agente del proyecto y la tarea en que trabaja ese personaje, y te la contesta él.
+Una pregunta escrita en la ficha de un personaje en el navegador («¿quién está con los tests?»), `b` en el juego de la terminal o `dev-team-office btw "…"` le pregunta al agente sin interrumpir su trabajo: el del proyecto y la tarea en que trabaja ese personaje (o el de turno), y el personaje la contesta en su ficha y en su burbuja. Lo demás que escribas ahí lo dice en voz alta, y te contesta con sus palabras.
 
 ## La CLI, completa
 
@@ -159,4 +159,4 @@ Tu respuesta se aprieta en el pane del agente, como si estuvieras ahí: las flec
 | Monitor | `o` navegador · `g` juego · `←→` oficina · `r` responder la pregunta del agente · `1`–`9`/`l` los logs de un servicio · `q` salir |
 | Bitácora | `g` juego · `o` navegador · `h` ayuda · `q` cerrar |
 | Juego (terminal) | `t` encargo · clic en la pizarra: sus tareas (con tickets) o un encargo · `c` ajustes · `o` oficina · `a` actividad · `tab`/flechas elegir · `m` mensaje · `b` btw · `s` saludar · `x` cancelar · `l` servicios (o clic en el rack) · `d`/`p` demos · `r` reiniciar · `q` volver |
-| Juego (navegador) | `t` encargo (en la dirección, una directiva; en el archivo, una entrada nueva) · `c` ajustes · `o` piso siguiente · `RePág`/`AvPág` subir o bajar de piso · `a` terminal de actividad · `f` pantalla completa · `v` vista frontal o cenital · `l` servicios (o clic en el rack) · `r` responder la pregunta del agente (o el chip ✋) · `esc` cerrar |
+| Juego (navegador) | `t` encargo (en la dirección, una directiva; en el archivo, una entrada nueva) · `c` ajustes · `o` piso siguiente · `RePág`/`AvPág` subir o bajar de piso · `a` actividad · `w` trabajo (la tarea, los pipelines, los encargos, las demos y el equipo) · `f` pantalla completa · `v` vista frontal o cenital · `l` servicios (o clic en el rack) · `r` responder la pregunta del agente (o el chip ✋) · `esc` cerrar |

@@ -3,6 +3,7 @@
 //
 //   t('ui.live')                      → "live" / "en vivo"
 //   t('sim.lunch.banner', { h: 13 })  → with {variables}
+//   t('state.done', { g: 'f' })       → "lista" (the {g:lista|listo} that agrees with her)
 //   ta('sim.gossip.po')               → a list (phrases to pick at random)
 //   listOf(['Ana', 'Leo', 'Sol'])     → "Ana, Leo and Sol" / "Ana, Leo y Sol"
 
@@ -21,7 +22,10 @@ const lookup = (dict, key) => {
   for (const k of key.split('.')) { if (v == null) return undefined; v = v[k]; }
   return v;
 };
-const fill = (s, vars) => (vars ? s.replace(/\{(\w+)\}/g, (_, k) => (vars[k] === undefined || vars[k] === null ? '' : String(vars[k]))) : s);
+// {g:hers|his}: the word that agrees with the sex of whom the text is about (vars.g: 'f' or 'm';
+// without it, the second one). For languages that inflect it, like Spanish: «{g:lista|listo}».
+const GENDERED = /\{g:([^|{}]*)\|([^{}]*)\}/g;
+const fill = (s, vars) => (vars ? s.replace(GENDERED, (_, f, m) => (vars.g === 'f' ? f : m)).replace(/\{(\w+)\}/g, (_, k) => (vars[k] === undefined || vars[k] === null ? '' : String(vars[k]))) : s.replace(GENDERED, '$2'));
 
 export const isLanguage = (l) => Object.hasOwn(DICTS, l);
 export const getLanguage = () => lang;
@@ -47,7 +51,7 @@ export function t(key, vars) {
 /** A list of phrases (or an object) in the current language. With vars, its {variables} are filled in. */
 export function ta(key, vars) {
   const v = lookup(DICTS[lang], key) ?? lookup(en, key);
-  if (Array.isArray(v)) return vars ? v.map((s) => fill(s, vars)) : v;
+  if (Array.isArray(v)) return v.map((s) => fill(s, vars));
   return v ?? [];
 }
 
