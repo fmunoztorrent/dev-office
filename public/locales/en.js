@@ -246,6 +246,90 @@ export default {
   },
   targets: { openSession: 'open session', claudeTurn: 'Claude, when its turn ends' },
   offices: { main: 'Main office' },
+
+  // ---------------------------------------------------------------- the two shared floors: the executive one and the archive
+  directiveStatus: { running: 'running', done: 'accomplished', partial: 'partly accomplished', failed: 'failed', cancelled: 'cancelled', interrupted: 'interrupted' },
+  knowledgeKind: { note: 'note', decision: 'decision', doc: 'doc', minute: 'minutes', skill: 'skill', connector: 'connector' },
+  floors: {
+    name: { exec: '🏛 Executive floor', archive: '📚 Archive' }, key: 'Pick the floor: the executive one, an office or the archive (o · PgUp/PgDn)', going: 'Floor: {name}',
+    elevator: 'the elevator',
+    // the game (floors.js): each floor's scene, its people and what they say
+    exec: {
+      sign: 'EXECUTIVE', board: 'DIRECTIVES', none: 'No directives: click here', wall: 'THE COMPANY',
+      working: '{n} working', waiting: '{n} waiting for you ✋', idle: 'quiet', tasks: '{n} brief(s)',
+      chat: [
+        'How are the offices doing?', 'We have to align every team', "Let's check the board", 'Did anyone see the Payments report?',
+        'We need one rule for every project', 'The next directive has to be clear', "Let's ask the archive what we already know",
+      ],
+      at: {
+        coffee: ['A coffee before the board meeting ☕', 'This coffee beats the offices’ one'],
+        window: ['What a view from up here', 'You can see the whole city from here'],
+        screen: ['The offices are doing fine', 'One office is waiting for an answer', 'Who is working right now?'],
+        board: ["Let's go over the directives", 'This one is almost done'],
+      },
+      react: {
+        order: 'I need everyone to do this: "{title}"',
+        split: 'Splitting it across {n} project(s): {offices}',
+        tech: ['Making sure each one does it its own way', 'Each team uses its own harness', "Careful not to break the APIs between projects"],
+        done: 'Directive accomplished! "{title}" ({done}/{total}) 🎉', trouble: 'The directive "{title}" had trouble: {done} of {total} went well',
+      },
+      who: {
+        ceo: 'I preside the company (I am you): I give the orders that cross offices', coo: 'Operations: I split each directive across the offices and follow how they go',
+        cto: 'Technology: I make sure the directives make sense in each project', assistant: 'I take the directives to each office in the elevator',
+      },
+    },
+    archive: {
+      sign: 'ARCHIVE', entries: '{n} entries', connectors: 'CONNECTORS · {n}', skills: 'SKILLS · {n}',
+      chat: ['The minutes need better tags', 'Did anyone ask for the API decision?', 'This knowledge is gold', 'A new skill for every team'],
+      at: { shelf: ['Filing it with the rest', 'All the decisions are here'], patch: ['Checking the connectors answer', 'One more cable to the outside'], rack: ['The skills, ready to install', 'Every team uses this one'] },
+      react: {
+        saved: 'Filed: {kind} "{title}"', read: '📖 An agent looks up: "{title}"', search: '🔎 An agent searches: "{title}"',
+        installed: '"{name}" installed in {n} project(s)', generate: 'Asking an agent for a {kind}: "{text}"', removed: 'Taking "{title}" out of the archive',
+      },
+      who: {
+        archivist: 'Archivist: I keep what the company knows and find it for the agents', skills: 'Skills: I prepare them and install them in each project',
+        connectors: 'Connectors: I connect the agents to outside information (MCP servers)',
+      },
+    },
+  },
+  exec: {
+    from: 'Executive floor',
+    brief: '🏛 Directive from the executive floor: "{title}". Also working on it: {others}. Do this project\'s part.',
+    interrupted: 'the office restarted before it ended',
+    minuteTitle: 'Minutes: {title}', minuteAsked: 'Asked by: {who}', minuteParts: 'How it ended in each project:',
+    log: { created: '🏛 Directive "{title}" to {n} project(s): {offices}', ended: '🏛 Directive "{title}": {status} ({done}/{total})' },
+    ui: {
+      title: '🏛 Directives', text: 'What must they do?', placeholder: 'One order for several offices or projects: "Every API exposes /health"',
+      scope: 'Who', all: 'all its projects ({n})', none: 'no registered projects', noAgents: 'Register each office’s projects in ⚙ › Agents to give them directives.',
+      send: '▶ Make it happen!', recent: 'The latest', empty: 'No directives yet.', pick: 'Pick at least one project', write: 'Write the directive',
+      sent: 'Directive sent to {n} project(s)', stop: '⏹ Stop', progress: '{done} of {total}', by: 'by {who}',
+    },
+  },
+  archive: {
+    from: 'Archive',
+    generate: {
+      skill: 'The company archive asks you for a skill: {text}\n\nWrite it and save it in the archive with the dev-team-office MCP tool save_knowledge (kind "skill", name in lowercase with dashes, title: what it does and when to use it, body: the instructions in Markdown). Do not change the project\'s files.',
+      connector: 'The company archive asks you for a connector to outside information: {text}\n\nFind the right MCP server and save it in the archive with the dev-team-office MCP tool save_knowledge (kind "connector", name, title: what information it gives, command + args for a local one or url for a remote one, body: how to set it up and which credentials it needs, without writing any secret). Do not change the project\'s files.',
+      note: 'The company archive asks you for a note: {text}\n\nLook into what is needed and save it with the dev-team-office MCP tool save_knowledge (kind "note", title and a Markdown body). Do not change the project\'s files.',
+      doc: 'The company archive asks you for a document: {text}\n\nWrite it and save it with the dev-team-office MCP tool save_knowledge (kind "doc", title and a Markdown body). Do not change the project\'s files.',
+    },
+    log: {
+      saved: '📚 {who} saved to the archive: {kind} "{title}"', updated: '📚 {who} updated in the archive: {kind} "{title}"',
+      installed: '📚 {kind} "{name}" installed in: {projects}', generate: '📚 The archive asked an agent for: {kind} "{text}"',
+    },
+    reason: { exists: 'it has its own one with that name', manual: 'it has opencode.jsonc: add it by hand', invalid: 'its config file is not valid JSON', harness: 'its agent does not support it', unknown: 'it is not registered', error: 'it could not be written' },
+    action: { created: 'installed', updated: 'added', same: 'already had it' },
+    ui: {
+      title: '📚 Archive', search: 'Search the archive…', all: 'All', kinds: { note: 'Notes', decision: 'Decisions', doc: 'Docs', minute: 'Minutes', skill: 'Skills', connector: 'Connectors' },
+      empty: 'The archive is empty. Save what the company knows, or ask an agent for it.', none: 'Nothing matches "{q}".', pickOne: 'Pick an entry to read it.',
+      new: '✚ New', ask: '✨ Ask an agent', edit: '✎ Edit', remove: '🗑 Delete', removeAsk: 'Delete "{title}" from the archive?', save: 'Save', back: '← Back',
+      kind: 'Kind', name: 'Name', titleField: 'Title', descField: 'Description (what it does and when to use it)', infoField: 'What information it gives', body: 'Text (Markdown)', instructions: 'Instructions (Markdown)', setup: 'How to set it up (no secrets)',
+      tags: 'Tags', office: 'For', company: 'the whole company', command: 'Command (a local MCP server)', args: 'Arguments', url: 'or URL (a remote MCP server)',
+      install: 'Install in', installGo: '⬇ Install', installHint: 'It is written in each project’s folder, in its agent’s format (Claude Code: .claude/; Pi, OpenCode and Codex: .agents/ or their MCP config).',
+      uses: '{n} read(s)', by: 'by {who}', saved: 'Saved', removed: 'Deleted', describe: 'What do you need?', describePh: 'A skill to deploy to staging with our pipeline…', agent: 'Agent',
+      asked: 'You asked {agent}: it will save it in the archive when it is done', noTargets: 'Register an agent in ⚙ › Agents to ask it',
+    },
+  },
   services: {
     title: 'Background services', running: 'running', since: 'since {time}', stopped: 'stopped at {time}',
     empty: 'Nothing is running in the background. When an agent leaves a service running (a dev server, a watcher…), it shows up here and lights a unit of the rack.',
@@ -281,6 +365,11 @@ export default {
     unknownType: 'unknown type: {type}', notFound: 'route not found', fullPath: 'use the full path', hostDenied: 'host not allowed', originDenied: 'origin not allowed',
     tooLarge: 'payload too large', noHerdr: 'you are not inside herdr (HERDR_ENV=1)', unknownService: 'there is no such service', serviceNoLog: 'that service has no log to follow', herdrFailed: 'herdr: {error}', paneMissing: 'the pane is missing',
     promptGone: 'that question is no longer there', promptChanged: 'the question changed on the agent’s screen: this is the one it shows now', promptOption: 'that option does not exist',
+    knowledgeKind: 'unknown kind: use {kinds}', knowledgeTitle: 'give it a title (for a skill: what it does and when to use it)', knowledgeTooLong: 'the text is over {n} KB',
+    knowledgeName: 'give it a name (letters, digits and dashes)', knowledgeExists: 'there is another one named "{name}"', knowledgeMax: 'the archive keeps at most {n} entries',
+    connectorUrl: "the connector's URL must start with http:// or https://", connectorHow: 'a connector needs a command (a local MCP server) or a URL (a remote one)',
+    unknownKnowledge: 'no such entry in the archive', notInstallable: 'only skills and connectors are installed in a project', installFailed: 'it was not installed in any project',
+    pickProjects: 'pick at least one office or registered project', unknownProject: 'unknown project: {project}', tooManyProjects: 'at most {n} projects per directive', unknownDirective: 'no such directive',
   },
   server: {
     started: 'Dev Team Office {version} at {url}', browser: '  Open it in your browser: {urls}', api: '  API: POST /v1/events/<source> · GET /v1/state · WS /v1/ws{socket}',
@@ -299,6 +388,7 @@ export default {
   },
   // the activity monitor (inside herdr, instead of the game)
   monitor: {
+    directives: '{n} directive(s) running', knowledge: '{n} in the archive',
     agents: '{n} active agent(s)', waiting: '{n} waiting for you', subagents: '{n} subagent(s) running', working: '{n} of the team working',
     panes: '{n} pane(s)', tasks: '{n} task(s) running', agentsTitle: 'AGENTS', subDone: 'finished', teamIdle: 'everyone is free', more: '{n} more',
     none: 'No agents yet: open one (pi, claude, opencode…) in another pane, or ask for something from the game in the browser (o).',
@@ -393,7 +483,7 @@ export default {
     context: 'Context · {agent}', contextLeft: '{pct}% free', contextAria: 'Context: {pct}% free ({used} of {max} used)',
     canvas: 'The office: click a character to see their card, the board for a new brief',
     settings: 'Settings', settingsKey: 'Settings (c)', fullscreen: 'Fullscreen', fullscreenKey: 'Fullscreen (f)', view: 'Front or top-down view', viewKey: 'Front or top-down view (v)', servicesKey: 'Background services: {n} running (l)',
-    office: 'Office', officeKey: 'Pick which office to view (o)',
+    office: 'Office', officeKey: 'Pick which office to view (o)', floor: 'Floor',
     sheetClose: 'Close card', poke: '👋 Say hi', message: '✉ Message', subagents: '{n} subagent(s)', nothingYet: 'Has not done anything in this session yet.',
     mood: { bath: 'in the bathroom 🚻', bathWait: 'waiting for the bathroom 😣', dream: 'dreaming of {dream} {emoji}', lunch: 'having lunch {food}', fire: 'putting out the fire! 🧯', talking: 'chatting 💬' },
     term: 'Team activity', termKey: 'Team activity (a)', termClose: 'Close terminal',

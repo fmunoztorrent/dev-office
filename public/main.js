@@ -6,6 +6,7 @@ import { createSettings } from './settings-ui.js';
 import { createServices } from './services-ui.js';
 import { createBoardView } from './board-ui.js';
 import { createPrompts } from './prompts-ui.js';
+import { createDirectivesUi, createArchiveUi } from './floors-ui.js';
 import { drawSprite } from './sprite.js';
 import { season, isSouth, daylight, weatherIcon } from './sky.js';
 import { t, setLanguage, onLanguage, getLanguage, timeOf } from './i18n.js';
@@ -27,10 +28,23 @@ let prefs = null;  // the general settings (language, zone, weather, herdr, log)
 let herdr = { available: false, panes: [] };
 let services = []; // the services the agents left running in the background (the rack, the ▶ chip)
 let asking = [];   // what the agents ask you on their screens (inside herdr): the ✋ chip
+// the two shared floors: the executive one (directives, how each office is doing) and the archive
+let directives = [];
+let overview = [];
 
 // the whiteboard: with tickets it expands to show them as post-its; without them, a new brief
 // the PO is you: with a question pending, clicking it (or the manager, hand up) opens the questions
-const game = createGame($('office'), { onSelect: (id) => ((id === 'po' || id === 'manager') && asking.length ? promptsUi.open() : select(id)), onBoardClick: () => (boardView.hasTickets() ? boardView.open() : openBrief()), onRackClick: () => servicesUi.open() });
+const game = createGame($('office'), {
+  onSelect: (id) => ((id === 'po' || id === 'manager') && asking.length ? promptsUi.open() : select(id)),
+  onBoardClick: () => (boardView.hasTickets() ? boardView.open() : openBrief()),
+  onRackClick: () => servicesUi.open(),
+  // the shared floors: the board and the screen (directives), the shelves, the rack and the patch panel (the archive), the elevator
+  onFloorClick: (floor, what) => {
+    if (what === 'lift') return moveFloor(floor === 'exec' ? 1 : -1);
+    if (floor === 'exec') return directivesUi.open();
+    return archiveUi.open({ kind: what === 'knowledge' ? '' : what });
+  },
+});
 const boardView = createBoardView({
   getBoard: () => game.sim.board,
   onBrief: () => openBrief(),
@@ -95,7 +109,12 @@ function connect() {
       onTargets(st.targets);
       onServices(st.services || []);
       onPrompts(st.prompts || []);
+      onFloors(st);
     }
+    if (msg.type === 'directives') onFloors({ directives: msg.directives });
+    if (msg.type === 'overview') onFloors({ overview: msg.overview });
+    if (msg.type === 'archive') onFloors({ archive: msg.archive });
+    if (msg.type === 'floor') onFloorEvent(msg.event);
     if (msg.type === 'prefs') onPrefs(msg.prefs);
     if (msg.type === 'offices') onOffices(msg.offices, msg.offices.find((o) => o.id === office?.id));
     if (msg.type === 'herdr') onHerdr(msg.herdr);
@@ -103,7 +122,7 @@ function connect() {
     if (msg.type === 'targets') onTargets(msg.targets);
     if (msg.type === 'services' && msg.office === office?.id) onServices(msg.services);
     if (msg.type === 'prompts' && msg.office === office?.id) onPrompts(msg.prompts);
-    if (msg.type === 'snapshot' || msg.type === 'appearance') { applyAppearance((msg.state || msg).appearance || {}); renderTeam(); renderSheet(true); }
+    if (msg.type === 'snapshot' || msg.type === 'appearance') { applyAppearance((msg.state || msg).appearance || {}); game.floors.setYou(TEAM.po); renderTeam(); renderSheet(true); }
     if (msg.type === 'snapshot' || msg.type === 'weather') { game.sim.setWeather((msg.state ? msg.state.weather : msg.weather) || null); renderWeather(); }
     if (msg.type === 'event') onEvent(msg.event, msg.session);
     if (msg.type === 'ask') onAsk(msg.ask);
@@ -170,6 +189,7 @@ function onPrefs(p) {
   term.life = !!p.log?.life;
   // the office view: front (the usual one) or isometric top-down, as saved in the settings
   game.setView(p.view?.mode === 'iso' ? 'iso' : 'flat');
+  if (p.view?.floor && p.view.floor !== game.floor) setFloor(p.view.floor, { save: false });
   $('view-mode').setAttribute('aria-pressed', String(game.view === 'iso'));
   setLanguage(p.lang);
   settings?.refresh?.();
@@ -181,6 +201,7 @@ function onOffices(list, current) {
   offices = list || [];
   const changed = current && current.id !== office?.id;
   if (current) office = current;
+  if (current && current.id === wanted) wanted = null;
   if (office) { game.sim.setZone(office.timezone); game.sim.setPlace(office.place); }
   renderOffices();
   if (changed) sysLine(t('ui.viewing', { name: office.name, tz: office.timezone }));
@@ -188,23 +209,80 @@ function onOffices(list, current) {
   settings?.refresh?.();
 }
 
-/** The selector, top left: only if the company has more than one office. */
+/** The selector, top left: the building's floors, from the executive one to the archive. */
 function renderOffices() {
-  const box = $('office-pick'), sel = $('office-select');
-  box.hidden = offices.length < 2;
+  const sel = $('office-select');
   sel.innerHTML = '';
-  for (const o of offices) sel.append(new Option(o.name, o.id));
-  sel.value = office?.id || '';
+  sel.append(new Option(t('floors.name.exec'), FLOOR_VALUE.exec));
+  for (const o of offices) sel.append(new Option(`🏢 ${o.name}`, o.id));
+  sel.append(new Option(t('floors.name.archive'), FLOOR_VALUE.archive));
+  sel.value = game.floor === 'office' ? office?.id || '' : FLOOR_VALUE[game.floor];
 }
+// the office asked for, until its snapshot arrives (the elevator does not wait for it)
+let wanted = null;
 function viewOffice(id) {
-  if (!id || id === office?.id) return;
+  if (!id || id === (wanted || office?.id)) return;
+  wanted = id;
   send({ type: 'view', office: id });
 }
-$('office-select').onchange = (e) => viewOffice(e.target.value);
-function nextOffice() {
-  if (offices.length < 2) return;
-  const i = Math.max(0, offices.findIndex((o) => o.id === office?.id));
-  viewOffice(offices[(i + 1) % offices.length].id);
+$('office-select').onchange = (e) => pickFloor(e.target.value);
+/** o: the next floor going down (and from the archive, back to the executive floor). */
+function nextOffice() { moveFloor(1); }
+
+// ---------------------------------------------------------------- the building's floors
+
+const directivesUi = createDirectivesUi({ getDirectives: () => directives, getOffices: () => offices, hhmm: (ts) => hhmm(ts) });
+const archiveUi = createArchiveUi({ getOffices: () => offices, hhmm: (ts) => `${new Date(ts).toLocaleDateString(getLanguage())} ${hhmm(ts)}` });
+const FLOOR_VALUE = { exec: '@exec', archive: '@archive' }; // in the selector, next to the offices' ids
+
+function onFloors({ directives: d, overview: o, archive: a } = {}) {
+  if (d) { directives = d; directivesUi.refresh(); }
+  if (o) overview = o;
+  if (a) archiveUi.refresh();
+  game.floors.setData({ directives: d, overview: o, archive: a });
+}
+
+/** What happens on the shared floors: the game animates it and the log tells it. */
+function onFloorEvent(ev = {}) {
+  game.floors.handle(ev);
+  const kind = (k) => t(`knowledgeKind.${k || 'note'}`);
+  const line = {
+    directive: () => t('exec.log.created', { title: ev.text, n: ev.total || 0, offices: (ev.offices || []).join(', ') }),
+    directive_end: () => t('exec.log.ended', { title: ev.text, status: t(`directiveStatus.${ev.status}`), done: ev.done ?? 0, total: ev.total ?? 0 }),
+    saved: () => (ev.entryKind === 'minute' ? null : t(ev.created ? 'archive.log.saved' : 'archive.log.updated', { kind: kind(ev.entryKind), title: ev.text, who: ev.source || t('events.you') })),
+    installed: () => (ev.count ? t('floors.archive.react.installed', { name: ev.text, n: ev.count }) : null),
+    generate: () => t('archive.log.generate', { kind: kind(ev.entryKind), text: ev.text }),
+    read: () => t('floors.archive.react.read', { title: ev.text }),
+    search: () => t('floors.archive.react.search', { title: ev.text }),
+  }[ev.kind]?.();
+  if (line) sysLine(line, `sys floor-${ev.floor}`);
+}
+
+/** Watches a floor: 'exec', 'archive' or 'office' (the office chosen). It is saved in the settings. */
+function setFloor(f, { save = true } = {}) {
+  f = ['exec', 'archive'].includes(f) ? f : 'office';
+  if (f === game.floor) return;
+  game.setFloor(f);
+  document.body.dataset.floor = f;
+  if (f !== 'office' && selected) select(null);
+  renderOffices();
+  renderContext();
+  if (save) send({ type: 'prefs', prefs: { view: { floor: f } } });
+  sysLine(t('floors.going', { name: f === 'office' ? office?.name || '' : t(`floors.name.${f}`) }));
+}
+/** The elevator: up (-1) or down (+1) through the executive floor, the offices and the archive. */
+function moveFloor(step) {
+  const stops = [FLOOR_VALUE.exec, ...offices.map((o) => o.id), FLOOR_VALUE.archive];
+  const here = game.floor === 'office' ? wanted || office?.id : FLOOR_VALUE[game.floor];
+  const i = Math.max(0, stops.indexOf(here));
+  const next = stops[(i + step + stops.length) % stops.length];
+  pickFloor(next);
+}
+function pickFloor(value) {
+  if (value === FLOOR_VALUE.exec) return setFloor('exec');
+  if (value === FLOOR_VALUE.archive) return setFloor('archive');
+  setFloor('office');
+  viewOffice(value);
 }
 
 function onHerdr(st) {
@@ -309,7 +387,7 @@ function renderContext() {
   const s = currentSession();
   const c = s?.context;
   const bar = $('ctx-bar');
-  bar.hidden = !c || !(c.max > 0);
+  bar.hidden = !c || !(c.max > 0) || game.floor !== 'office';
   if (bar.hidden) return;
   const left = Math.max(0, Math.min(1, 1 - c.used / c.max));
   const pct = Math.round(left * 100);
@@ -413,8 +491,9 @@ const COMMANDS = {
   office: (arg) => {
     if (!arg) return nextOffice();
     const q = arg.toLowerCase();
+    for (const f of ['exec', 'archive']) if (t(`floors.name.${f}`).toLowerCase().includes(q) || f === q) return setFloor(f);
     const o = offices.find((x) => x.id === q || x.name.toLowerCase() === q) || offices.find((x) => x.name.toLowerCase().includes(q));
-    return o ? viewOffice(o.id) : sysLine(t('ui.noOffice', { name: arg }));
+    return o ? pickFloor(o.id) : sysLine(t('ui.noOffice', { name: arg }));
   },
   clear: () => { $('log').innerHTML = ''; },
   life: () => {
@@ -791,7 +870,8 @@ document.addEventListener('keydown', (e) => {
   if (typing) return;
   const k = e.key.toLowerCase();
   if (k === 'a') { e.preventDefault(); toggleTerm(); }
-  else if (k === 't') { e.preventDefault(); openBrief(); }
+  else if (k === 't') { e.preventDefault(); if (game.floor === 'exec') directivesUi.open(); else if (game.floor === 'archive') archiveUi.open({ create: true }); else openBrief(); }
+  else if (e.key === 'PageUp' || e.key === 'PageDown') { e.preventDefault(); moveFloor(e.key === 'PageUp' ? -1 : 1); }
   else if (k === 'c') { e.preventDefault(); settings.open(); }
   else if (k === 'f') { e.preventDefault(); toggleFullscreen(); }
   else if (k === 'v') { e.preventDefault(); toggleView(); }

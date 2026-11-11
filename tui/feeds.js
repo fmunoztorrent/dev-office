@@ -22,6 +22,9 @@ export function localFeed(server) {
   const onHerdr = (st) => h?.onHerdr?.(st);
   const onServices = (id) => { if (mine(id)) h?.onServices?.(server.services.list(view)); };
   const onPrompts = (id) => { if (mine(id)) h?.onPrompts?.(server.promptsOf(view)); };
+  // the two shared floors: the directives and the archive (their news comes through the server's log)
+  const onDirectives = (list) => h?.onFloors?.({ directives: list });
+  const onArchive = () => h?.onFloors?.({ archive: server.archive.snapshot() });
   const snapshot = () => {
     const st = server.fullState(view);
     h.onPrefs?.(st.prefs);
@@ -55,6 +58,8 @@ export function localFeed(server) {
       server.bus.on('herdr', onHerdr);
       server.services.on('change', onServices);
       server.prompts?.on('change', onPrompts);
+      server.directives?.on('change', onDirectives);
+      server.archive?.on('change', onArchive);
     },
     send(msg) {
       if (msg?.type === 'view') {
@@ -77,6 +82,8 @@ export function localFeed(server) {
       server.bus.off('herdr', onHerdr);
       server.services.off('change', onServices);
       server.prompts?.off('change', onPrompts);
+      server.directives?.off('change', onDirectives);
+      server.archive?.off('change', onArchive);
     },
   };
 }
@@ -116,6 +123,9 @@ export function remoteFeed(wsUrl) {
       if (msg.type === 'services' && msg.office === view) h.onServices?.(msg.services || []);
       if (msg.type === 'prompts' && msg.office === view) h.onPrompts?.(msg.prompts || []);
       if (msg.type === 'pipelines') h.onPipelines(msg.runs);
+      if (msg.type === 'directives') h.onFloors?.({ directives: msg.directives });
+      if (msg.type === 'archive') h.onFloors?.({ archive: msg.archive });
+      if (msg.type === 'floor') h.onFloorEvent?.(msg.event);
       if (msg.type === 'targets') h.onTargets?.(msg.targets);
       if (msg.type === 'event') h.onEvent(msg.event, msg.session);
       if (msg.type === 'tasks') h.onTasks(msg);

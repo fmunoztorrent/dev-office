@@ -113,7 +113,7 @@ export class AgentRegistry extends EventEmitter {
     return profilesFor(models, harness).find(([pid]) => pid === id)?.[1] || null;
   }
 
-  run({ target, entry = 'prompt', text, session, from, profile } = {}) {
+  run({ target, entry = 'prompt', text, session, from, profile, title: label } = {}) {
     text = String(text ?? '').trim();
     if (!text) return { ok: false, error: tr('err.promptEmpty') };
     const t = this.targets().find((x) => x.id === target);
@@ -131,7 +131,7 @@ export class AgentRegistry extends EventEmitter {
       return this.pipelines.start({ session: s.session, agent: s.agent, pipeline: e.devteam, task: text, from, models: prof?.roles || null, meta: { agentId: t.registered ? t.id : null, entry: e.id } });
     }
     const inv = invocation(e, text);
-    const title = clip(`${e.id === 'prompt' ? '' : `${e.label}: `}${text}`, 300);
+    const title = clip(label || `${e.id === 'prompt' ? '' : `${e.label}: `}${text}`, 300);
     const meta = { agentId: t.registered ? t.id : null, entry: e.id };
     if (s) return this.hub.submit({ text: inv.text, title, agent: s.agent, session: s.session, command: inv.command, args: inv.args, from, meta, office: t.office });
     if (!t.registered) return { ok: false, error: tr('err.sessionGone') };

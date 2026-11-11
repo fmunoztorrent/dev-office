@@ -40,6 +40,8 @@ export function createMonitor() {
     services: [], // the ones left running in the background (server/services.js)
     prompts: [],  // what the agents ask you on their screens (server/prompts.js)
     answering: null, // the question being answered from here (r): its id
+    directives: [],  // the executive floor's latest directives (server/directives.js)
+    archive: null,   // the archive's counts (server/archive.js)
   };
   const person = (role) => ({ ...DEFAULT_TEAM[role], ...(m.appearance?.[role] || {}) });
 
@@ -70,6 +72,8 @@ export function createMonitor() {
       m.sessions = new Map((st.sessions || []).filter((s) => s && s.id !== 'office').map((s) => [s.id, s]));
       m.tasks = st.tasks || [];
       m.herdr = st.herdr || m.herdr;
+      if (st.directives) m.directives = st.directives;
+      if (st.archive) m.archive = st.archive;
       m.log = []; m.last.clear(); m.subLast.clear();
       for (const ev of st.log || []) { remember(ev); addLog(ev); }
     },
@@ -86,6 +90,15 @@ export function createMonitor() {
       addLog(ev);
     },
     tasks(snap) { m.tasks = snap?.tasks || []; },
+    floors({ directives, archive } = {}) { if (directives) m.directives = directives; if (archive) m.archive = archive; },
+    /** What happens on the shared floors, told in the log (a remote office: a local one tells it through its own log). */
+    floorEvent(ev = {}) {
+      const text = ev.kind === 'directive' ? t('exec.log.created', { title: ev.text, n: ev.total || 0, offices: (ev.offices || []).join(', ') })
+        : ev.kind === 'directive_end' ? t('exec.log.ended', { title: ev.text, status: t(`directiveStatus.${ev.status}`), done: ev.done ?? 0, total: ev.total ?? 0 })
+          : ev.kind === 'saved' && ev.entryKind !== 'minute' ? t(ev.created ? 'archive.log.saved' : 'archive.log.updated', { kind: t(`knowledgeKind.${ev.entryKind}`), title: ev.text, who: ev.source || t('events.you') })
+            : ev.kind === 'installed' && ev.count ? t('floors.archive.react.installed', { name: ev.text, n: ev.count }) : null;
+      if (text) this.log({ ts: ev.ts, text });
+    },
     herdr(st) { m.herdr = st; },
     services(list) { m.services = Array.isArray(list) ? list : []; },
     prompts(list) {
@@ -110,6 +123,8 @@ export function createMonitor() {
         tasks: m.tasks.filter((x) => ['running', 'sent', 'queued'].includes(x.status)).length,
         working: Object.values(m.roles).filter((r) => r.status && r.status !== 'idle' && r.status !== 'done' && now - (r.ts || 0) < 10 * 60_000).length,
         services: m.services.filter((s) => s.status === 'running').length,
+        directives: m.directives.filter((d) => d.status === 'running').length,
+        knowledge: Object.values(m.archive?.counts || {}).reduce((x, y) => x + y, 0),
       };
     },
   };
@@ -160,6 +175,9 @@ export function renderMonitor(mon, { cols = 100, rows = 30, color = true, colorM
     ['   🪟 ', ''], [t('monitor.panes', { n: n.panes }), B],
     ['   📨 ', ''], [t('monitor.tasks', { n: n.tasks }), B],
     ...(n.services ? [['   ▶ ', paint(TONE.ok)], [t('monitor.services', { n: n.services }), B]] : []),
+    // the shared floors: the directives running and what the archive keeps
+    ...(n.directives ? [['   🏛 ', paint('#e9c46a')], [t('monitor.directives', { n: n.directives }), B]] : []),
+    ...(n.knowledge ? [['   📚 ', ''], [t('monitor.knowledge', { n: n.knowledge }), B]] : []),
   ));
 
   // ---- the agents and their subagents ----
@@ -290,6 +308,8 @@ export function runMonitor({ feed, stdin = process.stdin, stdout = process.stdou
       onHerdr(st) { mon.herdr(st); dirty = true; },
       onServices(list) { mon.services(list); dirty = true; },
       onPrompts(list) { mon.prompts(list); dirty = true; },
+      onFloors(data) { mon.floors(data); dirty = true; },
+      onFloorEvent(ev) { mon.floorEvent(ev); dirty = true; },
       onAppearance(a) { mon.model.appearance = a || {}; dirty = true; },
       onOffices(list, current) { mon.model.offices = list || []; if (current) mon.model.office = current; dirty = true; },
       onPrefs(p) { if (p?.lang) setLanguage(p.lang); dirty = true; },

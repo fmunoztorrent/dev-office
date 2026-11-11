@@ -144,6 +144,8 @@ Para conectar cualquier otro harness (o entender el contrato de roles), ver [doc
 | `report_activity` | En qué rol y fase estás (`task`, `phase`, `todos`, `waiting`, `done`…) |
 | `send_task` | Le manda un prompt al agente de otro proyecto registrado |
 | `open_pane` | Dentro de herdr, abre un pane con una actividad (tests en watch, otro agente…) |
+| `search_knowledge` · `get_knowledge` · `save_knowledge` | El archivo de la empresa: notas, decisiones, documentos, skills y conectores |
+| `send_directive` · `list_directives` | La dirección: una orden para varias oficinas o proyectos |
 | `list_teams` · `install_team` | Los team packs (un subagente por rol) |
 
 Con la oficina apagada, lo que registras queda igual en la base y aparece al abrirla.
@@ -208,7 +210,22 @@ Una instancia de la oficina es una **empresa**: le puedes ir agregando **oficina
 - **su zona horaria** (si no, la de la empresa; si no, la del sistema), y con ella su hora, su almuerzo, su día y su noche, su estación y **su clima**;
 - **su actividad**: cada evento de un agente va a su oficina — la que dice el propio agente (la oficina se la pasa al abrirlo), la de su sesión, la de su pane de herdr o la del agente registrado cuya ruta contiene su carpeta; si no, a la principal.
 
-Las interfaces muestran **una oficina a la vez**: la que eliges en el selector de **arriba a la izquierda** (la web y la terminal; también con `o`). Si hay una sola, no aparece. La elección queda guardada. La bitácora de la terminal muestra la actividad de todas.
+Las interfaces muestran **una oficina a la vez**: la que eliges en el selector de **arriba a la izquierda** (la web y la terminal; también con `o`). La elección queda guardada. La bitácora de la terminal muestra la actividad de todas.
+
+## Dos pisos más: la dirección y el archivo
+
+El edificio de la empresa tiene, además de sus oficinas, dos pisos que comparten todas. Sube o baja con el selector de **arriba a la izquierda** (`o`, o `RePág`/`AvPág`; también con un clic en el ascensor).
+
+**🏛 La dirección**, arriba: los directivos, que presides tú (con tu aspecto de PO). Ahí das **directivas**: una orden para varias oficinas, departamentos o proyectos a la vez («que todas las APIs expongan `/health`», «actualicen el logger en todos lados»). Haz clic en el **tablero de directivas** (o `t` ahí), escribe la orden y elige las oficinas (todos sus proyectos) o los proyectos uno por uno. La oficina le manda al agente de cada proyecto un encargo con su parte (a una sesión abierta suya o a una nueva, como cualquier encargo) y el piso sigue cómo va cada parte; puedes detenerla. La **pantalla** de la empresa muestra qué hace cada oficina (quién trabaja, quién te espera, cuántos encargos). Cuando una directiva termina, su **acta** va al archivo. Los agentes también las dan: `send_directive` (MCP).
+
+**📚 El archivo**, en el subsuelo: lo que sabe la empresa, compartido por todas las oficinas y todos los agentes.
+
+- **Notas, decisiones y documentos** (y las actas de las directivas): búscalas, léelas, escríbelas. Los agentes las buscan y las agregan por MCP (`search_knowledge`, `get_knowledge`, `save_knowledge`), y el servidor MCP les pide buscar ahí antes de empezar y guardar lo que deciden.
+- **Skills:** se escriben una vez y se instalan en los proyectos que elijas, en el formato de cada agente (`.claude/skills/` para Claude Code, `.agents/skills/` para Pi, OpenCode y Codex). Nunca se pisa una skill propia del proyecto con el mismo nombre.
+- **Conectores:** servidores MCP que traen información de afuera (el gestor de issues, la documentación, una base de datos), con su comando o su URL. Se instalan en la config MCP de cada proyecto (`.mcp.json`, `.pi/mcp.json`, `opencode.json`, `.codex/config.toml`) sin tocar lo demás; cada agente te pide confiar en ellos la primera vez. Nunca escribas un secreto en uno.
+- **✨ Pedírsela a un agente:** describe la skill, el conector o el documento que necesitas y elige un agente: lo escribe y lo guarda en el archivo con `save_knowledge`.
+
+Haz clic en las estanterías, el rack de skills o el panel de conectores para abrirlo (o `t` ahí). El monitor de la terminal muestra las directivas en curso y cuántas entradas guarda el archivo; su bitácora cuenta lo que pasa en los dos pisos.
 
 ## herdr: el agente en un pane, y cada subagente en el suyo
 
@@ -384,6 +401,8 @@ bin/install.js          copia los archivos de cada integración
 install.sh              el instalador de una línea (curl … | sh)
 server/mcp.js           el servidor MCP (stdio)
 server/asks.js          btw: preguntas al margen al agente de turno
+server/directives.js    la dirección: una orden para los proyectos de varias oficinas, y cómo va cada parte
+server/archive.js       el archivo: lo que sabe la empresa, y la instalación de sus skills y conectores en un proyecto
 server/ws.js            WebSocket sin dependencias (RFC 6455)
 server/server.js        API HTTP + WebSocket en TCP y socket Unix
 server/adapters.js      payload nativo → formato genérico
@@ -414,6 +433,8 @@ tui/monitor.js          el monitor de actividad (dentro de herdr): cifras, cada 
 examples/tienda/        proyecto de ejemplo con equipo, pipelines y agentes
 tui/                    la oficina en la terminal: framebuffer de medios bloques, vista, teclado y ratón
 public/game.js          la oficina en canvas, para el navegador (vidrio, luces, noche, efectos), en vista frontal o cenital
+public/floors.js        los dos pisos compartidos en canvas (la dirección y el archivo): sus escenas y su gente
+public/floors-ui.js     sus diálogos: las directivas y el archivo
 public/iso.js           la cámara isométrica de la vista cenital (piso, paredes y sprites con transformaciones afines)
 integrations/common/    la librería del lado del agente: proyecto, pipelines, gates (la usan todas)
 integrations/           Claude Code (hook), Codex (hook), OpenCode (plugin), Pi (extensión)

@@ -31,9 +31,11 @@ Dev Team Office es una oficina en pixel art que muestra en vivo lo que hacen los
 | `server/services.js` | Los servicios que los agentes dejan corriendo en segundo plano: de dónde salen, si siguen vivos (`lsof`) y sus logs |
 | `server/herdr.js` · `server/subpanes.js` | herdr: un agente por pane, y un pane por subagente |
 | `server/mcp.js` | El servidor MCP: `join_office`, `register_project`, `report_activity`, `send_task`… y el prompt `join` |
-| `server/store.js` | La base SQLite: oficinas, agentes, ajustes (`prefs`), apariencia e historial |
+| `server/store.js` | La base SQLite: oficinas, agentes, ajustes (`prefs`), apariencia, historial, directivas y el archivo (`knowledge`) |
+| `server/directives.js` · `server/archive.js` | Los dos pisos compartidos: la dirección (una directiva = un encargo por proyecto, a varias oficinas) y el archivo (notas, decisiones, documentos, actas, skills y conectores; instala skills y conectores en cada proyecto) |
 | `public/sim.js` | La simulación (personajes, rutas, vida de la oficina). La comparten el navegador y la terminal |
 | `public/game.js` · `public/iso.js` | El juego en canvas: la vista frontal y la cenital (cámara isométrica) |
+| `public/floors.js` · `public/floors-ui.js` | Los pisos de la dirección y del archivo: sus escenas (con el mismo dibujo del juego) y sus diálogos |
 | `tui/` | La terminal: `app.js`/`view.js` (el juego), `console.js` (la bitácora), `monitor.js` (el monitor), `follow.js` (un subagente), `settings.js` |
 | `integrations/` | Lo que corre del lado del agente, más la librería común `integrations/common/devteam.mjs` (detección de proyectos y subagentes, pipelines, gates) |
 | `public/models.js` | Los perfiles de modelos (Anthropic, OpenCode y los que se agreguen): qué modelo usa cada rol |

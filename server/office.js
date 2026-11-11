@@ -224,6 +224,8 @@ export class Office extends EventEmitter {
       case 'task':
         // the scope line the office puts before a brief (tasks.js) is not part of the request
         if (typeof r.text === 'string' && r.text.startsWith('📁 ')) r.text = r.text.replace(/^📁 [^\n]*\n+/, '');
+        // a directive's part (directives.js): its header becomes a 🏛 before the request
+        if (typeof r.text === 'string' && r.text.startsWith('🏛 ')) r.text = r.text.replace(/^🏛 [^\n]*\n+/, '🏛 ');
         // Pi's extension and skill may announce the same task: the duplicate is dropped.
         if (s.title === clip(r.text, 300) && ev.ts - (s.taskAt || 0) < 30_000) return null;
         s.title = clip(r.text, 300);

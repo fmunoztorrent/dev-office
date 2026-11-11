@@ -92,6 +92,17 @@ If the review asks for changes: `tl changes "…"` → `backend fix` → `qa gre
 - `send_task`: sends a prompt to another registered project's agent.
 - `list_projects`, `list_offices`, `create_office`, `update_project`, `remove_project`.
 
+## The company's archive and its executive floor
+
+- **Before starting a task**, `search_knowledge` with its key words: decisions, conventions, docs, skills and
+  connectors the company already has. `get_knowledge` gives an entry whole. Follow what applies.
+- **When you settle something worth keeping** (a decision and its why, a convention, how a part works),
+  `save_knowledge` it: a short title and a Markdown body. Not the day's chatter: what another agent would
+  need next month. A skill: `kind: "skill"`, `name`, `title` (what it does and when to use it), `body`
+  (its instructions). A connector: `kind: "connector"`, `name`, `command` + `args` or `url`; never a secret.
+- A brief that starts with **🏛** is your project's part of a **directive** (an order for several projects):
+  do only this project's part. `send_directive` gives one, only when the user asks for it.
+
 Without MCP, the same from the shell: `dev-team-office agents add <path> --agent claude|codex|opencode|pi
 --office <id>`, `dev-team-office agents`, `dev-team-office offices add "<name>"`, `dev-team-office prompt <id> "<text>"`.
 

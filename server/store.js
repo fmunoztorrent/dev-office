@@ -8,6 +8,8 @@
 //   settings   the settings: `prefs` (language, the company's time zone, weather, herdr, log, the
 //              office being watched) and the appearance of each office's characters
 //   prompts    history of what was sent to the agents and how it ended
+//   directives the executive floor's orders: one text sent to several offices' projects at once
+//   knowledge  the archive floor: the company's notes, decisions, docs, skills and connectors
 //
 // Everything is validated before writing: an error returns { ok: false, error } and touches nothing.
 
@@ -25,9 +27,16 @@ const ASKS_KEEP = 500;
 const AGENTS_MAX = 100;
 const OFFICES_MAX = 30;
 const PROMPTS_KEEP = 2000;
+const DIRECTIVES_KEEP = 200;
+const KNOWLEDGE_MAX = 5000;
+export const KNOWLEDGE_KINDS = ['note', 'decision', 'doc', 'minute', 'skill', 'connector'];
+const NAMED = new Set(['skill', 'connector']); // they are installed in a project by their name
+const BODY_MAX = 64 * 1024;
 const COLOR_RX = /^#[0-9a-f]{6}$/i;
 const APPEARANCE = { name: 'text', title: 'text', shirt: 'color', pants: 'color', hair: 'color', skin: 'color', long: 'bool', beard: 'bool', glasses: 'bool' };
 export const MAIN_OFFICE = 'main';
+/** The building's floors: the executive one on top, the offices, and the archive in the basement. */
+export const FLOORS = ['exec', 'office', 'archive'];
 
 /** The general settings and their defaults. */
 export const DEFAULT_PREFS = {
@@ -37,7 +46,7 @@ export const DEFAULT_PREFS = {
   weather: true,                // query the real weather (Open-Meteo); otherwise it is simulated by season
   herdr: { launch: true, direction: 'right', startAgent: 'auto', subagents: true }, // inside herdr: the agents (and each subagent) in panes
   log: { life: false },         // the terminal log also shows the office's life
-  view: { office: MAIN_OFFICE, mode: 'flat' }, // the office being watched and how it looks: front (flat) or isometric top-down (iso)
+  view: { office: MAIN_OFFICE, mode: 'flat', floor: 'office' }, // the office being watched, how it looks (front: flat, or isometric top-down: iso) and the floor (an office, the executive one or the archive)
   models: DEFAULT_MODELS,       // the model profiles (public/models.js) and the one used by default
 };
 
@@ -124,11 +133,40 @@ const MIGRATIONS = [
      updated_at INTEGER NOT NULL
    );
    CREATE INDEX asks_by_office ON asks (office_id, created_at DESC);`,
+  // Two more floors: the executive floor (directives across offices) and the archive (the company's knowledge).
+  `CREATE TABLE directives (
+     id         TEXT PRIMARY KEY,
+     title      TEXT NOT NULL,
+     text       TEXT NOT NULL,
+     status     TEXT NOT NULL,               -- running | done | partial | failed | cancelled | interrupted
+     parts      TEXT NOT NULL,               -- JSON: one per project it was sent to
+     source     TEXT,                        -- who sent it (you, an agent through MCP…)
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL
+   );
+   CREATE INDEX directives_by_date ON directives (created_at DESC);
+   CREATE TABLE knowledge (
+     id         TEXT PRIMARY KEY,
+     kind       TEXT NOT NULL,               -- note | decision | doc | minute | skill | connector
+     name       TEXT,                        -- a skill's or connector's name (a slug)
+     title      TEXT NOT NULL,               -- for a skill: its description (what it does, when to use it)
+     body       TEXT NOT NULL DEFAULT '',
+     tags       TEXT,                        -- JSON: array of strings
+     office_id  TEXT,                        -- null: the whole company
+     source     TEXT,                        -- who saved it
+     config     TEXT,                        -- JSON: a connector's { command, args } or { url }
+     uses       INTEGER NOT NULL DEFAULT 0,  -- how many times an agent read it
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL
+   );
+   CREATE INDEX knowledge_by_kind ON knowledge (kind, updated_at DESC);`,
 ];
 
 class Invalid extends Error {}
 const fail = (msg) => { throw new Invalid(msg); };
 const slug = (s, fallback = 'agente') => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || fallback;
+/** Lowercase and without accents: to compare words. */
+const fold = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 const json = (v, fallback) => { try { return JSON.parse(v); } catch { return fallback; } };
 const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
 
@@ -348,6 +386,7 @@ export class Store {
             if (!isObj(v)) fail(t('err.prefValue', { key: k }));
             if (v.office !== undefined) next.view.office = this.getOffice(v.office)?.id || fail(t('err.unknownOffice', { office: v.office }));
             if (v.mode !== undefined) next.view.mode = ['flat', 'iso'].includes(v.mode) ? v.mode : fail(t('err.prefValue', { key: 'view.mode' }));
+            if (v.floor !== undefined) next.view.floor = FLOORS.includes(v.floor) ? v.floor : fail(t('err.prefValue', { key: 'view.floor' }));
             break;
           case 'models': {
             // a whole set ({ active, profiles }) or just which one is active ({ active })
@@ -443,6 +482,147 @@ export class Store {
       ? this.db.prepare('SELECT * FROM asks WHERE office_id = ? ORDER BY created_at DESC LIMIT ?').all(String(office), n)
       : this.db.prepare('SELECT * FROM asks ORDER BY created_at DESC LIMIT ?').all(n);
     return rows.map((r) => ({ id: r.id, office: r.office_id, agent: r.agent, agentId: r.agent_id, session: r.session, cwd: r.cwd, question: r.question, answer: r.answer, status: r.status, error: r.error, createdAt: r.created_at, updatedAt: r.updated_at }));
+  }
+
+  // ---------------------------------------------------------------- the executive floor: directives
+
+  /** Saves (or updates) a directive. d: { id, title, text, status, parts, source } */
+  saveDirective(d) {
+    const now = Date.now();
+    this.db.prepare(`INSERT INTO directives (id, title, text, status, parts, source, created_at, updated_at)
+                     VALUES ($id, $title, $text, $status, $parts, $source, $created, $now)
+                     ON CONFLICT (id) DO UPDATE SET status = excluded.status, parts = excluded.parts, updated_at = excluded.updated_at`)
+      .run({
+        $id: String(d.id), $title: String(d.title ?? ''), $text: String(d.text ?? ''), $status: String(d.status || 'running'),
+        $parts: JSON.stringify(Array.isArray(d.parts) ? d.parts : []), $source: d.source ?? null, $created: d.createdAt || now, $now: now,
+      });
+    if (Math.random() < 0.05) this.db.prepare('DELETE FROM directives WHERE id NOT IN (SELECT id FROM directives ORDER BY created_at DESC LIMIT ?)').run(DIRECTIVES_KEEP);
+  }
+
+  #directive(r) {
+    return r ? { id: r.id, title: r.title, text: r.text, status: r.status, parts: json(r.parts, []), source: r.source, createdAt: r.created_at, updatedAt: r.updated_at } : null;
+  }
+  listDirectives({ limit = 20 } = {}) {
+    return this.db.prepare('SELECT * FROM directives ORDER BY created_at DESC LIMIT ?').all(Math.min(200, Number(limit) || 20)).map((r) => this.#directive(r));
+  }
+  getDirective(id) { return this.#directive(this.db.prepare('SELECT * FROM directives WHERE id = ?').get(String(id))); }
+
+  // ---------------------------------------------------------------- the archive: the company's knowledge
+
+  #knowledge(r) {
+    if (!r) return null;
+    const k = { id: r.id, kind: r.kind, title: r.title, body: r.body, tags: json(r.tags, []) || [], office: r.office_id || null, source: r.source || null, uses: r.uses, createdAt: r.created_at, updatedAt: r.updated_at };
+    if (r.name) k.name = r.name;
+    const config = json(r.config, null);
+    if (isObj(config)) k.config = config;
+    return k;
+  }
+
+  /** Validates an entry of the archive (patched over `current` when it is an update). */
+  #cleanKnowledge(e, current = {}) {
+    const kind = String(e.kind ?? current.kind ?? 'note');
+    if (!KNOWLEDGE_KINDS.includes(kind)) fail(t('err.knowledgeKind', { kinds: KNOWLEDGE_KINDS.join(', ') }));
+    const title = String(e.title ?? e.description ?? current.title ?? '').trim().replace(/\s+/g, ' ').slice(0, 200);
+    if (!title) fail(t('err.knowledgeTitle'));
+    const body = String(e.body ?? current.body ?? '');
+    if (body.length > BODY_MAX) fail(t('err.knowledgeTooLong', { n: BODY_MAX / 1024 }));
+    let tags = e.tags !== undefined ? e.tags : current.tags ?? [];
+    if (typeof tags === 'string') tags = tags.split(/[,\s]+/);
+    if (!Array.isArray(tags)) fail(t('err.prefValue', { key: 'tags' }));
+    tags = [...new Set(tags.map((x) => slug(String(x), '')).filter(Boolean))].slice(0, 12);
+    const officeRef = e.office !== undefined ? e.office : current.office ?? null;
+    const office = officeRef ? (this.findOffice(officeRef) || fail(t('err.unknownOffice', { office: officeRef }))).id : null;
+    let name = null, config = null;
+    if (NAMED.has(kind)) {
+      name = slug(e.name ?? current.name ?? title, '');
+      if (!name) fail(t('err.knowledgeName'));
+      const clash = this.db.prepare('SELECT id FROM knowledge WHERE kind = ? AND name = ? AND id != ?').get(kind, name, String(current.id || ''));
+      if (clash) fail(t('err.knowledgeExists', { name }));
+    }
+    if (kind === 'connector') {
+      const c = isObj(e.config) ? e.config : e.command || e.url || e.args ? { command: e.command, args: e.args, url: e.url } : current.config || {};
+      const url = c.url ? String(c.url).trim() : '';
+      const command = c.command ? String(c.command).trim().slice(0, 300) : '';
+      if (url && !/^https?:\/\/[^\s]+$/i.test(url)) fail(t('err.connectorUrl'));
+      if (!url && !command) fail(t('err.connectorHow'));
+      let args = c.args ?? [];
+      if (typeof args === 'string') args = args.trim() ? args.trim().split(/\s+/) : [];
+      if (!Array.isArray(args) || args.some((x) => typeof x !== 'string')) fail(t('err.args', { name }));
+      config = url ? { url: url.slice(0, 500) } : { command, args: args.slice(0, 30).map((x) => x.slice(0, 300)) };
+    }
+    const source = e.source !== undefined ? (e.source ? String(e.source).slice(0, 60) : null) : current.source ?? null;
+    return { kind, name, title, body, tags, office, source, config };
+  }
+
+  /** Saves a new entry. With the name of a skill or connector that already exists, it updates that one. */
+  createKnowledge(input = {}) {
+    return this.#write(() => {
+      const kind = String(input.kind || 'note');
+      const named = NAMED.has(kind) && slug(input.name ?? input.title ?? '', '');
+      const same = named && this.db.prepare('SELECT id FROM knowledge WHERE kind = ? AND name = ?').get(kind, named);
+      if (same) return this.updateKnowledge(same.id, input);
+      if (this.db.prepare('SELECT count(*) AS n FROM knowledge').get().n >= KNOWLEDGE_MAX) fail(t('err.knowledgeMax', { n: KNOWLEDGE_MAX }));
+      const e = this.#cleanKnowledge(input);
+      const now = Date.now();
+      const id = `k${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+      this.db.prepare('INSERT INTO knowledge (id, kind, name, title, body, tags, office_id, source, config, uses, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)')
+        .run(id, e.kind, e.name, e.title, e.body, JSON.stringify(e.tags), e.office, e.source, e.config && JSON.stringify(e.config), now, now);
+      return { ok: true, entry: this.getKnowledge(id), created: true };
+    });
+  }
+
+  updateKnowledge(id, patch = {}) {
+    return this.#write(() => {
+      const current = this.getKnowledge(id);
+      if (!current) return { ok: false, error: t('err.unknownKnowledge'), status: 404 };
+      const e = this.#cleanKnowledge(patch, current);
+      this.db.prepare('UPDATE knowledge SET kind = ?, name = ?, title = ?, body = ?, tags = ?, office_id = ?, source = ?, config = ?, updated_at = ? WHERE id = ?')
+        .run(e.kind, e.name, e.title, e.body, JSON.stringify(e.tags), e.office, e.source, e.config && JSON.stringify(e.config), Date.now(), current.id);
+      return { ok: true, entry: this.getKnowledge(current.id), created: false };
+    });
+  }
+
+  deleteKnowledge(id) {
+    const r = this.db.prepare('DELETE FROM knowledge WHERE id = ?').run(String(id));
+    return r.changes ? { ok: true } : { ok: false, error: t('err.unknownKnowledge'), status: 404 };
+  }
+
+  getKnowledge(id) { return this.#knowledge(this.db.prepare('SELECT * FROM knowledge WHERE id = ?').get(String(id))); }
+  /** A skill or connector by its name. */
+  findKnowledge(kind, name) { return this.#knowledge(this.db.prepare('SELECT * FROM knowledge WHERE kind = ? AND name = ?').get(String(kind), slug(String(name), ''))); }
+  /** An agent read it: one more use. */
+  touchKnowledge(id) { this.db.prepare('UPDATE knowledge SET uses = uses + 1 WHERE id = ?').run(String(id)); }
+
+  /**
+   * The archive's entries, the newest first; with `q`, the ones that match it best (every word
+   * counts: in the title and the name it counts more than in the tags, and in the tags more than in
+   * the body). `office`: that office's plus the whole company's.
+   */
+  listKnowledge({ kind, q, office, limit = 50 } = {}) {
+    const n = Math.min(500, Math.max(1, Number(limit) || 50));
+    let rows = kind ? this.db.prepare('SELECT * FROM knowledge WHERE kind = ? ORDER BY updated_at DESC').all(String(kind)) : this.db.prepare('SELECT * FROM knowledge ORDER BY updated_at DESC').all();
+    if (office) rows = rows.filter((r) => !r.office_id || r.office_id === office);
+    const words = fold(q).split(/[^a-z0-9]+/).filter((w) => w.length > 1);
+    if (!words.length) return rows.slice(0, n).map((r) => this.#knowledge(r));
+    const scored = [];
+    for (const r of rows) {
+      const head = fold(`${r.title} ${r.name || ''}`), tags = fold(r.tags || ''), body = fold(r.body);
+      let score = 0, hits = 0;
+      for (const w of words) {
+        const s = (head.includes(w) ? 6 : 0) + (tags.includes(w) ? 3 : 0) + (body.includes(w) ? 1 : 0);
+        if (s) hits++;
+        score += s;
+      }
+      if (hits) scored.push([score * (hits / words.length), r]);
+    }
+    return scored.sort((a, b) => b[0] - a[0] || b[1].updated_at - a[1].updated_at).slice(0, n).map(([, r]) => this.#knowledge(r));
+  }
+
+  /** How many entries of each kind the archive keeps. */
+  knowledgeCounts() {
+    const out = Object.fromEntries(KNOWLEDGE_KINDS.map((k) => [k, 0]));
+    for (const r of this.db.prepare('SELECT kind, count(*) AS n FROM knowledge GROUP BY kind').all()) out[r.kind] = r.n;
+    return out;
   }
 
   // ---------------------------------------------------------------- migration from config.json

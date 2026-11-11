@@ -69,6 +69,7 @@ En las dos vistas (y en el juego de la terminal):
 | La terminal | `dev-team-office task "Agrega paginación" --agent pi`, o `dev-team-office prompt <id> "…" --pipeline <entrada>` |
 | Tu agente | Directo en su sesión: la oficina lo ve igual |
 | Otro agente (MCP) | La herramienta `send_task` |
+| La dirección | Una **directiva**: una orden para varias oficinas o proyectos a la vez (el tablero de ese piso, o `t` ahí; `send_directive` por MCP). Ver «Dos pisos más» en el README |
 
 Cada encargo va con su alcance delante (una línea que empieza con 📁): el agente trabaja sólo dentro de la carpeta de su proyecto y sólo en lo que se pidió. Esa línea no es parte del pedido: el título de la pizarra es sólo lo que escribiste. A OpenCode además le llega como regla de verdad (los archivos fuera de la carpeta se le niegan).
 
@@ -158,4 +159,4 @@ Tu respuesta se aprieta en el pane del agente, como si estuvieras ahí: las flec
 | Monitor | `o` navegador · `g` juego · `←→` oficina · `r` responder la pregunta del agente · `1`–`9`/`l` los logs de un servicio · `q` salir |
 | Bitácora | `g` juego · `o` navegador · `h` ayuda · `q` cerrar |
 | Juego (terminal) | `t` encargo · clic en la pizarra: sus tareas (con tickets) o un encargo · `c` ajustes · `o` oficina · `a` actividad · `tab`/flechas elegir · `m` mensaje · `b` btw · `s` saludar · `x` cancelar · `l` servicios (o clic en el rack) · `d`/`p` demos · `r` reiniciar · `q` volver |
-| Juego (navegador) | `t` encargo · `c` ajustes · `o` oficina · `a` terminal de actividad · `f` pantalla completa · `v` vista frontal o cenital · `l` servicios (o clic en el rack) · `r` responder la pregunta del agente (o el chip ✋) · `esc` cerrar |
+| Juego (navegador) | `t` encargo (en la dirección, una directiva; en el archivo, una entrada nueva) · `c` ajustes · `o` piso siguiente · `RePág`/`AvPág` subir o bajar de piso · `a` terminal de actividad · `f` pantalla completa · `v` vista frontal o cenital · `l` servicios (o clic en el rack) · `r` responder la pregunta del agente (o el chip ✋) · `esc` cerrar |

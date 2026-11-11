@@ -7,6 +7,8 @@
 // time, season and weather (sky.js). In the top-down view the office is the top floor of a glass
 // tower, with that same landscape behind it. On top of the scene goes a subtle lighting pass
 // (lamps, neon, monitors, the TV, the fire and the glow of the dreams).
+// The building has two more floors every office shares (floors.js): the executive one on top and
+// the archive in the basement; the game draws the floor being watched with this same toolkit.
 
 import {
   createSim, W, H, SPOT, PLANTS, STATUS_ICON, PHASE_COLOR, phaseInfo, onBoard, tvChannel,
@@ -16,6 +18,7 @@ import {
 import { outdoor, lightning, colorHex, weatherIcon } from './sky.js';
 import { isoCamera, apply, unapply, scaled, BACK, WALL_H } from './iso.js';
 import { t } from './i18n.js';
+import { createFloors, drawFloor, floorHit } from './floors.js';
 export { TEAM, PHASES, phaseInfo } from './sim.js';
 
 const P = 3; // size of a sprite "pixel"
@@ -31,7 +34,7 @@ const hslRgb = (h, s, l) => {
  * @param now   () => Date: the instant (daylight, clock, lunch). The real one by default.
  * @param zone  the office's time zone (null: the system's); changed with sim.setZone
  */
-export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHover, now: clockNow = () => new Date(), zone = null, view = 'flat' } = {}) {
+export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHover, onFloorClick, now: clockNow = () => new Date(), zone = null, view = 'flat' } = {}) {
   const ctx = canvas.getContext('2d');
   let iso = view !== 'flat';
   const cam = isoCamera();
@@ -42,6 +45,10 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   let hoverBoard = false;
   let hoverRack = false;
   let services = []; // the ones left running in the background: a light each on the rack
+  // the floor being watched: an office ('office'), the executive one or the archive (floors.js)
+  let floor = 'office';
+  const floors = createFloors();
+  let floorHover = null, floorSel = null;
   let last = performance.now();
   let scale = 1;
 
@@ -1467,14 +1474,38 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     drawBanner(now);
   }
 
+  // What floors.js draws the shared floors with: the same people, window and volumes as the offices.
+  const G = {
+    ctx, R, ID, cam, box, poly, FONT, EMOJI, fit, drawPerson, drawBubble, drawPlumbob,
+    get iso() { return iso; },
+    use,
+    outdoorAt: (opts, now, light) => drawOutdoor(outdoor({ date: sim.date(), weather: sim.weather, light, now, ...opts })),
+    isoBackdrop: (now, light, kind) => (kind === 'archive' ? drawUnderground() : drawIsoBackdrop(now, light)),
+  };
+  /** Behind the archive, in the top-down view: the ground it is dug into. */
+  function drawUnderground() {
+    use(ID);
+    const bands = ['#3b2f2a', '#4a3a31', '#3f3129', '#54443a', '#3a2e27'];
+    for (let i = 0, y = 0; y < H; i++, y += 70) R(0, y, W, 70, bands[i % bands.length]);
+    for (let i = 0; i < 60; i++) R((hash(i) * W) | 0, (hash(i + 99) * H) | 0, 4 + ((hash(i + 7) * 8) | 0), 3, '#6b5a4e');
+  }
+
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     const t = now / 1000;
     sim.step(dt, now);
+    floors.step(dt, now);
     const light = daylight(sim.date(), sim.weather);
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     ctx.imageSmoothingEnabled = false;
+    if (floor !== 'office') {
+      drawFloor(G, floors[floor], now, light, { hover: floorHover, selected: floorSel });
+      use(ID);
+      drawVignette();
+      requestAnimationFrame(frame);
+      return;
+    }
     if (iso) {
       frameIso(now, t, light);
       requestAnimationFrame(frame);
@@ -1535,6 +1566,12 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   };
   canvas.addEventListener('mousemove', (e) => {
     const [x, y] = toWorld(e);
+    if (floor !== 'office') {
+      const hit = floorHit(floors[floor], x, y, { iso, cam });
+      floorHover = hit?.person || null;
+      canvas.style.cursor = hit ? 'pointer' : 'default';
+      return;
+    }
     const was = hover;
     hover = agentAt(x, y);
     hoverBoard = !hover && overBoard(x, y);
@@ -1545,6 +1582,13 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   canvas.addEventListener('mouseleave', () => { hover = null; hoverBoard = false; hoverRack = false; });
   canvas.addEventListener('click', (e) => {
     const [x, y] = toWorld(e);
+    if (floor !== 'office') {
+      const hit = floorHit(floors[floor], x, y, { iso, cam });
+      floorSel = hit?.person || null;
+      if (hit?.person) floors[floor].intro(hit.person);
+      else if (hit?.what) onFloorClick?.(floor, hit.what);
+      return;
+    }
     const who = agentAt(x, y);
     if (!who && overBoard(x, y)) return onBoardClick?.();
     if (!who && onRackClick && overRack(x, y)) return onRackClick();
@@ -1564,5 +1608,10 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     setView(v) { iso = v !== 'flat'; },
     /** The services left running in the background (server/services.js): the rack shows them. */
     setServices(list) { services = Array.isArray(list) ? list : []; },
+    /** The two shared floors (floors.js): what they show, what happens on them and who presides. */
+    floors,
+    /** 'office' (the office being watched), 'exec' (the executive floor) or 'archive'. */
+    get floor() { return floor; },
+    setFloor(f) { floor = ['exec', 'archive'].includes(f) ? f : 'office'; floorHover = null; floorSel = null; },
   };
 }

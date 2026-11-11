@@ -17,6 +17,7 @@ import { detectHarness, harnessId, projectRoot, HARNESS_IDS, AGENT_ROLE_IDS, ROL
 import { DEFAULT_TEAM } from '../public/sim.js';
 import { realDir } from './paths.js';
 import { spawnOffice } from './lifecycle.js';
+import { KNOWLEDGE_KINDS } from './store.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
@@ -25,6 +26,7 @@ const KINDS = ['task', 'phase', 'phase_end', 'todos', 'waiting', 'error', 'turn_
 const INSTRUCTIONS = `Dev Team Office is a live pixel-art office that shows what coding agents do: each character is a role of a dev team. The product owner (po) is the user, who gives the orders; you and your subagents are the rest: analyst, manager, tl, qa, backend, frontend, designer.
 To add yourself and this project to the office in one step, call join_office (or the user runs the \`join\` prompt): it starts the office if needed, registers the project and returns which character plays each subagent.
 Use these tools to: register the current project (register_project) so the office can send it work; see what a project's harness brings (detect_project); tell the office which role and phase you are in while you work (report_activity: task → phase … → done); send a prompt to another registered agent (send_task); and open herdr panes for side activities (open_pane).
+The company has two shared floors. The archive keeps what the company knows: before starting a task, search it (search_knowledge, then get_knowledge for the whole entry) for decisions, docs, skills and connectors that apply; when you settle something worth keeping (a decision, a convention, how something works), save it (save_knowledge). The executive floor gives orders that cover several offices or projects at once (send_directive, list_directives); when a brief starts with 🏛 it is your part of one: do only this project's part.
 If the office is not running, office_start opens it; office_status gives its URL. Reporting is best effort: never stop or retry your real work because the office is offline.`;
 
 /** The connecting client's harness, from the name it sends in `initialize` (clientInfo.name). */
@@ -238,6 +240,79 @@ const TOOLS = [
       type: 'object',
       properties: { team: { type: 'string' }, harness: { type: 'string', enum: HARNESS_IDS }, project: { type: 'string', description: 'Project folder for project scope' } },
       required: ['team', 'harness'],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, openWorldHint: false },
+  },
+  {
+    name: 'send_directive',
+    title: 'Send a directive',
+    description: "The executive floor: one order for several offices or projects at once (\"every API exposes /health\"). The office sends each project's agent a brief with its part (to an open session or a new one) and follows how each part goes; when all end, its minutes go to the archive. Pick the projects (ids or paths, see list_projects) and/or whole offices (ids or names, \"all\" for every registered project).",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'What every project must do' },
+        title: { type: 'string', description: 'Short title (defaults to the first line)' },
+        offices: { type: 'array', items: { type: 'string' }, description: 'Offices (ids or names) whose registered projects all get it, or ["all"]' },
+        projects: { type: 'array', items: { type: 'string' }, description: 'Registered project ids or full paths' },
+      },
+      required: ['text'],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, openWorldHint: true },
+  },
+  {
+    name: 'list_directives',
+    title: 'List directives',
+    description: 'The latest directives of the executive floor, with how each project is doing, and what each office is doing right now.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  },
+  {
+    name: 'search_knowledge',
+    title: 'Search the archive',
+    description: 'The company archive: notes, decisions, docs, minutes (of directives), skills and connectors (MCP servers to outside information), shared by every office. Search it before starting a task for what already applies. Returns the best matches with an excerpt; get_knowledge returns an entry whole.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Words to look for (empty: the newest entries)' },
+        kind: { type: 'string', enum: KNOWLEDGE_KINDS },
+        limit: { type: 'number', description: 'At most this many (default 10)' },
+      },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  },
+  {
+    name: 'get_knowledge',
+    title: 'Read an archive entry',
+    description: 'An entry of the archive, whole: by its id (from search_knowledge), or a skill or connector by its name.',
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string' }, name: { type: 'string', description: "A skill's or connector's name" }, kind: { type: 'string', enum: ['skill', 'connector'] } },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  },
+  {
+    name: 'save_knowledge',
+    title: 'Save to the archive',
+    description: 'Saves what the company should remember: a note, a decision, a doc, a skill (name + title: what it does and when to use it + body: its instructions in Markdown) or a connector (name + title: what information it gives + command/args for a local MCP server or url for a remote one + body: how to set it up; never write a secret). A skill or connector whose name already exists is updated; any entry is updated by passing its id. Skills and connectors are installed in projects from the archive floor.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', enum: KNOWLEDGE_KINDS.filter((k) => k !== 'minute') },
+        title: { type: 'string' },
+        body: { type: 'string', description: 'Markdown' },
+        name: { type: 'string', description: 'For a skill or connector: lowercase with dashes' },
+        tags: { type: 'array', items: { type: 'string' } },
+        office: { type: 'string', description: 'Only for this office (id or name); default: the whole company' },
+        command: { type: 'string', description: "Connector: the local MCP server's command" },
+        args: { type: 'array', items: { type: 'string' }, description: "Connector: the command's arguments" },
+        url: { type: 'string', description: "Connector: a remote MCP server's URL" },
+        id: { type: 'string', description: 'Update this entry' },
+      },
+      required: ['kind', 'title'],
       additionalProperties: false,
     },
     annotations: { readOnlyHint: false, openWorldHint: false },
@@ -503,6 +578,76 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
         : await herdr.launchCommand({ command, cwd: dir, direction, env: paneEnv, title });
       const reported = await api('/v1/panes', { pane: out.pane, parent: herdr.pane, role, title: title || command || harness, command: harness ? undefined : command, agent: harness, office, cwd: dir });
       return { text: `Opened pane ${out.pane}${reported ? ` (office ${reported.office}, ${reported.role})` : ' (the office is offline: it will not show in the game)'}`, data: { pane: out.pane, office: reported?.office || null, role: reported?.role || null } };
+    },
+
+    async send_directive({ text, title, offices = [], projects = [] } = {}) {
+      need(String(text || '').trim(), 'text is required');
+      need(offices.length || projects.length, 'pick projects (list_projects) and/or offices ("all" for every one)');
+      need(await running(), 'the office is not running: start it with office_start');
+      const all = await listAgents();
+      const targets = projects.map((ref) => {
+        if (!/[/~]/.test(ref)) return ref;
+        const dir = where(ref);
+        return need(all.find((a) => realDir(a.path) === dir), `no registered project at ${dir}: use register_project first`).id;
+      });
+      const d = okOr(await api('/v1/directives', { text, ...(title ? { title } : {}), offices, targets, from: `MCP · ${client.name || 'agent'}` })).directive;
+      const line = (p) => `  ${p.name} (${p.office}): ${p.status}${p.detail ? ` — ${p.detail}` : ''}`;
+      return { text: `🏛 Directive ${d.id} "${d.title}" sent to ${d.total} project(s):\n${d.parts.map(line).join('\n')}`, data: d };
+    },
+
+    async list_directives() {
+      need(await running(), 'the office is not running: start it with office_start');
+      const out = okOr(await api('/v1/directives'));
+      const list = out.directives || [];
+      const offices = (out.overview || []).map((o) => `${o.name}: ${o.working} working, ${o.waiting} waiting, ${o.tasks} brief(s)`).join(' · ');
+      return { text: `${list.length ? list.map((d) => `${d.id} "${d.title}": ${d.status} (${d.done}/${d.total})`).join('\n') : 'No directives yet.'}${offices ? `\nOffices — ${offices}` : ''}`, data: out };
+    },
+
+    async search_knowledge({ query = '', kind, limit = 10 } = {}) {
+      const n = Math.min(50, Math.max(1, Number(limit) || 10));
+      let entries;
+      if (await running()) {
+        const qs = new URLSearchParams({ limit: String(n), from: 'agent', ...(query ? { q: query } : {}), ...(kind ? { kind } : {}) });
+        entries = okOr(await api(`/v1/knowledge?${qs}`)).entries || [];
+      } else {
+        const { Archive } = await import('./archive.js');
+        entries = local().listKnowledge({ q: query, kind, limit: n }).map(Archive.summary);
+      }
+      const line = (e) => `${e.id} [${e.kind}] ${e.name ? `${e.name} — ` : ''}${e.title}${e.tags?.length ? ` #${e.tags.join(' #')}` : ''}${e.excerpt ? `\n    ${e.excerpt}` : ''}`;
+      return { text: entries.length ? entries.map(line).join('\n') : `Nothing in the archive${query ? ` for "${query}"` : ''}.`, data: { entries } };
+    },
+
+    async get_knowledge({ id, name, kind } = {}) {
+      need(id || name, 'pass an id (from search_knowledge) or a skill/connector name');
+      const live = await running();
+      let e;
+      if (!id) {
+        const kinds = kind ? [kind] : ['skill', 'connector'];
+        if (live) {
+          for (const k of kinds) {
+            const qs = new URLSearchParams({ kind: k, q: name, limit: '50' });
+            const hit = ((await api(`/v1/knowledge?${qs}`))?.entries || []).find((x) => x.name === String(name).toLowerCase());
+            if (hit) { id = hit.id; break; }
+          }
+        } else e = kinds.map((k) => local().findKnowledge(k, name)).find(Boolean);
+        need(id || e, `no skill or connector named "${name}" in the archive`);
+      }
+      if (!e) e = live ? okOr(await api(`/v1/knowledge/${encodeURIComponent(id)}?from=agent`)).entry : local().getKnowledge(id);
+      need(e, `no entry ${id} in the archive`);
+      if (!live) local().touchKnowledge(e.id);
+      const how = e.config ? `\nConnector: ${e.config.url || [e.config.command, ...(e.config.args || [])].join(' ')}` : '';
+      return { text: `[${e.kind}] ${e.name ? `${e.name} — ` : ''}${e.title}${how}\n\n${e.body || ''}`, data: e };
+    },
+
+    async save_knowledge({ id, ...input } = {}) {
+      need(input.kind && String(input.title || '').trim(), 'kind and title are required');
+      const body = { ...input, ...(input.office ? { office: await findOffice(input.office) } : {}), source: harnessOfClient(client.name) || client.name || 'agent' };
+      const live = await running();
+      const out = live
+        ? await api(id ? `/v1/knowledge/${encodeURIComponent(id)}` : '/v1/knowledge', body, id ? 'PUT' : 'POST')
+        : id ? local().updateKnowledge(id, body) : local().createKnowledge(body);
+      const e = okOr(out).entry;
+      return { text: `📚 ${out.created ? 'Saved' : 'Updated'} in the archive: ${e.id} [${e.kind}] ${e.name ? `${e.name} — ` : ''}${e.title}${live ? '' : ' · the office is offline: it shows up when it opens'}`, data: { id: e.id, kind: e.kind, name: e.name, title: e.title, created: !!out.created } };
     },
 
     async list_teams() {
