@@ -371,13 +371,13 @@ function nextOffice() { moveFloor(1); }
 
 // ---------------------------------------------------------------- the building's floors
 
-const directivesUi = createDirectivesUi({ getDirectives: () => directives, getOffices: () => offices, hhmm: (ts) => hhmm(ts) });
+const directivesUi = createDirectivesUi({ getDirectives: () => directives, getOffices: () => offices, getOverview: () => overview, hhmm: (ts) => hhmm(ts) });
 const archiveUi = createArchiveUi({ getOffices: () => offices, hhmm: (ts) => `${new Date(ts).toLocaleDateString(getLanguage())} ${hhmm(ts)}` });
 const FLOOR_VALUE = { exec: '@exec', archive: '@archive' }; // in the selector, next to the offices' ids
 
 function onFloors({ directives: d, overview: o, archive: a } = {}) {
   if (d) { directives = d; directivesUi.refresh(); }
-  if (o) overview = o;
+  if (o) { overview = o; directivesUi.refresh(); }
   if (a) archiveUi.refresh();
   game.floors.setData({ directives: d, overview: o, archive: a });
 }

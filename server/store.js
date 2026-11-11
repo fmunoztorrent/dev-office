@@ -29,7 +29,10 @@ const HARNESS_IDS = ['claude-code', 'opencode', 'pi', 'codex'];
 const ASKS_KEEP = 500;
 const AGENTS_MAX = 100;
 const OFFICES_MAX = 30;
-const INSTRUCTIONS_MAX = 4000; // a department's or a project's instructions
+const INSTRUCTIONS_MAX = 4000; // a department's or a project's instructions (and the company's standards)
+/** How much a department works on its own: guided (the analyst reviews, the agent asks when in doubt),
+ * balanced (it reviews, the agent works to the end), autonomous (no review). null: the company's. */
+export const AUTONOMY_LEVELS = ['guided', 'balanced', 'autonomous'];
 const PROMPTS_KEEP = 2000;
 const DIRECTIVES_KEEP = 200;
 const KNOWLEDGE_MAX = 5000;
@@ -56,6 +59,10 @@ export const DEFAULT_PREFS = {
   // how a brief is worked: the analyst first checks it has everything (and asks you only what is missing),
   // and the agent works on its own to the end (it asks only if it gets stuck)
   autonomy: { clarify: true, autonomous: true },
+  // the company's standards (the CTO's): on top of every brief of every department, before its own
+  standards: '',
+  // how many briefs a department takes at once from a directive (the rest wait their turn)
+  capacity: 3,
   // the archive as a RAG: its chunks go on top of every brief (push), and optionally they get an
   // embedding for the semantic search (off | ollama | openai, with its model and URL)
   archive: { push: true, embeddings: 'off', model: '', url: '' },
@@ -208,6 +215,8 @@ const MIGRATIONS = [
      last_at   INTEGER NOT NULL,
      resolved  INTEGER NOT NULL DEFAULT 0
    );`,
+  // 6 → 7: each department's autonomy (null: the company's)
+  `ALTER TABLE offices ADD COLUMN autonomy TEXT;`,
 ];
 
 class Invalid extends Error {}
@@ -253,7 +262,7 @@ export class Store {
   // ---------------------------------------------------------------- oficinas
 
   #office(r) {
-    return r ? { id: r.id, name: r.name, timezone: r.timezone || null, location: r.location || null, instructions: r.instructions || '', position: r.position, createdAt: r.created_at, updatedAt: r.updated_at } : null;
+    return r ? { id: r.id, name: r.name, timezone: r.timezone || null, location: r.location || null, instructions: r.instructions || '', autonomy: AUTONOMY_LEVELS.includes(r.autonomy) ? r.autonomy : null, position: r.position, createdAt: r.created_at, updatedAt: r.updated_at } : null;
   }
   listOffices() { return this.db.prepare('SELECT * FROM offices ORDER BY position, created_at').all().map((r) => this.#office(r)); }
   getOffice(id) { return this.#office(this.db.prepare('SELECT * FROM offices WHERE id = ?').get(String(id))); }
@@ -273,7 +282,8 @@ export class Store {
     const clash = name && this.listOffices().find((x) => x.id !== current.id && slug(x.name, '') === slug(name, '-'));
     if (clash) fail(t('err.officeExists'));
     const instructions = o.instructions !== undefined ? String(o.instructions ?? '').trim().slice(0, INSTRUCTIONS_MAX) : current.instructions ?? '';
-    return { name, timezone: tz, location, instructions };
+    const autonomy = o.autonomy !== undefined ? (o.autonomy ? (AUTONOMY_LEVELS.includes(o.autonomy) ? o.autonomy : fail(t('err.autonomy', { levels: AUTONOMY_LEVELS.join(', ') }))) : null) : current.autonomy ?? null;
+    return { name, timezone: tz, location, instructions, autonomy };
   }
 
   createOffice(input = {}) {
@@ -284,8 +294,8 @@ export class Store {
       for (let i = 2; this.getOffice(id); i++) id = `${slug(o.name, 'oficina')}-${i}`;
       const now = Date.now();
       const position = (this.db.prepare('SELECT max(position) AS p FROM offices').get().p ?? 0) + 1;
-      this.db.prepare('INSERT INTO offices (id, name, timezone, location, instructions, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-        .run(id, o.name, o.timezone, o.location, o.instructions || null, position, now, now);
+      this.db.prepare('INSERT INTO offices (id, name, timezone, location, instructions, autonomy, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(id, o.name, o.timezone, o.location, o.instructions || null, o.autonomy, position, now, now);
       return { ok: true, office: this.getOffice(id) };
     });
   }
@@ -295,7 +305,7 @@ export class Store {
       const current = this.getOffice(id);
       if (!current) return { ok: false, error: t('err.unknownOffice', { office: id }), status: 404 };
       const o = this.#cleanOffice(patch, current);
-      this.db.prepare('UPDATE offices SET name = ?, timezone = ?, location = ?, instructions = ?, updated_at = ? WHERE id = ?').run(o.name, o.timezone, o.location, o.instructions || null, Date.now(), current.id);
+      this.db.prepare('UPDATE offices SET name = ?, timezone = ?, location = ?, instructions = ?, autonomy = ?, updated_at = ? WHERE id = ?').run(o.name, o.timezone, o.location, o.instructions || null, o.autonomy, Date.now(), current.id);
       return { ok: true, office: this.getOffice(current.id) };
     });
   }
@@ -440,6 +450,16 @@ export class Store {
             next.city = String(v ?? '').trim().slice(0, 80) || null;
             break;
           case 'weather': next.weather = bool(k, v); break;
+          case 'standards':
+            if (v !== null && typeof v !== 'string') fail(t('err.prefValue', { key: k }));
+            next.standards = String(v ?? '').trim().slice(0, INSTRUCTIONS_MAX);
+            break;
+          case 'capacity': {
+            const n = Number(v);
+            if (!Number.isInteger(n) || n < 1 || n > 20) fail(t('err.prefValue', { key: k }));
+            next.capacity = n;
+            break;
+          }
           case 'herdr':
             if (!isObj(v)) fail(t('err.prefValue', { key: k }));
             for (const [hk, hv] of Object.entries(v)) {
@@ -553,6 +573,30 @@ export class Store {
         $session: p.session ?? null, $mode: String(p.mode || 'session'), $cwd: p.cwd ?? null, $status: String(p.status || 'new'), $detail: p.detail ?? null, $now: now,
       });
     if (Math.random() < 0.02) this.db.prepare('DELETE FROM prompts WHERE id NOT IN (SELECT id FROM prompts ORDER BY created_at DESC LIMIT ?)').run(PROMPTS_KEEP);
+  }
+
+  /**
+   * How briefs flowed per department since a time (from the history): { [office]: { briefs, done,
+   * failed, leadMin } }; leadMin, the median minutes from sent to done. A brief belongs to its
+   * registered agent's department, or to the one of the project its folder is in.
+   */
+  flowByOffice({ since = Date.now() - 7 * 86400_000 } = {}) {
+    const agents = this.listAgents();
+    const officeOf = (r) => agents.find((a) => a.id === r.agent_id)?.office
+      || (r.cwd ? agents.filter((a) => insideDir(r.cwd, a.path)).sort((a, b) => b.path.length - a.path.length)[0]?.office : null) || MAIN_OFFICE;
+    const out = {};
+    for (const r of this.db.prepare('SELECT agent_id, cwd, status, created_at, updated_at FROM prompts WHERE created_at >= ?').all(since)) {
+      const o = (out[officeOf(r)] ||= { briefs: 0, done: 0, failed: 0, leads: [] });
+      o.briefs++;
+      if (r.status === 'done') { o.done++; o.leads.push((r.updated_at - r.created_at) / 60_000); }
+      if (r.status === 'failed') o.failed++;
+    }
+    for (const o of Object.values(out)) {
+      const l = o.leads.sort((a, b) => a - b);
+      o.leadMin = l.length ? Math.round(l.length % 2 ? l[(l.length - 1) / 2] : (l[l.length / 2 - 1] + l[l.length / 2]) / 2) : null;
+      delete o.leads;
+    }
+    return out;
   }
 
   listPrompts({ agentId, limit = 50 } = {}) {

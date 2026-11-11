@@ -362,3 +362,74 @@ test('la salud de cada departamento en dirección: errores de la última hora, e
     assert.deepEqual([main().context, main().health], [0.9, 'warn']);
   } finally { await server.close(); }
 });
+
+test('operaciones no satura un departamento: toma hasta `capacity` encargos abiertos; el resto espera turno y sale cuando uno termina', () => {
+  const store = openStore(':memory:');
+  store.setPrefs({ capacity: 2 });
+  store.createOffice({ name: 'Pagos' });
+  const ids = ['a', 'b', 'c', 'd'].map((n) => store.createAgent({ path: tmp(), harness: 'claude-code', name: n, office: 'Pagos' }).agent.id);
+  const hub = Object.assign(new EventEmitter(), { tasks: new Map(), cancel() { return { ok: true }; } });
+  // the department already had a brief open
+  hub.tasks.set('t0', { id: 't0', status: 'running', office: 'pagos' });
+  let n = 0;
+  const registry = { run(msg) { const task = { id: `t${++n}`, status: 'running', office: 'pagos', target: msg.target }; hub.tasks.set(task.id, task); hub.emit('change'); return { ok: true, task }; } };
+  const desk = new DirectiveDesk({ store, registry, hub, archive: null, company: null });
+  const d = desk.create({ text: 'Logger nuevo en todos lados', offices: ['Pagos'] }).directive;
+  assert.deepEqual(d.parts.map((p) => p.status), ['running', 'waiting', 'waiting', 'waiting'], 'una cabe (ya tenía uno abierto)');
+  assert.match(d.parts[1].detail, /^el departamento tiene 2 encargo\(s\) abiertos$/);
+  // one ends: the next one goes
+  hub.tasks.get('t0').status = 'done';
+  hub.emit('change');
+  assert.deepEqual(desk.get(d.id).parts.map((p) => p.status), ['running', 'running', 'waiting', 'waiting']);
+  hub.tasks.get('t1').status = 'done';
+  hub.tasks.get('t2').status = 'done';
+  hub.emit('change');
+  assert.deepEqual(desk.get(d.id).parts.map((p) => p.status), ['done', 'done', 'running', 'running']);
+  assert.equal(desk.get(d.id).status, 'running');
+  // cancelling also cancels the ones waiting
+  const two = desk.create({ text: 'Otra', targets: [ids[0]] }).directive;
+  assert.equal(two.parts[0].status, 'waiting');
+  assert.equal(desk.cancel(two.id).directive.parts[0].status, 'cancelled');
+});
+
+test('los estándares de la empresa (del CTO) y la autonomía de cada departamento van con cada encargo', async () => {
+  const { guideFor, guideText, autonomyOf, unguided } = await import('../server/guides.js');
+  const store = openStore(':memory:');
+  const dir = tmp();
+  store.createOffice({ name: 'Pagos', instructions: 'Montos en centavos.' });
+  store.createAgent({ path: dir, harness: 'pi', name: 'api', office: 'Pagos' });
+  store.setPrefs({ standards: 'Commits convencionales.\nCada endpoint en OpenAPI.' });
+  const g = guideFor(store, dir);
+  assert.equal(g.office, 'pagos');
+  assert.equal(guideText(g), '📋 Estándares de la empresa (los del CTO):\n│ Commits convencionales.\n│ Cada endpoint en OpenAPI.\n📋 Indicaciones del departamento «Pagos»:\n│ Montos en centavos.');
+  assert.equal(unguided(`📁 x\n${guideText(g)}\n\nLa tarea`), 'La tarea');
+  // autonomy: the company's, unless the department has its own
+  assert.deepEqual(autonomyOf(store, 'pagos'), { clarify: true, autonomous: true, level: null });
+  store.setPrefs({ autonomy: { clarify: false } });
+  assert.deepEqual(autonomyOf(store, 'pagos'), { clarify: false, autonomous: true, level: null });
+  assert.equal(store.updateOffice('pagos', { autonomy: 'guided' }).office.autonomy, 'guided');
+  assert.deepEqual(autonomyOf(store, 'pagos'), { clarify: true, autonomous: false, level: 'guided' });
+  assert.deepEqual(autonomyOf(store, 'main'), { clarify: false, autonomous: true, level: null });
+  assert.match(store.updateOffice('pagos', { autonomy: 'loca' }).error, /la autonomía debe ser una de: guided, balanced, autonomous/);
+  assert.equal(store.updateOffice('pagos', { autonomy: '' }).office.autonomy, null, 'vacía: la de la empresa');
+  assert.match(store.setPrefs({ capacity: 0 }).error, /capacity/);
+  assert.equal(store.setPrefs({ capacity: 5 }).prefs?.capacity ?? store.getPrefs().capacity, 5);
+});
+
+test('el flujo de cada departamento en 7 días: encargos, hechos, fallidos y la mediana de lo que tardan', () => {
+  const store = openStore(':memory:');
+  store.createOffice({ name: 'Pagos' });
+  const dir = tmp();
+  const api = store.createAgent({ path: dir, harness: 'pi', name: 'api', office: 'Pagos' }).agent;
+  const at = (id, min, status, extra = {}) => {
+    store.savePrompt({ id, agent: 'pi', text: 'x', status, ...extra });
+    store.db.prepare('UPDATE prompts SET created_at = ?, updated_at = ? WHERE id = ?').run(Date.now() - 3600_000, Date.now() - 3600_000 + min * 60_000, id);
+  };
+  at('p1', 10, 'done', { agentId: api.id });
+  at('p2', 30, 'done', { cwd: path.join(dir, 'src') }); // by its folder
+  at('p3', 5, 'failed', { agentId: api.id });
+  at('p4', 1, 'done'); // nobody's: the main office
+  const flow = store.flowByOffice();
+  assert.deepEqual(flow.pagos, { briefs: 3, done: 2, failed: 1, leadMin: 20 });
+  assert.deepEqual(flow.main, { briefs: 1, done: 1, failed: 0, leadMin: 1 });
+});

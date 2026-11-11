@@ -54,10 +54,10 @@ La pregunta la contesta el agente de turno de la oficina (la sesión más recien
 
 | Método | Ruta | Cuerpo | Respuesta |
 |---|---|---|---|
-| `GET` | `/v1/offices` | | `{ ok, offices, view }`: cada una con `{ id, name, custom, timezone, ownTimezone, location, instructions, place, country, city, agents, sessions }`; `view`, la que se está mirando |
-| `POST` | `/v1/offices` | `{ name, timezone?, location?, instructions? }` | `201 { ok, office }`; operaciones, en la dirección, toma nota (`{ type: "floor", event: { floor: "exec", kind: "department" } }`) |
+| `GET` | `/v1/offices` | | `{ ok, offices, view }`: cada una con `{ id, name, custom, timezone, ownTimezone, location, instructions, autonomy, place, country, city, agents, sessions }`; `view`, la que se está mirando |
+| `POST` | `/v1/offices` | `{ name, timezone?, location?, instructions?, autonomy? }` (`autonomy`: `guided` \| `balanced` \| `autonomous`; vacía o `null`: la de la empresa) | `201 { ok, office }`; operaciones, en la dirección, toma nota (`{ type: "floor", event: { floor: "exec", kind: "department" } }`) |
 | `GET` | `/v1/offices/<id>` | | `{ ok, office }` |
-| `PUT` | `/v1/offices/<id>` | `{ name?, timezone?, location?, instructions? }` (`null`: la de la empresa / la de la zona; `""` borra las indicaciones) | `{ ok, office }` |
+| `PUT` | `/v1/offices/<id>` | `{ name?, timezone?, location?, instructions?, autonomy? }` (`null`: la de la empresa / la de la zona; `""` borra las indicaciones) | `{ ok, office }` |
 | `DELETE` | `/v1/offices/<id>` | | `{ ok }`; sus agentes pasan a la principal (`main`, que no se elimina) |
 | `POST` | `/v1/offices/<id>/standup` | | La daily ahora: `{ ok, office, date, lines: [{ role, text }], waiting, open, empty, entry }`. La bitácora de la oficina recibe un evento `standup` (`{ kind: "standup", role: "manager", text, lines, waiting, open }`, el juego reúne al equipo en la mesa) y, si pasó algo en las últimas 24 horas, su acta va al archivo (`entry`: tipo `minute`, etiqueta `daily`). También ocurre sola una vez al día, desde las 9:30 en la zona horaria de la oficina. Por WebSocket: `{ type: "standup" }` (la oficina que se está mirando) |
 
@@ -79,7 +79,7 @@ La dirección y el archivo sirven a todas las oficinas (no dependen de la oficin
 
 | Método | Ruta | Cuerpo | Respuesta |
 |---|---|---|---|
-| `GET` | `/v1/directives?limit=` | | `{ ok, directives, overview }`: cada directiva `{ id, title, text, status, source, done, total, parts: [{ target, name, harness, office, kind: task \| run, ref, status, detail }], createdAt, updatedAt }`; `overview`, cada oficina `{ id, name, agents, working, waiting, tasks, title, lastAt, errors, context, waitMin, health }`: `errors` de la última hora (un test rojo en TDD no es error), `context` lo que les queda a sus agentes (el más bajo, 0–1; `null` si ninguno lo informa), `waitMin` cuánto hace que te espera, `health` `ok` \| `warn` (te espera, 3+ errores o menos de 25 % de contexto) \| `bad` (te espera hace 15+ min, 10+ errores o menos de 10 % de contexto) |
+| `GET` | `/v1/directives?limit=` | | `{ ok, directives, overview }`: cada directiva `{ id, title, text, status, source, done, total, parts: [{ target, name, harness, office, kind: task \| run, ref, status, detail }], createdAt, updatedAt }`; `overview`, cada oficina `{ id, name, agents, working, waiting, tasks, title, lastAt, errors, context, waitMin, health }`: `errors` de la última hora (un test rojo en TDD no es error), `context` lo que les queda a sus agentes (el más bajo, 0–1; `null` si ninguno lo informa), `waitMin` cuánto hace que te espera, `autonomy` (su nivel o `company`), `flow` sus últimos 7 días `{ briefs, done, failed, leadMin }` (la mediana de minutos de enviado a hecho), `health` `ok` \| `warn` (te espera, 3+ errores o menos de 25 % de contexto) \| `bad` (te espera hace 15+ min, 10+ errores o menos de 10 % de contexto) |
 | `POST` | `/v1/directives` | `{ text, title?, offices?: [id \| nombre \| "all"], targets?: [id de agente \| ruta], from? }` | `201 { ok, directive }`; una parte que no se pudo mandar queda `failed` con el motivo |
 | `GET` | `/v1/directives/<id>` | | `{ ok, directive }` |
 | `POST` | `/v1/directives/<id>/cancel` | | `{ ok, directive }`: cancela lo que sigue en curso |
@@ -213,7 +213,9 @@ Formato y protocolo con los agentes: [pipelines.es.md](pipelines.es.md).
 | `herdr` | `{ launch: bool, subagents: bool, direction: "right" \| "down", startAgent: "auto" \| "none" \| <id de agente> }` (`subagents`: un pane por subagente) |
 | `log` | `{ life: bool }` (la vida de la oficina en la bitácora) |
 | `archive` | `{ push: bool, embeddings: "off" \| "ollama" \| "openai", model, url }`: lo que sabe el archivo va arriba de cada encargo y pregunta; el proveedor de embeddings para la búsqueda por significado (su clave en `$DEV_TEAM_OFFICE_EMBED_KEY`) |
-| `autonomy` | `{ clarify: bool, autonomous: bool }`: la analista revisa cada encargo primero; cada encargo le pide al agente trabajar solo hasta terminar (los dos encendidos por defecto) |
+| `autonomy` | `{ clarify: bool, autonomous: bool }`: la analista revisa cada encargo primero; cada encargo le pide al agente trabajar solo hasta terminar (los dos encendidos por defecto). Un departamento con su propia `autonomy` (`guided` \| `balanced` \| `autonomous`) la reemplaza |
+| `standards` | Los estándares de la empresa (los del CTO), hasta 4000 caracteres: arriba de cada encargo, antes de las indicaciones del departamento y del proyecto |
+| `capacity` | Cuántos encargos abiertos toma un departamento a la vez de una directiva (1–20, 3 por defecto); el resto de sus partes espera turno (`status: "waiting"`) |
 
 - **Validación:** todo se valida antes de escribir. Si hay un error, la respuesta es `400 { error }` (en el idioma del juego) y no se toca nada.
 - **En vivo:** al cambiar los ajustes el servidor difunde `{ type: "prefs", prefs }`; la apariencia, `{ type: "appearance", appearance, office }` a quienes miran esa oficina; los agentes o las sesiones, `{ type: "targets", targets }`.

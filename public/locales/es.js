@@ -17,7 +17,7 @@ export default {
   },
   state: { idle: 'libre', working: 'trabajando', thinking: 'pensando', blocked: '{g:bloqueada|bloqueado}', waiting: 'esperando', done: '{g:lista|listo}', coffee: 'café', talking: 'hablando', red: 'en rojo', lunch: 'almorzando', alarm: 'emergencia' },
   sessionStatus: { active: 'en curso', waiting: 'esperándote', done: 'terminada', ended: 'cerrada' },
-  taskStatus: { queued: 'en cola', sent: 'enviada', running: 'en curso', done: 'hecha', failed: 'falló', cancelled: 'cancelada' },
+  taskStatus: { queued: 'en cola', sent: 'enviada', running: 'en curso', done: 'hecha', failed: 'falló', cancelled: 'cancelada', waiting: 'esperando turno' },
   runStatus: { running: 'en curso', done: 'terminado', failed: 'falló', cancelled: 'cancelado', queued: 'en cola', sent: 'enviado' },
   weather: { clear: 'despejado', partly: 'parcialmente nublado', cloudy: 'nublado', fog: 'neblina', drizzle: 'llovizna', rain: 'lluvia', snow: 'nieve', storm: 'tormenta' },
   season: { spring: 'primavera', summer: 'verano', autumn: 'otoño', winter: 'invierno' },
@@ -298,6 +298,7 @@ export default {
   },
   // las indicaciones arriba de un encargo (server/guides.js)
   guide: {
+    company: 'Estándares de la empresa (los del CTO):', 
     department: 'Indicaciones del departamento «{name}»:', project: 'Indicaciones del proyecto «{name}»:',
     autonomous: 'Modo autónomo: trabájalo hasta terminar por tu cuenta (planifica, implementa, prueba y verifica; usa subagentes si conviene). Pregunta sólo lo que únicamente la PO puede responder, con tu herramienta de preguntas; si no, toma supuestos razonables y anótalos.',
   },
@@ -325,6 +326,7 @@ export default {
       },
       react: {
         order: 'Necesito que todos hagan esto: «{title}»',
+        wait: '({n} esperan turno: no voy a saturar a nadie)',
         split: 'Lo reparto a {n} proyecto(s): {offices}',
         department: 'Nuevo departamento: {name}. Le faltan sus repositorios, su personal y sus indicaciones para poder recibir órdenes', departmentOk: 'Bien: déjenlo listo',
         tech: ['Reviso que cada uno lo haga a su manera', 'Que cada equipo use su propio harness', 'Ojo con romper las APIs entre proyectos'],
@@ -351,11 +353,18 @@ export default {
   },
   exec: {
     from: 'Dirección',
+    waitTurn: 'el departamento tiene {n} encargo(s) abiertos',
     brief: '🏛 Directiva de la dirección: «{title}». También la trabajan: {others}. Haz la parte de este proyecto.',
     interrupted: 'la oficina se reinició antes de que terminara',
     minuteTitle: 'Acta: {title}', minuteAsked: 'Pedido por: {who}', minuteParts: 'Cómo terminó en cada proyecto:',
     log: { created: '🏛 Directiva «{title}» a {n} proyecto(s): {offices}', department: '🏛 Nuevo departamento: {name}', ended: '🏛 Directiva «{title}»: {status} ({done}/{total})' },
     ui: {
+      company: 'La empresa · últimos 7 días',
+      health: { ok: 'sana', warn: 'atenta', bad: 'te necesita' },
+      co: {
+        col: { dept: 'Departamento', now: 'Ahora', autonomy: 'Autonomía', briefs: 'Encargos', ok: 'Sin fallar', lead: 'Tiempo (mediana)' },
+        waiting: '✋ espera hace {min} min', errors: '{n} errores/h', context: 'contexto {pct}%', fine: 'todo bien', companyAutonomy: 'la de la empresa', flow: '{n} ({done} hechos)', lead: '{min} min',
+      },
       title: '🏛 Directivas', text: '¿Qué tienen que hacer?', placeholder: 'Una orden para varias oficinas o proyectos: «Que todas las APIs expongan /health»',
       scope: 'A quién', all: 'todos sus proyectos ({n})', none: 'sin proyectos registrados', noAgents: 'Registra los proyectos de cada departamento en ⚙ › Departamentos (o ⚙ › Agentes) para darles directivas.',
       send: '▶ ¡Que lo hagan!', recent: 'Las últimas', empty: 'Todavía no hay directivas.', pick: 'Elige al menos un proyecto', write: 'Escribe la directiva',
@@ -415,7 +424,7 @@ export default {
     agentExists: 'ese agente ya está registrado en esa ruta', saveFailed: 'no se pudo guardar: {error}', agentsMax: 'como máximo {n} agentes',
     unknownAgent: 'agente desconocido', unknownGap: 'vacío desconocido', character: { json: 'ese archivo no es JSON', kind: 'eso no es un personaje de Dev Team Office (su "kind" debe ser "dev-team-office/character")' }, unknownRole: 'rol desconocido: {role}', oneOf: '{role}: «{key}» debe ser uno de: {values}', notEditable: '{role}: no se puede cambiar "{key}"',
     color: '{role}.{key}: usa un color como #3f73f0', empty: '{role}.{key} no puede quedar vacío',
-    unknownOffice: 'departamento (oficina) desconocido: {office}', officeName: 'ponle un nombre al departamento', officeExists: 'ya hay un departamento con ese nombre',
+    unknownOffice: 'departamento (oficina) desconocido: {office}', officeName: 'ponle un nombre al departamento', officeExists: 'ya hay un departamento con ese nombre', autonomy: 'la autonomía debe ser una de: {levels} (o vacía: la de la empresa)',
     officesMax: 'como máximo {n} oficinas', mainOffice: 'la oficina principal no se puede eliminar', timezone: 'zona horaria desconocida: {tz}',
     language: 'idioma desconocido: {lang}', pref: 'ajuste desconocido: {key}', prefValue: '{key}: valor no válido',
     taskEmpty: 'la tarea está vacía', taskTooLong: 'la tarea supera {n} caracteres', taskNoAgent: 'falta el agente destino', cantLaunch: 'no sé lanzar "{agent}"',
@@ -518,6 +527,12 @@ export default {
     },
     offices: {
       hint: 'Cada departamento es una oficina de la empresa (un piso del edificio): sus proyectos (repositorios, con sus agentes), su personal (los personajes), sus indicaciones (cómo trabajar ahí: van con cada encargo, directiva y pregunta a sus proyectos), su zona horaria y su clima. Arriba a la izquierda eliges cuál ver.',
+      companyTitle: 'La empresa', departments: 'Departamentos', saveCompany: 'Guardar',
+      standards: 'Estándares de la empresa (los del CTO)', standardsPh: 'Lo que siguen todos los proyectos de todos los departamentos: convenciones, seguridad, cómo documentar… Van arriba de cada encargo, antes de las indicaciones del departamento y del proyecto.',
+      capacity: 'Capacidad', capacityHint: 'Cuántos encargos toma un departamento a la vez de una directiva (contando los que ya tiene abiertos). Operaciones no satura a nadie: el resto espera turno y sale en cuanto termina uno.',
+      autonomy: 'Autonomía', autonomyCompany: 'La de la empresa (⚙ › General)', autonomyCompanyHint: 'Trabaja como dice ⚙ › General › Autonomía.',
+      autonomyLevel: { guided: 'Guiada', balanced: 'Equilibrada', autonomous: 'Autónoma' },
+      autonomyHint: { guided: 'La analista revisa cada encargo y el agente te pregunta cuando tiene dudas.', balanced: 'La analista revisa cada encargo; después el agente trabaja solo hasta terminar.', autonomous: 'Sin revisión: cada encargo pasa directo a trabajo y el agente trabaja solo hasta terminar.' },
       name: 'Nombre', timezone: 'Zona horaria', inherit: 'la de la empresa ({tz})', location: 'Ciudad (clima)', locationPh: 'la de la zona horaria ({city})', cityInherit: 'la de la empresa ({city})',
       agents: '{n} agente(s)', viewing: '● la que estás mirando', main: 'principal', view: 'Ver', edit: 'Editar', delete: 'Eliminar', add: '＋ Agregar departamento', saveChanges: 'Guardar cambios',
       newTitle: 'Nuevo departamento', editTitle: 'Editar «{name}»', created: 'Listo: «{name}» ya es parte de la empresa.', updated: 'Departamento actualizado.', deleted: 'Departamento eliminado (sus proyectos pasaron al principal).',

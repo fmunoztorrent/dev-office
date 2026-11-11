@@ -41,7 +41,8 @@ async function api(method, path, body) {
 }
 
 const emptyForm = () => ({ id: null, path: '', harness: '', name: '', bin: '', args: '', office: null, instructions: '', detected: null, touched: false });
-const emptyOffice = () => ({ id: null, name: '', timezone: '', location: '', instructions: '' });
+const emptyOffice = () => ({ id: null, name: '', timezone: '', location: '', instructions: '', autonomy: '' });
+const AUTONOMY = ['guided', 'balanced', 'autonomous'];
 
 /** A time zone field: type to search (city, region or country) among all zones. */
 function zoneInput({ value, placeholder, label, onPick }) {
@@ -247,6 +248,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
           el('b', {}, o.name), o.id === 'main' ? el('span', { class: 's-tag' }, O('main')) : null,
           el('span', { class: 's-tag kind' }, tzLabel(o.timezone)),
           o.instructions ? el('span', { class: 's-tag kind', title: o.instructions }, O('hasInstructions')) : null,
+          o.autonomy ? el('span', { class: 's-tag kind', title: O(`autonomyHint.${o.autonomy}`) }, `🤖 ${O(`autonomyLevel.${o.autonomy}`)}`) : null,
           o.id === here() ? el('span', { class: 's-ok' }, O('viewing')) : null),
         el('div', { class: 'hint' }, `${o.place?.name ? `📍 ${o.place.name}` : ''}${o.ownTimezone ? '' : `${o.place?.name ? ' · ' : ''}${O('inherit', { tz: company })}`}`),
         o.instructions ? el('p', { class: 's-dept-text' }, o.instructions) : null,
@@ -266,19 +268,34 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         el('div', { class: 's-row' },
           o.id !== here() ? el('button', { type: 'button', class: 's-mini', onclick: () => { onView?.(o.id); $('settings').close(); } }, `👁 ${O('view')}`) : null,
           el('button', { type: 'button', class: 's-mini', onclick: () => { if (o.id !== here()) { st.pendingLook = true; onView?.(o.id); } show('look'); } }, `👥 ${O('editPeople')}`),
-          el('button', { type: 'button', class: 's-mini', onclick: () => { st.office = { id: o.id, name: o.custom ? o.name : '', timezone: o.ownTimezone || '', location: o.location || '', instructions: o.instructions || '' }; renderOffices(); $('s-office-form')?.scrollIntoView({ block: 'nearest' }); } }, O('edit')),
+          el('button', { type: 'button', class: 's-mini', onclick: () => { st.office = { id: o.id, name: o.custom ? o.name : '', timezone: o.ownTimezone || '', location: o.location || '', instructions: o.instructions || '', autonomy: o.autonomy || '' }; renderOffices(); $('s-office-form')?.scrollIntoView({ block: 'nearest' }); } }, O('edit')),
           o.id !== 'main' ? el('button', { type: 'button', class: 's-mini danger', onclick: () => removeOffice(o) }, O('delete')) : null));
     });
     const f = st.office;
     const editing = getOffices().find((o) => o.id === f.id);
+    // the company's standards (the CTO's) and how much a department takes at once (operations)
+    const companyBox = el('div', { class: 's-form s-company' },
+      el('label', { class: 'note' }, el('span', {}, O('standards')),
+        el('textarea', { id: 's-standards', rows: 3, maxlength: 4000, placeholder: O('standardsPh') }, p.standards || '')),
+      el('label', { class: 'b-field' }, el('span', {}, O('capacity')),
+        el('input', { id: 's-capacity', type: 'number', min: 1, max: 20, value: p.capacity || 3, class: 's-num' })),
+      el('p', { class: 'hint' }, O('capacityHint')),
+      el('div', { class: 's-row' }, el('button', { type: 'button', class: 'btn', onclick: () => setPref({ standards: $('s-standards').value, capacity: Number($('s-capacity').value) || 3 }) }, O('saveCompany'))));
     put(panel,
       el('p', { class: 'hint' }, O('hint')),
+      el('h3', {}, O('companyTitle')),
+      companyBox,
+      el('h3', {}, O('departments')),
       el('div', { class: 's-agents' }, cards),
       el('h3', {}, editing ? O('editTitle', { name: editing.name }) : O('newTitle')),
       el('div', { class: 's-form', id: 's-office-form' },
         el('label', { class: 'b-field' }, el('span', {}, O('name')), el('input', { type: 'text', value: f.name, maxlength: 40, oninput: (e) => { f.name = e.target.value; } })),
         el('label', { class: 'note' }, el('span', {}, O('instructions')),
           el('textarea', { rows: 4, maxlength: 4000, placeholder: O('instructionsPh'), oninput: (e) => { f.instructions = e.target.value; } }, f.instructions || '')),
+        el('label', { class: 'b-field' }, el('span', {}, O('autonomy')),
+          el('select', { onchange: (e) => { f.autonomy = e.target.value; renderOffices(); } },
+            option('', O('autonomyCompany'), !f.autonomy), AUTONOMY.map((l) => option(l, O(`autonomyLevel.${l}`), f.autonomy === l)))),
+        el('p', { class: 'hint' }, f.autonomy ? O(`autonomyHint.${f.autonomy}`) : O('autonomyCompanyHint')),
         el('label', { class: 'b-field' }, el('span', {}, O('timezone')),
           el('span', { class: 'tz-field' }, zoneInput({ value: f.timezone, placeholder: O('inherit', { tz: company }), label: O('timezone'), onPick: (z) => {
             // another country: its city is no longer valid
@@ -303,7 +320,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
 
   async function saveOffice() {
     const f = st.office;
-    const body = { name: f.name, timezone: f.timezone || null, location: f.location || null, instructions: f.instructions || '' };
+    const body = { name: f.name, timezone: f.timezone || null, location: f.location || null, instructions: f.instructions || '', autonomy: f.autonomy || null };
     const r = f.id ? await api('PUT', `/v1/offices/${encodeURIComponent(f.id)}`, body) : await api('POST', '/v1/offices', body);
     if (!r.ok) return msg(r.error);
     msg(f.id ? t('settings.offices.updated') : t('settings.offices.created', { name: r.office.name }), true);

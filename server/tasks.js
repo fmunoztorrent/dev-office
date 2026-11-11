@@ -20,7 +20,7 @@ import path from 'node:path';
 import { clip } from './roles.js';
 import { sanitizeProject } from './pipeline.js';
 import { agentCommand, modelArgs, HARNESSES, which } from '../integrations/common/devteam.mjs';
-import { guideFor, guideText, GUIDE_MARK } from './guides.js';
+import { guideFor, guideText, autonomyOf, GUIDE_MARK } from './guides.js';
 import { contextBlock } from './rag.js';
 import { t as tr } from '../public/i18n.js';
 import { MAIN_OFFICE } from './store.js';
@@ -144,8 +144,8 @@ export class TaskHub extends EventEmitter {
   brief(text, dir, { office = null, scope = true, autonomous = true } = {}) {
     // autonomous: it works to the end on its own, and asks only what only you can answer (a pipeline
     // already is: its stages and gates say how far it goes)
-    const auto = autonomous && this.store?.getPrefs?.().autonomy?.autonomous !== false ? `${GUIDE_MARK}${tr('guide.autonomous')}` : '';
     const g = guideFor(this.store, dir, office);
+    const auto = autonomous && autonomyOf(this.store, g.office).autonomous ? `${GUIDE_MARK}${tr('guide.autonomous')}` : '';
     // and what the archive knows about it (the glossary terms it mentions, the most relevant chunks)
     const archive = this.store?.listKnowledge ? contextBlock(this.store, text, { office: g.department?.id || office, project: g.project?.path || dir || null }) : '';
     return scoped(text, scope ? dir : null, [auto, guideText(g), archive].filter(Boolean).join('\n'));

@@ -217,14 +217,19 @@ One office instance is a **company**: you can keep adding **departments** — ea
 
 - **its projects** (repositories, each with its agent: `--office` or the selector in ⚙ › Agents; the maintainer can also bring an existing project into it);
 - **its instructions**: how to work there (conventions, what is never done, who to ask). They go on top of every brief, pipeline, directive and question to its projects, like a ChatGPT or Claude project's;
+- **its autonomy**: guided (the analyst reviews each brief and the agent asks you when in doubt), balanced (it reviews, then the agent works to the end) or autonomous (no review); otherwise the company's (⚙ › General › Autonomy);
 - **its people**: its characters (their own names, titles, personalities, styles and colors);
 - **its time zone** (otherwise the company's; otherwise the system's), and with it its time, its lunch, its day and night, its season and **its weather**;
 - **its activity**: each agent event goes to its office — the one the agent itself states (the office passes it when opening it), its session's, its herdr pane's, or the one of the registered agent whose path contains its folder; otherwise, the main one.
+
+**The company has its standards** (the CTO's, at the top of ⚙ › Departments): what every project of every department follows (conventions, security, how to document). They go first, before the department's and the project's instructions.
 
 **Each project has instructions too** (⚙ › Agents, `dev-team-office agents set <id> --instructions "…"`, or `update_project` over MCP), for every agent working in its folder: the commands, the conventions, what not to touch. A brief to that folder starts like this (the office takes this header out of the whiteboard's title):
 
 ```
 📁 Work only inside ~/shop: …
+📋 The company’s standards (the CTO’s):
+│ Conventional commits. Every endpoint documented in OpenAPI.
 📋 Instructions of the department «Payments»:
 │ Every amount in cents. Never log card numbers.
 📋 Instructions of the project «shop»:
@@ -241,7 +246,9 @@ The company's building has, besides its offices, two floors every office shares.
 
 **🏛 The executive floor**, on top: the directors, presided over by you (with your PO look). There you give **directives**: one order for several offices, departments or projects at once ("every API exposes `/health`", "update the logger everywhere"). Click the **directives board** (or `t` there), write the order and pick the offices (all their projects) or the projects one by one. The office sends each project's agent a brief with its part (to an open session of it, or a new one, like any brief) and the floor follows how each part goes; you can stop it. The company's **screen** shows what each office is doing (who is working, who is waiting for you, how many briefs) and its **health**, as a life bar: green, yellow or red (blinking) by its errors in the last hour, the context its agents have left and how long it has been waiting for you, with the reason next to it (`⚠5/h`, `ctx 12%`). When a directive ends, its **minutes** go to the archive. Agents send them too: `send_directive` (MCP).
 
-The order goes to **operations** (the COO), who splits it across the departments. **If the department it is for does not exist yet**, create it right there in the dialog (＋ New department): operations takes note of what it still needs (its repositories, its people and its instructions), which you give it in ⚙ › Departments.
+The order goes to **operations** (the COO), who splits it across the departments. **If the department it is for does not exist yet**, create it right there in the dialog (＋ New department): operations takes note of what it still needs (its repositories, its people and its instructions), which you give it in ⚙ › Departments. Operations **does not overload a department**: it takes at most its **capacity** of open briefs at once (3 by default, in ⚙ › Departments, counting the ones it already had); the rest of the parts wait their turn and go as soon as one ends.
+
+The directives dialog also shows **the company**: each department's health now, its autonomy and how its briefs flowed in the last 7 days (how many, how many without failing, and the median time from sent to done).
 
 **📚 The archive**, in the basement: what the company knows, shared by every office and every agent.
 
@@ -314,7 +321,7 @@ The office aims for you to brief and the team to get there on its own:
 
 - **First, the analyst checks the brief.** Before it goes to work, Valentina has the project's own agent read it (read-only: it changes nothing and does not start) with the project's and department's instructions. If it can be done well with what there is, it goes straight to work. If something only you know is missing and it would change the result (the scope, the acceptance criteria, a business decision), she brings you **up to 3 questions**: she walks to your desk with her hand up. You answer what you can (an empty answer is left to the team), or **Let the team decide**; your answers go with the brief. If the review fails or takes too long, the brief goes as it is.
 - **Then, autonomous mode.** Every brief carries a line asking the agent to work on it to the end on its own (plan, implement, test and check, with subagents if it helps) and to ask only what only you can answer, with its question tool; otherwise to make reasonable assumptions and note them. Pipelines already work that way.
-- Both are switched in **⚙ › General › Autonomy**.
+- Both are switched in **⚙ › General › Autonomy**, and each department can have its own level (⚙ › Departments).
 
 **When an agent waits for you, you see it.** An agent asking you something (Claude Code's `AskUserQuestion`, Pi's and OpenCode's question), a permission it needs, a question on its screen inside herdr, or the analyst's questions: a big yellow banner pulses at the top, on every floor, with who is waiting, for what and for how long, and the screen's edge lights up. The tab's title says `✋ (n)`. **Answer** opens the questions (or the prompt inside herdr); outside herdr, you answer in the agent's terminal. It stays until you answer. Optionally (⚙ › General, per browser), a sound and a system notification. The terminal game shows it as a pulsing strip at the top of the scene. When more than one is waiting, **See all** opens the **inbox**: everything waiting for you in one list, oldest first, each with its own button.
 

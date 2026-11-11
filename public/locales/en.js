@@ -17,7 +17,7 @@ export default {
   },
   state: { idle: 'free', working: 'working', thinking: 'thinking', blocked: 'blocked', waiting: 'waiting', done: 'done', coffee: 'coffee', talking: 'talking', red: 'red', lunch: 'at lunch', alarm: 'emergency' },
   sessionStatus: { active: 'in progress', waiting: 'waiting for you', done: 'finished', ended: 'closed' },
-  taskStatus: { queued: 'queued', sent: 'sent', running: 'running', done: 'done', failed: 'failed', cancelled: 'cancelled' },
+  taskStatus: { queued: 'queued', sent: 'sent', running: 'running', done: 'done', failed: 'failed', cancelled: 'cancelled', waiting: 'waiting its turn' },
   runStatus: { running: 'running', done: 'finished', failed: 'failed', cancelled: 'cancelled', queued: 'queued', sent: 'sent' },
   weather: { clear: 'clear', partly: 'partly cloudy', cloudy: 'cloudy', fog: 'fog', drizzle: 'drizzle', rain: 'rain', snow: 'snow', storm: 'storm' },
   season: { spring: 'spring', summer: 'summer', autumn: 'autumn', winter: 'winter' },
@@ -298,6 +298,7 @@ export default {
   },
   // the instructions on top of a brief (server/guides.js)
   guide: {
+    company: 'The company’s standards (the CTO’s):', 
     department: 'Instructions of the department «{name}»:', project: 'Instructions of the project «{name}»:',
     autonomous: 'Autonomous mode: work on it to the end on your own (plan, implement, test and check it; use subagents if it helps). Ask only what only the PO can answer, with your question tool; otherwise make reasonable assumptions and note them.',
   },
@@ -325,6 +326,7 @@ export default {
       },
       react: {
         order: 'I need everyone to do this: "{title}"',
+        wait: '({n} wait their turn: I won’t overload anyone)',
         split: 'Splitting it across {n} project(s): {offices}',
         department: 'New department: {name}. It needs its repositories, its people and its instructions before it can take orders', departmentOk: 'Good: get it ready',
         tech: ['Making sure each one does it its own way', 'Each team uses its own harness', "Careful not to break the APIs between projects"],
@@ -351,11 +353,18 @@ export default {
   },
   exec: {
     from: 'Executive floor',
+    waitTurn: 'the department has {n} brief(s) open',
     brief: '🏛 Directive from the executive floor: "{title}". Also working on it: {others}. Do this project\'s part.',
     interrupted: 'the office restarted before it ended',
     minuteTitle: 'Minutes: {title}', minuteAsked: 'Asked by: {who}', minuteParts: 'How it ended in each project:',
     log: { created: '🏛 Directive "{title}" to {n} project(s): {offices}', department: '🏛 New department: {name}', ended: '🏛 Directive "{title}": {status} ({done}/{total})' },
     ui: {
+      company: 'The company · last 7 days',
+      health: { ok: 'healthy', warn: 'watch it', bad: 'needs you' },
+      co: {
+        col: { dept: 'Department', now: 'Now', autonomy: 'Autonomy', briefs: 'Briefs', ok: 'Without failing', lead: 'Median time' },
+        waiting: '✋ waiting {min} min', errors: '{n} errors/h', context: 'context {pct}%', fine: 'all good', companyAutonomy: 'the company’s', flow: '{n} ({done} done)', lead: '{min} min',
+      },
       title: '🏛 Directives', text: 'What must they do?', placeholder: 'One order for several offices or projects: "Every API exposes /health"',
       scope: 'Who', all: 'all its projects ({n})', none: 'no registered projects', noAgents: 'Register each department’s projects in ⚙ › Departments (or ⚙ › Agents) to give them directives.',
       send: '▶ Make it happen!', recent: 'The latest', empty: 'No directives yet.', pick: 'Pick at least one project', write: 'Write the directive',
@@ -415,7 +424,7 @@ export default {
     agentExists: 'that agent is already registered for that path', saveFailed: 'could not save: {error}', agentsMax: 'at most {n} agents',
     unknownAgent: 'unknown agent', unknownGap: 'unknown gap', character: { json: 'that file is not JSON', kind: 'that is not a Dev Team Office character (its "kind" must be "dev-team-office/character")' }, unknownRole: 'unknown role: {role}', oneOf: '{role}: "{key}" must be one of: {values}', notEditable: '{role}: "{key}" cannot be changed',
     color: '{role}.{key}: use a color like #3f73f0', empty: '{role}.{key} cannot be empty',
-    unknownOffice: 'unknown department (office): {office}', officeName: 'give the department a name', officeExists: 'there is already a department with that name',
+    unknownOffice: 'unknown department (office): {office}', officeName: 'give the department a name', officeExists: 'there is already a department with that name', autonomy: 'autonomy must be one of: {levels} (or empty: the company’s)',
     officesMax: 'at most {n} offices', mainOffice: 'the main office cannot be deleted', timezone: 'unknown time zone: {tz}',
     language: 'unknown language: {lang}', pref: 'unknown setting: {key}', prefValue: '{key}: invalid value',
     taskEmpty: 'the task is empty', taskTooLong: 'the task is longer than {n} characters', taskNoAgent: 'the target agent is missing', cantLaunch: 'I do not know how to launch "{agent}"',
@@ -518,6 +527,12 @@ export default {
     },
     offices: {
       hint: 'Each department is an office of the company (a floor of the building): its projects (repositories, with their agents), its people (the characters), its instructions (how to work there: they go with every brief, directive and question to its projects), its time zone and its weather. Pick which one to view at the top left.',
+      companyTitle: 'The company', departments: 'Departments', saveCompany: 'Save',
+      standards: 'The company’s standards (the CTO’s)', standardsPh: 'What every project of every department follows: conventions, security, how to document… They go on top of every brief, before the department’s and the project’s instructions.',
+      capacity: 'Capacity', capacityHint: 'How many briefs a department takes at once from a directive (counting the ones it already has open). Operations does not overload anyone: the rest wait their turn and go as soon as one ends.',
+      autonomy: 'Autonomy', autonomyCompany: 'The company’s (⚙ › General)', autonomyCompanyHint: 'It works as ⚙ › General › Autonomy says.',
+      autonomyLevel: { guided: 'Guided', balanced: 'Balanced', autonomous: 'Autonomous' },
+      autonomyHint: { guided: 'The analyst reviews each brief and the agent asks you when in doubt.', balanced: 'The analyst reviews each brief; then the agent works to the end on its own.', autonomous: 'No review: each brief goes straight to work and the agent works to the end on its own.' },
       name: 'Name', timezone: 'Time zone', inherit: 'the company’s ({tz})', location: 'City (weather)', locationPh: 'the time zone’s ({city})', cityInherit: 'the company’s ({city})',
       agents: '{n} agent(s)', viewing: '● the one you are viewing', main: 'main', view: 'View', edit: 'Edit', delete: 'Delete', add: '＋ Add department', saveChanges: 'Save changes',
       newTitle: 'New department', editTitle: 'Edit “{name}”', created: 'Done: “{name}” is now part of the company.', updated: 'Department updated.', deleted: 'Department deleted (its projects moved to the main one).',

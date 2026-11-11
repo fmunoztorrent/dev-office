@@ -160,3 +160,32 @@ test('el juego de la terminal también muestra que te esperan, hasta que contest
     await server.close();
   }
 });
+
+test('cada departamento con su autonomía: el autónomo no pasa por la analista; el guiado sí, aunque la empresa no, y sin la línea del modo autónomo', async () => {
+  // the company does not review, but this department is guided
+  let k = desk({ output: 'P: ¿Pesos o dólares?\n', prefs: { clarify: false } });
+  k.store.updateOffice('main', { autonomy: 'guided' });
+  let out = k.d.review({ type: 'run', target: 'tienda-pi', entry: 'prompt', text: 'Precios en la tienda' });
+  assert.equal(out.clarify?.status, 'reviewing');
+  await until(() => k.d.list()[0].status === 'asking');
+  k.store.close();
+  // the company reviews, but this department is autonomous: straight to work
+  k = desk({ output: 'P: ¿algo?\n', prefs: { clarify: true } });
+  k.store.updateOffice('main', { autonomy: 'autonomous' });
+  out = k.d.review({ type: 'run', target: 'tienda-pi', entry: 'prompt', text: 'Agrega paginación' });
+  assert.equal(out.ok, true);
+  assert.equal(out.clarify, undefined);
+  assert.equal(k.sent.length, 1);
+  assert.equal(k.calls.length, 0, 'nadie revisó');
+  k.store.close();
+  // a guided department's briefs go without the autonomous-mode line
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false, places: false });
+  try {
+    const dir = tmp();
+    server.store.createOffice({ name: 'Pagos', autonomy: 'guided' });
+    server.store.createAgent({ path: dir, harness: 'pi', name: 'pagos-api', office: 'Pagos' });
+    assert.doesNotMatch(server.hub.brief('Cobros con QR', dir), /Modo autónomo/);
+    server.store.updateOffice('pagos', { autonomy: 'balanced' });
+    assert.match(server.hub.brief('Cobros con QR', dir), /Modo autónomo/);
+  } finally { await server.close(); }
+});

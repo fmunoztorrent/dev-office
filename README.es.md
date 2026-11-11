@@ -217,14 +217,19 @@ Una instancia de la oficina es una **empresa**: le puedes ir agregando **departa
 
 - **sus proyectos** (repositorios, cada uno con su agente: `--office` o el selector en ⚙ › Agentes; el mantenedor también puede traer un proyecto que ya existe);
 - **sus indicaciones**: cómo se trabaja ahí (convenciones, lo que nunca se hace, a quién preguntar). Van arriba de cada encargo, pipeline, directiva y pregunta a sus proyectos, como las de un proyecto de ChatGPT o Claude;
+- **su autonomía**: guiada (la analista revisa cada encargo y el agente te pregunta cuando tiene dudas), equilibrada (revisa y después el agente trabaja hasta terminar) o autónoma (sin revisión); si no, la de la empresa (⚙ › General › Autonomía);
 - **su personal**: sus personajes (nombres, cargos, personalidades, estilos y colores propios);
 - **su zona horaria** (si no, la de la empresa; si no, la del sistema), y con ella su hora, su almuerzo, su día y su noche, su estación y **su clima**;
 - **su actividad**: cada evento de un agente va a su oficina — la que dice el propio agente (la oficina se la pasa al abrirlo), la de su sesión, la de su pane de herdr o la del agente registrado cuya ruta contiene su carpeta; si no, a la principal.
+
+**La empresa tiene sus estándares** (los del CTO, arriba en ⚙ › Departamentos): lo que siguen todos los proyectos de todos los departamentos (convenciones, seguridad, cómo documentar). Van primero, antes de las indicaciones del departamento y del proyecto.
 
 **Cada proyecto también tiene sus indicaciones** (⚙ › Agentes, `dev-team-office agents set <id> --instructions "…"` o `update_project` por MCP), para todos los agentes que trabajan en su carpeta: los comandos, las convenciones, lo que no se toca. Un encargo a esa carpeta empieza así (la oficina saca esa cabecera del título de la pizarra):
 
 ```
 📁 Trabaja sólo dentro de ~/tienda: …
+📋 Estándares de la empresa (los del CTO):
+│ Commits convencionales. Cada endpoint documentado en OpenAPI.
 📋 Indicaciones del departamento «Pagos»:
 │ Montos siempre en centavos. Nunca registres números de tarjeta.
 📋 Indicaciones del proyecto «tienda»:
@@ -241,7 +246,9 @@ El edificio de la empresa tiene, además de sus oficinas, dos pisos que comparte
 
 **🏛 La dirección**, arriba: los directivos, que presides tú (con tu aspecto de PO). Ahí das **directivas**: una orden para varias oficinas, departamentos o proyectos a la vez («que todas las APIs expongan `/health`», «actualicen el logger en todos lados»). Haz clic en el **tablero de directivas** (o `t` ahí), escribe la orden y elige las oficinas (todos sus proyectos) o los proyectos uno por uno. La oficina le manda al agente de cada proyecto un encargo con su parte (a una sesión abierta suya o a una nueva, como cualquier encargo) y el piso sigue cómo va cada parte; puedes detenerla. La **pantalla** de la empresa muestra qué hace cada oficina (quién trabaja, quién te espera, cuántos encargos) y su **salud**, como barra de vida: verde, amarilla o roja (parpadeando) según sus errores de la última hora, el contexto que les queda a sus agentes y cuánto hace que te espera, con el motivo al lado (`⚠5/h`, `ctx 12%`). Cuando una directiva termina, su **acta** va al archivo. Los agentes también las dan: `send_directive` (MCP).
 
-La orden le llega a **operaciones** (el COO), que la reparte entre los departamentos. **Si el departamento al que va todavía no existe**, créalo ahí mismo en el diálogo (＋ Nuevo departamento): operaciones toma nota de lo que le falta (sus repositorios, su personal y sus indicaciones), que le das en ⚙ › Departamentos.
+La orden le llega a **operaciones** (el COO), que la reparte entre los departamentos. **Si el departamento al que va todavía no existe**, créalo ahí mismo en el diálogo (＋ Nuevo departamento): operaciones toma nota de lo que le falta (sus repositorios, su personal y sus indicaciones), que le das en ⚙ › Departamentos. Operaciones **no satura a un departamento**: toma a lo más su **capacidad** de encargos abiertos a la vez (3 por defecto, en ⚙ › Departamentos, contando los que ya tenía); el resto de las partes espera turno y sale en cuanto termina uno.
+
+El diálogo de directivas muestra también **la empresa**: la salud de cada departamento ahora, su autonomía y cómo fluyeron sus encargos en los últimos 7 días (cuántos, cuántos sin fallar y la mediana de lo que tardan de enviados a hechos).
 
 **📚 El archivo**, en el subsuelo: lo que sabe la empresa, compartido por todas las oficinas y todos los agentes.
 
@@ -314,7 +321,7 @@ La oficina busca que tú encargues y el equipo llegue solo al objetivo:
 
 - **Primero, la analista revisa el encargo.** Antes de que pase a trabajo, Valentina se lo da a leer al agente del proyecto (en sólo lectura: no cambia nada ni empieza) con las indicaciones del proyecto y del departamento. Si se puede hacer bien con lo que hay, pasa directo a trabajo. Si falta algo que sólo tú sabes y que cambiaría el resultado (el alcance, los criterios de aceptación, una decisión de negocio), te trae **hasta 3 preguntas**: va a tu escritorio con la mano en alto. Contestas lo que puedas (lo que dejes vacío lo decide el equipo), o **Que decida el equipo**; tus respuestas van con el encargo. Si la revisión falla o tarda demasiado, el encargo va tal cual.
 - **Después, modo autónomo.** Cada encargo lleva una línea que le pide al agente trabajarlo hasta terminar por su cuenta (planificar, implementar, probar y verificar, con subagentes si conviene) y preguntar sólo lo que únicamente tú puedes responder, con su herramienta de preguntas; si no, tomar supuestos razonables y anotarlos. Los pipelines ya trabajan así.
-- Las dos se cambian en **⚙ › General › Autonomía**.
+- Las dos se cambian en **⚙ › General › Autonomía**, y cada departamento puede tener su propio nivel (⚙ › Departamentos).
 
 **Cuando un agente te espera, lo ves.** Un agente que te pregunta algo (el `AskUserQuestion` de Claude Code, el `question` de Pi y OpenCode), un permiso que necesita, una pregunta en su pantalla dentro de herdr, o las preguntas de la analista: arriba late un cartel amarillo grande, en todos los pisos, con quién te espera, para qué y hace cuánto, y el borde de la pantalla se ilumina. El título de la pestaña dice `✋ (n)`. **Responder** abre las preguntas (o la pregunta dentro de herdr); fuera de herdr, contestas en la terminal del agente. Se queda hasta que contestas. Si quieres (⚙ › General, en cada navegador), con un sonido y una notificación del sistema. El juego de la terminal lo muestra como una franja que late arriba de la escena. Cuando te espera más de uno, **Ver las n** abre la **bandeja**: todo lo que te espera en una lista, lo más antiguo primero, cada cosa con su botón.
 

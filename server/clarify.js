@@ -17,7 +17,7 @@ import { askCommand } from '../integrations/common/devteam.mjs';
 import { t, getLanguage, LANGUAGES } from '../public/i18n.js';
 import { clip } from './roles.js';
 import { childEnv } from './tasks.js';
-import { guideFor, guideText } from './guides.js';
+import { guideFor, guideText, autonomyOf } from './guides.js';
 import { contextBlock } from './rag.js';
 import { MAIN_OFFICE } from './store.js';
 
@@ -55,6 +55,8 @@ export class ClarifyDesk extends EventEmitter {
 
   /** Is the review on? (⚙ › General › Autonomy) */
   get enabled() { return this.store?.getPrefs?.().autonomy?.clarify !== false; }
+  /** For a department: its own autonomy level, or the company's. */
+  enabledFor(office) { return autonomyOf(this.store, office).clarify; }
 
   list(office) { return [...this.items.values()].filter((c) => !office || c.office === office).map((c) => this.#public(c)); }
   #public(c) { const { msg, ...rest } = c; return { ...rest }; }
@@ -67,7 +69,7 @@ export class ClarifyDesk extends EventEmitter {
     const text = String(msg.text ?? '').trim();
     const target = this.registry.targets().find((x) => x.id === msg.target);
     // without text, or for something the registry does not know, it goes as it is (the registry says why)
-    if (!this.enabled || msg.clarified || !text || !target) return this.registry.run(msg);
+    if (msg.clarified || !text || !target || !this.enabledFor(target.office)) return this.registry.run(msg);
     const harness = (msg.session && target.sessions?.find((s) => s.session === msg.session)?.agent) || target.harness;
     const guide = [guideText(guideFor(this.store, target.path, target.office)), this.store?.listKnowledge ? contextBlock(this.store, text, { office: target.office, project: target.path }) : ''].filter(Boolean).join('\n');
     const question = [

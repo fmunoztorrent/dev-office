@@ -21,6 +21,7 @@ import { PipelineHub } from './pipeline.js';
 import { AgentRegistry } from './registry.js';
 import { ClarifyDesk } from './clarify.js';
 import { Standup } from './standup.js';
+import { autonomyOf } from './guides.js';
 import { search as ragSearch, createEmbedder, createIndexer } from './rag.js';
 import { fromFile, fromUrl } from './ingest.js';
 import { AskDesk } from './asks.js';
@@ -41,7 +42,7 @@ import { zoneInfo, systemZone } from '../public/clock.js';
 import { insideDir as inside } from './paths.js';
 import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.15.0';
+export const VERSION = '0.16.0';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
 const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
@@ -184,6 +185,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   function overview() {
     const now = Date.now();
     const agents = store.listAgents();
+    const flow = store.flowByOffice({ since: now - 7 * 86400_000 });
     return company.ids().map((id) => {
       const o = company.get(id);
       const live = [...o.sessions.values()].filter((s) => s.id !== 'office' && ['active', 'waiting'].includes(s.status) && now - s.lastAt < 15 * 60_000);
@@ -201,6 +203,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         tasks: [...hub.tasks.values()].filter((x) => (x.office || MAIN_OFFICE) === id && ['queued', 'sent', 'running'].includes(x.status)).length,
         title: live.sort((a, b) => b.lastAt - a.lastAt)[0]?.title || '', lastAt: last?.lastAt || null,
         errors, context, waitMin, health,
+        // how it works on its own, and how its briefs flowed in the last 7 days
+        autonomy: autonomyOf(store, id).level || 'company', flow: flow[id] || { briefs: 0, done: 0, failed: 0, leadMin: null },
       };
     });
   }
@@ -349,7 +353,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   const officeName = (id) => company.info(id)?.name || id;
   directives.on('created', (d) => {
     const offices = [...new Set(d.parts.map((p) => p.office))];
-    floor('exec', 'directive', { text: d.title, offices: offices.map(officeName), total: d.total });
+    floor('exec', 'directive', { text: d.title, offices: offices.map(officeName), total: d.total, waiting: d.parts.filter((p) => p.status === 'waiting').length });
     say(t('exec.log.created', { title: d.title, n: d.total, offices: offices.map(officeName).join(', ') }), { floor: 'exec' });
   });
   directives.on('ended', (d) => {

@@ -159,7 +159,7 @@ export function createFloors({ clock = () => performance.now() } = {}) {
     if (ev.floor === 'exec') {
       if (ev.kind === 'directive') {
         P.ceo.say(t('floors.exec.react.order', { title: text }), 5000).setState('working', 5000);
-        setTimeout(() => P.coo.say(t('floors.exec.react.split', { offices: (ev.offices || []).join(', ') || '—', n: ev.total || 0 }), 5000), 1500);
+        setTimeout(() => P.coo.say(t('floors.exec.react.split', { offices: (ev.offices || []).join(', ') || '—', n: ev.total || 0 }) + (ev.waiting ? ` ${t('floors.exec.react.wait', { n: ev.waiting })}` : ''), 5500), 1500);
         setTimeout(() => P.cto.say(f.lines('floors.exec.react.tech'), 4000), 3200);
         setTimeout(() => f.ride(P.assistant, 4200), 2000);
       } else if (ev.kind === 'department') {

@@ -4,6 +4,15 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-11
+
+### Added
+
+- **The company's standards (the CTO's):** what every project of every department follows, at the top of ⚙ › Departments. They go on top of every brief, before the department's and the project's instructions (`prefs.standards`).
+- **Autonomy per department:** guided (the analyst reviews each brief and the agent asks when in doubt), balanced (it reviews, then the agent works to the end) or autonomous (no review); otherwise the company's. ⚙ › Departments, `PUT /v1/offices/<id>` `{ autonomy }`, `update_office` (MCP).
+- **Operations does not overload a department:** a directive gives each department at most its capacity of open briefs at once (3 by default, counting the ones it already had); the rest of its parts wait their turn and go as soon as one ends (`prefs.capacity`, part status `waiting`).
+- **The company at a glance:** the directives dialog shows each department's health now, its autonomy and how its briefs flowed in the last 7 days (how many, how many without failing, the median time). `overview` brings `autonomy` and `flow`.
+
 ## [0.15.0] - 2026-11-11
 
 ### Added
@@ -215,7 +224,8 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.12.0...v0.13.0

@@ -179,10 +179,10 @@ const TOOLS = [
   {
     name: 'update_office',
     title: 'Update a department',
-    description: 'The departments maintainer: changes a department (an office) — its name, timezone, location or instructions (how to work there; empty removes them).',
+    description: 'The departments maintainer: changes a department (an office) — its name, timezone, location, instructions (how to work there; empty removes them) or autonomy (guided: the analyst reviews each brief and the agent asks when in doubt; balanced: reviews, then works to the end; autonomous: no review; empty: the company\'s).',
     inputSchema: {
       type: 'object',
-      properties: { id: { type: 'string', description: 'Department id or name' }, name: { type: 'string' }, timezone: { type: 'string' }, location: { type: 'string' }, instructions: { type: 'string' } },
+      properties: { id: { type: 'string', description: 'Department id or name' }, name: { type: 'string' }, timezone: { type: 'string' }, location: { type: 'string' }, instructions: { type: 'string' }, autonomy: { type: 'string', enum: ['', 'guided', 'balanced', 'autonomous'] } },
       required: ['id'],
       additionalProperties: false,
     },
@@ -553,7 +553,7 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
       const officeId = need(await findOffice(id), `no department ${id}: create it with create_office`);
       const out = (await running()) ? await api(`/v1/offices/${encodeURIComponent(officeId)}`, patch, 'PUT') : local().updateOffice(officeId, patch);
       const o = okOr(out).office;
-      return { text: `Department ${o.id} updated: ${o.name || 'Main office'}${o.instructions ? ' (with instructions)' : ''}`, data: o };
+      return { text: `Department ${o.id} updated: ${o.name || 'Main office'}${o.instructions ? ' (with instructions)' : ''}${o.autonomy ? ` · autonomy: ${o.autonomy}` : ''}`, data: o };
     },
 
     async get_instructions({ path: p } = {}) {
@@ -561,7 +561,7 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
       const store = local();
       const g = guideFor(store, dir);
       const text = guideText(g);
-      return { text: text || `No instructions for ${dir} (nor for its department). Add them with update_project or update_office.`, data: g };
+      return { text: text || `No instructions for ${dir} (nor for its department, nor company standards). Add them with update_project or update_office.`, data: g };
     },
 
     async report_activity(a = {}) {

@@ -24,7 +24,7 @@ This page explains what it does and how to register it by hand in another client
 | `remove_project` | `id` | Removes it from the registry (its files are not touched) |
 | `list_offices` | — | The departments (offices: teams or domains), with their instructions |
 | `create_office` | `name`, `timezone?`, `location?`, `instructions?` | A new department, with its IANA zone (time, daylight and weather) and how to work there |
-| `update_office` | `id`, `name?`, `timezone?`, `location?`, `instructions?` | The departments maintainer: changes a department |
+| `update_office` | `id`, `name?`, `timezone?`, `location?`, `instructions?`, `autonomy?` | The departments maintainer: changes a department (`autonomy`: `guided`, `balanced`, `autonomous`, or empty for the company's) |
 | `get_instructions` | `path?` | How to work with a project folder: its department's instructions and its own (the same that go on top of every brief to it) |
 | `report_activity` | `kind`, `text?`, `role?`, `phase?`, `from?`, `todos?`, `roles?`, `cwd?` | `task` · `phase` · `phase_end` · `todos` · `waiting` · `error` · `turn_end` · `done` · `chat` · `agent_roles`. It does not fail without an office: it returns `delivered: false` |
 | `send_task` | `project` (id or path), `text`, `entry?`, `newSession?` | Sends a prompt to a registered project's agent, through an entry of its harness |

@@ -54,10 +54,10 @@ The question is answered by the office's agent on duty (the most recent session,
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| `GET` | `/v1/offices` | | `{ ok, offices, view }`: each with `{ id, name, custom, timezone, ownTimezone, location, instructions, place, country, city, agents, sessions }`; `view`, the one being watched |
-| `POST` | `/v1/offices` | `{ name, timezone?, location?, instructions? }` | `201 { ok, office }`; the executive floor's operations takes note of it (`{ type: "floor", event: { floor: "exec", kind: "department" } }`) |
+| `GET` | `/v1/offices` | | `{ ok, offices, view }`: each with `{ id, name, custom, timezone, ownTimezone, location, instructions, autonomy, place, country, city, agents, sessions }`; `view`, the one being watched |
+| `POST` | `/v1/offices` | `{ name, timezone?, location?, instructions?, autonomy? }` (`autonomy`: `guided` \| `balanced` \| `autonomous`; empty or `null`: the company's) | `201 { ok, office }`; the executive floor's operations takes note of it (`{ type: "floor", event: { floor: "exec", kind: "department" } }`) |
 | `GET` | `/v1/offices/<id>` | | `{ ok, office }` |
-| `PUT` | `/v1/offices/<id>` | `{ name?, timezone?, location?, instructions? }` (`null`: the company's / the zone's; `""` removes the instructions) | `{ ok, office }` |
+| `PUT` | `/v1/offices/<id>` | `{ name?, timezone?, location?, instructions?, autonomy? }` (`null`: the company's / the zone's; `""` removes the instructions) | `{ ok, office }` |
 | `DELETE` | `/v1/offices/<id>` | | `{ ok }`; its agents move to the main one (`main`, which cannot be deleted) |
 | `POST` | `/v1/offices/<id>/standup` | | The daily standup now: `{ ok, office, date, lines: [{ role, text }], waiting, open, empty, entry }`. The office's log gets a `standup` event (`{ kind: "standup", role: "manager", text, lines, waiting, open }`, the game gathers the team at the table) and, if something happened in the last 24 hours, its minutes go to the archive (`entry`: kind `minute`, tag `daily`). It also happens by itself once a day, from 9:30 in the office's time zone. Over WebSocket: `{ type: "standup" }` (the office being watched) |
 
@@ -79,7 +79,7 @@ The executive floor and the archive serve every office (they do not depend on th
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| `GET` | `/v1/directives?limit=` | | `{ ok, directives, overview }`: each directive `{ id, title, text, status, source, done, total, parts: [{ target, name, harness, office, kind: task \| run, ref, status, detail }], createdAt, updatedAt }`; `overview`, each office `{ id, name, agents, working, waiting, tasks, title, lastAt, errors, context, waitMin, health }`: `errors` in the last hour (a red test in TDD is no error), `context` the share its agents have left (the lowest, 0–1; `null` if none reports it), `waitMin` how long it has been waiting for you, `health` `ok` \| `warn` (waiting, 3+ errors or under 25 % context) \| `bad` (waiting 15+ min, 10+ errors or under 10 % context) |
+| `GET` | `/v1/directives?limit=` | | `{ ok, directives, overview }`: each directive `{ id, title, text, status, source, done, total, parts: [{ target, name, harness, office, kind: task \| run, ref, status, detail }], createdAt, updatedAt }`; `overview`, each office `{ id, name, agents, working, waiting, tasks, title, lastAt, errors, context, waitMin, health }`: `errors` in the last hour (a red test in TDD is no error), `context` the share its agents have left (the lowest, 0–1; `null` if none reports it), `waitMin` how long it has been waiting for you, `autonomy` (its level or `company`), `flow` its last 7 days `{ briefs, done, failed, leadMin }` (the median minutes from sent to done), `health` `ok` \| `warn` (waiting, 3+ errors or under 25 % context) \| `bad` (waiting 15+ min, 10+ errors or under 10 % context) |
 | `POST` | `/v1/directives` | `{ text, title?, offices?: [id \| name \| "all"], targets?: [agent id \| path], from? }` | `201 { ok, directive }`; a part that could not be sent shows as `failed` with why |
 | `GET` | `/v1/directives/<id>` | | `{ ok, directive }` |
 | `POST` | `/v1/directives/<id>/cancel` | | `{ ok, directive }`: cancels what is still running |
@@ -213,7 +213,9 @@ Format and protocol with the agents: [pipelines.md](pipelines.md).
 | `herdr` | `{ launch: bool, subagents: bool, direction: "right" \| "down", startAgent: "auto" \| "none" \| <agent id> }` (`subagents`: one pane per subagent) |
 | `log` | `{ life: bool }` (the office's life in the log) |
 | `archive` | `{ push: bool, embeddings: "off" \| "ollama" \| "openai", model, url }`: what the archive knows goes on top of every brief and question; the embedding provider for the semantic search (its key in `$DEV_TEAM_OFFICE_EMBED_KEY`) |
-| `autonomy` | `{ clarify: bool, autonomous: bool }`: the analyst reviews each brief first; every brief asks the agent to work on its own to the end (both on by default) |
+| `autonomy` | `{ clarify: bool, autonomous: bool }`: the analyst reviews each brief first; every brief asks the agent to work on its own to the end (both on by default). A department with its own `autonomy` (`guided` \| `balanced` \| `autonomous`) overrides it |
+| `standards` | The company's standards (the CTO's), up to 4000 characters: on top of every brief, before the department's and the project's instructions |
+| `capacity` | How many open briefs a department takes at once from a directive (1–20, 3 by default); the rest of its parts wait their turn (`status: "waiting"`) |
 
 - **Validation:** everything is validated before writing. On an error, the response is `400 { error }` (in the game's language) and nothing is touched.
 - **Live:** when the settings change the server broadcasts `{ type: "prefs", prefs }`; the appearance, `{ type: "appearance", appearance, office }` to whoever watches that office; the agents or sessions, `{ type: "targets", targets }`.

@@ -24,7 +24,7 @@ página sirve para entender qué hace y para registrarlo a mano en otro cliente.
 | `remove_project` | `id` | Lo quita del registro (no toca sus archivos) |
 | `list_offices` | — | Los departamentos (oficinas: equipos o dominios), con sus indicaciones |
 | `create_office` | `name`, `timezone?`, `location?`, `instructions?` | Un departamento nuevo, con su zona IANA (hora, luz y clima) y cómo se trabaja ahí |
-| `update_office` | `id`, `name?`, `timezone?`, `location?`, `instructions?` | El mantenedor de departamentos: cambia un departamento |
+| `update_office` | `id`, `name?`, `timezone?`, `location?`, `instructions?`, `autonomy?` | El mantenedor de departamentos: cambia un departamento (`autonomy`: `guided`, `balanced`, `autonomous`, o vacía para la de la empresa) |
 | `get_instructions` | `path?` | Cómo trabajar con la carpeta de un proyecto: las indicaciones de su departamento y las suyas (las mismas que van arriba de cada encargo) |
 | `report_activity` | `kind`, `text?`, `role?`, `phase?`, `from?`, `todos?`, `roles?`, `cwd?` | `task` · `phase` · `phase_end` · `todos` · `waiting` · `error` · `turn_end` · `done` · `chat` · `agent_roles`. Sin oficina no falla: devuelve `delivered: false` |
 | `send_task` | `project` (id o ruta), `text`, `entry?`, `newSession?` | Le manda un prompt al agente de un proyecto registrado, por una entrada de su harness |

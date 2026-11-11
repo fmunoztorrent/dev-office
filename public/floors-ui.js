@@ -58,10 +58,11 @@ function scopePicker(box, groups, { checked = () => false } = {}) {
 /**
  * @param getDirectives  () => the latest directives (they come over WebSocket)
  * @param getOffices     () => the company's offices
+ * @param getOverview    () => how each office is doing (server.js overview(): health, autonomy, flow)
  * @param hhmm           (ts) => the time, in the office's zone
  * @param onDepartment   (office) => a department was created from here (to set up its projects and people)
  */
-export function createDirectivesUi({ getDirectives = () => [], getOffices = () => [], hhmm = (ts) => new Date(ts).toLocaleTimeString(), onDepartment }) {
+export function createDirectivesUi({ getDirectives = () => [], getOffices = () => [], getOverview = () => [], hhmm = (ts) => new Date(ts).toLocaleTimeString(), onDepartment }) {
   const dialog = $('directives');
   const st = { chosen: () => [], busy: false };
   $('dv-close').onclick = () => dialog.close();
@@ -133,6 +134,28 @@ export function createDirectivesUi({ getDirectives = () => [], getOffices = () =
         el('ul', { class: 'dv-parts' }, d.parts.map((p) => el('li', { class: p.status, title: p.detail || '' },
           el('span', { class: 'dot' }), `${p.name}`, el('span', { class: 'fl-dim' }, ` · ${(getOffices().find((o) => o.id === p.office)?.name) || p.office} · ${t(`taskStatus.${p.status}`)}${p.detail ? ` — ${p.detail}` : ''}`))))));
     }
+    renderCompany();
+  }
+
+  /** The company: per department, its health now, its autonomy and how its briefs flowed in 7 days. */
+  function renderCompany() {
+    const table = $('dv-company');
+    const C = (k, v) => t(`exec.ui.co.${k}`, v);
+    const rows = getOverview().map((o) => {
+      const f = o.flow || {};
+      const ended = (f.done || 0) + (f.failed || 0);
+      const why = [o.waiting ? C('waiting', { n: o.waiting, min: o.waitMin || 0 }) : '', o.errors ? C('errors', { n: o.errors }) : '', Number.isFinite(o.context) ? C('context', { pct: Math.round(o.context * 100) }) : ''].filter(Boolean).join(' · ');
+      return el('tr', {},
+        el('th', { scope: 'row' }, el('span', { class: `dv-hp ${o.health || 'ok'}`, title: t(`exec.ui.health.${o.health || 'ok'}`) }), o.name),
+        el('td', { class: 'fl-dim' }, why || C('fine')),
+        el('td', {}, o.autonomy && o.autonomy !== 'company' ? t(`settings.offices.autonomyLevel.${o.autonomy}`) : C('companyAutonomy')),
+        el('td', {}, f.briefs ? C('flow', { n: f.briefs, done: f.done || 0 }) : '—'),
+        el('td', {}, ended ? `${Math.round(((f.done || 0) / ended) * 100)}%` : '—'),
+        el('td', {}, Number.isFinite(f.leadMin) ? C('lead', { min: f.leadMin }) : '—'));
+    });
+    table.replaceChildren(
+      el('thead', {}, el('tr', {}, ...['dept', 'now', 'autonomy', 'briefs', 'ok', 'lead'].map((k) => el('th', { scope: 'col' }, C(`col.${k}`))))),
+      el('tbody', {}, ...rows));
   }
 
   return { open, refresh() { if (dialog.open) render(); } };

@@ -3,6 +3,10 @@
 // /health". The office is still the frontend: a directive is one brief per project, sent to each
 // registered agent through its harness (an open session of it, or a new one), and the floor follows
 // how each part goes. When the last one ends, its minutes go to the archive.
+//
+// Operations does not overload a department: it takes at most `prefs.capacity` open briefs at once
+// (3 by default, counting what it already had); the rest of its parts wait their turn and go as
+// soon as one of its briefs ends.
 
 import { EventEmitter } from 'node:events';
 import { clip } from './roles.js';
@@ -89,17 +93,18 @@ export class DirectiveDesk extends EventEmitter {
       source: clip(from || tr('events.you'), 60), parts: [], createdAt: Date.now(), updatedAt: Date.now(),
     };
     const names = pick.agents.map((a) => a.name);
-    for (const a of pick.agents) {
-      const others = names.filter((n) => n !== a.name);
-      const brief = tr('exec.brief', { title: d.title, others: others.length ? others.join(', ') : '—' }) + `\n\n${text}`;
-      const part = { target: a.id, name: a.name, harness: a.harness, office: a.office || MAIN_OFFICE, kind: null, ref: null, status: 'running', detail: '' };
-      let out;
-      try { out = this.registry.run({ target: a.id, entry: 'prompt', text: brief, title: `🏛 ${d.title}`, from: tr('exec.from') }); } catch (err) { out = { ok: false, error: err.message }; }
-      if (out.ok && out.task) Object.assign(part, { kind: 'task', ref: out.task.id, status: ENDED.has(out.task.status) ? out.task.status : 'running', detail: out.task.detail || '' });
-      else if (out.ok && out.run) Object.assign(part, { kind: 'run', ref: out.run.id, detail: out.run.detail || '' });
-      else Object.assign(part, { status: 'failed', detail: out.error || tr('task.failedDefault') });
-      d.parts.push(part);
-    }
+    this.#sending = true;
+    try {
+      for (const a of pick.agents) {
+        const others = names.filter((n) => n !== a.name);
+        const part = { target: a.id, name: a.name, harness: a.harness, office: a.office || MAIN_OFFICE, kind: null, ref: null, status: 'running', detail: '', brief: tr('exec.brief', { title: d.title, others: others.length ? others.join(', ') : '—' }) + `\n\n${text}` };
+        d.parts.push(part);
+        // a department with its hands full: this part waits its turn
+        const busy = this.#busy(part.office);
+        if (busy >= this.#capacity()) Object.assign(part, { status: 'waiting', detail: tr('exec.waitTurn', { n: busy }) });
+        else this.#send(d, part);
+      }
+    } finally { this.#sending = false; }
     d.status = directiveStatus(d.parts);
     this.items.set(d.id, d);
     while (this.items.size > KEEP) this.items.delete(this.items.keys().next().value);
@@ -108,6 +113,24 @@ export class DirectiveDesk extends EventEmitter {
     if (d.status !== 'running') this.#ended(d);
     this.#changed();
     return { ok: true, directive: this.#public(d) };
+  }
+
+  #sending = false;
+  #capacity() { return Math.max(1, Number(this.store.getPrefs?.().capacity) || 3); }
+
+  /** The briefs a department has open now (its tasks and pipeline runs that did not end). */
+  #busy(office) {
+    const open = (x) => (x.office || MAIN_OFFICE) === office && !ENDED.has(x.status);
+    return [...(this.hub?.tasks?.values() || [])].filter(open).length + [...(this.pipelines?.runs?.values() || [])].filter((r) => r.office && open(r)).length;
+  }
+
+  /** Sends a part to its project's agent. */
+  #send(d, part) {
+    let out;
+    try { out = this.registry.run({ target: part.target, entry: 'prompt', text: part.brief, title: `🏛 ${d.title}`, from: tr('exec.from') }); } catch (err) { out = { ok: false, error: err.message }; }
+    if (out.ok && out.task) Object.assign(part, { kind: 'task', ref: out.task.id, status: ENDED.has(out.task.status) ? out.task.status : 'running', detail: out.task.detail || '' });
+    else if (out.ok && out.run) Object.assign(part, { kind: 'run', ref: out.run.id, status: 'running', detail: out.run.detail || '' });
+    else Object.assign(part, { status: 'failed', detail: out.error || tr('task.failedDefault') });
   }
 
   /** Cancels what is still running of a directive. */
@@ -130,12 +153,20 @@ export class DirectiveDesk extends EventEmitter {
   get(id) { const d = this.items.get(String(id)); return d ? this.#public(d) : null; }
   list(limit = 12) { return [...this.items.values()].slice(-limit).reverse().map((d) => this.#public(d)); }
 
-  // each part follows its task (or its pipeline run)
+  // each part follows its task (or its pipeline run); the ones waiting their turn go when there is room
   #follow() {
+    if (this.#sending) return;
     for (const d of this.items.values()) {
       if (d.status !== 'running') continue;
       let moved = false;
       for (const p of d.parts) {
+        if (p.status === 'waiting') {
+          if (this.#busy(p.office) >= this.#capacity()) continue;
+          this.#sending = true;
+          try { this.#send(d, p); } finally { this.#sending = false; }
+          moved = true;
+          continue;
+        }
         if (ENDED.has(p.status) || !p.ref) continue;
         const x = p.kind === 'task' ? this.hub?.tasks?.get(p.ref) : this.pipelines?.runs?.get(p.ref);
         if (!x) continue;
