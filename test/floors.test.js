@@ -37,7 +37,7 @@ test('el archivo: notas, skills y conectores validados; una skill con el mismo n
   for (const [bad, rx] of [
     [{ kind: 'meme', title: 'x' }, /tipo desconocido/], [{ kind: 'note' }, /ponle un título/],
     [{ kind: 'connector', name: 'jira', title: 'Jira' }, /un comando .* o una URL/], [{ kind: 'connector', name: 'x', title: 'X', url: 'ftp://x' }, /http/],
-    [{ kind: 'note', title: 'x', office: 'nada' }, /oficina desconocida/],
+    [{ kind: 'note', title: 'x', office: 'nada' }, /departamento \(oficina\) desconocido/],
   ]) assert.match(store.createKnowledge(bad).error, rx, JSON.stringify(bad));
 
   const s1 = store.createKnowledge({ kind: 'skill', name: 'Deploy Staging', title: 'Desplegar a staging', body: '1. npm run deploy' });
@@ -174,7 +174,7 @@ test('una directiva va a cada proyecto elegido, sigue sus tareas y deja su acta 
   desk.on('ended', (d) => ended.push(d));
 
   assert.match(desk.create({ text: 'x' }).error, /elige al menos/);
-  assert.match(desk.create({ text: 'x', offices: ['marte'] }).error, /oficina desconocida/);
+  assert.match(desk.create({ text: 'x', offices: ['marte'] }).error, /departamento \(oficina\) desconocido/);
   assert.match(desk.create({ text: '' }).error, /vacía/);
 
   const out = desk.create({ text: 'Que todas las APIs expongan /health', offices: ['Pagos'], targets: [api.id] });
@@ -240,7 +240,7 @@ test('API: directivas a varias oficinas, el archivo y lo que cuentan los pisos',
     // the fake CLI ends: the directive is accomplished and its minutes are archived
     const done = await until(async () => { const x = (await call(base, 'GET', '/v1/directives')).body; return x.directives[0].status === 'done' && x; });
     assert.equal(done.overview.length, 2);
-    assert.deepEqual(floor.filter((e) => e.floor === 'exec').map((e) => e.kind), ['directive', 'directive_end']);
+    assert.deepEqual(floor.filter((e) => e.floor === 'exec').map((e) => e.kind), ['department', 'directive', 'directive_end'], 'operations takes note of the new department, then the directive');
     assert.equal((await call(base, 'GET', '/v1/knowledge?kind=minute')).body.entries.length, 1);
     const logged = read(process.env.FAKE_CLAUDE_LOG).trim().split('\n').map((l) => JSON.parse(l));
     assert.equal(logged.length, 2);

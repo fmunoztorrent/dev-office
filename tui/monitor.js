@@ -93,7 +93,8 @@ export function createMonitor() {
     floors({ directives, archive } = {}) { if (directives) m.directives = directives; if (archive) m.archive = archive; },
     /** What happens on the shared floors, told in the log (a remote office: a local one tells it through its own log). */
     floorEvent(ev = {}) {
-      const text = ev.kind === 'directive' ? t('exec.log.created', { title: ev.text, n: ev.total || 0, offices: (ev.offices || []).join(', ') })
+      const text = ev.kind === 'department' ? t('exec.log.department', { name: ev.text })
+        : ev.kind === 'directive' ? t('exec.log.created', { title: ev.text, n: ev.total || 0, offices: (ev.offices || []).join(', ') })
         : ev.kind === 'directive_end' ? t('exec.log.ended', { title: ev.text, status: t(`directiveStatus.${ev.status}`), done: ev.done ?? 0, total: ev.total ?? 0 })
           : ev.kind === 'saved' && ev.entryKind !== 'minute' ? t(ev.created ? 'archive.log.saved' : 'archive.log.updated', { kind: t(`knowledgeKind.${ev.entryKind}`), title: ev.text, who: ev.source || t('events.you') })
             : ev.kind === 'installed' && ev.count ? t('floors.archive.react.installed', { name: ev.text, n: ev.count }) : null;

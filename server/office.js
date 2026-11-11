@@ -3,6 +3,7 @@ import { adapt } from './adapters.js';
 import { ROLE_IDS, roleForTool, roleForText, describe, clip, normRole, agentRole, normPhase } from './roles.js';
 import { t } from '../public/i18n.js';
 import { realDir, insideDir } from './paths.js';
+import { unguided } from './guides.js';
 
 const LOG_MAX = 300;
 const SESSIONS_MAX = 30;
@@ -223,7 +224,7 @@ export class Office extends EventEmitter {
         return this.#endSub(s, ev, { agentId: r.agentId, toolUseId: r.toolUseId, fromHook: !r.toolUseId });
       case 'task':
         // the scope line the office puts before a brief (tasks.js) is not part of the request
-        if (typeof r.text === 'string' && r.text.startsWith('📁 ')) r.text = r.text.replace(/^📁 [^\n]*\n+/, '');
+        if (typeof r.text === 'string') r.text = unguided(r.text); // the 📁 scope and the 📋 instructions are the office's
         // a directive's part (directives.js): its header becomes a 🏛 before the request
         if (typeof r.text === 'string' && r.text.startsWith('🏛 ')) r.text = r.text.replace(/^🏛 [^\n]*\n+/, '🏛 ');
         // Pi's extension and skill may announce the same task: the duplicate is dropped.
@@ -260,7 +261,7 @@ export class Office extends EventEmitter {
       // A side question (btw) to the agent on duty: the question, and its answer (or why there was none).
       case 'btw': {
         const phase = ['ask', 'answer', 'failed'].includes(r.phase) ? r.phase : 'ask';
-        return { ...ev, role: role || 'tl', phase, askId: clip(r.askId, 40), agent: clip(r.agent, 30), from: clip(r.from || t('events.you'), 30), text: clip(r.text, phase === 'answer' ? 1500 : 300), ...(r.subId ? { subId: clip(String(r.subId), 60) } : {}) };
+        return { ...ev, role: role || 'tl', phase, askId: clip(r.askId, 40), agent: clip(r.agent, 30), from: clip(r.from || t('events.you'), 30), text: clip(r.text, phase === 'answer' ? 4000 : 300), ...(r.subId ? { subId: clip(String(r.subId), 60) } : {}) };
       }
       case 'stage_end': return role ? { ...ev, role, ok: r.ok !== false, text: clip(r.text, 160) } : null;
       // The agent says which subagent is which role (when starting a pipeline): it is not drawn, it is learned.

@@ -28,7 +28,7 @@ test('desde la terminal: ⚙ → Personajes → renombrar a Tomás → ctrl+s gu
     type(`\x1b[<0;${gearCell.col + 2};${gearCell.row + 1}M`); // 1-based clicks, in the middle of « ⚙ »
     await until(() => stdout.out.includes('⚙ Ajustes') && stdout.out.includes('Idioma'));
     type('\x1b[C'); // tabs: General → Offices
-    await until(() => stdout.out.includes('Agregar oficina'));
+    await until(() => stdout.out.includes('Agregar departamento'));
     type('\x1b[C'); // → Agentes
     await until(() => stdout.out.includes('Agentes registrados'));
     type('\x1b[C'); // → Personajes

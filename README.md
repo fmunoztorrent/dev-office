@@ -142,7 +142,8 @@ To connect any other harness (or understand the role contract), see [docs/connec
 | `register_project` | Registers the current folder (or `path`) with the agent that serves it and, optionally, in an office (team or domain; created if it does not exist). Idempotent |
 | `detect_project` | What a project brings: harnesses, pipelines, commands and each subagent's role |
 | `list_projects` · `update_project` · `remove_project` | The projects maintainer |
-| `list_offices` · `create_office` | The company's offices, with their time zone |
+| `list_offices` · `create_office` · `update_office` | The departments maintainer: the company's departments (offices), with their time zone and their instructions. `send_directive` to a department that does not exist yet says how to create it |
+| `get_instructions` | How to work with a project folder: its department's instructions and its own (`register_project` and `update_project` take `instructions` too) |
 | `report_activity` | Which role and phase you are in (`task`, `phase`, `todos`, `waiting`, `done`…) |
 | `send_task` | Sends a prompt to another registered project's agent |
 | `open_pane` | Inside herdr, opens a pane with an activity (tests in watch mode, another agent…) |
@@ -181,7 +182,9 @@ dev-team-office btw "who is on the tests?"             # a side question to the 
 dev-team-office agents add ~/Workspace/Errementari --agent claude --office payments   # registers an agent
 dev-team-office agents                                 # the agents and their harness's pipelines
 dev-team-office prompt errementari-claude-code "the SSE does not reconnect" --pipeline errementari:bugfix
-dev-team-office offices add "Payments" --timezone Europe/Madrid   # another office of the company
+dev-team-office departments add "Payments" --instructions "Every amount in cents"   # another department
+dev-team-office agents set errementari-claude-code --instructions "pnpm, not npm"     # a project's instructions
+dev-team-office character export qa --out ~/Desktop/   # a character as JSON, to share them
 dev-team-office config lang es                         # the settings (in the SQLite database)
 dev-team-office pane --role qa -- npm test -- --watch  # inside herdr: an activity in another pane
 ```
@@ -208,12 +211,25 @@ The same office can be seen in the browser at `http://127.0.0.1:4317`, **full sc
 
 ## A company with several offices
 
-One office instance is a **company**: you can keep adding **offices** (teams or domains: payments, web, platform…) in **⚙ › Offices** or with `dev-team-office offices add`. Each office has:
+One office instance is a **company**: you can keep adding **departments** — each one an office of the building (teams or domains: payments, web, platform…) — in **⚙ › Departments**, from the directive dialog on the executive floor, or with `dev-team-office departments add`. Each department has:
 
-- **its agents** (each registered agent belongs to an office: `--office` or the selector in ⚙ › Agents);
-- **its characters** (their own names, titles and colors);
+- **its projects** (repositories, each with its agent: `--office` or the selector in ⚙ › Agents; the maintainer can also bring an existing project into it);
+- **its instructions**: how to work there (conventions, what is never done, who to ask). They go on top of every brief, pipeline, directive and question to its projects, like a ChatGPT or Claude project's;
+- **its people**: its characters (their own names, titles, personalities, styles and colors);
 - **its time zone** (otherwise the company's; otherwise the system's), and with it its time, its lunch, its day and night, its season and **its weather**;
 - **its activity**: each agent event goes to its office — the one the agent itself states (the office passes it when opening it), its session's, its herdr pane's, or the one of the registered agent whose path contains its folder; otherwise, the main one.
+
+**Each project has instructions too** (⚙ › Agents, `dev-team-office agents set <id> --instructions "…"`, or `update_project` over MCP), for every agent working in its folder: the commands, the conventions, what not to touch. A brief to that folder starts like this (the office takes this header out of the whiteboard's title):
+
+```
+📁 Work only inside ~/shop: …
+📋 Instructions of the department «Payments»:
+│ Every amount in cents. Never log card numbers.
+📋 Instructions of the project «shop»:
+│ pnpm, not npm. Run pnpm test before finishing.
+
+Add pagination to the orders list
+```
 
 The interfaces show **one office at a time**: the one you pick in the selector at the **top left** (web and terminal; also with `o`). The choice is saved. The terminal log shows the activity of all of them.
 
@@ -222,6 +238,8 @@ The interfaces show **one office at a time**: the one you pick in the selector a
 The company's building has, besides its offices, two floors every office shares. Go up or down with the selector at the **top left** (`o`, or `PgUp`/`PgDn`), or **with the elevator**: clicking it, on any floor and in both views, opens its panel with a button per floor, and it takes you to the one you press. In the top-down view every floor has the same footprint: the room, and left of it the hallway with the building's elevator and the bathroom.
 
 **🏛 The executive floor**, on top: the directors, presided over by you (with your PO look). There you give **directives**: one order for several offices, departments or projects at once ("every API exposes `/health`", "update the logger everywhere"). Click the **directives board** (or `t` there), write the order and pick the offices (all their projects) or the projects one by one. The office sends each project's agent a brief with its part (to an open session of it, or a new one, like any brief) and the floor follows how each part goes; you can stop it. The company's **screen** shows what each office is doing (who is working, who is waiting for you, how many briefs). When a directive ends, its **minutes** go to the archive. Agents send them too: `send_directive` (MCP).
+
+The order goes to **operations** (the COO), who splits it across the departments. **If the department it is for does not exist yet**, create it right there in the dialog (＋ New department): operations takes note of what it still needs (its repositories, its people and its instructions), which you give it in ⚙ › Departments.
 
 **📚 The archive**, in the basement: what the company knows, shared by every office and every agent.
 
@@ -327,16 +345,17 @@ The office's gear (top right, on the web and in the terminal; also with `c`):
 | Tab | What is there |
 |---|---|
 | General | **Language** (English by default, or Spanish: it changes everything live, on the web, in the terminal and in the log), the company's **time zone** (search by typing the city, the region or the country) and its **city** (among the cities of that zone's country), real or simulated weather, office life in the log, the **office view** (front or isometric top-down), and herdr: agents in panes, each subagent in its pane, which way the pane opens and which agent opens at start |
-| Offices | The company's offices: name, time zone and city for the weather; view, edit and delete (their agents move to the main one) |
-| Agents | The maintainer: add (full path + CLI + office; it detects its harness as you type it), edit, delete and ✉ send it a prompt. Also the open sessions that are not registered |
-| Characters | Name, title, **sex** (their face, their default look and how the texts about them are written: *Diseñadora*/*Diseñador*), **personality** (chatty, focused, anxious, calm or dreamer: how often they chat, take breaks, doubt, watch TV or daydream), colors with a palette and a free picker (skin, hair, shirt, pants), long hair, beard and glasses of each character of the office you are watching. In the terminal, ◂ ▸ go through each palette and typing `#rrggbb` gives any other color |
+| Departments | The departments maintainer: each department (an office) with its **instructions**, its **projects** (＋ a new one, or bring an existing one into it), its **people** (👥 edit its characters), its time zone and its city for the weather; view, edit and delete (its projects move to the main one) |
+| Agents | The maintainer: add (full path + CLI + department; it detects its harness as you type it), the **project's instructions**, edit, delete and ✉ send it a prompt. Also the open sessions that are not registered |
+| Characters | Name, title, **sex** (their face, their default look and how the texts about them are written: *Diseñadora*/*Diseñador*), **personality** (chatty, focused, anxious, calm or dreamer: how often they chat, take breaks, doubt, watch TV or daydream), **style** (how they answer you, like Claude's: normal, concise, explanatory, teacher or formal), colors with a palette and a free picker (skin, hair, shirt, pants), long hair, beard and glasses of each character of the office you are watching. In the terminal, ◂ ▸ go through each palette and typing `#rrggbb` gives any other color. **⬇ Export / ⬆ Import:** a character as a JSON file, to share them (also `dev-team-office character export|import` and `GET|PUT /v1/characters/<role>`) |
 
 **Everything "local" comes from the time zone:** the date and time (the clock, lunch, day and night), the **country** and the city (from the IANA zone table, offline: `America/Santiago` → Chile, Santiago, −33.45, −70.67) and, with those coordinates, **the weather**. By default, the system's zone.
 
-Everything is saved in an **SQLite** database (also from the CLI: `dev-team-office config`, `dev-team-office offices`): `~/.dev-team-office/office.db`, or the path in `DEV_TEAM_OFFICE_DB`. It uses `node:sqlite`, so there are no native dependencies, and the file has `0600` permissions. It has four tables:
+Everything is saved in an **SQLite** database (also from the CLI: `dev-team-office config`, `dev-team-office offices`): `~/.dev-team-office/office.db`, or the path in `DEV_TEAM_OFFICE_DB`. It uses `node:sqlite`, so there are no native dependencies, and the file has `0600` permissions. It has five tables:
 
-- `offices`: the company's offices;
+- `offices`: the company's departments (offices), with their instructions;
 - `agents`: the registered agents (with their office);
+- `projects`: each project folder's instructions;
 - `settings`: the general settings (`prefs`: language, time zone, weather, herdr, log and the office being watched) and each office's appearance;
 - `prompts`: the history of what you sent them and how it ended.
 
@@ -350,7 +369,7 @@ Everything is validated before writing, applied live, and a foreign website cann
 
 Any process can send the office events and listen to it:
 
-- **HTTP/JSON** at `http://127.0.0.1:4317/v1/…`: `POST /v1/events/<source>`, `GET /v1/state?office=`, `GET /v1/weather`, `GET|POST /v1/offices`, `GET|PUT /v1/settings`, `GET|POST /v1/panes`, `GET /v1/services`, `POST /v1/commands`.
+- **HTTP/JSON** at `http://127.0.0.1:4317/v1/…`: `POST /v1/events/<source>`, `GET /v1/state?office=`, `GET /v1/weather`, `GET|POST /v1/offices`, `GET|PUT /v1/settings`, `GET|PUT /v1/characters/<role>`, `PUT /v1/projects/instructions`, `GET|POST /v1/panes`, `GET /v1/services`, `POST /v1/commands`.
 - **WebSocket** at `ws://127.0.0.1:4317/v1/ws`: live state and sending events, with an optional `ack`.
 - **Unix socket** at `~/.dev-team-office/office.sock`: the same API, accessible only to your user.
 

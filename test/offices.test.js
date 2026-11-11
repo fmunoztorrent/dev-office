@@ -23,7 +23,7 @@ test('la base: oficinas con nombre, zona horaria y ubicación; la principal no s
   let r = store.createOffice({ name: 'Pagos', timezone: 'Europe/Madrid', location: 'Madrid' });
   assert.equal(r.ok, true, r.error);
   assert.deepEqual([r.office.id, r.office.name, r.office.timezone, r.office.location], ['pagos', 'Pagos', 'Europe/Madrid', 'Madrid']);
-  for (const [bad, rx] of [[{}, /nombre/], [{ name: 'pagos' }, /ya hay una oficina/], [{ name: 'X', timezone: 'Marte/Olympus' }, /zona horaria desconocida/]]) {
+  for (const [bad, rx] of [[{}, /nombre/], [{ name: 'pagos' }, /ya hay un departamento/], [{ name: 'X', timezone: 'Marte/Olympus' }, /zona horaria desconocida/]]) {
     assert.match(store.createOffice(bad).error, rx, JSON.stringify(bad));
   }
   assert.equal(store.updateOffice('pagos', { timezone: null }).office.timezone, null);
@@ -33,7 +33,7 @@ test('la base: oficinas con nombre, zona horaria y ubicación; la principal no s
   const dir = tmp();
   const a = store.createAgent({ path: dir, harness: 'pi', office: 'Pagos' });
   assert.equal(a.agent.office, 'pagos');
-  assert.match(store.createAgent({ path: dir, harness: 'claude', office: 'nada' }).error, /oficina desconocida/);
+  assert.match(store.createAgent({ path: dir, harness: 'claude', office: 'nada' }).error, /departamento \(oficina\) desconocido/);
   assert.equal(store.setAppearance({ qa: { name: 'Pilar' } }, 'pagos').ok, true);
   assert.deepEqual(store.getAppearance('pagos'), { qa: { name: 'Pilar' } });
   assert.deepEqual(store.getAppearance(), {}, 'cada oficina tiene sus personajes');

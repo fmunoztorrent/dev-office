@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { detectHarness, harnessId, projectRoot, HARNESS_IDS, AGENT_ROLE_IDS, ROLE_NAME } from '../integrations/common/devteam.mjs';
 import { DEFAULT_TEAM } from '../public/sim.js';
 import { realDir } from './paths.js';
+import { guideFor, guideText } from './guides.js';
 import { spawnOffice } from './lifecycle.js';
 import { KNOWLEDGE_KINDS } from './store.js';
 
@@ -124,6 +125,7 @@ const TOOLS = [
         harness: { type: 'string', enum: HARNESS_IDS, description: 'Agent CLI that works on it (defaults to the caller)' },
         name: { type: 'string', description: 'Display name (defaults to the folder name)' },
         office: { type: 'string', description: 'Office (team/domain) id or name; created if it does not exist. Defaults to the main office' },
+        instructions: { type: 'string', description: 'How to work with it (conventions, commands, what not to touch): it goes on top of every brief, pipeline, directive and question to it. Empty removes them' },
       },
       additionalProperties: false,
     },
@@ -139,10 +141,10 @@ const TOOLS = [
   {
     name: 'update_project',
     title: 'Update a project',
-    description: 'Changes a registered project: its name, path, harness or office.',
+    description: 'Changes a registered project: its name, path, harness, office (department) or instructions.',
     inputSchema: {
       type: 'object',
-      properties: { id: { type: 'string' }, name: { type: 'string' }, path: { type: 'string' }, harness: { type: 'string', enum: HARNESS_IDS }, office: { type: 'string' } },
+      properties: { id: { type: 'string' }, name: { type: 'string' }, path: { type: 'string' }, harness: { type: 'string', enum: HARNESS_IDS }, office: { type: 'string' }, instructions: { type: 'string', description: 'How to work with it (conventions, commands, what not to touch): it goes on top of every brief, pipeline, directive and question to it. Empty removes them' } },
       required: ['id'],
       additionalProperties: false,
     },
@@ -158,21 +160,40 @@ const TOOLS = [
   {
     name: 'list_offices',
     title: 'List offices',
-    description: 'The offices of the company (each one a team or domain) with their timezone and how many projects and sessions they have.',
+    description: 'The departments of the company (each one an office: a team or domain) with their timezone, instructions and how many projects and sessions they have.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, openWorldHint: false },
   },
   {
     name: 'create_office',
-    title: 'Create an office',
-    description: 'Adds an office (a team or domain, like a real company): its name, and optionally its IANA timezone (for its clock, daylight and weather) and location.',
+    title: 'Create a department',
+    description: 'Adds a department (an office: a team or domain, like a real company): its name, and optionally its instructions (how to work there), its IANA timezone (for its clock, daylight and weather) and location. Then give it its projects with register_project or update_project. Use it when a directive is for a department that does not exist yet.',
     inputSchema: {
       type: 'object',
-      properties: { name: { type: 'string' }, timezone: { type: 'string', description: 'IANA zone, e.g. Europe/Madrid' }, location: { type: 'string', description: 'City or "lat,lon" for the weather' } },
+      properties: { name: { type: 'string' }, timezone: { type: 'string', description: 'IANA zone, e.g. Europe/Madrid' }, location: { type: 'string', description: 'City or "lat,lon" for the weather' }, instructions: { type: 'string', description: 'How to work in this department: they go with every brief, directive and question to its projects' } },
       required: ['name'],
       additionalProperties: false,
     },
     annotations: { readOnlyHint: false, openWorldHint: false },
+  },
+  {
+    name: 'update_office',
+    title: 'Update a department',
+    description: 'The departments maintainer: changes a department (an office) — its name, timezone, location or instructions (how to work there; empty removes them).',
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string', description: 'Department id or name' }, name: { type: 'string' }, timezone: { type: 'string' }, location: { type: 'string' }, instructions: { type: 'string' } },
+      required: ['id'],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: 'get_instructions',
+    title: 'Get the instructions for a project',
+    description: 'How to work with a project folder: its department\'s instructions and its own (the same ones that go on top of every brief to it). Read them before starting work in a project.',
+    inputSchema: { type: 'object', properties: { path: { type: 'string', description: 'Full path of the project (defaults to the current folder)' } }, additionalProperties: false },
+    annotations: { readOnlyHint: true, openWorldHint: false },
   },
   {
     name: 'report_activity',
@@ -383,7 +404,7 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
     });
   }
 
-  const summarize = (a) => ({ id: a.id, name: a.name, path: a.path, harness: a.harness, office: a.office, ...(a.kinds?.length ? { kinds: a.kinds } : {}), ...(a.entries ? { entries: a.entries.map((e) => e.id) } : {}), ...(a.sessions ? { openSessions: a.sessions.filter((s) => s.live).length } : {}) });
+  const summarize = (a) => ({ id: a.id, name: a.name, path: a.path, harness: a.harness, office: a.office, ...(a.instructions ? { instructions: a.instructions } : {}), ...(a.kinds?.length ? { kinds: a.kinds } : {}), ...(a.entries ? { entries: a.entries.map((e) => e.id) } : {}), ...(a.sessions ? { openSessions: a.sessions.filter((s) => s.live).length } : {}) });
 
   /** Starts the office if it is not running. Returns { h, started } (h: its health, or null if it could not). */
   async function ensureRunning() {
@@ -467,7 +488,7 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
       return { text: `${d.name}: ${d.harnesses.length ? d.harnesses.join(' + ') : 'no harness configured'} · ${d.entries.length} entry point(s) · ${roles.length ? `roles: ${roles.map(([n, r]) => `${n}→${r}`).join(', ')}` : 'no subagent roles declared'}${d.roleIssues?.length ? ` · issues: ${d.roleIssues.join('; ')}` : ''}`, data };
     },
 
-    async register_project({ path: p, harness, name, office } = {}) {
+    async register_project({ path: p, harness, name, office, instructions } = {}) {
       const dir = where(p);
       const d = detectHarness(dir);
       if (!d.exists) throw new ToolError(`folder not found: ${dir}`);
@@ -478,10 +499,10 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
       const existing = (await listAgents()).find((a) => realDir(a.path) === realDir(d.dir) && a.harness === h);
       let out;
       if (existing) {
-        const patch = { ...(name ? { name } : {}), ...(officeId ? { office: officeId } : {}) };
+        const patch = { ...(name ? { name } : {}), ...(officeId ? { office: officeId } : {}), ...(instructions !== undefined ? { instructions } : {}) };
         out = !Object.keys(patch).length ? { ok: true, agent: existing } : live ? await api(`/v1/agents/${encodeURIComponent(existing.id)}`, patch, 'PATCH') : local().updateAgent(existing.id, patch);
       } else {
-        const body = { path: d.dir, harness: h, ...(name ? { name } : {}), ...(officeId ? { office: officeId } : {}) };
+        const body = { path: d.dir, harness: h, ...(name ? { name } : {}), ...(officeId ? { office: officeId } : {}), ...(instructions !== undefined ? { instructions } : {}) };
         out = live ? await api('/v1/agents', body) : local().createAgent(body);
       }
       const a = okOr(out).agent;
@@ -516,15 +537,31 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
 
     async list_offices() {
       const offices = (await running()) ? (await api('/v1/offices'))?.offices || [] : local().listOffices();
-      return { text: offices.map((o) => `${o.id}: ${o.name || 'Main office'}${o.timezone ? ` · ${o.timezone}` : ''}`).join('\n'), data: { offices } };
+      return { text: offices.map((o) => `${o.id}: ${o.name || 'Main office'}${o.timezone ? ` · ${o.timezone}` : ''}${o.instructions ? `\n  📋 ${o.instructions.replace(/\n/g, '\n     ')}` : ''}`).join('\n'), data: { offices } };
     },
 
-    async create_office({ name, timezone, location } = {}) {
+    async create_office({ name, timezone, location, instructions } = {}) {
       need(String(name || '').trim(), 'name is required');
-      const body = { name, ...(timezone ? { timezone } : {}), ...(location ? { location } : {}) };
+      const body = { name, ...(timezone ? { timezone } : {}), ...(location ? { location } : {}), ...(instructions ? { instructions } : {}) };
       const out = (await running()) ? await api('/v1/offices', body) : local().createOffice(body);
       const o = okOr(out).office;
       return { text: `Office ${o.id} created: ${o.name}${o.timezone ? ` (${o.timezone})` : ''}`, data: o };
+    },
+
+    async update_office({ id, ...patch } = {}) {
+      need(id, 'id is required');
+      const officeId = need(await findOffice(id), `no department ${id}: create it with create_office`);
+      const out = (await running()) ? await api(`/v1/offices/${encodeURIComponent(officeId)}`, patch, 'PUT') : local().updateOffice(officeId, patch);
+      const o = okOr(out).office;
+      return { text: `Department ${o.id} updated: ${o.name || 'Main office'}${o.instructions ? ' (with instructions)' : ''}`, data: o };
+    },
+
+    async get_instructions({ path: p } = {}) {
+      const dir = where(p);
+      const store = local();
+      const g = guideFor(store, dir);
+      const text = guideText(g);
+      return { text: text || `No instructions for ${dir} (nor for its department). Add them with update_project or update_office.`, data: g };
     },
 
     async report_activity(a = {}) {
@@ -584,6 +621,11 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
       need(String(text || '').trim(), 'text is required');
       need(offices.length || projects.length, 'pick projects (list_projects) and/or offices ("all" for every one)');
       need(await running(), 'the office is not running: start it with office_start');
+      // a department that does not exist yet: say how to create it (operations cannot split an order to nobody)
+      for (const ref of offices) {
+        if (ref === 'all') continue;
+        try { await findOffice(ref); } catch { throw new ToolError(`no department "${ref}" yet: create it with create_office (its instructions too), give it projects with register_project or update_project, then send the directive again`); }
+      }
       const all = await listAgents();
       const targets = projects.map((ref) => {
         if (!/[/~]/.test(ref)) return ref;

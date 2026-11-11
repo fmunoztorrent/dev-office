@@ -165,11 +165,13 @@ test('desde la terminal: Personajes → sexo, personalidad y un color de piel es
     type('\x1b[C'); // Tomás: man → woman
     type('\x1b[B'); // Personality
     type('\x1b[C'); // calm → dreamer
+    type('\x1b[B'); // Style
+    type('\x1b[C'); // normal → concise
     type('\x1b[B'); // Skin
     type('#5c3a21');
     type('\x13');
     const look = await until(() => server.store.getAppearance().tl);
-    assert.deepEqual({ sex: look.sex, long: look.long, beard: look.beard, personality: look.personality, skin: look.skin }, { sex: 'f', long: true, beard: false, personality: 'dreamer', skin: '#5c3a21' });
+    assert.deepEqual({ sex: look.sex, long: look.long, beard: look.beard, personality: look.personality, style: look.style, skin: look.skin }, { sex: 'f', long: true, beard: false, personality: 'dreamer', style: 'concise', skin: '#5c3a21' });
     await until(() => TEAM.tl.sex === 'f');
   } finally {
     type('\x1b');

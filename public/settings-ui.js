@@ -6,7 +6,8 @@
 //                detected, and a prompt sent from the whiteboard starts THAT pipeline.
 //   Characters   how the characters of the office being watched look.
 
-import { TEAM, DEFAULT_TEAM, APPEARANCE_KEYS, LOOK_PALETTES, SEXES, PERSONALITIES, randomLook, lookForSex } from './sim.js';
+import { TEAM, DEFAULT_TEAM, APPEARANCE_KEYS, LOOK_PALETTES, SEXES, PERSONALITIES, STYLES, randomLook, lookForSex } from './sim.js';
+import { exportCharacter, parseCharacter, characterFile } from './character.js';
 import { drawSprite } from './sprite.js';
 import { t, LANGUAGES, getLanguage } from './i18n.js';
 import { allZones, zoneInfo, countryName } from './clock.js';
@@ -39,8 +40,8 @@ async function api(method, path, body) {
   return res.ok ? { ok: true, ...data } : { ok: false, error: data.error || `HTTP ${res.status}` };
 }
 
-const emptyForm = () => ({ id: null, path: '', harness: '', name: '', bin: '', args: '', office: null, detected: null, touched: false });
-const emptyOffice = () => ({ id: null, name: '', timezone: '', location: '' });
+const emptyForm = () => ({ id: null, path: '', harness: '', name: '', bin: '', args: '', office: null, instructions: '', detected: null, touched: false });
+const emptyOffice = () => ({ id: null, name: '', timezone: '', location: '', instructions: '' });
 
 /** A time zone field: type to search (city, region or country) among all zones. */
 function zoneInput({ value, placeholder, label, onPick }) {
@@ -132,7 +133,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     $('settings-save').hidden = tab !== 'look' && tab !== 'models';
     $('s-file').textContent = st.data ? t('settings.file', { file: tilde(st.data.office.file) }) : '';
     if (tab === 'general') renderGeneral();
-    else if (tab === 'offices') renderOffices();
+    else if (tab === 'offices') { renderOffices(); loadProjects(); }
     else if (tab === 'agents') renderAgents();
     else if (tab === 'models') { st.models = null; renderModels(); }
     else { st.looks = null; renderLook(); }
@@ -143,6 +144,13 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     if (!$('settings').open) return;
     if (st.tab === 'agents') return renderList();
     if (all || st.tab === 'general' || st.tab === 'offices') show(st.tab);
+  }
+  /** The watched office's characters changed (another office chosen, or saved): Characters shows them. */
+  function appearanceChanged() {
+    if (!$('settings').open || st.tab !== 'look' || (!st.pendingLook && !st.saved)) return;
+    st.pendingLook = st.saved = false;
+    st.looks = null;
+    renderLook();
   }
 
   // ------------------------------------------------------------ General
@@ -189,29 +197,57 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
 
   // ------------------------------------------------------------ Oficinas
 
+  /**
+   * The departments maintainer: each department is an office of the company, with its projects
+   * (repositories and their agents), its people (the characters), its instructions (how to work
+   * there), its time zone and its weather.
+   */
   function renderOffices() {
     const panel = document.querySelector('[data-panel="offices"]');
     const O = (k, v) => t(`settings.offices.${k}`, v);
     const p = getPrefs() || st.data?.office.prefs || {};
     const company = p.timezone || st.data?.systemZone || '';
-    const cards = getOffices().map((o) => el('div', { class: 's-agent' },
-      el('div', { class: 's-agent-head' },
-        el('b', {}, o.name), o.id === 'main' ? el('span', { class: 's-tag' }, O('main')) : null,
-        el('span', { class: 's-tag kind' }, tzLabel(o.timezone)),
-        o.id === here() ? el('span', { class: 's-ok' }, O('viewing')) : null),
-      el('div', { class: 'hint' }, `${O('agents', { n: o.agents })}${o.place?.name ? ` · 📍 ${o.place.name}` : ''}${o.ownTimezone ? '' : ` · ${O('inherit', { tz: company })}`}`),
-      el('div', { class: 's-row' },
-        o.id !== here() ? el('button', { type: 'button', class: 's-mini', onclick: () => { onView?.(o.id); $('settings').close(); } }, `👁 ${O('view')}`) : null,
-        el('button', { type: 'button', class: 's-mini', onclick: () => { st.office = { id: o.id, name: o.custom ? o.name : '', timezone: o.ownTimezone || '', location: o.location || '' }; renderOffices(); } }, O('edit')),
-        o.id !== 'main' ? el('button', { type: 'button', class: 's-mini danger', onclick: () => removeOffice(o) }, O('delete')) : null)));
+    const projects = st.projects || getTargets().filter((x) => x.registered);
+    const cards = getOffices().map((o) => {
+      const mine = projects.filter((a) => a.office === o.id);
+      const others = projects.filter((a) => a.office !== o.id);
+      return el('div', { class: 's-agent s-dept' },
+        el('div', { class: 's-agent-head' },
+          el('b', {}, o.name), o.id === 'main' ? el('span', { class: 's-tag' }, O('main')) : null,
+          el('span', { class: 's-tag kind' }, tzLabel(o.timezone)),
+          o.instructions ? el('span', { class: 's-tag kind', title: o.instructions }, O('hasInstructions')) : null,
+          o.id === here() ? el('span', { class: 's-ok' }, O('viewing')) : null),
+        el('div', { class: 'hint' }, `${o.place?.name ? `📍 ${o.place.name}` : ''}${o.ownTimezone ? '' : `${o.place?.name ? ' · ' : ''}${O('inherit', { tz: company })}`}`),
+        o.instructions ? el('p', { class: 's-dept-text' }, o.instructions) : null,
+        // its projects: the repositories of the company that work for it
+        el('div', { class: 's-dept-k' }, `${O('projects')} (${mine.length})`),
+        el('div', { class: 's-entries' }, mine.length ? mine.map((a) => el('span', { title: `${tilde(a.path)}${a.instructions ? `\n📋 ${a.instructions}` : ''}` }, `${a.name} · ${HARNESS_NAME[a.harness] || a.harness}${a.instructions ? ' 📋' : ''}`)) : el('span', { class: 'hint' }, O('noProjects'))),
+        el('div', { class: 's-row' },
+          el('button', { type: 'button', class: 's-mini', onclick: () => { st.form = { ...emptyForm(), office: o.id }; show('agents'); } }, O('addProject')),
+          others.length ? el('select', { class: 's-mini', 'aria-label': O('moveHere'), onchange: async (e) => {
+            if (!e.target.value) return;
+            const r = await api('PUT', `/v1/agents/${encodeURIComponent(e.target.value)}`, { office: o.id });
+            if (!r.ok) return msg(r.error);
+            onSaved?.();
+            loadProjects();
+          } }, option('', O('moveHere'), true), others.map((a) => option(a.id, `${a.name} · ${HARNESS_NAME[a.harness] || a.harness}`))) : null),
+        // its people: the characters of that office
+        el('div', { class: 's-row' },
+          o.id !== here() ? el('button', { type: 'button', class: 's-mini', onclick: () => { onView?.(o.id); $('settings').close(); } }, `👁 ${O('view')}`) : null,
+          el('button', { type: 'button', class: 's-mini', onclick: () => { if (o.id !== here()) { st.pendingLook = true; onView?.(o.id); } show('look'); } }, `👥 ${O('editPeople')}`),
+          el('button', { type: 'button', class: 's-mini', onclick: () => { st.office = { id: o.id, name: o.custom ? o.name : '', timezone: o.ownTimezone || '', location: o.location || '', instructions: o.instructions || '' }; renderOffices(); $('s-office-form')?.scrollIntoView({ block: 'nearest' }); } }, O('edit')),
+          o.id !== 'main' ? el('button', { type: 'button', class: 's-mini danger', onclick: () => removeOffice(o) }, O('delete')) : null));
+    });
     const f = st.office;
     const editing = getOffices().find((o) => o.id === f.id);
     put(panel,
       el('p', { class: 'hint' }, O('hint')),
       el('div', { class: 's-agents' }, cards),
       el('h3', {}, editing ? O('editTitle', { name: editing.name }) : O('newTitle')),
-      el('div', { class: 's-form' },
+      el('div', { class: 's-form', id: 's-office-form' },
         el('label', { class: 'b-field' }, el('span', {}, O('name')), el('input', { type: 'text', value: f.name, maxlength: 40, oninput: (e) => { f.name = e.target.value; } })),
+        el('label', { class: 'note' }, el('span', {}, O('instructions')),
+          el('textarea', { rows: 4, maxlength: 4000, placeholder: O('instructionsPh'), oninput: (e) => { f.instructions = e.target.value; } }, f.instructions || '')),
         el('label', { class: 'b-field' }, el('span', {}, O('timezone')),
           el('span', { class: 'tz-field' }, zoneInput({ value: f.timezone, placeholder: O('inherit', { tz: company }), label: O('timezone'), onPick: (z) => {
             // another country: its city is no longer valid
@@ -226,9 +262,17 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
           f.id ? el('button', { type: 'button', class: 'btn ghost', onclick: () => { st.office = emptyOffice(); renderOffices(); } }, O('cancel')) : null)));
   }
 
+  /** Every department's projects (the page only has the watched office's). */
+  async function loadProjects() {
+    const r = await api('GET', '/v1/agents');
+    if (!r.ok) return;
+    st.projects = (r.agents || []).filter((a) => a.registered);
+    if (st.tab === 'offices' && $('settings').open) renderOffices();
+  }
+
   async function saveOffice() {
     const f = st.office;
-    const body = { name: f.name, timezone: f.timezone || null, location: f.location || null };
+    const body = { name: f.name, timezone: f.timezone || null, location: f.location || null, instructions: f.instructions || '' };
     const r = f.id ? await api('PUT', `/v1/offices/${encodeURIComponent(f.id)}`, body) : await api('POST', '/v1/offices', body);
     if (!r.ok) return msg(r.error);
     msg(f.id ? t('settings.offices.updated') : t('settings.offices.created', { name: r.office.name }), true);
@@ -272,6 +316,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         el('b', {}, a.name), el('span', { class: 's-tag' }, HARNESS_NAME[a.harness] || a.harness),
         ...a.kinds.map((k) => el('span', { class: 's-tag kind' }, k)),
         offices.length > 1 ? el('span', { class: 's-tag' }, `🏢 ${officeName(a.office)}`) : null,
+        a.instructions ? el('span', { class: 's-tag kind', title: a.instructions }, A('hasInstructions')) : null,
         a.sessions.some((x) => x.live) ? el('span', { class: 's-ok' }, A('sessionOpen')) : null,
         !a.exists ? el('span', { class: 's-bad' }, A('pathMissing')) : !a.available ? el('span', { class: 's-bad' }, A('cliMissing', { agent: HARNESS_NAME[a.harness] })) : null),
       el('div', { class: 'hint' }, tilde(a.path)),
@@ -309,6 +354,9 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       el('label', { class: 'b-field' }, el('span', {}, A('name')), el('input', { type: 'text', value: f.name, placeholder: A('namePh'), maxlength: 40, oninput: (e) => { f.name = e.target.value; } })),
       offices.length > 1 ? el('label', { class: 'b-field' }, el('span', {}, A('office')),
         el('select', { onchange: (e) => { f.office = e.target.value; } }, offices.map((o) => option(o.id, o.name, o.id === f.office)))) : null,
+      // how to work with this project: it goes with every brief, pipeline and question to its folder
+      el('label', { class: 'note' }, el('span', {}, A('instructions')),
+        el('textarea', { rows: 4, maxlength: 4000, placeholder: A('instructionsPh'), oninput: (e) => { f.instructions = e.target.value; } }, f.instructions || '')),
       el('details', {}, el('summary', {}, A('advanced')),
         el('label', { class: 'b-field' }, el('span', {}, A('bin')), el('input', { type: 'text', value: f.bin, placeholder: A('binPh'), oninput: (e) => { f.bin = e.target.value; } })),
         el('label', { class: 'b-field' }, el('span', {}, A('args')), el('input', { type: 'text', value: f.args, placeholder: A('argsPh'), oninput: (e) => { f.args = e.target.value; } })),
@@ -331,7 +379,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   }
 
   function edit(a) {
-    st.form = { ...emptyForm(), id: a.id, path: a.path, harness: a.harness, name: a.name, office: a.office, bin: a.bin || '', args: (a.args || []).join(' '), touched: true };
+    st.form = { ...emptyForm(), id: a.id, path: a.path, harness: a.harness, name: a.name, office: a.office, bin: a.bin || '', args: (a.args || []).join(' '), instructions: a.instructions || '', touched: true };
     renderForm();
     detect();
     $('s-agent-form').scrollIntoView({ block: 'nearest' });
@@ -339,7 +387,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
 
   async function save() {
     const f = st.form;
-    const body = { path: f.path, harness: f.harness, name: f.name, office: f.office || here(), bin: f.bin || null, args: f.args.trim() ? f.args.trim().split(/\s+/) : null };
+    const body = { path: f.path, harness: f.harness, name: f.name, office: f.office || here(), bin: f.bin || null, args: f.args.trim() ? f.args.trim().split(/\s+/) : null, instructions: f.instructions };
     const r = f.id ? await api('PUT', `/v1/agents/${encodeURIComponent(f.id)}`, body) : await api('POST', '/v1/agents', body);
     if (!r.ok) return msg(r.error);
     st.form = emptyForm();
@@ -400,6 +448,11 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         el('div', { class: 'pair' },
           select('sex', SEXES, (v) => LK(`sexes.${v}`)),
           select('personality', Object.keys(PERSONALITIES), (v) => LK(`personalities.${v}`))),
+        el('div', { class: 'pair' },
+          select('style', STYLES, (v) => LK(`styles.${v}`)),
+          el('div', { class: 's-share' },
+            el('button', { type: 'button', class: 's-mini', title: LK('exportTitle', { name: look.name }), onclick: () => download(role, look) }, LK('export')),
+            el('button', { type: 'button', class: 's-mini', title: LK('importTitle'), onclick: () => upload(role) }, LK('import')))),
         el('div', { class: 'colors' }, colorField(look, 'skin', set), colorField(look, 'hair', set), colorField(look, 'shirt', set), colorField(look, 'pants', set)),
         el('div', { class: 'toggles' }, toggle('long'), toggle('beard'), toggle('glasses')),
         el('div', { class: 'toggles' },
@@ -415,6 +468,28 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       el('div', { class: 's-looks' }, cards));
     if (box) box.scrollTop = top;
     if (focus) [...panel.querySelectorAll('[aria-label]')].find((x) => x.getAttribute('aria-label') === focus)?.focus();
+  }
+
+  // A character as a JSON file (public/character.js): to share them, and to bring one in.
+  function download(role, look) {
+    const blob = new Blob([`${JSON.stringify(exportCharacter(role, look), null, 2)}\n`], { type: 'application/json' });
+    const a = el('a', { href: URL.createObjectURL(blob), download: characterFile(role, look.name) });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  function upload(role) {
+    const input = el('input', { type: 'file', accept: '.json,application/json', onchange: async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const c = parseCharacter(await file.text());
+      if (!c.ok) return msg(t(`err.character.${c.error}`));
+      Object.assign(st.looks[role], c.look);
+      renderLook();
+      msg(LK('imported', { name: st.looks[role].name }), true);
+    } });
+    input.click();
   }
 
   async function saveLook() {
@@ -480,5 +555,5 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   $('settings-save').onclick = () => (st.tab === 'look' ? saveLook() : st.tab === 'models' ? setPref({ models: st.models }) : null);
   $('settings-form').onsubmit = (e) => e.preventDefault();
 
-  return { open, refresh };
+  return { open, refresh, appearanceChanged };
 }

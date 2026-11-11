@@ -4,6 +4,20 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-11
+
+### Added
+
+- **How each character answers you:** a **style** per character (⚙ › Characters, web and terminal), like Claude's: normal, concise, explanatory, teacher or formal. Their answers (a question on their card, `btw`) follow it.
+- **Characters you can share:** ⬇ Export / ⬆ Import a character as a JSON file (name, sex, personality, style and look), into any role and office. Also `dev-team-office character export|import` and `GET|PUT /v1/characters/<role>`.
+- **Project instructions**, like a ChatGPT or Claude project's: each project folder has its own (⚙ › Agents, `dev-team-office agents add|set --instructions`, `update_project`/`register_project` over MCP, `PUT /v1/projects/instructions`). They go on top of every brief, pipeline, directive and question to that folder, under the 📁 scope line; the office takes that header out of the whiteboard's title.
+- **The departments maintainer** (⚙ › Departments, formerly Offices): each department (an office) with its **instructions** (they go with every brief to its projects), its **projects** (a new one, or bring an existing one into it), its **people** (edit its characters), its time zone and its weather. `dev-team-office departments`, and `update_office`, `get_instructions` over MCP.
+- **A directive for a department that does not exist yet:** create it right in the directive dialog (＋ New department); operations (the COO) takes note of what it still needs. Over MCP, `send_directive` to an unknown department says how to create it.
+
+### Changed
+
+- An answer to a question can be longer (up to 4000 characters), for the explanatory and teacher styles.
+
 ## [0.11.1] - 2026-11-11
 
 ### Fixed
@@ -165,7 +179,8 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.11.1...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/fmunoztorrent/dev-office/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.9.0...v0.10.0

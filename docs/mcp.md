@@ -18,16 +18,18 @@ This page explains what it does and how to register it by hand in another client
 | `office_status` | — | Is it running? URL, version, offices, registered projects and open sessions |
 | `office_start` | `open?` | Starts it in the background if it is not running (`dev-team-office serve`, log in `~/.dev-team-office/office.log`) and returns the URL; with `open`, opens the browser |
 | `detect_project` | `path?` | What a folder brings: harnesses, entries (pipelines, commands, prompts) and each subagent's role (`roles`, `roleIssues`) |
-| `register_project` | `path?`, `harness?`, `name?`, `office?` | Registers the folder with the CLI that serves it. `harness` defaults to the client's (by its `clientInfo.name`); `office` is looked up by id or name and created if it does not exist. Idempotent |
+| `register_project` | `path?`, `harness?`, `name?`, `office?`, `instructions?` | Registers the folder with the CLI that serves it. `harness` defaults to the client's (by its `clientInfo.name`); `office` is looked up by id or name and created if it does not exist. Idempotent |
 | `list_projects` | `office?` | The registered projects |
-| `update_project` | `id`, `name?`, `path?`, `harness?`, `office?` | Changes a project |
+| `update_project` | `id`, `name?`, `path?`, `harness?`, `office?`, `instructions?` | Changes a project; `instructions` (how to work with it) go on top of every brief, pipeline and question to its folder |
 | `remove_project` | `id` | Removes it from the registry (its files are not touched) |
-| `list_offices` | — | The offices (teams or domains) |
-| `create_office` | `name`, `timezone?`, `location?` | A new office, with its IANA zone (time, daylight and weather) |
+| `list_offices` | — | The departments (offices: teams or domains), with their instructions |
+| `create_office` | `name`, `timezone?`, `location?`, `instructions?` | A new department, with its IANA zone (time, daylight and weather) and how to work there |
+| `update_office` | `id`, `name?`, `timezone?`, `location?`, `instructions?` | The departments maintainer: changes a department |
+| `get_instructions` | `path?` | How to work with a project folder: its department's instructions and its own (the same that go on top of every brief to it) |
 | `report_activity` | `kind`, `text?`, `role?`, `phase?`, `from?`, `todos?`, `roles?`, `cwd?` | `task` · `phase` · `phase_end` · `todos` · `waiting` · `error` · `turn_end` · `done` · `chat` · `agent_roles`. It does not fail without an office: it returns `delivered: false` |
 | `send_task` | `project` (id or path), `text`, `entry?`, `newSession?` | Sends a prompt to a registered project's agent, through an entry of its harness |
 | `open_pane` | `command?` \| `agent?` + `prompt?`, `role?`, `title?`, `direction?` | Inside herdr: opens a pane with an activity and tells the office |
-| `send_directive` | `text`, `title?`, `offices?` (ids or names, or `["all"]`), `projects?` (ids or paths) | **The executive floor:** one order for several offices or projects. Each project's agent gets a brief with its part (it starts with 🏛); the office follows each part and, when all end, archives the minutes |
+| `send_directive` | `text`, `title?`, `offices?` (ids or names, or `["all"]`), `projects?` (ids or paths) | **The executive floor:** one order for several offices or projects. Each project's agent gets a brief with its part (it starts with 🏛); the office follows each part and, when all end, archives the minutes. A department that does not exist yet is an error that says how to create it (`create_office`) |
 | `list_directives` | — | The latest directives, how each project is doing, and what each office is doing right now |
 | `search_knowledge` | `query?`, `kind?`, `limit?` | **The archive:** the entries that best match (notes, decisions, docs, minutes, skills, connectors), with an excerpt. Works with the office off too |
 | `get_knowledge` | `id` \| `name` + `kind?` | An entry whole (a skill or connector also by its name). It counts as a read |

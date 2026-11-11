@@ -185,6 +185,11 @@
           <span class="fl-label" data-i18n="exec.ui.scope">Who</span>
           <div id="dv-offices" class="fl-scope"></div>
           <p id="dv-none" class="fl-dim" data-i18n="exec.ui.noAgents" hidden></p>
+          <!-- the department the order is for may not exist yet: it is created right here -->
+          <div class="fl-new">
+            <input id="dv-dept" type="text" maxlength="40" autocomplete="off" data-i18n-ph="exec.ui.deptPh" data-i18n-aria="exec.ui.deptPh">
+            <button type="button" class="btn ghost" id="dv-dept-add" data-i18n="exec.ui.deptAdd">＋ New department</button>
+          </div>
         </div>
         <p id="dv-msg" class="b-problem" role="status" aria-live="polite"></p>
         <span class="fl-label" data-i18n="exec.ui.recent">The latest</span>

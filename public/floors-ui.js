@@ -58,8 +58,9 @@ function scopePicker(box, groups, { checked = () => false } = {}) {
  * @param getDirectives  () => the latest directives (they come over WebSocket)
  * @param getOffices     () => the company's offices
  * @param hhmm           (ts) => the time, in the office's zone
+ * @param onDepartment   (office) => a department was created from here (to set up its projects and people)
  */
-export function createDirectivesUi({ getDirectives = () => [], getOffices = () => [], hhmm = (ts) => new Date(ts).toLocaleTimeString() }) {
+export function createDirectivesUi({ getDirectives = () => [], getOffices = () => [], hhmm = (ts) => new Date(ts).toLocaleTimeString(), onDepartment }) {
   const dialog = $('directives');
   const st = { chosen: () => [], busy: false };
   $('dv-close').onclick = () => dialog.close();
@@ -81,6 +82,22 @@ export function createDirectivesUi({ getDirectives = () => [], getOffices = () =
     st.chosen = scopePicker($('dv-offices'), groups, { checked: () => groups.length === 1 });
     $('dv-text').focus();
   }
+
+  // A department that does not exist yet: created here (its projects, people and instructions, in ⚙ › Departments)
+  $('dv-dept').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); $('dv-dept-add').click(); } };
+  $('dv-dept-add').onclick = async () => {
+    const name = $('dv-dept').value.trim();
+    if (!name) { say(t('exec.ui.deptName')); $('dv-dept').focus(); return; }
+    const out = await api('/v1/offices', { name });
+    if (!out.ok) return say(out.error || '?');
+    $('dv-dept').value = '';
+    say(t('exec.ui.deptCreated', { name: out.office.name }), true);
+    onDepartment?.(out.office);
+    const groups = await projectsByOffice([...getOffices().filter((o) => o.id !== out.office.id), out.office]);
+    $('dv-offices').hidden = false;
+    $('dv-none').hidden = true;
+    st.chosen = scopePicker($('dv-offices'), groups);
+  };
 
   $('dv-form').onsubmit = async (e) => {
     e.preventDefault();

@@ -94,7 +94,7 @@ export class Company extends EventEmitter {
     const z = zoneInfo(tz);
     const office = this.get(id);
     return {
-      id: o.id, name: o.name || t('offices.main'), custom: !!o.name, timezone: tz, ownTimezone: o.timezone, location: o.location,
+      id: o.id, name: o.name || t('offices.main'), custom: !!o.name, timezone: tz, ownTimezone: o.timezone, location: o.location, instructions: o.instructions || '',
       country: z.country, city: z.city, place: placeOf(this.locationOf(id), z), agents: this.store.listAgents().filter((a) => a.office === o.id).length,
       sessions: [...office.sessions.values()].filter((s) => s.id !== 'office').length,
     };

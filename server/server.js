@@ -30,13 +30,14 @@ import { SubPanes } from './subpanes.js';
 import { ServiceHub } from './services.js';
 import { PromptHub } from './prompts.js';
 import { DEFAULT_TEAM } from '../public/sim.js';
+import { exportCharacter, parseCharacter, changedLook } from '../public/character.js';
 import { detectHarness, projectRoot, HARNESSES, which } from '../integrations/common/devteam.mjs';
 import { t, setLanguage, getLanguage } from '../public/i18n.js';
 import { zoneInfo, systemZone } from '../public/clock.js';
 import { insideDir as inside } from './paths.js';
 import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.11.1';
+export const VERSION = '0.12.0';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
 const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
@@ -540,7 +541,11 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       if (req.method === 'GET' && p === '/v1/offices') return json(res, 200, { ok: true, offices: company.list(), view: view() });
       if (req.method === 'POST' && p === '/v1/offices') {
         const out = store.createOffice(await body(req));
-        if (out.ok) { officesChanged(); out.office = company.info(out.office.id); }
+        if (out.ok) {
+          officesChanged();
+          out.office = company.info(out.office.id);
+          floor('exec', 'department', { text: out.office.name }); // operations takes note of the new department
+        }
         return json(res, out.ok ? 201 : 400, out);
       }
       let m;
@@ -557,6 +562,28 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
           if (out.ok) officesChanged();
           return json(res, out.ok ? 200 : out.status || 400, out);
         }
+      }
+      // A character as JSON, to share it (public/character.js): GET exports it, PUT imports one
+      if ((m = p.match(/^\/v1\/characters\/([^/]+)$/))) {
+        const role = normRole(decodeURIComponent(m[1]));
+        if (!role) return json(res, 404, { ok: false, error: t('err.unknownRole', { role: decodeURIComponent(m[1]) }) });
+        const id = valid(q('office'));
+        if (req.method === 'GET') return json(res, 200, exportCharacter(role, { ...DEFAULT_TEAM[role], ...(store.getAppearance(id)[role] || {}) }));
+        if (req.method === 'PUT') {
+          const c = parseCharacter(await body(req));
+          if (!c.ok) return json(res, 400, { ok: false, error: t(`err.character.${c.error}`) });
+          const r = store.setAppearance({ [role]: Object.keys(changedLook(role, c.look)).length ? changedLook(role, c.look) : null }, id);
+          if (!r.ok) return json(res, 400, r);
+          bus.emit('appearance', id, r.appearance);
+          return json(res, 200, { ok: true, role, appearance: r.appearance[role] || {} });
+        }
+      }
+      // A project folder's instructions (also with each agent of ⚙ › Agents): { path, instructions }
+      if (req.method === 'PUT' && p === '/v1/projects/instructions') {
+        const b = await body(req);
+        const out = store.setProjectInstructions(b.path, b.instructions);
+        if (out.ok) registry.changed();
+        return json(res, out.ok ? 200 : 400, out);
       }
       // herdr: the panes the office follows, and the ones an agent announces (`dev-team-office pane`)
       if (req.method === 'GET' && p === '/v1/panes') return json(res, 200, { ok: true, ...(herdr ? herdr.status() : { available: false, panes: [] }) });
@@ -667,7 +694,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
           if (run) out.pipeline = run;
           else {
             const task = hub.takeForClaude(session);
-            if (task) out.task = { id: task.id, text: task.text, ...(task.command ? { command: task.command, args: task.args } : {}) };
+            // with the instructions of its project and department on top (Claude already works in its folder)
+            if (task) out.task = { id: task.id, text: task.command ? task.text : hub.brief(task.text, company.session(session)?.cwd, { office: task.office, scope: false }), ...(task.command ? { command: task.command, args: task.args } : {}) };
           }
         }
         const cancel = session ? pipelines.cancelsFor(session) : [];

@@ -7,7 +7,7 @@
 // Everything is saved in the SQLite database (through the office's API).
 // Keys: ↑↓/tab field · ◂▸ change · typing edits · Enter action · ctrl+s save · esc close
 
-import { TEAM, DEFAULT_TEAM, APPEARANCE_KEYS, LOOK_PALETTES, SEXES, PERSONALITIES, randomLook, lookForSex } from '../public/sim.js';
+import { TEAM, DEFAULT_TEAM, APPEARANCE_KEYS, LOOK_PALETTES, SEXES, PERSONALITIES, STYLES, randomLook, lookForSex } from '../public/sim.js';
 import { t, LANGUAGES } from '../public/i18n.js';
 import { allZones, zoneInfo, countryName } from '../public/clock.js';
 import { parsePlace } from '../public/sky.js';
@@ -36,7 +36,7 @@ const searchZones = (q, lang) => {
 
 const HARNESS_IDS = ['claude-code', 'opencode', 'pi', 'codex'];
 const emptyCity = () => ({ query: '', hits: [], offline: false, busy: false, seq: 0, timer: null });
-const emptyOffice = () => ({ id: null, name: '', timezone: null, location: '', tzQuery: '', city: emptyCity() });
+const emptyOffice = () => ({ id: null, name: '', timezone: null, location: '', instructions: '', tzQuery: '', city: emptyCity() });
 const placeName = (location) => parsePlace(location)?.name || String(location || '');
 
 /**
@@ -108,7 +108,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
 
   async function saveOffice() {
     const f = s.officeForm;
-    const body = { name: f.name, timezone: f.timezone, location: f.location || null };
+    const body = { name: f.name, timezone: f.timezone, location: f.location || null, instructions: f.instructions };
     const r = f.id ? await api('PUT', `/v1/offices/${encodeURIComponent(f.id)}`, body) : await api('POST', '/v1/offices', body);
     if (!r.ok) return say(r.error);
     say(f.id ? t('settings.offices.updated') : t('settings.offices.created', { name: r.office.name }), true);
@@ -197,7 +197,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
         const own = o.ownTimezone ? tzLabel(o.timezone) : t('settings.offices.inherit', { tz: o.timezone });
         f.push({ type: 'info', text: `  ${o.name}${o.id === 'main' ? ` (${t('settings.offices.main')})` : ''} · ${own}${o.place?.name ? ` · 📍 ${o.place.name}` : ''} · ${t('settings.offices.agents', { n: o.agents })}${o.id === office() ? `  ${t('settings.offices.viewing')}` : ''}`, color: C.ink });
         if (o.id !== office()) f.push({ type: 'action', label: '', value: () => `👁 ${t('settings.offices.view')} ${o.name}`, run: () => onView?.(o.id) });
-        f.push({ type: 'action', label: '', value: () => `✎ ${t('settings.offices.edit')} ${o.name}`, run: () => { s.officeForm = { ...emptyOffice(), id: o.id, name: o.custom ? o.name : '', timezone: o.ownTimezone, location: o.location || '' }; s.focus = 0; } });
+        f.push({ type: 'action', label: '', value: () => `✎ ${t('settings.offices.edit')} ${o.name}`, run: () => { s.officeForm = { ...emptyOffice(), id: o.id, name: o.custom ? o.name : '', timezone: o.ownTimezone, location: o.location || '', instructions: o.instructions || '' }; s.focus = 0; } });
         if (o.id !== 'main') f.push({ type: 'action', label: '', value: () => `✕ ${t('settings.offices.delete')} ${o.name}`, run: () => deleteOffice(o) });
       }
       const of = s.officeForm;
@@ -210,6 +210,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
       const officeZone = () => of.timezone || p.timezone || s.data.systemZone;
       f.push(cityField(of.city, { label: t('settings.offices.location'), timezone: officeZone, onPick: (c) => { of.location = c || ''; },
         placeholder: () => (of.location ? placeName(of.location) : !of.timezone && p.city ? t('settings.offices.cityInherit', { city: placeName(p.city) }) : t('settings.offices.locationPh', { city: zoneInfo(officeZone()).city || '' })) }));
+      f.push({ type: 'text', label: t('settings.offices.instructions'), value: () => of.instructions, placeholder: () => t('settings.offices.instructionsPh'), edit: (v) => { of.instructions = v.slice(0, 4000); } });
       f.push({ type: 'action', label: '', value: () => (of.id ? t('settings.offices.saveChanges') : t('settings.offices.add')), run: () => saveOffice() });
       if (of.id) f.push({ type: 'action', label: '', value: () => t('settings.offices.cancel'), run: () => { s.officeForm = emptyOffice(); } });
     } else if (s.tab === 'agents') {
@@ -229,6 +230,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
       f.push({ type: 'text', label: t('settings.agents.path'), value: () => s.form.path, placeholder: t('settings.agents.pathPh'), edit: (v) => { s.form.path = v; } });
       f.push({ type: 'select', label: t('settings.agents.agent'), value: () => HARNESS_NAME[s.form.harness], cycle: (d) => { s.form.harness = cycle(HARNESS_IDS, s.form.harness, d); } });
       f.push({ type: 'text', label: t('settings.agents.name'), value: () => s.form.name, placeholder: t('settings.agents.namePh'), edit: (v) => { s.form.name = v.slice(0, 40); } });
+      f.push({ type: 'text', label: t('settings.agents.instructions'), value: () => s.form.instructions || '', placeholder: t('settings.agents.instructionsPh'), edit: (v) => { s.form.instructions = v.slice(0, 4000); } });
       if (s.offices.length > 1) f.push({ type: 'select', label: t('settings.agents.office'), value: () => officeName(s.form.office), cycle: (d) => { s.form.office = cycle(s.offices.map((o) => o.id), s.form.office, d); } });
       f.push({ type: 'action', label: '', value: () => t('settings.agents.addBtn'), run: () => addAgent() });
       if (loose.length) {
@@ -243,6 +245,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
       f.push({ type: 'text', label: L('title'), value: () => look.title, edit: (v) => { look.title = v.slice(0, 30); } });
       f.push({ type: 'select', label: L('sex'), value: () => t(`settings.look.sexes.${look.sex}`), cycle: (d) => { Object.assign(look, lookForSex(cycle(SEXES, look.sex, d))); } });
       f.push({ type: 'select', label: L('personality'), value: () => t(`settings.look.personalities.${look.personality}`), cycle: (d) => { look.personality = cycle(Object.keys(PERSONALITIES), look.personality, d); } });
+      f.push({ type: 'select', label: L('style'), value: () => t(`settings.look.styles.${look.style}`), cycle: (d) => { look.style = cycle(STYLES, look.style, d); } });
       // a color: ◂ ▸ go through its palette (shown next to it, the chosen one marked) and typing
       // #rrggbb gives any other one
       for (const k of ['skin', 'hair', 'shirt', 'pants']) {

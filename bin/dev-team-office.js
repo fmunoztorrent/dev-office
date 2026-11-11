@@ -13,6 +13,9 @@ import { openStore } from '../server/store.js';
 import { detectHarness } from '../integrations/common/devteam.mjs';
 import { t, setLanguage, getLanguage } from '../public/i18n.js';
 import { systemZone, countryName, zoneInfo } from '../public/clock.js';
+import { exportCharacter, parseCharacter, changedLook, characterFile } from '../public/character.js';
+import { DEFAULT_TEAM } from '../public/sim.js';
+import { normRole } from '../server/roles.js';
 import { compareVersions, installedVersion, officeMode, sameInstall, stopOffice, startOffice } from '../server/lifecycle.js';
 
 // ---------------------------------------------------------------- argumentos
@@ -291,12 +294,23 @@ async function cmdAgents() {
   const office = await runningOffice();
   const harness = args.agent === 'claude' ? 'claude-code' : args.agent;
   if (sub === 'add') {
-    const body = { path: rest.join(' '), harness, name: str(args.name), office: str(args.office) };
+    const body = { path: rest.join(' '), harness, name: str(args.name), office: str(args.office), ...(args.instructions !== undefined ? { instructions: str(args.instructions) || '' } : {}) };
     let out;
     if (office) out = await api('/v1/agents', body);
     else { const store = openStore(); out = store.createAgent(body); store.close(); }
     if (!out?.ok) fail(t('cli.couldNot', { error: out?.error || t('cli.noAnswer') }));
     console.log(t('cli.registered', { id: out.agent.id, path: tilde(out.agent.path) }));
+    return;
+  }
+  // changes a registered project: its name, its department (--office) or its instructions
+  if (sub === 'set') {
+    const id = rest[0] || fail(t('cli.agentsUsage'));
+    const patch = { ...(str(args.name) ? { name: str(args.name) } : {}), ...(str(args.office) ? { office: str(args.office) } : {}), ...(args.instructions !== undefined ? { instructions: str(args.instructions) || '' } : {}) };
+    let out;
+    if (office) out = await api(`/v1/agents/${encodeURIComponent(id)}`, patch, 'PUT');
+    else { const store = openStore(); out = store.updateAgent(id, patch); store.close(); }
+    if (!out?.ok) fail(t('cli.couldNot', { error: out?.error || t('cli.noAnswer') }));
+    console.log(t('cli.agentSaved', { id }));
     return;
   }
   if (sub === 'rm' || sub === 'remove' || sub === 'delete') {
@@ -319,14 +333,52 @@ async function cmdAgents() {
   for (const a of agents) {
     console.log(`${a.id}  🏢 ${a.office || 'main'}\n  ${a.harness} · ${tilde(a.path)}${a.kinds.length ? ` · ${a.kinds.join(' + ')}` : ''}${a.sessions.some((x) => x.live) ? t('cli.openSession') : ''}`);
     console.log(`  --pipeline ${a.entries.map((e) => e.id).join(' | ')}`);
+    if (a.instructions) console.log(`  📋 ${a.instructions.replace(/\n/g, '\n     ')}`);
   }
+}
+
+// A character as JSON, to share it (public/character.js): export one, or import one into a role.
+async function cmdCharacter() {
+  const [, sub, ref] = args._;
+  const office = str(args.office) || 'main';
+  const live = await runningOffice();
+  if (sub === 'export') {
+    const role = normRole(ref) || fail(t('cli.characterUsage'));
+    let c;
+    if (live) c = await api(`/v1/characters/${role}?office=${encodeURIComponent(office)}`);
+    else { const store = openStore(); c = exportCharacter(role, { ...DEFAULT_TEAM[role], ...(store.getAppearance(office)[role] || {}) }); store.close(); }
+    if (!c?.kind) fail(t('cli.couldNot', { error: c?.error || t('cli.noAnswer') }));
+    const json = `${JSON.stringify(c, null, 2)}\n`;
+    const out = str(args.out);
+    if (!out) { process.stdout.write(json); return; }
+    const file = path.resolve(out.endsWith('/') || (fs.existsSync(out) && fs.statSync(out).isDirectory()) ? path.join(out, characterFile(role, c.name)) : out);
+    fs.writeFileSync(file, json);
+    console.log(t('cli.characterExported', { name: c.name, file: tilde(file) }));
+    return;
+  }
+  if (sub === 'import') {
+    const file = ref || fail(t('cli.characterUsage'));
+    let raw;
+    try { raw = fs.readFileSync(path.resolve(file), 'utf8'); } catch (err) { fail(t('cli.couldNot', { error: err.message })); }
+    const c = parseCharacter(raw);
+    if (!c.ok) fail(t(`err.character.${c.error}`));
+    const role = normRole(str(args.role)) || c.role || fail(t('cli.characterRole'));
+    const look = changedLook(role, c.look);
+    let out;
+    if (live) out = await api(`/v1/characters/${role}?office=${encodeURIComponent(office)}`, JSON.parse(raw), 'PUT');
+    else { const store = openStore(); out = store.setAppearance({ [role]: Object.keys(look).length ? look : null }, office); store.close(); }
+    if (!out?.ok) fail(t('cli.couldNot', { error: out?.error || t('cli.noAnswer') }));
+    console.log(t('cli.characterImported', { name: c.look.name || DEFAULT_TEAM[role].name, role, office }));
+    return;
+  }
+  fail(t('cli.characterUsage'));
 }
 
 // The company's offices: through the API if an office is running, otherwise in the database.
 async function cmdOffices() {
   const [, sub, ...rest] = args._;
   const live = await runningOffice();
-  const body = () => ({ ...(str(args.name) || (sub === 'add' && rest.length) ? { name: str(args.name) || rest.join(' ') } : {}), ...(args.timezone !== undefined ? { timezone: args.timezone === 'system' || args.timezone === true ? null : args.timezone } : {}), ...(args.location !== undefined ? { location: args.location === true ? null : args.location } : {}) });
+  const body = () => ({ ...(str(args.name) || (sub === 'add' && rest.length) ? { name: str(args.name) || rest.join(' ') } : {}), ...(args.instructions !== undefined ? { instructions: str(args.instructions) || '' } : {}), ...(args.timezone !== undefined ? { timezone: args.timezone === 'system' || args.timezone === true ? null : args.timezone } : {}), ...(args.location !== undefined ? { location: args.location === true ? null : args.location } : {}) });
   const run = async (method, path, b, local) => {
     if (live) return api(path, b, method);
     const store = openStore();
@@ -636,7 +688,7 @@ if (args.version) { console.log(VERSION); process.exit(0); }
 
 const commands = {
   open: () => cmdOpen({ game: !!args.game }), game: () => cmdOpen({ game: true }), monitor: () => cmdOpen(), serve: cmdServe, start: cmdStart, stop: cmdStop, restart: () => (args['if-outdated'] || args['if-running'] ? cmdRefresh() : cmdRestart()), watch: () => cmdWatch(args._[1]), status: cmdStatus,
-  demo: cmdDemo, send: cmdSend, task: cmdTask, tasks: cmdTasks, install: cmdSetup, setup: cmdSetup, uninstall: cmdUninstall, doctor: cmdDoctor, update: cmdUpdate, agents: cmdAgents, offices: cmdOffices, config: cmdConfig,
+  demo: cmdDemo, send: cmdSend, task: cmdTask, tasks: cmdTasks, install: cmdSetup, setup: cmdSetup, uninstall: cmdUninstall, doctor: cmdDoctor, update: cmdUpdate, agents: cmdAgents, offices: cmdOffices, departments: cmdOffices, character: cmdCharacter, config: cmdConfig,
   pane: cmdPane, follow: cmdFollow, join: cmdJoin, prompt: cmdPrompt, team: cmdTeam, mcp: cmdMcp, btw: cmdBtw, help: () => console.log(HELP()),
 };
 const cmd = commands[args._[0] || 'open'];

@@ -21,12 +21,14 @@ import { normRole } from './roles.js';
 import { t, isLanguage, DEFAULT_LANGUAGE } from '../public/i18n.js';
 import { validZone } from '../public/clock.js';
 import { DEFAULT_MODELS, normalizeModels } from '../public/models.js';
-import { SEXES, PERSONALITIES } from '../public/sim.js';
+import { SEXES, PERSONALITIES, STYLES } from '../public/sim.js';
+import { realDir } from './paths.js';
 
 const HARNESS_IDS = ['claude-code', 'opencode', 'pi', 'codex'];
 const ASKS_KEEP = 500;
 const AGENTS_MAX = 100;
 const OFFICES_MAX = 30;
+const INSTRUCTIONS_MAX = 4000; // a department's or a project's instructions
 const PROMPTS_KEEP = 2000;
 const DIRECTIVES_KEEP = 200;
 const KNOWLEDGE_MAX = 5000;
@@ -35,7 +37,7 @@ const NAMED = new Set(['skill', 'connector']); // they are installed in a projec
 const BODY_MAX = 64 * 1024;
 const COLOR_RX = /^#[0-9a-f]{6}$/i;
 // what can be changed of each character, and how it is checked (a list: one of those values)
-const APPEARANCE = { name: 'text', title: 'text', sex: SEXES, personality: Object.keys(PERSONALITIES), shirt: 'color', pants: 'color', hair: 'color', skin: 'color', long: 'bool', beard: 'bool', glasses: 'bool' };
+const APPEARANCE = { name: 'text', title: 'text', sex: SEXES, personality: Object.keys(PERSONALITIES), style: STYLES, shirt: 'color', pants: 'color', hair: 'color', skin: 'color', long: 'bool', beard: 'bool', glasses: 'bool' };
 export const MAIN_OFFICE = 'main';
 /** The building's floors: the executive one on top, the offices, and the archive in the basement. */
 export const FLOORS = ['exec', 'office', 'archive'];
@@ -162,6 +164,14 @@ const MIGRATIONS = [
      updated_at INTEGER NOT NULL
    );
    CREATE INDEX knowledge_by_kind ON knowledge (kind, updated_at DESC);`,
+  // Instructions to work with each department (an office) and each project (a folder), like a
+  // ChatGPT or Claude project's: they go with every brief, pipeline, directive and question.
+  `ALTER TABLE offices ADD COLUMN instructions TEXT;
+   CREATE TABLE projects (
+     path         TEXT PRIMARY KEY,           -- the project's folder (real path)
+     instructions TEXT NOT NULL DEFAULT '',
+     updated_at   INTEGER NOT NULL
+   );`,
 ];
 
 class Invalid extends Error {}
@@ -206,7 +216,7 @@ export class Store {
   // ---------------------------------------------------------------- oficinas
 
   #office(r) {
-    return r ? { id: r.id, name: r.name, timezone: r.timezone || null, location: r.location || null, position: r.position, createdAt: r.created_at, updatedAt: r.updated_at } : null;
+    return r ? { id: r.id, name: r.name, timezone: r.timezone || null, location: r.location || null, instructions: r.instructions || '', position: r.position, createdAt: r.created_at, updatedAt: r.updated_at } : null;
   }
   listOffices() { return this.db.prepare('SELECT * FROM offices ORDER BY position, created_at').all().map((r) => this.#office(r)); }
   getOffice(id) { return this.#office(this.db.prepare('SELECT * FROM offices WHERE id = ?').get(String(id))); }
@@ -225,7 +235,8 @@ export class Store {
     const location = o.location !== undefined ? (o.location ? String(o.location).trim().slice(0, 80) : null) : current.location ?? null;
     const clash = name && this.listOffices().find((x) => x.id !== current.id && slug(x.name, '') === slug(name, '-'));
     if (clash) fail(t('err.officeExists'));
-    return { name, timezone: tz, location };
+    const instructions = o.instructions !== undefined ? String(o.instructions ?? '').trim().slice(0, INSTRUCTIONS_MAX) : current.instructions ?? '';
+    return { name, timezone: tz, location, instructions };
   }
 
   createOffice(input = {}) {
@@ -236,8 +247,8 @@ export class Store {
       for (let i = 2; this.getOffice(id); i++) id = `${slug(o.name, 'oficina')}-${i}`;
       const now = Date.now();
       const position = (this.db.prepare('SELECT max(position) AS p FROM offices').get().p ?? 0) + 1;
-      this.db.prepare('INSERT INTO offices (id, name, timezone, location, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .run(id, o.name, o.timezone, o.location, position, now, now);
+      this.db.prepare('INSERT INTO offices (id, name, timezone, location, instructions, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(id, o.name, o.timezone, o.location, o.instructions || null, position, now, now);
       return { ok: true, office: this.getOffice(id) };
     });
   }
@@ -247,7 +258,7 @@ export class Store {
       const current = this.getOffice(id);
       if (!current) return { ok: false, error: t('err.unknownOffice', { office: id }), status: 404 };
       const o = this.#cleanOffice(patch, current);
-      this.db.prepare('UPDATE offices SET name = ?, timezone = ?, location = ?, updated_at = ? WHERE id = ?').run(o.name, o.timezone, o.location, Date.now(), current.id);
+      this.db.prepare('UPDATE offices SET name = ?, timezone = ?, location = ?, instructions = ?, updated_at = ? WHERE id = ?').run(o.name, o.timezone, o.location, o.instructions || null, Date.now(), current.id);
       return { ok: true, office: this.getOffice(current.id) };
     });
   }
@@ -271,7 +282,7 @@ export class Store {
 
   #row(r) {
     if (!r) return null;
-    const a = { id: r.id, name: r.name, path: r.path, harness: r.harness, office: r.office_id || MAIN_OFFICE, createdAt: r.created_at, updatedAt: r.updated_at };
+    const a = { id: r.id, name: r.name, path: r.path, harness: r.harness, office: r.office_id || MAIN_OFFICE, instructions: this.getProjectInstructions(r.path), createdAt: r.created_at, updatedAt: r.updated_at };
     if (r.bin) a.bin = r.bin;
     const args = json(r.args, null);
     if (Array.isArray(args)) a.args = args;
@@ -311,6 +322,7 @@ export class Store {
       const now = Date.now();
       this.db.prepare('INSERT INTO agents (id, name, path, harness, bin, args, office_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .run(id, a.name, a.path, a.harness, a.bin, a.args && JSON.stringify(a.args), a.office, now, now);
+      if (input.instructions !== undefined) this.#instructions(a.path, input.instructions);
       return { ok: true, agent: this.getAgent(id) };
     });
   }
@@ -322,6 +334,7 @@ export class Store {
       const a = this.#clean(patch, current);
       this.db.prepare('UPDATE agents SET name = ?, path = ?, harness = ?, bin = ?, args = ?, office_id = ?, updated_at = ? WHERE id = ?')
         .run(a.name, a.path, a.harness, a.bin, a.args && JSON.stringify(a.args), a.office, Date.now(), current.id);
+      if (patch.instructions !== undefined) this.#instructions(a.path, patch.instructions);
       return { ok: true, agent: this.getAgent(current.id) };
     });
   }
@@ -329,6 +342,31 @@ export class Store {
   deleteAgent(id) {
     const r = this.db.prepare('DELETE FROM agents WHERE id = ?').run(String(id));
     return r.changes ? { ok: true } : { ok: false, error: t('err.unknownAgent'), status: 404 };
+  }
+
+  // ---------------------------------------------------------------- a project's instructions (per folder)
+
+  /** The instructions to work with the project in that folder ('' if it has none). */
+  getProjectInstructions(dir) {
+    if (!dir) return '';
+    return this.db.prepare('SELECT instructions FROM projects WHERE path = ?').get(realDir(String(dir)))?.instructions || '';
+  }
+  #instructions(dir, text) {
+    const key = realDir(String(dir));
+    const clean = String(text ?? '').trim().slice(0, INSTRUCTIONS_MAX);
+    if (!clean) this.db.prepare('DELETE FROM projects WHERE path = ?').run(key);
+    else this.db.prepare('INSERT INTO projects (path, instructions, updated_at) VALUES (?, ?, ?) ON CONFLICT (path) DO UPDATE SET instructions = excluded.instructions, updated_at = excluded.updated_at').run(key, clean, Date.now());
+    return clean;
+  }
+  /** Sets (or, empty, removes) a project folder's instructions: an existing absolute path. */
+  setProjectInstructions(dir, text) {
+    return this.#write(() => {
+      const raw = String(dir ?? '').trim().replace(/^~(?=$|\/)/, os.homedir());
+      if (!raw) fail(t('err.pathMissing'));
+      if (!path.isAbsolute(raw)) fail(t('err.pathRelative', { path: dir }));
+      if (!fs.statSync(raw, { throwIfNoEntry: false })?.isDirectory()) fail(t('err.pathNotFound', { path: dir }));
+      return { ok: true, path: realDir(raw), instructions: this.#instructions(raw, text) };
+    });
   }
 
   // ---------------------------------------------------------------- ajustes generales
@@ -414,7 +452,7 @@ export class Store {
   #appearanceKey(office) { return !office || office === MAIN_OFFICE ? 'appearance' : `appearance:${office}`; }
   getAppearance(office = MAIN_OFFICE) { return this.#get(this.#appearanceKey(office), {}) || {}; }
 
-  /** patch: { role: { name, title, sex, personality, shirt, pants, hair, skin, long, beard, glasses } | null } (null = the original) */
+  /** patch: { role: { name, title, sex, personality, style, shirt, pants, hair, skin, long, beard, glasses } | null } (null = the original) */
   setAppearance(patch = {}, office = MAIN_OFFICE) {
     return this.#write(() => {
       if (!this.getOffice(office)) fail(t('err.unknownOffice', { office }));

@@ -126,10 +126,13 @@ export class PipelineHub extends EventEmitter {
       session: 'office', office: run.office, kind: 'dispatch', agent: host.agent, from: run.from,
       text: tr('run.dispatch', { name: pl.name, agent: AGENT_NAME[host.agent] || host.agent, task }),
     });
-    if (host.live) this.tasks.sendToSession(host.session, { type: 'pipeline', id: run.id, session: host.session, pipeline: pl.id, task, ...(models ? { models } : {}) });
+    if (host.live) this.tasks.sendToSession(host.session, { type: 'pipeline', id: run.id, session: host.session, pipeline: pl.id, task: this.#guided(run), ...(models ? { models } : {}) });
     this.changed(run);
     return { ok: true, run: this.#public(run) };
   }
+
+  /** The task as the agent gets it: with its project's and department's instructions on top. */
+  #guided(run) { return this.tasks.brief ? this.tasks.brief(run.task, run.project.dir, { office: run.office, scope: false }) : run.task; }
 
   /** For the Claude Code hook: that session's next queued pipeline. */
   takeForClaude(session) {
@@ -138,7 +141,7 @@ export class PipelineHub extends EventEmitter {
     run.status = 'sent';
     run.detail = tr('run.claudeTook');
     this.changed(run);
-    return { id: run.id, pipeline: run.pipeline.id, task: run.task, ...(run.models ? { models: run.models } : {}) };
+    return { id: run.id, pipeline: run.pipeline.id, task: this.#guided(run), ...(run.models ? { models: run.models } : {}) };
   }
 
   /** For the Claude Code hook: that session's pipelines the user cancelled. */

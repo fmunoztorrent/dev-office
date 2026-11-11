@@ -264,6 +264,8 @@ export default {
   },
   targets: { openSession: 'open session', claudeTurn: 'Claude, when its turn ends' },
   offices: { main: 'Main office' },
+  // the instructions on top of a brief (server/guides.js)
+  guide: { department: 'Instructions of the department «{name}»:', project: 'Instructions of the project «{name}»:' },
 
   // ---------------------------------------------------------------- the two shared floors: the executive one and the archive
   directiveStatus: { running: 'running', done: 'accomplished', partial: 'partly accomplished', failed: 'failed', cancelled: 'cancelled', interrupted: 'interrupted' },
@@ -289,6 +291,7 @@ export default {
       react: {
         order: 'I need everyone to do this: "{title}"',
         split: 'Splitting it across {n} project(s): {offices}',
+        department: 'New department: {name}. It needs its repositories, its people and its instructions before it can take orders', departmentOk: 'Good: get it ready',
         tech: ['Making sure each one does it its own way', 'Each team uses its own harness', "Careful not to break the APIs between projects"],
         done: 'Directive accomplished! "{title}" ({done}/{total}) 🎉', trouble: 'The directive "{title}" had trouble: {done} of {total} went well',
       },
@@ -316,12 +319,13 @@ export default {
     brief: '🏛 Directive from the executive floor: "{title}". Also working on it: {others}. Do this project\'s part.',
     interrupted: 'the office restarted before it ended',
     minuteTitle: 'Minutes: {title}', minuteAsked: 'Asked by: {who}', minuteParts: 'How it ended in each project:',
-    log: { created: '🏛 Directive "{title}" to {n} project(s): {offices}', ended: '🏛 Directive "{title}": {status} ({done}/{total})' },
+    log: { created: '🏛 Directive "{title}" to {n} project(s): {offices}', department: '🏛 New department: {name}', ended: '🏛 Directive "{title}": {status} ({done}/{total})' },
     ui: {
       title: '🏛 Directives', text: 'What must they do?', placeholder: 'One order for several offices or projects: "Every API exposes /health"',
-      scope: 'Who', all: 'all its projects ({n})', none: 'no registered projects', noAgents: 'Register each office’s projects in ⚙ › Agents to give them directives.',
+      scope: 'Who', all: 'all its projects ({n})', none: 'no registered projects', noAgents: 'Register each department’s projects in ⚙ › Departments (or ⚙ › Agents) to give them directives.',
       send: '▶ Make it happen!', recent: 'The latest', empty: 'No directives yet.', pick: 'Pick at least one project', write: 'Write the directive',
       sent: 'Directive sent to {n} project(s)', stop: '⏹ Stop', progress: '{done} of {total}', by: 'by {who}',
+      deptPh: 'A department that does not exist yet…', deptAdd: '＋ New department', deptName: 'Write the new department’s name', deptCreated: 'Department “{name}” created: add its projects, people and instructions in ⚙ › Departments.',
     },
   },
   archive: {
@@ -368,9 +372,9 @@ export default {
     pathMissing: 'the path is missing', pathRelative: '{path}: use the full path (e.g. ~/Workspace/my-project)', pathNotFound: '{path}: that folder does not exist',
     harness: 'choose the agent for that path: claude-code, opencode or pi', args: '{name}: args must be a list of strings',
     agentExists: 'that agent is already registered for that path', saveFailed: 'could not save: {error}', agentsMax: 'at most {n} agents',
-    unknownAgent: 'unknown agent', unknownRole: 'unknown role: {role}', oneOf: '{role}: "{key}" must be one of: {values}', notEditable: '{role}: "{key}" cannot be changed',
+    unknownAgent: 'unknown agent', character: { json: 'that file is not JSON', kind: 'that is not a Dev Team Office character (its "kind" must be "dev-team-office/character")' }, unknownRole: 'unknown role: {role}', oneOf: '{role}: "{key}" must be one of: {values}', notEditable: '{role}: "{key}" cannot be changed',
     color: '{role}.{key}: use a color like #3f73f0', empty: '{role}.{key} cannot be empty',
-    unknownOffice: 'unknown office: {office}', officeName: 'give the office a name', officeExists: 'there is already an office with that name',
+    unknownOffice: 'unknown department (office): {office}', officeName: 'give the department a name', officeExists: 'there is already a department with that name',
     officesMax: 'at most {n} offices', mainOffice: 'the main office cannot be deleted', timezone: 'unknown time zone: {tz}',
     language: 'unknown language: {lang}', pref: 'unknown setting: {key}', prefValue: '{key}: invalid value',
     taskEmpty: 'the task is empty', taskTooLong: 'the task is longer than {n} characters', taskNoAgent: 'the target agent is missing', cantLaunch: 'I do not know how to launch "{agent}"',
@@ -457,7 +461,7 @@ export default {
       active: 'Default profile', label: 'Name', for: 'For:', default: 'Default', same: 'same as the default ({model})', remove: 'Remove this profile', add: '✚ New profile', newLabel: 'Profile {n}',
     },
     title: '⚙ Settings', loading: 'Loading…', close: 'Close', save: 'Save', saved: 'Saved: already in use.', file: 'stored in {file}',
-    tabs: { general: 'General', offices: 'Offices', agents: 'Agents', look: 'Characters', models: 'Models' },
+    tabs: { general: 'General', offices: 'Departments', agents: 'Agents', look: 'Characters', models: 'Models' },
     keys: { field: 'field', change: 'change', action: 'action', save: 'save', close: 'close', tabs: '◂ ▸ switch tab' },
     yes: 'yes', no: 'no',
     general: {
@@ -470,20 +474,23 @@ export default {
       life: 'Office life in the log',
     },
     offices: {
-      hint: 'Each office is a team or domain, like in a real company: its agents, its characters, its time zone and its weather. Pick which one to view at the top left (when there is more than one).',
+      hint: 'Each department is an office of the company (a floor of the building): its projects (repositories, with their agents), its people (the characters), its instructions (how to work there: they go with every brief, directive and question to its projects), its time zone and its weather. Pick which one to view at the top left.',
       name: 'Name', timezone: 'Time zone', inherit: 'the company’s ({tz})', location: 'City (weather)', locationPh: 'the time zone’s ({city})', cityInherit: 'the company’s ({city})',
-      agents: '{n} agent(s)', viewing: '● the one you are viewing', main: 'main', view: 'View', edit: 'Edit', delete: 'Delete', add: '＋ Add office', saveChanges: 'Save changes',
-      newTitle: 'New office', editTitle: 'Edit “{name}”', created: 'Done: “{name}” is now part of the company.', updated: 'Office updated.', deleted: 'Office deleted (its agents moved to the main one).',
-      confirmDelete: 'Delete the office “{name}”? Its agents move to the main office; their folders are not touched.', cancel: 'Cancel',
+      agents: '{n} agent(s)', viewing: '● the one you are viewing', main: 'main', view: 'View', edit: 'Edit', delete: 'Delete', add: '＋ Add department', saveChanges: 'Save changes',
+      newTitle: 'New department', editTitle: 'Edit “{name}”', created: 'Done: “{name}” is now part of the company.', updated: 'Department updated.', deleted: 'Department deleted (its projects moved to the main one).',
+      confirmDelete: 'Delete the department “{name}”? Its projects move to the main one; their folders are not touched.', cancel: 'Cancel',
+      instructions: 'Instructions', instructionsPh: 'How to work in this department: conventions, what to never do, who to ask… They go with every brief, directive and question to its projects.',
+      projects: 'Projects', noProjects: 'No projects yet.', addProject: '＋ New project', moveHere: 'Bring a project here…', people: 'People', editPeople: 'Edit its people', hasInstructions: '📋 with instructions',
     },
     agents: {
+      instructions: 'Project instructions', instructionsPh: 'How to work with this project (for every agent in its folder): commands, conventions, what not to touch… They go with every brief, pipeline and question.', hasInstructions: '📋 instructions',
       hint: 'Each agent is a full path, the CLI that serves it and its office. The office detects the pipeline of its harness (Errementari, commands, prompts, .devteam/). A prompt from the board starts it: in the session open in that path, or in a new session (inside herdr, in a pane).',
       registered: 'Registered agents (the prompt starts the pipeline of their harness)', none: 'None yet: add one below with its full path.',
       noneWeb: 'You have not registered any agent yet. Add one below with its full path.', loose: 'Open sessions not registered',
       open: '● open', sessionOpen: '● session open', missing: '✗ does not exist', pathMissing: '✗ the path does not exist', notInstalled: '✗ CLI not installed', cliMissing: '✗ {agent} is not installed',
       promptTo: '✉ Prompt to {name}', sendPrompt: '✉ Send prompt', removeOne: '✕ Delete {name}', edit: 'Edit', delete: 'Delete', register: 'Register',
       add: 'Add agent', editTitle: 'Edit “{name}”', path: 'Path', pathPh: '/full/path/to/the/project', pathPhWeb: '/Users/you/Workspace/my-project  (or ~/Workspace/my-project)',
-      pathLabel: 'Full path of the project', agent: 'Agent', cliLabel: 'CLI that serves the path', name: 'Name', namePh: '(the folder’s)', office: 'Office',
+      pathLabel: 'Full path of the project', agent: 'Agent', cliLabel: 'CLI that serves the path', name: 'Name', namePh: '(the folder’s)', office: 'Department',
       addBtn: '＋ Add', addAgent: '＋ Add agent', saveChanges: 'Save changes', cancel: 'Cancel', choose: '— choose —', configured: ' ✓ configured',
       detectHint: 'Type the path: the office detects which harness it has.', detectNone: '✗ That folder does not exist.', detected: 'Found: {what} — {n} entry(ies).',
       noHarness: 'no harness configured (direct prompt only)', advanced: 'Advanced', bin: 'Executable', binPh: '(the one in the PATH: claude, opencode, pi)',
@@ -494,7 +501,7 @@ export default {
     look: {
       hint: 'How the characters of this office look and what they are called. Each one still stands for its role (QA, backend…).',
       character: 'Character', name: 'Name', title: 'Title', shirt: 'Shirt', pants: 'Pants', hair: 'Hair', skin: 'Skin', long: 'Long hair', beard: 'Beard', glasses: 'Glasses',
-      sex: 'Sex', sexes: { f: 'Female', m: 'Male' }, personality: 'Personality', personalities: { chatty: 'Chatty: talks a lot, at the desk and at the café', focused: 'Focused: barely leaves the desk', anxious: 'Anxious: many doubts, coffee often', calm: 'Calm: takes breaks, no rush', dreamer: 'Dreamer: daydreams while working' }, traits: { chatty: 'chatty', focused: 'focused', anxious: 'anxious', calm: 'calm', dreamer: 'dreamer' }, pickColor: 'Pick a color', moreColors: 'Other color…',
+      sex: 'Sex', style: 'Style', styles: { normal: 'Normal', concise: 'Concise: straight to the point', explanatory: 'Explanatory: the why, with examples', teacher: 'Teacher: step by step, to learn', formal: 'Formal: like a report' }, export: '⬇ Export', exportTitle: 'Download {name} as JSON, to share them', import: '⬆ Import', importTitle: 'Bring a character from a JSON file into this role', imported: 'Done: {name} imported (Save to keep it).', sexes: { f: 'Female', m: 'Male' }, personality: 'Personality', personalities: { chatty: 'Chatty: talks a lot, at the desk and at the café', focused: 'Focused: barely leaves the desk', anxious: 'Anxious: many doubts, coffee often', calm: 'Calm: takes breaks, no rush', dreamer: 'Dreamer: daydreams while working' }, traits: { chatty: 'chatty', focused: 'focused', anxious: 'anxious', calm: 'calm', dreamer: 'dreamer' }, pickColor: 'Pick a color', moreColors: 'Other color…',
       random: '🎲 Random', reset: '↺ Back to the original', randomTitle: 'Random', resetTitle: 'Back to the original', role: 'role: {role}', you: "that's you", preview: 'Preview of {name}', of: '{label} of {name}',
       saved: 'Done: the team now looks like this in the office.',
     },
@@ -554,17 +561,22 @@ Usage:
   dev-team-office watch [url]     Watch an office that is already running (the local one by default).
   dev-team-office status          Is an office running? Shows the version and endpoints.
   dev-team-office demo [--pi]     Plays a sample session (Claude Code, or a Pi TDD flow).
-  dev-team-office offices         The company's offices (teams or domains).
-  dev-team-office offices add "<name>" [--timezone Europe/Madrid] [--location "Madrid"]
-  dev-team-office offices set <id> [--name …] [--timezone …] [--location …]
+  dev-team-office offices         The company's departments (offices: teams or domains). Also: departments.
+  dev-team-office offices add "<name>" [--timezone Europe/Madrid] [--location "Madrid"] [--instructions "<how to work there>"]
+  dev-team-office offices set <id> [--name …] [--timezone …] [--location …] [--instructions …]
   dev-team-office offices rm <id>
   dev-team-office config [key] [value]
                                   The settings (in the SQLite database): lang en|es, timezone <zone>|system, city <city>|zone,
                                   weather on|off, herdr.launch on|off, herdr.subagents on|off, herdr.direction right|down,
                                   herdr.startAgent auto|none|<id>, log.life on|off, view.office <id>, view.mode flat|iso.
   dev-team-office agents          The agent maintainer: the registered ones and what their harness brings.
-  dev-team-office agents add <full path> --agent claude|opencode|pi|codex [--name <name>] [--office <id>]
+  dev-team-office agents add <full path> --agent claude|opencode|pi|codex [--name <name>] [--office <id>] [--instructions "<how to work with it>"]
+  dev-team-office agents set <id> [--name …] [--office <id>] [--instructions …]
+                                  A project's instructions go on top of every brief, pipeline and question to its folder.
   dev-team-office agents rm <id>
+  dev-team-office character export <role> [--office <id>] [--out <file or folder>]
+  dev-team-office character import <file.json> [--role <role>] [--office <id>]
+                                  A character as JSON, to share them: name, sex, personality, style and look.
   dev-team-office prompt <id> "<text>" [--pipeline <entry>] [--new]
                                   Sends a prompt to a registered agent through an entry of its harness.
   dev-team-office task "<text>" --agent pi|opencode|claude [--session <id>] [--launch [--cwd <dir>]]
@@ -623,7 +635,7 @@ API: docs/api.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
     promptUsage: 'Usage: dev-team-office prompt <id> "<text>" [--pipeline <entry>] [--new]   (the ids: dev-team-office agents)',
     unknownCommand: 'Unknown command: {cmd}',
     offices: 'Offices:', officeLine: '  {id}  {name}  · {tz}{country}  · {agents} agent(s){viewing}', viewing: '  ← the one being viewed',
-    officeAdded: 'Office created: {id}  ({name}, {tz})', officeSaved: 'Office updated: {id}', officeRemoved: 'Office deleted: {id} (its agents moved to the main one)',
+    officeAdded: 'Office created: {id}  ({name}, {tz})', officeSaved: 'Office updated: {id}', agentSaved: 'Project updated: {id}', agentsUsage: 'Usage: dev-team-office agents [add <full path> --agent … | set <id> | rm <id>] [--name …] [--office …] [--instructions …]', characterUsage: 'Usage: dev-team-office character export <role> [--office <id>] [--out <file>]  ·  character import <file.json> [--role <role>] [--office <id>]', characterRole: 'Which role is it for? Add --role qa|backend|frontend|tl|manager|analyst|designer|po', characterExported: '{name} exported to {file}', characterImported: '{name} is now the {role} of {office}', officeRemoved: 'Office deleted: {id} (its agents moved to the main one)',
     officesUsage: 'Usage: dev-team-office offices [add "<name>" | set <id> | rm <id>] [--name …] [--timezone …] [--location …]',
     config: 'Settings (in {file}):', configSaved: '{key} = {value}', configUnknown: 'Unknown setting: {key}. See: dev-team-office config',
     paneUsage: 'Usage: dev-team-office pane [--role qa] [--title "tests"] [--agent pi|claude|opencode|codex] -- <command or prompt>',
@@ -661,6 +673,13 @@ API: docs/api.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
     promptHead: '[btw] A side question from the Dev Team Office game. Do not change any file and do not continue your current task: just answer.',
     promptQuestion: 'Question: {question}',
     promptRules: 'Answer briefly (at most 3 short sentences, plain text, no markdown headings), in {lang}.',
+    // the character's style (⚙ › Characters): how they answer
+    rules: {
+      concise: 'Answer in one or two short sentences, straight to the point, plain text, in {lang}.',
+      explanatory: 'Answer explaining the why, with a concrete example from the project if it helps (up to 8 sentences, plain text, no markdown headings), in {lang}.',
+      teacher: 'Answer as a patient teacher to someone learning: step by step, the concepts behind it and what to try next to understand it (up to 10 sentences, plain text, no markdown headings), in {lang}.',
+      formal: 'Answer formally and precisely, as in a work report (at most 4 sentences, plain text), in {lang}.',
+    },
   },
   setup: {
     title: 'Dev Team Office {version} · setup',

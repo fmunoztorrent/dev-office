@@ -162,6 +162,10 @@ export function createFloors({ clock = () => performance.now() } = {}) {
         setTimeout(() => P.coo.say(t('floors.exec.react.split', { offices: (ev.offices || []).join(', ') || '—', n: ev.total || 0 }), 5000), 1500);
         setTimeout(() => P.cto.say(f.lines('floors.exec.react.tech'), 4000), 3200);
         setTimeout(() => f.ride(P.assistant, 4200), 2000);
+      } else if (ev.kind === 'department') {
+        // a new department: operations takes note and asks for what it is missing
+        P.coo.say(t('floors.exec.react.department', { name: text }), 6000).setState('working', 4000);
+        setTimeout(() => P.ceo.say(t('floors.exec.react.departmentOk'), 3500), 1800);
       } else if (ev.kind === 'directive_end') {
         const good = ev.status === 'done';
         P.coo.say(t(`floors.exec.react.${good ? 'done' : 'trouble'}`, { title: text, done: ev.done ?? 0, total: ev.total ?? 0 }), 6000, good ? undefined : 'warn');

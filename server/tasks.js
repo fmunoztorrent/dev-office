@@ -20,6 +20,7 @@ import path from 'node:path';
 import { clip } from './roles.js';
 import { sanitizeProject } from './pipeline.js';
 import { agentCommand, modelArgs, HARNESSES, which } from '../integrations/common/devteam.mjs';
+import { guideFor, guideText } from './guides.js';
 import { t as tr } from '../public/i18n.js';
 import { MAIN_OFFICE } from './store.js';
 
@@ -46,7 +47,11 @@ const OUTPUT_LINES = 40;
 // A brief starts with its scope: the agent works only inside its project's folder, and only on what
 // is asked (the stay-focused skill). The 📁 line is the office's: it is taken out of the board's title.
 export const SCOPE_MARK = '📁 ';
-export const scoped = (text, dir) => (dir ? `${SCOPE_MARK}${tr('task.scope', { dir: String(dir).replace(os.homedir(), '~') })}\n\n${text}` : text);
+export const scoped = (text, dir, guide = '') => {
+  // then, the instructions of its department and its project (server/guides.js)
+  const head = [dir ? `${SCOPE_MARK}${tr('task.scope', { dir: String(dir).replace(os.homedir(), '~') })}` : '', guide].filter(Boolean).join('\n');
+  return head ? `${head}\n\n${text}` : text;
+};
 /** OpenCode also gets the rule for real: reading or changing files outside the folder is denied. */
 /** The agent's arguments plus the profile's model (unless the registered agent already sets one). */
 const withModel = (agent, args, model) => (model && !args.some((a) => a === '--model' || a === '-m') ? [...args, ...modelArgs(agent, model)] : args);
@@ -131,6 +136,14 @@ export class TaskHub extends EventEmitter {
     return live.sort((a, b) => b.connectedAt - a.connectedAt)[0] || null;
   }
 
+  /**
+   * A brief as its agent gets it: the 📁 scope (scope: false, without it) and the instructions of
+   * the project in `dir` and of its department, on top of the text.
+   */
+  brief(text, dir, { office = null, scope = true } = {}) {
+    return scoped(text, scope ? dir : null, guideText(guideFor(this.store, dir, office)));
+  }
+
   // ---------------------------------------------------------------- tareas
 
   /**
@@ -162,7 +175,7 @@ export class TaskHub extends EventEmitter {
       task.cwd = path.resolve(String(cwd || this.defaultCwd).replace(/^~(?=$|\/)/, os.homedir()));
       if (!fs.statSync(task.cwd, { throwIfNoEntry: false })?.isDirectory()) return { ok: false, error: tr('err.noDir', { dir: task.cwd }) };
       // the agent works in its project's folder, and only on what is asked (a harness command goes as is)
-      task.prompt = task.command ? text : scoped(text, task.cwd);
+      task.prompt = task.command ? text : this.brief(text, task.cwd, { office: task.office });
       task.model = model ? clip(model, 80) : null; // the model profile's (null: the agent's own)
       const cmd = agentCommand(agent, { text: task.prompt, command: task.command, args: task.args, model: task.model }, launch || {});
       if (cmd.error) return { ok: false, error: cmd.code === 'missing' ? tr('err.notInstalled', { bin: cmd.bin }) : tr('err.cantLaunch', { agent }) };
@@ -296,7 +309,7 @@ export class TaskHub extends EventEmitter {
     task.connId = conn.id;
     task.session ||= conn.session;
     this.#set(task, 'sent', tr('task.sentTo', { agent: AGENT_LABEL[conn.agent] || conn.agent }));
-    conn.send({ type: 'task', id: task.id, text: task.command ? task.text : scoped(task.text, conn.cwd), session: task.session, ...(task.command ? { command: task.command, args: task.args } : {}) });
+    conn.send({ type: 'task', id: task.id, text: task.command ? task.text : this.brief(task.text, conn.cwd, { office: task.office }), session: task.session, ...(task.command ? { command: task.command, args: task.args } : {}) });
   }
 
   /** The agent's answer: accepted | done | failed | rejected. */

@@ -121,7 +121,7 @@ function connect() {
     if (msg.type === 'targets') onTargets(msg.targets);
     if (msg.type === 'services' && msg.office === office?.id) onServices(msg.services);
     if (msg.type === 'prompts' && msg.office === office?.id) onPrompts(msg.prompts);
-    if (msg.type === 'snapshot' || msg.type === 'appearance') { applyAppearance((msg.state || msg).appearance || {}); game.floors.setYou(TEAM.po); renderTeam(); renderSheet(true); }
+    if (msg.type === 'snapshot' || msg.type === 'appearance') { applyAppearance((msg.state || msg).appearance || {}); game.floors.setYou(TEAM.po); renderTeam(); renderSheet(true); settings?.appearanceChanged?.(); }
     if (msg.type === 'snapshot' || msg.type === 'weather') { game.sim.setWeather((msg.state ? msg.state.weather : msg.weather) || null); renderWeather(); }
     if (msg.type === 'event') onEvent(msg.event, msg.session);
     if (msg.type === 'ask') onAsk(msg.ask);
@@ -249,6 +249,7 @@ function onFloorEvent(ev = {}) {
   const kind = (k) => t(`knowledgeKind.${k || 'note'}`);
   const line = {
     directive: () => t('exec.log.created', { title: ev.text, n: ev.total || 0, offices: (ev.offices || []).join(', ') }),
+    department: () => t('exec.log.department', { name: ev.text }),
     directive_end: () => t('exec.log.ended', { title: ev.text, status: t(`directiveStatus.${ev.status}`), done: ev.done ?? 0, total: ev.total ?? 0 }),
     saved: () => (ev.entryKind === 'minute' ? null : t(ev.created ? 'archive.log.saved' : 'archive.log.updated', { kind: kind(ev.entryKind), title: ev.text, who: ev.source || t('events.you') })),
     installed: () => (ev.count ? t('floors.archive.react.installed', { name: ev.text, n: ev.count }) : null),

@@ -84,7 +84,7 @@ export class AgentRegistry extends EventEmitter {
       const own = sessions.filter((s) => inside(s.cwd, a.path) && (s.agent === a.harness || !a.harness));
       own.forEach((s) => used.add(s.session));
       if (office && (a.office || MAIN_OFFICE) !== office) continue;
-      out.push({ ...describe({ id: a.id, name: a.name, dir: a.path, harness: a.harness, registered: true, own, office: a.office || MAIN_OFFICE }), bin: a.bin || null, args: a.args || null });
+      out.push({ ...describe({ id: a.id, name: a.name, dir: a.path, harness: a.harness, registered: true, own, office: a.office || MAIN_OFFICE }), bin: a.bin || null, args: a.args || null, instructions: a.instructions || '' });
     }
     // sessions open outside the registered paths: they can be sent a prompt too
     for (const s of sessions) {

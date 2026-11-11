@@ -54,11 +54,17 @@ La pregunta la contesta el agente de turno de la oficina (la sesión más recien
 
 | Método | Ruta | Cuerpo | Respuesta |
 |---|---|---|---|
-| `GET` | `/v1/offices` | | `{ ok, offices, view }`: cada una con `{ id, name, custom, timezone, ownTimezone, location, place, country, city, agents, sessions }`; `view`, la que se está mirando |
-| `POST` | `/v1/offices` | `{ name, timezone?, location? }` | `201 { ok, office }` |
+| `GET` | `/v1/offices` | | `{ ok, offices, view }`: cada una con `{ id, name, custom, timezone, ownTimezone, location, instructions, place, country, city, agents, sessions }`; `view`, la que se está mirando |
+| `POST` | `/v1/offices` | `{ name, timezone?, location?, instructions? }` | `201 { ok, office }`; operaciones, en la dirección, toma nota (`{ type: "floor", event: { floor: "exec", kind: "department" } }`) |
 | `GET` | `/v1/offices/<id>` | | `{ ok, office }` |
-| `PUT` | `/v1/offices/<id>` | `{ name?, timezone?, location? }` (`null`: la de la empresa / la de la zona) | `{ ok, office }` |
+| `PUT` | `/v1/offices/<id>` | `{ name?, timezone?, location?, instructions? }` (`null`: la de la empresa / la de la zona; `""` borra las indicaciones) | `{ ok, office }` |
 | `DELETE` | `/v1/offices/<id>` | | `{ ok }`; sus agentes pasan a la principal (`main`, que no se elimina) |
+
+Cada oficina es un **departamento**. Sus `instructions` (cómo se trabaja ahí) y las de la carpeta de cada proyecto van arriba de cada encargo, pipeline, directiva y pregunta a sus proyectos, bajo la línea 📁 del alcance, como líneas `📋 …` con el texto en líneas `│ …` (la oficina saca esa cabecera del título de la pizarra):
+
+| Método | Ruta | Cuerpo | Respuesta |
+|---|---|---|---|
+| `PUT` | `/v1/projects/instructions` | `{ path, instructions }` (una carpeta absoluta que exista; `""` las borra) | `{ ok, path, instructions }`. También `instructions` en `POST`/`PUT /v1/agents` (son de la carpeta: todos sus agentes las comparten) |
 
 `timezone` es una zona IANA (`Europe/Madrid`); de ella salen la hora y el país de la oficina. `location` es su propia ciudad: un nombre (`Valparaíso`), coordenadas (`-33.45,-70.65`) o las dos cosas, como la guarda el buscador de ciudades (`Concepción, Región del Biobío (-36.8270, -73.0498)`). `place` es la ciudad que usa, `{ name, lat, lon }`: la suya, la de la empresa (`prefs.city`) si hereda la zona horaria, o la de la zona horaria. Los cambios se difunden como `{ type: "offices", offices }`.
 
@@ -184,7 +190,9 @@ Formato y protocolo con los agentes: [pipelines.es.md](pipelines.es.md).
 | Método | Ruta | Cuerpo |
 |---|---|---|
 | `GET` | `/v1/settings?office=<id>` | Responde `{ office: { id, file, appearance, prefs }, offices, systemZone, herdr }` (`file`: la base SQLite; `appearance`: la de esa oficina) |
-| `PUT` | `/v1/settings` | `{ prefs?: { … }, appearance?: { rol: { name?, title?, shirt?, pants?, hair?, skin?, long?, beard?, glasses? } \| null }, office? }` |
+| `PUT` | `/v1/settings` | `{ prefs?: { … }, appearance?: { rol: { name?, title?, sex?, personality?, style?, shirt?, pants?, hair?, skin?, long?, beard?, glasses? } \| null }, office? }` |
+| `GET` | `/v1/characters/<rol>?office=<id>` | Contesta el personaje como JSON, para compartirlo: `{ kind: "dev-team-office/character", version: 1, role, name, sex, personality, style, shirt, … }` |
+| `PUT` | `/v1/characters/<rol>?office=<id>` | Ese JSON: pasa a ser el `<rol>` de esa oficina (las claves desconocidas o inválidas se ignoran; `400` si no es un personaje) |
 
 `prefs` (los ajustes generales, todos opcionales al cambiarlos):
 

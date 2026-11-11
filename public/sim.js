@@ -33,14 +33,14 @@ export const WORLD_W = W - LEFT;
 // Bottom row: the technical team, with the TL a bit apart (people go consult them).
 // The job title comes from the game's language, unless customized in ⚙ › Characters.
 export const TEAM = {
-  designer: { name: 'Camila', title: 'Diseñadora', sex: 'f', personality: 'dreamer', shirt: '#c86bfa', pants: '#3a2f45', hair: '#f2d16b', skin: '#f0c8a8', long: true, seat: { x: 100, y: 228 }, prop: 'tablet' },
-  po: { name: 'Sofía', title: 'Product Owner', sex: 'f', personality: 'chatty', shirt: '#e0607e', pants: '#3b3355', hair: '#5a3214', skin: '#f2c9a0', long: true, seat: { x: 210, y: 228 }, prop: 'notes' },
-  analyst: { name: 'Valentina', title: 'Analista de negocio', sex: 'f', personality: 'chatty', shirt: '#f0a73a', pants: '#2f3b52', hair: '#21160f', skin: '#c98e62', long: true, seat: { x: 320, y: 228 }, prop: 'chart' },
-  manager: { name: 'Marco', title: 'Manager', sex: 'm', personality: 'chatty', shirt: '#3f73f0', pants: '#2a2d3a', hair: '#8d8d8d', skin: '#e8b98f', seat: { x: 710, y: 228 }, prop: 'phone' },
-  frontend: { name: 'Lucía', title: 'Frontend', sex: 'f', personality: 'focused', shirt: '#ff7a45', pants: '#2d3a4f', hair: '#b8322a', skin: '#f5d0b0', long: true, seat: { x: 110, y: 418 }, prop: 'dual' },
-  backend: { name: 'Diego', title: 'Backend', sex: 'm', personality: 'focused', shirt: '#6b5bd6', pants: '#22222e', hair: '#151515', skin: '#b07a52', seat: { x: 220, y: 418 }, prop: 'terminal' },
-  qa: { name: 'Andrés', title: 'QA', sex: 'm', personality: 'anxious', shirt: '#8ac926', pants: '#2b3a2e', hair: '#3d2817', skin: '#e0ac7e', glasses: true, seat: { x: 330, y: 418 }, prop: 'qa' },
-  tl: { name: 'Tomás', title: 'Tech Lead', sex: 'm', personality: 'calm', shirt: '#22a68e', pants: '#26313a', hair: '#2b1b12', skin: '#d9a273', beard: true, seat: { x: 560, y: 418 }, prop: 'big' },
+  designer: { name: 'Camila', title: 'Diseñadora', sex: 'f', personality: 'dreamer', style: 'normal', shirt: '#c86bfa', pants: '#3a2f45', hair: '#f2d16b', skin: '#f0c8a8', long: true, seat: { x: 100, y: 228 }, prop: 'tablet' },
+  po: { name: 'Sofía', title: 'Product Owner', sex: 'f', personality: 'chatty', style: 'normal', shirt: '#e0607e', pants: '#3b3355', hair: '#5a3214', skin: '#f2c9a0', long: true, seat: { x: 210, y: 228 }, prop: 'notes' },
+  analyst: { name: 'Valentina', title: 'Analista de negocio', sex: 'f', personality: 'chatty', style: 'normal', shirt: '#f0a73a', pants: '#2f3b52', hair: '#21160f', skin: '#c98e62', long: true, seat: { x: 320, y: 228 }, prop: 'chart' },
+  manager: { name: 'Marco', title: 'Manager', sex: 'm', personality: 'chatty', style: 'normal', shirt: '#3f73f0', pants: '#2a2d3a', hair: '#8d8d8d', skin: '#e8b98f', seat: { x: 710, y: 228 }, prop: 'phone' },
+  frontend: { name: 'Lucía', title: 'Frontend', sex: 'f', personality: 'focused', style: 'normal', shirt: '#ff7a45', pants: '#2d3a4f', hair: '#b8322a', skin: '#f5d0b0', long: true, seat: { x: 110, y: 418 }, prop: 'dual' },
+  backend: { name: 'Diego', title: 'Backend', sex: 'm', personality: 'focused', style: 'normal', shirt: '#6b5bd6', pants: '#22222e', hair: '#151515', skin: '#b07a52', seat: { x: 220, y: 418 }, prop: 'terminal' },
+  qa: { name: 'Andrés', title: 'QA', sex: 'm', personality: 'anxious', style: 'normal', shirt: '#8ac926', pants: '#2b3a2e', hair: '#3d2817', skin: '#e0ac7e', glasses: true, seat: { x: 330, y: 418 }, prop: 'qa' },
+  tl: { name: 'Tomás', title: 'Tech Lead', sex: 'm', personality: 'calm', style: 'normal', shirt: '#22a68e', pants: '#26313a', hair: '#2b1b12', skin: '#d9a273', beard: true, seat: { x: 560, y: 418 }, prop: 'big' },
 };
 export const PRODUCT = ['po', 'analyst', 'designer']; // business NPCs: they talk among themselves and bring the requirements
 export const TECH = ['backend', 'frontend', 'qa'];      // they work and sometimes consult the TL
@@ -58,7 +58,12 @@ export const onBoard = (x, y) => x >= BOARD.x && x <= BOARD.x + BOARD.w && y >= 
 
 // Customizable appearance (⚙ Settings › Characters). TEAM is modified in place so both
 // renderers and the simulation see the change instantly.
-export const APPEARANCE_KEYS = ['name', 'title', 'sex', 'personality', 'shirt', 'pants', 'hair', 'skin', 'long', 'beard', 'glasses'];
+export const APPEARANCE_KEYS = ['name', 'title', 'sex', 'personality', 'style', 'shirt', 'pants', 'hair', 'skin', 'long', 'beard', 'glasses'];
+/**
+ * How they answer you (like Claude's styles): normal, concise (straight to the point), explanatory
+ * (the why, with an example), teacher (step by step, as to someone learning) or formal.
+ */
+export const STYLES = ['normal', 'concise', 'explanatory', 'teacher', 'formal'];
 /** Sex: their face, their default look and how the texts that talk about them are written. */
 export const SEXES = ['f', 'm'];
 /**

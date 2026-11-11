@@ -32,12 +32,14 @@ Dev Team Office es una oficina en pixel art que muestra en vivo lo que hacen los
 | `server/herdr.js` · `server/subpanes.js` | herdr: un agente por pane, y un pane por subagente |
 | `server/mcp.js` | El servidor MCP: `join_office`, `register_project`, `report_activity`, `send_task`… y el prompt `join` |
 | `server/store.js` | La base SQLite: oficinas, agentes, ajustes (`prefs`), apariencia, historial, directivas y el archivo (`knowledge`) |
+| `server/guides.js` | Las indicaciones de cada departamento (una oficina) y de cada proyecto (su carpeta): van arriba de cada encargo, pipeline, directiva y pregunta, bajo la línea 📁 |
 | `server/directives.js` · `server/archive.js` | Los dos pisos compartidos: la dirección (una directiva = un encargo por proyecto, a varias oficinas) y el archivo (notas, decisiones, documentos, actas, skills y conectores; instala skills y conectores en cada proyecto) |
 | `public/sim.js` | La simulación (personajes, rutas, vida de la oficina). La comparten el navegador y la terminal |
 | `public/game.js` · `public/iso.js` | El juego en canvas: la vista frontal y la cenital (cámara isométrica) |
 | `public/floors.js` · `public/floors-ui.js` | Los pisos de la dirección y del archivo: sus escenas (con el mismo dibujo del juego) y sus diálogos |
 | `tui/` | La terminal: `app.js`/`view.js` (el juego), `console.js` (la bitácora), `monitor.js` (el monitor), `follow.js` (un subagente), `settings.js` |
 | `integrations/` | Lo que corre del lado del agente, más la librería común `integrations/common/devteam.mjs` (detección de proyectos y subagentes, pipelines, gates) |
+| `public/character.js` | Un personaje como JSON, para compartirlo (exportar e importar): nombre, sexo, personalidad, estilo y aspecto |
 | `public/models.js` | Los perfiles de modelos (Anthropic, OpenCode y los que se agreguen): qué modelo usa cada rol |
 | `public/board-ui.js` | La pizarra expandida: las tareas como post-its |
 | `public/locales/{en,es}.js` | Todos los textos de la interfaz |
@@ -112,7 +114,7 @@ Más detalle en [docs/conventions.es.md](docs/conventions.es.md) y [CONTRIBUTING
   - En la simulación cotorrea, pero no decide nada sola: no lleva ideas al backlog ni contesta alcances.
 - **Cada subagente es alguien nuevo** en la simulación (`sim.ghosts`): un extra translúcido de su rol que llega por el ascensor (`ELEVATOR`) y se sienta en un escritorio propio, que existe mientras él está (`HOT_DESKS` son los lugares). Los eventos con `subId` son suyos, no del personaje fijo del rol.
 - **El mundo va de `x = LEFT` (negativo) a `W`:** la oficina es `x ≥ 0`; a su izquierda, el pasillo (`HALL`) y el baño (`BATHROOM`). La vista frontal dibuja con el mundo corrido (`FLAT` en `game.js`), la terminal resta `LEFT` al convertir, y la ruta (`route` en `sim.js`) pasa por las puertas: nadie cruza una pared.
-- **Un encargo lleva su alcance delante:** una línea que empieza con `📁` (`server/tasks.js`, `scoped`): sólo la carpeta del proyecto y sólo lo pedido. La oficina la saca del título de la pizarra; a OpenCode además le llega como regla (`fenced`).
+- **Un encargo lleva su alcance delante:** una línea que empieza con `📁` (`server/tasks.js`, `scoped`): sólo la carpeta del proyecto y sólo lo pedido. Debajo van las indicaciones de su departamento y de su proyecto (líneas `📋 …` y `│ …`, `server/guides.js`). La oficina saca esa cabecera del título de la pizarra (`unguided`); a OpenCode el alcance además le llega como regla (`fenced`).
 - **El contexto** llega como evento `context` (o el campo `context` de cualquier evento): sólo actualiza `session.context`, no va a la bitácora ni mueve a nadie.
 - **Los roles de los subagentes** salen de, en este orden:
   1. su `role:`;

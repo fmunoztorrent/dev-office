@@ -54,11 +54,17 @@ The question is answered by the office's agent on duty (the most recent session,
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| `GET` | `/v1/offices` | | `{ ok, offices, view }`: each with `{ id, name, custom, timezone, ownTimezone, location, place, country, city, agents, sessions }`; `view`, the one being watched |
-| `POST` | `/v1/offices` | `{ name, timezone?, location? }` | `201 { ok, office }` |
+| `GET` | `/v1/offices` | | `{ ok, offices, view }`: each with `{ id, name, custom, timezone, ownTimezone, location, instructions, place, country, city, agents, sessions }`; `view`, the one being watched |
+| `POST` | `/v1/offices` | `{ name, timezone?, location?, instructions? }` | `201 { ok, office }`; the executive floor's operations takes note of it (`{ type: "floor", event: { floor: "exec", kind: "department" } }`) |
 | `GET` | `/v1/offices/<id>` | | `{ ok, office }` |
-| `PUT` | `/v1/offices/<id>` | `{ name?, timezone?, location? }` (`null`: the company's / the zone's) | `{ ok, office }` |
+| `PUT` | `/v1/offices/<id>` | `{ name?, timezone?, location?, instructions? }` (`null`: the company's / the zone's; `""` removes the instructions) | `{ ok, office }` |
 | `DELETE` | `/v1/offices/<id>` | | `{ ok }`; its agents move to the main one (`main`, which cannot be deleted) |
+
+Each office is a **department**. Its `instructions` (how to work there) and each project folder's go on top of every brief, pipeline, directive and question to its projects, under the 📁 scope line, as `📋 …` lines with the text in `│ …` lines (the office takes that header out of the whiteboard's title):
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| `PUT` | `/v1/projects/instructions` | `{ path, instructions }` (an existing absolute folder; `""` removes them) | `{ ok, path, instructions }`. Also `instructions` in `POST`/`PUT /v1/agents` (they belong to the folder: every agent in it shares them) |
 
 `timezone` is an IANA zone (`Europe/Madrid`); it gives the office's time and country. `location` is its own city: a name (`Valparaíso`), coordinates (`-33.45,-70.65`) or both, as the city picker saves it (`Concepción, Región del Biobío (-36.8270, -73.0498)`). `place` is the city it uses, `{ name, lat, lon }`: its own, the company's (`prefs.city`) if it inherits the time zone, or the time zone's. Changes are broadcast as `{ type: "offices", offices }`.
 
@@ -184,7 +190,9 @@ Format and protocol with the agents: [pipelines.md](pipelines.md).
 | Method | Path | Body |
 |---|---|---|
 | `GET` | `/v1/settings?office=<id>` | Answers `{ office: { id, file, appearance, prefs }, offices, systemZone, herdr }` (`file`: the SQLite database; `appearance`: that office's) |
-| `PUT` | `/v1/settings` | `{ prefs?: { … }, appearance?: { role: { name?, title?, shirt?, pants?, hair?, skin?, long?, beard?, glasses? } \| null }, office? }` |
+| `PUT` | `/v1/settings` | `{ prefs?: { … }, appearance?: { role: { name?, title?, sex?, personality?, style?, shirt?, pants?, hair?, skin?, long?, beard?, glasses? } \| null }, office? }` |
+| `GET` | `/v1/characters/<role>?office=<id>` | Answers the character as JSON, to share it: `{ kind: "dev-team-office/character", version: 1, role, name, sex, personality, style, shirt, … }` |
+| `PUT` | `/v1/characters/<role>?office=<id>` | That JSON: it becomes that office's `<role>` (unknown or invalid keys are ignored; `400` if it is not a character) |
 
 `prefs` (the general settings, all optional when changing them):
 

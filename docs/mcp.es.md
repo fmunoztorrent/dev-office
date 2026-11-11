@@ -18,16 +18,18 @@ página sirve para entender qué hace y para registrarlo a mano en otro cliente.
 | `office_status` | — | ¿Está corriendo? URL, versión, oficinas, proyectos registrados y sesiones abiertas |
 | `office_start` | `open?` | La levanta en segundo plano si no está (`dev-team-office serve`, bitácora en `~/.dev-team-office/office.log`) y devuelve la URL; con `open`, abre el navegador |
 | `detect_project` | `path?` | Qué trae una carpeta: harnesses, entradas (pipelines, comandos, prompts) y el rol de cada subagente (`roles`, `roleIssues`) |
-| `register_project` | `path?`, `harness?`, `name?`, `office?` | Registra la carpeta con el CLI que la atiende. `harness` por defecto es el del cliente (por su `clientInfo.name`); `office` se busca por id o nombre y se crea si no existe. Idempotente |
+| `register_project` | `path?`, `harness?`, `name?`, `office?`, `instructions?` | Registra la carpeta con el CLI que la atiende. `harness` por defecto es el del cliente (por su `clientInfo.name`); `office` se busca por id o nombre y se crea si no existe. Idempotente |
 | `list_projects` | `office?` | Los proyectos registrados |
-| `update_project` | `id`, `name?`, `path?`, `harness?`, `office?` | Cambia un proyecto |
+| `update_project` | `id`, `name?`, `path?`, `harness?`, `office?`, `instructions?` | Cambia un proyecto; sus `instructions` (cómo trabajar con él) van arriba de cada encargo, pipeline y pregunta a su carpeta |
 | `remove_project` | `id` | Lo quita del registro (no toca sus archivos) |
-| `list_offices` | — | Las oficinas (equipos o dominios) |
-| `create_office` | `name`, `timezone?`, `location?` | Una oficina nueva, con su zona IANA (hora, luz y clima) |
+| `list_offices` | — | Los departamentos (oficinas: equipos o dominios), con sus indicaciones |
+| `create_office` | `name`, `timezone?`, `location?`, `instructions?` | Un departamento nuevo, con su zona IANA (hora, luz y clima) y cómo se trabaja ahí |
+| `update_office` | `id`, `name?`, `timezone?`, `location?`, `instructions?` | El mantenedor de departamentos: cambia un departamento |
+| `get_instructions` | `path?` | Cómo trabajar con la carpeta de un proyecto: las indicaciones de su departamento y las suyas (las mismas que van arriba de cada encargo) |
 | `report_activity` | `kind`, `text?`, `role?`, `phase?`, `from?`, `todos?`, `roles?`, `cwd?` | `task` · `phase` · `phase_end` · `todos` · `waiting` · `error` · `turn_end` · `done` · `chat` · `agent_roles`. Sin oficina no falla: devuelve `delivered: false` |
 | `send_task` | `project` (id o ruta), `text`, `entry?`, `newSession?` | Le manda un prompt al agente de un proyecto registrado, por una entrada de su harness |
 | `open_pane` | `command?` \| `agent?` + `prompt?`, `role?`, `title?`, `direction?` | Dentro de herdr: abre un pane con una actividad y se lo cuenta a la oficina |
-| `send_directive` | `text`, `title?`, `offices?` (ids o nombres, o `["all"]`), `projects?` (ids o rutas) | **La dirección:** una orden para varias oficinas o proyectos. El agente de cada proyecto recibe un encargo con su parte (empieza con 🏛); la oficina sigue cada parte y, cuando terminan todas, archiva el acta |
+| `send_directive` | `text`, `title?`, `offices?` (ids o nombres, o `["all"]`), `projects?` (ids o rutas) | **La dirección:** una orden para varias oficinas o proyectos. El agente de cada proyecto recibe un encargo con su parte (empieza con 🏛); la oficina sigue cada parte y, cuando terminan todas, archiva el acta. Un departamento que todavía no existe es un error que dice cómo crearlo (`create_office`) |
 | `list_directives` | — | Las últimas directivas, cómo va cada proyecto y qué hace cada oficina ahora |
 | `search_knowledge` | `query?`, `kind?`, `limit?` | **El archivo:** las entradas que mejor coinciden (notas, decisiones, documentos, actas, skills, conectores), con un extracto. Funciona también con la oficina apagada |
 | `get_knowledge` | `id` \| `name` + `kind?` | Una entrada completa (una skill o un conector también por su nombre). Cuenta como una lectura |

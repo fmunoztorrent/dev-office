@@ -22,11 +22,12 @@ import { MAIN_OFFICE } from './store.js';
 import { realDir } from './paths.js';
 import { childEnv } from './tasks.js';
 import { DEFAULT_TEAM } from '../public/sim.js';
+import { guideFor, guideText } from './guides.js';
 
 const ANSI = /\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07/g;
 const SOURCE_HARNESS = { 'claude-code': 'claude-code', claude: 'claude-code', codex: 'codex', opencode: 'opencode', pi: 'pi' };
 const FORKABLE = new Set(['claude-code', 'opencode']); // the ones that expose a session id their CLI understands
-const ANSWER_MAX = 1500;
+const ANSWER_MAX = 4000; // an explanatory or teacher answer is longer
 const RECENT_MS = 12 * 3600_000;
 let seq = 0;
 
@@ -101,6 +102,9 @@ export class AskDesk extends EventEmitter {
     const lines = [t('btw.ctxOffice', { office: info?.name || officeId })];
     if (duty.cwd) lines.push(t('btw.ctxProject', { project: duty.cwd.split('/').filter(Boolean).pop() || duty.cwd, dir: duty.cwd }));
     if (role) lines.push(t('btw.ctxRole', { who: this.#who(officeId, role) }));
+    // how to work with this project and its department (their instructions)
+    const guide = guideText(guideFor(this.store, duty.cwd, officeId));
+    if (guide) lines.push(guide);
     if (forked) return lines.join('\n');
     if (duty.title) lines.push(t('btw.ctxTask', { task: clip(duty.title, 200) }));
     if (duty.turn) lines.push(t('btw.ctxTurn', { role: t(`team.titles.${duty.turn}`) }));
@@ -116,12 +120,18 @@ export class AskDesk extends EventEmitter {
     return lines.join('\n');
   }
 
+  /** How the character asked answers (⚙ › Characters › Style): normal, concise, explanatory, teacher or formal. */
+  #style(officeId, role) {
+    const style = (role && (this.store.getAppearance?.(officeId)?.[role]?.style || DEFAULT_TEAM[role]?.style)) || 'normal';
+    return style === 'normal' ? 'promptRules' : `rules.${style}`;
+  }
+
   #prompt(question, officeId, duty, role, forked) {
     return [
       t('btw.promptHead'),
       this.#context(officeId, duty, role, forked),
       t('btw.promptQuestion', { question }),
-      t('btw.promptRules', { lang: LANGUAGES[getLanguage()] || 'English' }),
+      t(`btw.${this.#style(officeId, role)}`, { lang: LANGUAGES[getLanguage()] || 'English' }),
     ].filter(Boolean).join('\n\n');
   }
 
