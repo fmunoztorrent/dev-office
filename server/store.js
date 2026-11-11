@@ -504,6 +504,10 @@ export class Store {
     });
   }
 
+  /** The day (in the office's zone) each office had its last standup (server/standup.js). */
+  getStandupDay(office) { return this.#get(`standup:${office}`, null); }
+  setStandupDay(office, day) { this.#put(`standup:${office}`, String(day)); }
+
   // ---------------------------------------------------------------- appearance (per office)
 
   #appearanceKey(office) { return !office || office === MAIN_OFFICE ? 'appearance' : `appearance:${office}`; }

@@ -59,6 +59,7 @@ The question is answered by the office's agent on duty (the most recent session,
 | `GET` | `/v1/offices/<id>` | | `{ ok, office }` |
 | `PUT` | `/v1/offices/<id>` | `{ name?, timezone?, location?, instructions? }` (`null`: the company's / the zone's; `""` removes the instructions) | `{ ok, office }` |
 | `DELETE` | `/v1/offices/<id>` | | `{ ok }`; its agents move to the main one (`main`, which cannot be deleted) |
+| `POST` | `/v1/offices/<id>/standup` | | The daily standup now: `{ ok, office, date, lines: [{ role, text }], waiting, open, empty, entry }`. The office's log gets a `standup` event (`{ kind: "standup", role: "manager", text, lines, waiting, open }`, the game gathers the team at the table) and, if something happened in the last 24 hours, its minutes go to the archive (`entry`: kind `minute`, tag `daily`). It also happens by itself once a day, from 9:30 in the office's time zone. Over WebSocket: `{ type: "standup" }` (the office being watched) |
 
 Each office is a **department**. Its `instructions` (how to work there) and each project folder's go on top of every brief, pipeline, directive and question to its projects, under the 📁 scope line, as `📋 …` lines with the text in `│ …` lines (the office takes that header out of the whiteboard's title):
 
@@ -78,7 +79,7 @@ The executive floor and the archive serve every office (they do not depend on th
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| `GET` | `/v1/directives?limit=` | | `{ ok, directives, overview }`: each directive `{ id, title, text, status, source, done, total, parts: [{ target, name, harness, office, kind: task \| run, ref, status, detail }], createdAt, updatedAt }`; `overview`, each office `{ id, name, agents, working, waiting, tasks, title, lastAt }` |
+| `GET` | `/v1/directives?limit=` | | `{ ok, directives, overview }`: each directive `{ id, title, text, status, source, done, total, parts: [{ target, name, harness, office, kind: task \| run, ref, status, detail }], createdAt, updatedAt }`; `overview`, each office `{ id, name, agents, working, waiting, tasks, title, lastAt, errors, context, waitMin, health }`: `errors` in the last hour (a red test in TDD is no error), `context` the share its agents have left (the lowest, 0–1; `null` if none reports it), `waitMin` how long it has been waiting for you, `health` `ok` \| `warn` (waiting, 3+ errors or under 25 % context) \| `bad` (waiting 15+ min, 10+ errors or under 10 % context) |
 | `POST` | `/v1/directives` | `{ text, title?, offices?: [id \| name \| "all"], targets?: [agent id \| path], from? }` | `201 { ok, directive }`; a part that could not be sent shows as `failed` with why |
 | `GET` | `/v1/directives/<id>` | | `{ ok, directive }` |
 | `POST` | `/v1/directives/<id>/cancel` | | `{ ok, directive }`: cancels what is still running |

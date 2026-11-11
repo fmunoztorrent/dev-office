@@ -20,6 +20,7 @@ import { TaskHub, AGENT_LABEL } from './tasks.js';
 import { PipelineHub } from './pipeline.js';
 import { AgentRegistry } from './registry.js';
 import { ClarifyDesk } from './clarify.js';
+import { Standup } from './standup.js';
 import { search as ragSearch, createEmbedder, createIndexer } from './rag.js';
 import { fromFile, fromUrl } from './ingest.js';
 import { AskDesk } from './asks.js';
@@ -40,7 +41,7 @@ import { zoneInfo, systemZone } from '../public/clock.js';
 import { insideDir as inside } from './paths.js';
 import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.14.0';
+export const VERSION = '0.15.0';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
 const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
@@ -76,7 +77,7 @@ class HttpError extends Error {
  *                 says it, so `update` knows whether it can bring the office back by itself
  * @returns {Promise<{company, office, url, socket, command, handleMessage, close, …}>}
  */
-export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {}, clarify: clarifyOpt = {}, rag: ragOpt = {}, mode = 'terminal', outdatedAfter = 3000 } = {}) {
+export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {}, clarify: clarifyOpt = {}, rag: ragOpt = {}, standup: standupOpt = {}, mode = 'terminal', outdatedAfter = 3000 } = {}) {
   const ownStore = !db || typeof db === 'string';
   const store = ownStore ? openStore(db || dbFile()) : db; // oficinas, agentes, ajustes e historial
   setLanguage(store.getPrefs().lang);
@@ -122,6 +123,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   const embedder = createEmbedder(() => store.getPrefs(), ragOpt);
   const indexer = createIndexer(store, embedder);
   archive.on('saved', () => indexer.kick());
+  // the daily standup, each morning in each office (and on demand)
+  const standup = new Standup({ company, archive, store, hub, clarify, ...standupOpt });
   const directives = new DirectiveDesk({ store, registry, hub, pipelines, archive, company });
   const startedAt = Date.now();
   const bus = new EventEmitter(); // changes the interfaces see: settings, appearance, weather, offices, log
@@ -173,7 +176,11 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     };
   };
 
-  /** What the executive floor sees of each office: who is working, who waits for you, what is running. */
+  /**
+   * What the executive floor sees of each office: who is working, who waits for you, what is running,
+   * and its health: errors in the last hour, the context left of its agents (the lowest) and how long
+   * it has been waiting for you → 'ok' | 'warn' | 'bad'.
+   */
   function overview() {
     const now = Date.now();
     const agents = store.listAgents();
@@ -181,11 +188,19 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       const o = company.get(id);
       const live = [...o.sessions.values()].filter((s) => s.id !== 'office' && ['active', 'waiting'].includes(s.status) && now - s.lastAt < 15 * 60_000);
       const last = [...o.sessions.values()].filter((s) => s.id !== 'office').sort((a, b) => b.lastAt - a.lastAt)[0];
+      const errors = o.log.filter((e) => e.ts >= now - 3600_000 && ((e.kind === 'tool_end' && e.ok === false && e.phase !== 'red') || e.kind === 'error')).length;
+      const left = live.filter((s) => s.context?.max > 0).map((s) => Math.max(0, 1 - s.context.used / s.context.max));
+      const context = left.length ? Math.round(Math.min(...left) * 100) / 100 : null;
+      const waiting = live.filter((s) => s.status === 'waiting');
+      const waitMin = waiting.length ? Math.floor((now - Math.min(...waiting.map((s) => s.waiting?.since || s.lastAt))) / 60_000) : 0;
+      const health = waitMin >= 15 || errors >= 10 || (context !== null && context < 0.1) ? 'bad'
+        : waiting.length || errors >= 3 || (context !== null && context < 0.25) ? 'warn' : 'ok';
       return {
         id, name: company.info(id)?.name || id, agents: agents.filter((a) => a.office === id).length,
-        working: live.filter((s) => s.status === 'active').length, waiting: live.filter((s) => s.status === 'waiting').length,
+        working: live.filter((s) => s.status === 'active').length, waiting: waiting.length,
         tasks: [...hub.tasks.values()].filter((x) => (x.office || MAIN_OFFICE) === id && ['queued', 'sent', 'running'].includes(x.status)).length,
         title: live.sort((a, b) => b.lastAt - a.lastAt)[0]?.title || '', lastAt: last?.lastAt || null,
+        errors, context, waitMin, health,
       };
     });
   }
@@ -425,6 +440,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         return clarify.answer(msg.id, { answers: Array.isArray(msg.answers) ? msg.answers : [], skip: !!msg.skip });
       case 'clarify_cancel':
         return clarify.cancel(msg.id);
+      case 'standup':
+        return standup.run(here, { from: t('events.you') });
       // the executive floor: one order for several offices or projects, and cancelling it
       case 'directive':
         return directives.create({ text: msg.text, title: msg.title, offices: msg.offices, targets: msg.targets, from: msg.from });
@@ -563,6 +580,12 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         return json(res, out.ok ? 201 : 400, out);
       }
       let m;
+      // The daily standup now (it also happens by itself every morning)
+      if (req.method === 'POST' && (m = p.match(/^\/v1\/offices\/([^/]+)\/standup$/))) {
+        const id = decodeURIComponent(m[1]);
+        if (!company.has(id)) return json(res, 404, { ok: false, error: t('err.unknownOffice', { office: id }) });
+        return json(res, 200, standup.run(id, { from: t('events.you') }));
+      }
       if ((m = p.match(/^\/v1\/offices\/([^/]+)$/))) {
         const id = decodeURIComponent(m[1]);
         if (req.method === 'GET') { const o = company.info(id); return o ? json(res, 200, { ok: true, office: o }) : json(res, 404, { ok: false, error: t('err.unknownOffice', { office: id }) }); }
@@ -946,6 +969,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     archive,
     embedder,
     indexer,
+    standup,
     directives,
     overview,
     bus,
@@ -968,6 +992,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     store,
     async close() {
       stopDemo?.();
+      standup.stop();
+      indexer.stop();
       clearTimeout(overviewTimer);
       for (const w of weathers.values()) w.stop();
       weatherShared?.stop?.();

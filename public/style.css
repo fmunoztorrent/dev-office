@@ -116,6 +116,15 @@ body[data-floor="exec"] .screen[data-view="flat"] .hud-tl, body[data-floor="arch
 .cl-questions { margin: 0; padding-left: 20px; display: grid; gap: 10px; }
 .cl-q { margin: 0 0 4px; font-weight: 600; }
 .cl-questions textarea { width: 100%; resize: vertical; font: 14px "Space Grotesk", sans-serif; }
+.attention-go.ghost { color: #1b1f33; background: #fff3c4; }
+.inbox { width: min(560px, calc(100vw - 32px)); }
+.inbox-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; max-height: 60vh; overflow: auto; }
+.inbox-list li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: #fff8dc; box-shadow: inset 3px 0 0 #ffd166; }
+.inbox-text { flex: 1; min-width: 0; display: grid; gap: 2px; font-size: 13px; }
+.inbox-text b { font-weight: 700; }
+.inbox-text span { overflow-wrap: anywhere; }
+.inbox .muted, .clarify .muted { color: #5c4630; margin: 2px 0 0; }
+.inbox-since { flex: none; font: 18px/1 "VT323", monospace; color: #6b4d00; }
 .btn.danger { color: #b3261e; }
 
 /* btw: the side question and its answer, top center */

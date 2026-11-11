@@ -53,6 +53,7 @@
         <span class="attention-text"><b id="attention-who"></b><span id="attention-what"></span></span>
         <span id="attention-since" class="attention-since"></span>
         <button id="attention-go" class="attention-go" type="button"></button>
+        <button id="attention-all" class="attention-go ghost" type="button" hidden></button>
       </div>
 
       <!-- btw: a side question to the agent on duty, and its answer -->
@@ -257,6 +258,7 @@
         </dl>
         <div class="w-actions">
           <button id="new-brief" class="btn" type="button" data-i18n="ui.newBrief">📋 New brief</button>
+          <button id="standup" class="btn ghost" type="button" data-i18n="ui.standupBtn" data-i18n-title="ui.standupTip">🗣 Daily</button>
           <button id="demo" class="btn ghost" type="button" data-i18n="ui.demo">▶ Demo</button>
           <button id="demo-pi" class="btn ghost" type="button" data-i18n="ui.demoTdd">▶ TDD demo</button>
           <button id="reset" class="btn ghost" type="button" data-i18n="ui.reset">⟲ Reset</button>
@@ -288,6 +290,19 @@
         <button type="submit" class="btn" id="cl-send" data-i18n="clarify.ui.send">▶ Send it to work</button>
       </footer>
     </form>
+  </dialog>
+
+  <!-- Everything waiting for you, in one place (the banner's "See all"): oldest first, each with its button. -->
+  <dialog id="inbox" class="brief inbox" aria-labelledby="inbox-title">
+    <header class="brief-head">
+      <span class="pin" aria-hidden="true"></span>
+      <h2 id="inbox-title" data-i18n="attention.inbox">Waiting for you</h2>
+      <button type="button" class="brief-x" id="inbox-close" data-i18n-aria="settings.close">✕</button>
+    </header>
+    <div class="brief-body">
+      <ol id="inbox-list" class="inbox-list"></ol>
+      <p class="muted" data-i18n="attention.inboxHint">Oldest first.</p>
+    </div>
   </dialog>
 
   <!-- The elevator: its panel of buttons, one per floor (the executive floor, each office, the archive). -->

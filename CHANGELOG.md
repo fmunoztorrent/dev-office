@@ -4,6 +4,15 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-11
+
+### Added
+
+- **The daily standup.** Every morning (from 9:30 in each office's time zone, if something happened the day before) the team gathers at the meeting table and each character tells what their agent did in the last 24 hours, from the real log: what they worked on, how many steps, how many times they got stuck. Marco closes with what is waiting for you and what is still open. The minutes go to the archive (tag `daily`). No model is asked. **🗣 Daily** in the Work panel calls it at any time; `POST /v1/offices/<id>/standup`.
+- **The inbox:** when more than one thing is waiting for you, **See all** on the banner lists them all (oldest first), each with its own button.
+- **Moods from real signals:** three errors in a row stress that character (😰, it shows on their card) until something works; when the agent's context drops below 25 %, Marco says so and he and whoever is working get tired (🥱, they want coffee) until it is compacted.
+- **Each department's health** on the executive floor's screen: a life bar (green, yellow, red) by its errors in the last hour, its agents' context left and how long it has been waiting for you, with the reason (`⚠5/h`, `ctx 12%`). `overview` brings `errors`, `context`, `waitMin` and `health`.
+
 ## [0.14.0] - 2026-11-11
 
 ### Added
@@ -206,7 +215,8 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.11.1...v0.12.0

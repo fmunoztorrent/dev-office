@@ -374,6 +374,8 @@ function drawLift(g, floor, lift, now, tag) {
   R(x + w + 6, 70, 6, 10, '#2b2d42'); R(x + w + 7, 71, 4, 3, open ? '#06d6a0' : '#adb5bd'); R(x + w + 7, 75, 4, 3, '#adb5bd');
 }
 
+const HEALTH = { ok: { fill: 1, color: '#06d6a0' }, warn: { fill: 0.6, color: '#ffd166' }, bad: { fill: 0.3, color: '#ef476f' } };
+
 function drawExecWall(g, floor, now, light) {
   const { R } = g;
   // dark wood paneling with its vertical slats
@@ -418,9 +420,18 @@ function drawExecWall(g, floor, now, light) {
     const y = s.y + 24 + i * 17;
     const color = o.waiting ? '#ffd166' : o.working ? '#06d6a0' : '#5c677d';
     R(s.x + 8, y + 3, 8, 8, o.waiting && blink ? '#0b1020' : color);
-    label(g, o.name, s.x + 22, y + 7, '#e9ecef', 14, 'left', 120);
+    label(g, o.name, s.x + 22, y + 7, '#e9ecef', 14, 'left', 108);
     const what = o.waiting ? t('floors.exec.waiting', { n: o.waiting }) : o.working ? t('floors.exec.working', { n: o.working }) : t('floors.exec.idle');
-    label(g, `${what}${o.tasks ? ` · ${t('floors.exec.tasks', { n: o.tasks })}` : ''}`, s.x + 148, y + 7, color, 13, 'left', s.w - 156);
+    label(g, what, s.x + 134, y + 7, color, 13, 'left', 112);
+    // its health, as a life bar (full and green, two thirds and yellow, one third and red, blinking),
+    // and what hurts it: errors in the last hour, its agents' context running out (or its open briefs)
+    const hp = HEALTH[o.health] || HEALTH.ok;
+    const bx = s.x + s.w - 46;
+    const hurts = [o.errors >= 3 ? t('floors.exec.errors', { n: o.errors }) : '', Number.isFinite(o.context) && o.context < 0.25 ? t('floors.exec.context', { pct: Math.round(o.context * 100) }) : ''].filter(Boolean);
+    const side = hurts.length ? hurts[Math.floor(now / 2500) % hurts.length] : o.tasks ? t('floors.exec.tasks', { n: o.tasks }) : ''; // one at a time, in turns
+    if (side) label(g, side, bx - 5, y + 7, hurts.length ? hp.color : '#8ecae6', 13, 'right', bx - 5 - (s.x + 250));
+    R(bx, y + 3, 38, 8, '#1b1f33');
+    if (!(o.health === 'bad' && blink)) R(bx + 1, y + 4, Math.round(36 * hp.fill), 6, hp.color);
   });
   if (offices.length > 5) label(g, `+${offices.length - 5}`, s.x + s.w - 8, s.y + s.h - 8, '#8ecae6', 13, 'right', 40);
   // the floor's brass plate, under the window

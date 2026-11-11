@@ -641,7 +641,7 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
       need(await running(), 'the office is not running: start it with office_start');
       const out = okOr(await api('/v1/directives'));
       const list = out.directives || [];
-      const offices = (out.overview || []).map((o) => `${o.name}: ${o.working} working, ${o.waiting} waiting, ${o.tasks} brief(s)`).join(' · ');
+      const offices = (out.overview || []).map((o) => `${o.name}: ${o.working} working, ${o.waiting} waiting, ${o.tasks} brief(s), health ${o.health}${o.errors ? ` (${o.errors} errors in the last hour)` : ''}`).join(' · ');
       return { text: `${list.length ? list.map((d) => `${d.id} "${d.title}": ${d.status} (${d.done}/${d.total})`).join('\n') : 'No directives yet.'}${offices ? `\nOffices — ${offices}` : ''}`, data: out };
     },
 

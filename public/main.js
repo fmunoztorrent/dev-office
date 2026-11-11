@@ -211,6 +211,7 @@ function renderAttention() {
   const items = attentionItems();
   const bar = $('attention');
   bar.hidden = !items.length; // on every floor: wherever you are, you see it
+  if (!items.length && $('inbox').open) $('inbox').close();
   $('screen').classList.toggle('waiting', items.length > 0);
   document.title = items.length ? `${t('attention.title', { n: items.length })} · ${baseTitle}` : baseTitle;
   if (!items.length) return;
@@ -221,12 +222,34 @@ function renderAttention() {
   $('attention-since').textContent = min >= 1 ? t('attention.since', { min }) : '';
   $('attention-go').textContent = first.label;
   $('attention-go').onclick = first.go;
+  $('attention-all').hidden = items.length < 2;
+  $('attention-all').textContent = t('attention.all', { n: items.length });
+  if ($('inbox').open) renderInbox(items);
   // something new: a sound and, if you allowed it, a system notification
   const fresh = items.filter((x) => !announced.has(x.key));
   for (const x of items) announced.add(x.key);
   if (fresh.length) announce(fresh[0]);
 }
 setInterval(renderAttention, 15_000); // the "for N min" grows
+
+/** The inbox: everything waiting for you, in one list (oldest first), each with its own button. */
+function renderInbox(items = attentionItems()) {
+  const ol = $('inbox-list');
+  ol.innerHTML = '';
+  for (const x of items) {
+    const min = Math.floor((Date.now() - x.since) / 60_000);
+    const go = el('button', 'btn', x.label);
+    go.type = 'button';
+    go.onclick = () => { $('inbox').close(); x.go(); };
+    const text = el('div', 'inbox-text');
+    text.append(el('b', '', x.who), el('span', '', x.what));
+    const li = el('li');
+    li.append(text, el('span', 'inbox-since', min >= 1 ? t('attention.since', { min }) : t('attention.now')), go);
+    ol.append(li);
+  }
+}
+$('attention-all').onclick = () => { renderInbox(); if (!$('inbox').open) $('inbox').showModal(); };
+$('inbox-close').onclick = () => $('inbox').close();
 
 function announce(item) {
   const p = alertPrefs();
@@ -544,6 +567,7 @@ function renderContext() {
   bar.hidden = game.floor !== 'office';
   bar.classList.toggle('none', !c);
   if (!c) {
+    game.sim.setContext(null);
     $('ctx-fill').style.width = $('ctx-trail').style.width = '0%';
     $('ctx-who').textContent = '';
     $('ctx-pct').textContent = '—';
@@ -555,6 +579,7 @@ function renderContext() {
   }
   const left = Math.max(0, Math.min(1, 1 - c.used / c.max));
   const pct = Math.round(left * 100);
+  game.sim.setContext(left); // running out tires the team (sim.js)
   $('ctx-fill').style.width = `${left * 100}%`;
   $('ctx-trail').style.width = `${left * 100}%`;
   $('ctx-who').textContent = '';
@@ -585,6 +610,7 @@ function addLog(ev, opts) {
   }
   if (ev.kind === 'phase_end') text = t('events.turnEnd', { text: ev.text ? `: ${ev.text}` : '' });
   if (ev.kind === 'pane_open' || ev.kind === 'pane_close') text = `🪟 ${ev.pane} · ${ev.text}${ev.kind === 'pane_close' ? ' ✔' : ''}`;
+  if (ev.kind === 'standup') text = t('events.standup', { text: ev.text || '' });
   if (ev.kind === 'clarify') text = t(`events.clarify.${ev.phase}`, { project: ev.project || '', n: ev.n || 0, text: ev.text || '' });
   if (ev.kind === 'btw') text = ev.phase === 'ask' ? `❓ btw: ${ev.text}` : ev.phase === 'answer' ? `💡 ${ev.text}` : `✖ btw: ${ev.text}`;
   const name = el('b', '', `${ev.kind === 'btw' && ev.phase === 'ask' ? ev.from : who}: `);
@@ -778,6 +804,8 @@ function moodOf(a) {
   if (a.lunch) return t('ui.mood.lunch', { food: a.food || '🍽️' });
   if (a.state === 'alarm') return t('ui.mood.fire');
   if (a.scene && a.scene.kind !== 'consult') return t('ui.mood.talking');
+  if (a.stress?.n >= 3) return t('ui.mood.stressed', { n: a.stress.n, g: a.cfg.sex });
+  if (a.tired && game.sim.fatigue) return t('ui.mood.tired', { pct: Math.round(game.sim.fatigue.left * 100), g: a.cfg.sex });
   return t(`state.${a.state}`, { g: a.cfg.sex });
 }
 
@@ -1056,6 +1084,7 @@ function el(tag, cls, text) {
 }
 
 $('session').onchange = (e) => { focus = e.target.value || null; renderSessions(); renderContext(); };
+$('standup').onclick = () => { send({ type: 'standup' }); $('work').close?.(); };
 $('demo').onclick = () => send({ type: 'command', action: 'demo' });
 $('demo-pi').onclick = () => send({ type: 'command', action: 'demo-pi' });
 $('reset').onclick = () => send({ type: 'command', action: 'reset' });

@@ -25,6 +25,7 @@ export default {
   // ---------------------------------------------------------------- office life (sim.js)
   sim: {
     journal: {
+      standup: '🗣 Daily standup: {names}',
       workcoffeeAlone: '{who} goes for a coffee to think about what they are doing ☕',
       workcoffee: '{who} goes for a coffee with {names} to talk about what they are doing ☕',
       newcomer: '{name} comes in to help with {role}: {text}', farewell: '{name} finished their part and leaves',
@@ -72,6 +73,7 @@ export default {
     askYou: '{name}, I have a question for you ❓',
     chatReplies: ['Noted! 📝', "Let's cover it at the daily 👍", 'Got it 🙌', 'Good idea!'],
     btwThinking: ['Hmm, good question… 🤔', 'Let me check… 🔍', 'One sec, looking it up 📚'],
+    standup: { open: 'Good morning! Daily: what did each one do? 🗣', waiting: '{n} thing(s) waiting for the PO: {what}', open2: '{n} brief(s) still open. Let’s go! 💪', close: 'Nothing pending. Let’s go! 💪' },
     clarify: { review: ['Let me read it carefully 🔍', 'Checking we have everything 📋', 'Before starting, let me review it 🤓'], ask: 'I have {n} question(s) before we start 📝', sent: ['All clear: to work! 🚀', 'Ready for the team 💪'], cancelled: 'Ok, we drop it' },
     btwFail: "I couldn't find out 🤷",
     poke: '{from} says hi 👋',
@@ -137,6 +139,9 @@ export default {
     },
     nightmares: ['Those red tests are haunting me 💀', 'I dream of stack traces 💀', 'What if it fails in production too? 💀', 'That bug is coming back… 💀'],
     pizzaReward: 'This deserves a pizza! 🍕',
+    stressed: ['It failed again… 😰', 'Third error in a row. Breathe. 😰', 'Why won’t it pass?! 😰'],
+    tired: 'I’m running out of context ({pct}% left)… I’m getting tired 🥱',
+    rested: ['Context compacted: good as new! ☕', 'Fresh memory, let’s keep going! 💪'],
     pizzaParty: ["Let's celebrate with pizza! 🍕", 'Shall we order pizza to celebrate? 🍕'],
     rounds: ['How is it going, {name}?', '{name}, need anything?', 'All good over here, {name}?'],
     roundsReplies: ['Good, making progress 💪', 'All under control 👍', 'A bit stuck, but getting there 😅', 'Almost done 🙌'],
@@ -242,6 +247,7 @@ export default {
     cd: 'Going into {dir}', background: '{what} (in the background)', mcp: 'Using {server}: {what}', toolUse: 'Using {tool}',
   },
   events: {
+    standup: '🗣 {text}',
     clarify: { review: '🔍 Reviewing the brief for {project}', ask: '❓ {n} question(s) for you: {text}', sent: '📨 The brief goes to work: {text}', failed: '✖ The brief could not be sent: {text}', cancelled: '⊘ Brief cancelled' },
     updateBoard: 'Updates the board', newCard: 'New card: {text}', moveCard: 'Moves a card', failed: 'Failed: {text}{detail}',
     thinking: 'Thinking…', waiting: 'The agent is waiting for your approval', error: 'Something went wrong', compact: 'Tidies up the notes (compacts the context)',
@@ -268,6 +274,8 @@ export default {
   offices: { main: 'Main office' },
   // the analyst reviews a brief before it goes to work (server/clarify.js)
   ingest: { tooBig: 'too big (more than {mb} MB)', convert: 'to read {name} the office needs {tool} installed (or ask an agent to convert it: ✨ Ask an agent)', format: 'the archive does not read .{ext} files (Markdown, text, CSV, JSON, HTML, PDF or Word)', empty: '{name} has no text', url: 'that is not an http(s) address', fetch: 'could not download it: {error}' },
+  // the daily standup (server/standup.js)
+  standup: { title: 'Daily · {office} · {date}', did: 'Yesterday: {did} ({steps}).', steps: { one: '1 step', other: '{n} steps' }, errors: { one: 'It got stuck once.', other: 'It got stuck {n} times.' }, nothing: 'reviewing and planning', waitingHead: 'Waiting for the PO:', openHead: 'Still open:', source: 'The daily', now: '🗣 Daily now' },
   rag: { block: 'From the archive (cite its [id]; search more with search_knowledge):' },
   clarify: {
     promptHead: '[review] Before a brief goes to work, check whether it has everything needed to do it end to end without asking anyone. Do not change any file and do not start the work: only review it.',
@@ -284,7 +292,7 @@ export default {
   },
   // the screen's signal when an agent (or the analyst) waits for you
   attention: {
-    one: '{who} is waiting for you', many: '{n} are waiting for you', since: '{min} min', answer: 'Answer', terminal: 'answer in its terminal', see: 'See',
+    all: 'See all {n}', inbox: '✋ Waiting for you', inboxHint: 'Oldest first. Each one stays here until you answer.', now: 'just now', one: '{who} is waiting for you', many: '{n} are waiting for you', since: '{min} min', answer: 'Answer', terminal: 'answer in its terminal', see: 'See',
     question: 'asks you: {text}', clarify: '{name} has {n} question(s) about your brief', title: '✋ ({n}) waiting for you',
     sound: 'A sound when they wait for you', notify: 'A system notification when they wait for you', notifyTitle: 'Dev Team Office: waiting for you',
   },
@@ -304,7 +312,7 @@ export default {
     // the game (floors.js): each floor's scene, its people and what they say
     exec: {
       sign: 'EXECUTIVE', board: 'DIRECTIVES', none: 'No directives: click here', wall: 'THE COMPANY',
-      working: '{n} working', waiting: '{n} waiting for you ✋', idle: 'quiet', tasks: '{n} brief(s)',
+      errors: '⚠{n}/h', context: 'ctx {pct}%', working: '{n} working', waiting: '{n} waiting for you ✋', idle: 'quiet', tasks: '📋{n}',
       chat: [
         'How are the offices doing?', 'We have to align every team', "Let's check the board", 'Did anyone see the Payments report?',
         'We need one rule for every project', 'The next directive has to be clear', "Let's ask the archive what we already know",
@@ -549,10 +557,10 @@ export default {
     settings: 'Settings', settingsKey: 'Settings (c)', fullscreen: 'Fullscreen', fullscreenKey: 'Fullscreen (f)', view: 'Front or top-down view', viewKey: 'Front or top-down view (v)', servicesKey: 'Background services: {n} running (l)',
     office: 'Office', officeKey: 'Pick which office to view (o)', floor: 'Floor',
     sheetClose: 'Close card', poke: '👋 Say hi', subagents: '{n} subagent(s)', nothingYet: 'Has not done anything in this session yet.',
-    mood: { bath: 'in the bathroom 🚻', bathWait: 'waiting for the bathroom 😣', dream: 'dreaming of {dream} {emoji}', lunch: 'having lunch {food}', fire: 'putting out the fire! 🧯', talking: 'chatting 💬' },
+    mood: { stressed: 'stressed 😰 ({n} errors in a row)', tired: 'tired 🥱 (their agent has {pct}% context left)', bath: 'in the bathroom 🚻', bathWait: 'waiting for the bathroom 😣', dream: 'dreaming of {dream} {emoji}', lunch: 'having lunch {food}', fire: 'putting out the fire! 🧯', talking: 'chatting 💬' },
     session: 'session', sessionLabel: 'Session', latest: 'most recent', noTaskYet: 'Session without a task yet', waitingAgent: 'Waiting for events from an agent…',
     stats: { tools: 'actions', errors: 'errors', subs: 'subagents', status: 'status' },
-    newBrief: '📋 New brief', demo: '▶ Demo', demoTdd: '▶ TDD demo', reset: '⟲ Reset', connected: '{n} agent(s) connected',
+    standupBtn: '🗣 Daily', standupTip: 'The daily standup now: each one tells what their agent did in the last 24 hours (the minutes go to the archive)', newBrief: '📋 New brief', demo: '▶ Demo', demoTdd: '▶ TDD demo', reset: '⟲ Reset', connected: '{n} agent(s) connected',
     cancel: 'Cancel', cancelRun: '✕ cancel', runBy: 'Run by {agent}: {task}', isNew: ' (new)', flow: 'Flow by role', noActivity: 'no activity',
     btwUsage: 'btw <question>: a side question to the agent on duty about the team, the domain or the office', btwThinking: 'thinking…', btwFailed: 'no answer: {error}', btwClose: 'Close',
     lifeOn: 'office life: shown', lifeOff: 'office life: hidden',

@@ -107,6 +107,8 @@ Office life is not only chance: each signal from the agent and its harness's sub
 | `story`/`criteria`/`requirements` phases | Product goes to ask Tomás whether it is feasible |
 | The agent awaits your OK | Those not working take the chance: coffee, a chat and TV |
 | Task finished (`Stop`) | A celebration at the meeting table, and the devs dream of the party pizza |
+| Three errors in a row from the same role | That character gets **stressed 😰** (it says so, sweats, and their card says "stressed (3 errors in a row)"); the next success calms them down |
+| The agent's context drops below 25 % | Marco says it ("I'm running out of context (12% left)…") and he and whoever is working **get tired 🥱**: they yawn and want coffee. When it is compacted, they are good as new |
 
 All of this also shows in the activity terminal, with its cause: `* Andrés has a nightmare about a skull 💀 (the tests failed)`.
 
@@ -237,7 +239,7 @@ The interfaces show **one office at a time**: the one you pick in the selector a
 
 The company's building has, besides its offices, two floors every office shares. Go up or down with the selector at the **top left** (`o`, or `PgUp`/`PgDn`), or **with the elevator**: clicking it, on any floor and in both views, opens its panel with a button per floor, and it takes you to the one you press. In the top-down view every floor has the same footprint: the room, and left of it the hallway with the building's elevator and the bathroom.
 
-**🏛 The executive floor**, on top: the directors, presided over by you (with your PO look). There you give **directives**: one order for several offices, departments or projects at once ("every API exposes `/health`", "update the logger everywhere"). Click the **directives board** (or `t` there), write the order and pick the offices (all their projects) or the projects one by one. The office sends each project's agent a brief with its part (to an open session of it, or a new one, like any brief) and the floor follows how each part goes; you can stop it. The company's **screen** shows what each office is doing (who is working, who is waiting for you, how many briefs). When a directive ends, its **minutes** go to the archive. Agents send them too: `send_directive` (MCP).
+**🏛 The executive floor**, on top: the directors, presided over by you (with your PO look). There you give **directives**: one order for several offices, departments or projects at once ("every API exposes `/health`", "update the logger everywhere"). Click the **directives board** (or `t` there), write the order and pick the offices (all their projects) or the projects one by one. The office sends each project's agent a brief with its part (to an open session of it, or a new one, like any brief) and the floor follows how each part goes; you can stop it. The company's **screen** shows what each office is doing (who is working, who is waiting for you, how many briefs) and its **health**, as a life bar: green, yellow or red (blinking) by its errors in the last hour, the context its agents have left and how long it has been waiting for you, with the reason next to it (`⚠5/h`, `ctx 12%`). When a directive ends, its **minutes** go to the archive. Agents send them too: `send_directive` (MCP).
 
 The order goes to **operations** (the COO), who splits it across the departments. **If the department it is for does not exist yet**, create it right there in the dialog (＋ New department): operations takes note of what it still needs (its repositories, its people and its instructions), which you give it in ⚙ › Departments.
 
@@ -314,7 +316,9 @@ The office aims for you to brief and the team to get there on its own:
 - **Then, autonomous mode.** Every brief carries a line asking the agent to work on it to the end on its own (plan, implement, test and check, with subagents if it helps) and to ask only what only you can answer, with its question tool; otherwise to make reasonable assumptions and note them. Pipelines already work that way.
 - Both are switched in **⚙ › General › Autonomy**.
 
-**When an agent waits for you, you see it.** An agent asking you something (Claude Code's `AskUserQuestion`, Pi's and OpenCode's question), a permission it needs, a question on its screen inside herdr, or the analyst's questions: a big yellow banner pulses at the top, on every floor, with who is waiting, for what and for how long, and the screen's edge lights up. The tab's title says `✋ (n)`. **Answer** opens the questions (or the prompt inside herdr); outside herdr, you answer in the agent's terminal. It stays until you answer. Optionally (⚙ › General, per browser), a sound and a system notification. The terminal game shows it as a pulsing strip at the top of the scene.
+**When an agent waits for you, you see it.** An agent asking you something (Claude Code's `AskUserQuestion`, Pi's and OpenCode's question), a permission it needs, a question on its screen inside herdr, or the analyst's questions: a big yellow banner pulses at the top, on every floor, with who is waiting, for what and for how long, and the screen's edge lights up. The tab's title says `✋ (n)`. **Answer** opens the questions (or the prompt inside herdr); outside herdr, you answer in the agent's terminal. It stays until you answer. Optionally (⚙ › General, per browser), a sound and a system notification. The terminal game shows it as a pulsing strip at the top of the scene. When more than one is waiting, **See all** opens the **inbox**: everything waiting for you in one list, oldest first, each with its own button.
+
+**The daily standup.** Every morning (from 9:30 in each office's time zone, the first time the office is running that day and something happened the day before) the team gathers at the meeting table and each character tells what their agent did in the last 24 hours, from the real log: what they worked on, how many steps and how many times they got stuck. Marco closes with what is waiting for you and what is still open. Its **minutes** go to the archive (minutes, tagged `daily`). It is the office's own summary: no model is asked. **🗣 Daily** (in the 📋 Work panel, `w`) calls it whenever you want.
 
 ## Briefs: click the whiteboard
 
@@ -443,6 +447,7 @@ server/mcp.js           the MCP server (stdio)
 server/asks.js          btw: side questions to the agent on duty
 server/directives.js    the executive floor: one order for several offices' projects, and how each part goes
 server/archive.js       the archive: the company's knowledge, and installing its skills and connectors in a project
+server/standup.js       the daily standup: each character's report from the real log, and its minutes
 server/ws.js            dependency-free WebSocket (RFC 6455)
 server/server.js        HTTP + WebSocket API over TCP and a Unix socket
 server/adapters.js      native payload → generic format

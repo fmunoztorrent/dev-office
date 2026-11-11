@@ -42,7 +42,7 @@ function excerpt(text, { max = 1200, lines = 14, head = false } = {}) {
   return kept.length > max ? (head ? `${kept.slice(0, max - 1)}…` : `…${kept.slice(-(max - 1))}`) : kept;
 }
 /** Announcements: they are logged but do not change any role's state. */
-const ANNOUNCEMENTS = new Set(['dispatch', 'clarify', 'pane_open', 'pane_close', 'pane_state', 'service_up', 'service_down']);
+const ANNOUNCEMENTS = new Set(['dispatch', 'clarify', 'standup', 'pane_open', 'pane_close', 'pane_state', 'service_up', 'service_down']);
 /** What state a character ends up in after one of its events (shared by the office and the monitor);
  *  `null` for announcements, which do not change the state (nor set it to idle). */
 export const roleStatus = (ev) => (ANNOUNCEMENTS.has(ev.kind) ? null : ev.phase === 'red' ? 'red' : ev.kind === 'tool_end' && !ev.ok ? 'blocked' : ev.kind === 'waiting' ? 'waiting' : ev.kind === 'done' ? 'done' : ev.kind === 'turn_end' || ev.kind === 'session_end' ? 'idle' : 'working');
@@ -272,6 +272,12 @@ export class Office extends EventEmitter {
         return null;
       // The analyst reviews a brief before it goes to work (server/clarify.js): reviewing it, her
       // questions for you, and when it is handed over.
+      // The daily standup (server/standup.js): what each character tells at the table.
+      case 'standup': {
+        const lines = (Array.isArray(r.lines) ? r.lines : []).map((l) => ({ role: normRole(l?.role), text: clip(l?.text, 300) })).filter((l) => l.role && l.text).slice(0, 10);
+        const list = (v) => (Array.isArray(v) ? v.map((x) => clip(x, 120)).filter(Boolean).slice(0, 5) : []);
+        return { ...ev, role: 'manager', lines, waiting: list(r.waiting), open: list(r.open), text: clip(r.text, 120) };
+      }
       case 'clarify': {
         const phase = ['review', 'ask', 'sent', 'failed', 'cancelled'].includes(r.phase) ? r.phase : 'review';
         return { ...ev, role: 'analyst', phase, clarifyId: clip(r.clarifyId, 40), n: Number(r.n) || 0, project: clip(r.project, 60), text: clip(r.text, 600) };
@@ -362,7 +368,7 @@ export class Office extends EventEmitter {
     if ((ev.kind === 'tool_end' && !ev.ok && ev.phase !== 'red') || ev.kind === 'error') s.errors++;
     // an agent that asks you something with its question tool is waiting for you too
     const asksYou = ev.kind === 'tool_start' && ASK_TOOL.test(ev.tool || '');
-    if (!['chat', 'poke', 'dispatch', 'btw', 'clarify'].includes(ev.kind)) s.status = asksYou ? 'waiting' : SESSION_STATUS[ev.kind] || 'active';
+    if (!['chat', 'poke', 'dispatch', 'btw', 'clarify', 'standup'].includes(ev.kind)) s.status = asksYou ? 'waiting' : SESSION_STATUS[ev.kind] || 'active';
     // what it is waiting for, and since when: the screen's "they are waiting for you" signal
     if (s.status === 'waiting') s.waiting = { text: ev.text || s.waiting?.text || '', since: s.waiting?.since || ev.ts, question: asksYou || !!s.waiting?.question, role: ev.role || null };
     else delete s.waiting;

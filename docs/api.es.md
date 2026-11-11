@@ -59,6 +59,7 @@ La pregunta la contesta el agente de turno de la oficina (la sesión más recien
 | `GET` | `/v1/offices/<id>` | | `{ ok, office }` |
 | `PUT` | `/v1/offices/<id>` | `{ name?, timezone?, location?, instructions? }` (`null`: la de la empresa / la de la zona; `""` borra las indicaciones) | `{ ok, office }` |
 | `DELETE` | `/v1/offices/<id>` | | `{ ok }`; sus agentes pasan a la principal (`main`, que no se elimina) |
+| `POST` | `/v1/offices/<id>/standup` | | La daily ahora: `{ ok, office, date, lines: [{ role, text }], waiting, open, empty, entry }`. La bitácora de la oficina recibe un evento `standup` (`{ kind: "standup", role: "manager", text, lines, waiting, open }`, el juego reúne al equipo en la mesa) y, si pasó algo en las últimas 24 horas, su acta va al archivo (`entry`: tipo `minute`, etiqueta `daily`). También ocurre sola una vez al día, desde las 9:30 en la zona horaria de la oficina. Por WebSocket: `{ type: "standup" }` (la oficina que se está mirando) |
 
 Cada oficina es un **departamento**. Sus `instructions` (cómo se trabaja ahí) y las de la carpeta de cada proyecto van arriba de cada encargo, pipeline, directiva y pregunta a sus proyectos, bajo la línea 📁 del alcance, como líneas `📋 …` con el texto en líneas `│ …` (la oficina saca esa cabecera del título de la pizarra):
 
@@ -78,7 +79,7 @@ La dirección y el archivo sirven a todas las oficinas (no dependen de la oficin
 
 | Método | Ruta | Cuerpo | Respuesta |
 |---|---|---|---|
-| `GET` | `/v1/directives?limit=` | | `{ ok, directives, overview }`: cada directiva `{ id, title, text, status, source, done, total, parts: [{ target, name, harness, office, kind: task \| run, ref, status, detail }], createdAt, updatedAt }`; `overview`, cada oficina `{ id, name, agents, working, waiting, tasks, title, lastAt }` |
+| `GET` | `/v1/directives?limit=` | | `{ ok, directives, overview }`: cada directiva `{ id, title, text, status, source, done, total, parts: [{ target, name, harness, office, kind: task \| run, ref, status, detail }], createdAt, updatedAt }`; `overview`, cada oficina `{ id, name, agents, working, waiting, tasks, title, lastAt, errors, context, waitMin, health }`: `errors` de la última hora (un test rojo en TDD no es error), `context` lo que les queda a sus agentes (el más bajo, 0–1; `null` si ninguno lo informa), `waitMin` cuánto hace que te espera, `health` `ok` \| `warn` (te espera, 3+ errores o menos de 25 % de contexto) \| `bad` (te espera hace 15+ min, 10+ errores o menos de 10 % de contexto) |
 | `POST` | `/v1/directives` | `{ text, title?, offices?: [id \| nombre \| "all"], targets?: [id de agente \| ruta], from? }` | `201 { ok, directive }`; una parte que no se pudo mandar queda `failed` con el motivo |
 | `GET` | `/v1/directives/<id>` | | `{ ok, directive }` |
 | `POST` | `/v1/directives/<id>/cancel` | | `{ ok, directive }`: cancela lo que sigue en curso |

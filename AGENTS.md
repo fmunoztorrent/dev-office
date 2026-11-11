@@ -36,6 +36,7 @@ Dev Team Office es una oficina en pixel art que muestra en vivo lo que hacen los
 | `server/guides.js` | Las indicaciones de cada departamento (una oficina) y de cada proyecto (su carpeta): van arriba de cada encargo, pipeline, directiva y pregunta, bajo la línea 📁 |
 | `server/rag.js` · `server/chunks.js` · `server/ingest.js` | El archivo como RAG: cargar documentos (su texto legible), cortarlos en fragmentos, buscarlos por palabras (FTS5) y por significado (embeddings opcionales), el glosario, los vacíos y el bloque «📚 Del archivo» arriba de cada encargo |
 | `server/directives.js` · `server/archive.js` | Los dos pisos compartidos: la dirección (una directiva = un encargo por proyecto, a varias oficinas) y el archivo (notas, decisiones, documentos, actas, skills y conectores; instala skills y conectores en cada proyecto) |
+| `server/standup.js` | La daily: cada mañana (9:30 de la oficina) o cuando la pidas, lo que hizo cada personaje según la bitácora real de las últimas 24 horas; el juego los junta en la mesa y el acta va al archivo |
 | `public/sim.js` | La simulación (personajes, rutas, vida de la oficina). La comparten el navegador y la terminal |
 | `public/game.js` · `public/iso.js` | El juego en canvas: la vista frontal y la cenital (cámara isométrica) |
 | `public/floors.js` · `public/floors-ui.js` | Los pisos de la dirección y del archivo: sus escenas (con el mismo dibujo del juego) y sus diálogos |

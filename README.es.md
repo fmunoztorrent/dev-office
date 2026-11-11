@@ -107,6 +107,8 @@ La vida de la oficina no es sólo azar: cada señal del agente y de los subagent
 | Fases `historia`/`criterios`/`requisitos` | Producto va a preguntarle a Tomás si es factible |
 | El agente espera tu OK | Los que no trabajan aprovechan: café, conversación y tele |
 | Tarea terminada (`Stop`) | Celebración en la mesa de reuniones, y los devs sueñan con la pizza del festejo |
+| Tres errores seguidos del mismo rol | Ese personaje se **estresa 😰** (lo dice, suda, y su ficha dice «estresado (3 errores seguidos)»); el siguiente acierto lo calma |
+| Al agente le queda menos de 25 % de contexto | Marco lo dice («Me queda poco contexto (12%)…») y él y quien esté trabajando **se cansan 🥱**: bostezan y quieren café. Al compactar, quedan como nuevos |
 
 Todo esto sale también en la terminal de actividad, con la causa: `* Andrés tiene una pesadilla con una calavera 💀 (fallaron los tests)`.
 
@@ -237,7 +239,7 @@ Las interfaces muestran **una oficina a la vez**: la que eliges en el selector d
 
 El edificio de la empresa tiene, además de sus oficinas, dos pisos que comparten todas. Sube o baja con el selector de **arriba a la izquierda** (`o`, o `RePág`/`AvPág`), o **con el ascensor**: al hacerle clic, en cualquier piso y en las dos vistas, se abre su panel con un botón por piso, y te lleva al que aprietes. En la vista cenital todos los pisos tienen la misma planta: la sala y, a su izquierda, el pasillo con el ascensor del edificio y el baño.
 
-**🏛 La dirección**, arriba: los directivos, que presides tú (con tu aspecto de PO). Ahí das **directivas**: una orden para varias oficinas, departamentos o proyectos a la vez («que todas las APIs expongan `/health`», «actualicen el logger en todos lados»). Haz clic en el **tablero de directivas** (o `t` ahí), escribe la orden y elige las oficinas (todos sus proyectos) o los proyectos uno por uno. La oficina le manda al agente de cada proyecto un encargo con su parte (a una sesión abierta suya o a una nueva, como cualquier encargo) y el piso sigue cómo va cada parte; puedes detenerla. La **pantalla** de la empresa muestra qué hace cada oficina (quién trabaja, quién te espera, cuántos encargos). Cuando una directiva termina, su **acta** va al archivo. Los agentes también las dan: `send_directive` (MCP).
+**🏛 La dirección**, arriba: los directivos, que presides tú (con tu aspecto de PO). Ahí das **directivas**: una orden para varias oficinas, departamentos o proyectos a la vez («que todas las APIs expongan `/health`», «actualicen el logger en todos lados»). Haz clic en el **tablero de directivas** (o `t` ahí), escribe la orden y elige las oficinas (todos sus proyectos) o los proyectos uno por uno. La oficina le manda al agente de cada proyecto un encargo con su parte (a una sesión abierta suya o a una nueva, como cualquier encargo) y el piso sigue cómo va cada parte; puedes detenerla. La **pantalla** de la empresa muestra qué hace cada oficina (quién trabaja, quién te espera, cuántos encargos) y su **salud**, como barra de vida: verde, amarilla o roja (parpadeando) según sus errores de la última hora, el contexto que les queda a sus agentes y cuánto hace que te espera, con el motivo al lado (`⚠5/h`, `ctx 12%`). Cuando una directiva termina, su **acta** va al archivo. Los agentes también las dan: `send_directive` (MCP).
 
 La orden le llega a **operaciones** (el COO), que la reparte entre los departamentos. **Si el departamento al que va todavía no existe**, créalo ahí mismo en el diálogo (＋ Nuevo departamento): operaciones toma nota de lo que le falta (sus repositorios, su personal y sus indicaciones), que le das en ⚙ › Departamentos.
 
@@ -314,7 +316,9 @@ La oficina busca que tú encargues y el equipo llegue solo al objetivo:
 - **Después, modo autónomo.** Cada encargo lleva una línea que le pide al agente trabajarlo hasta terminar por su cuenta (planificar, implementar, probar y verificar, con subagentes si conviene) y preguntar sólo lo que únicamente tú puedes responder, con su herramienta de preguntas; si no, tomar supuestos razonables y anotarlos. Los pipelines ya trabajan así.
 - Las dos se cambian en **⚙ › General › Autonomía**.
 
-**Cuando un agente te espera, lo ves.** Un agente que te pregunta algo (el `AskUserQuestion` de Claude Code, el `question` de Pi y OpenCode), un permiso que necesita, una pregunta en su pantalla dentro de herdr, o las preguntas de la analista: arriba late un cartel amarillo grande, en todos los pisos, con quién te espera, para qué y hace cuánto, y el borde de la pantalla se ilumina. El título de la pestaña dice `✋ (n)`. **Responder** abre las preguntas (o la pregunta dentro de herdr); fuera de herdr, contestas en la terminal del agente. Se queda hasta que contestas. Si quieres (⚙ › General, en cada navegador), con un sonido y una notificación del sistema. El juego de la terminal lo muestra como una franja que late arriba de la escena.
+**Cuando un agente te espera, lo ves.** Un agente que te pregunta algo (el `AskUserQuestion` de Claude Code, el `question` de Pi y OpenCode), un permiso que necesita, una pregunta en su pantalla dentro de herdr, o las preguntas de la analista: arriba late un cartel amarillo grande, en todos los pisos, con quién te espera, para qué y hace cuánto, y el borde de la pantalla se ilumina. El título de la pestaña dice `✋ (n)`. **Responder** abre las preguntas (o la pregunta dentro de herdr); fuera de herdr, contestas en la terminal del agente. Se queda hasta que contestas. Si quieres (⚙ › General, en cada navegador), con un sonido y una notificación del sistema. El juego de la terminal lo muestra como una franja que late arriba de la escena. Cuando te espera más de uno, **Ver las n** abre la **bandeja**: todo lo que te espera en una lista, lo más antiguo primero, cada cosa con su botón.
+
+**La daily.** Cada mañana (desde las 9:30 en la zona horaria de cada oficina, la primera vez que la oficina está corriendo ese día y si pasó algo el día anterior) el equipo se junta en la mesa de reuniones y cada personaje cuenta lo que hizo su agente en las últimas 24 horas, desde la bitácora real: en qué trabajó, cuántos pasos y cuántas veces se trabó. Marco cierra con lo que te espera y lo que sigue abierto. Su **acta** va al archivo (actas, con la etiqueta `daily`). Es el resumen de la oficina: no se le pregunta a ningún modelo. **🗣 Daily** (en el panel 📋 Trabajo, `w`) la llama cuando quieras.
 
 ## Encargos: haz clic en la pizarra
 
@@ -442,6 +446,7 @@ server/mcp.js           el servidor MCP (stdio)
 server/asks.js          btw: preguntas al margen al agente de turno
 server/directives.js    la dirección: una orden para los proyectos de varias oficinas, y cómo va cada parte
 server/archive.js       el archivo: lo que sabe la empresa, y la instalación de sus skills y conectores en un proyecto
+server/standup.js       la daily: lo que cuenta cada personaje desde la bitácora real, y su acta
 server/ws.js            WebSocket sin dependencias (RFC 6455)
 server/server.js        API HTTP + WebSocket en TCP y socket Unix
 server/adapters.js      payload nativo → formato genérico

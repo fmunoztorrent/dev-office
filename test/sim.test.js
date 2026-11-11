@@ -558,3 +558,43 @@ test('las de producto a veces van juntas al baño a cuchichear frente al espejo'
   assert.ok(whispers.length >= 1, 'cuchichean en el baño');
   assert.ok(said.some((s) => PRODUCT.includes(s.who) && s.text.startsWith('🤫')), 'en voz baja');
 });
+
+test('el ánimo sale de señales reales: errores seguidos estresan a quien los cometió; un acierto se lo pasa', () => {
+  const { sim, said, run } = office();
+  const fail = () => sim.handle({ kind: 'tool_end', role: 'backend', tool: 'Bash', ok: false, text: 'npm run build' });
+  fail(); fail();
+  assert.equal(sim.agents.backend.stress.n, 2);
+  assert.ok(!said.some((s) => s.who === 'backend' && /😰/.test(s.text)), 'dos errores todavía no');
+  fail();
+  assert.equal(sim.agents.backend.stress.n, 3);
+  assert.ok(said.some((s) => s.who === 'backend' && /😰/.test(s.text)), 'al tercero lo dice');
+  run(20);
+  assert.ok(sim.agents.backend.stress, 'sigue estresado un rato');
+  sim.handle({ kind: 'tool_end', role: 'backend', tool: 'Bash', ok: true, text: 'npm run build' });
+  assert.equal(sim.agents.backend.stress, null, 'funcionó: se le pasa');
+  // without new errors it wears off by itself
+  fail();
+  run(6 * 60);
+  assert.equal(sim.agents.backend.stress, null);
+});
+
+test('el ánimo sale de señales reales: con poco contexto el manager y quien trabaja se cansan; al compactar, como nuevos', () => {
+  const { sim, said, run } = office();
+  sim.setContext(0.8);
+  assert.equal(sim.fatigue, null);
+  sim.handle({ kind: 'tool_start', role: 'frontend', tool: 'Edit', text: 'Editando el checkout' });
+  sim.setContext(0.12);
+  assert.deepEqual(sim.fatigue, { left: 0.12 });
+  assert.ok(said.some((s) => s.who === 'manager' && /12%/.test(s.text)), 'el manager avisa que queda poco');
+  run(1);
+  assert.equal(sim.agents.manager.tired, true);
+  assert.equal(sim.agents.frontend.tired, true, 'quien trabaja también');
+  assert.equal(sim.agents.analyst.tired, false, 'quien no, no');
+  sim.setContext(0.1);
+  assert.equal(said.filter((s) => s.who === 'manager' && /contexto/.test(s.text)).length, 1, 'lo dice una vez');
+  sim.setContext(0.9); // compacted
+  assert.equal(sim.fatigue, null);
+  run(1);
+  assert.equal(sim.agents.manager.tired, false);
+  assert.ok(said.some((s) => s.who === 'manager' && /(compactado|Memoria fresca)/.test(s.text)));
+});

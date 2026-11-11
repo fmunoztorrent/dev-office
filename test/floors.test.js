@@ -343,3 +343,22 @@ test('en la vista cenital los pisos compartidos tienen el pasillo de la oficina:
     assert.equal(floorHit(floors[kind], ELEVATOR.x + ELEVATOR.w / 2, 60, { iso: false }), null, 'en la vista frontal no hay pasillo');
   }
 });
+
+test('la salud de cada departamento en dirección: errores de la última hora, el contexto que le queda y cuánto te espera', async () => {
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false, places: false });
+  try {
+    const ev = (e) => server.company.ingest('generic', { session: 's1', source: 'claude', cwd: '/tmp/tienda', ...e });
+    const main = () => server.overview().find((o) => o.id === 'main');
+    ev({ kind: 'tool_start', role: 'backend', tool: 'Edit', text: 'Editando' });
+    assert.deepEqual([main().health, main().errors, main().context], ['ok', 0, null]);
+    for (let i = 0; i < 3; i++) ev({ kind: 'tool_end', role: 'backend', tool: 'Bash', ok: false });
+    ev({ kind: 'phase', role: 'qa', phase: 'red', text: 'Tests en rojo' });
+    ev({ kind: 'tool_end', role: 'qa', tool: 'Bash', ok: false }); // a red test in TDD is no error
+    assert.deepEqual([main().health, main().errors], ['warn', 3]);
+    ev({ kind: 'context', context: { used: 190_000, max: 200_000 } });
+    assert.equal(main().context, 0.05);
+    assert.equal(main().health, 'bad', 'casi sin contexto');
+    ev({ kind: 'context', context: { used: 20_000, max: 200_000 } }); // compacted
+    assert.deepEqual([main().context, main().health], [0.9, 'warn']);
+  } finally { await server.close(); }
+});

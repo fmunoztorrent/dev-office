@@ -388,7 +388,7 @@ export function assignees(text) {
 }
 
 // Conversations that are cut short if real work reaches the character (consulting the TL is not).
-const LEISURE = new Set(['gossip', 'deskchat', 'bathgossip', 'coffee', 'workcoffee', 'lunchtalk', 'archchat', 'idea', 'rounds', 'tv']);
+const LEISURE = new Set(['standup', 'gossip', 'deskchat', 'bathgossip', 'coffee', 'workcoffee', 'lunchtalk', 'archchat', 'idea', 'rounds', 'tv']);
 
 // When the weather outside changes (the real one, or the simulated one when offline)
 const SKY_GROUP = { clear: 'fair', partly: 'fair', cloudy: 'cloudy', fog: 'fog', drizzle: 'wet', rain: 'wet', storm: 'storm', snow: 'snow' };
@@ -405,7 +405,7 @@ function describe(kind, who, extra) {
     case 'dream': return t(extra.dream === 'skull' ? 'sim.journal.nightmare' : 'sim.journal.dream', { ...vars, dream: DREAMS[extra.dream]?.label || extra.dream, emoji: DREAMS[extra.dream]?.emoji || '' });
     case 'weather': return extra.text;
     case 'workcoffee': return extra.with?.length ? t('sim.journal.workcoffee', { ...vars, names: listOf(extra.with.map(name)) }) : t('sim.journal.workcoffeeAlone', vars);
-    case 'deskchat': case 'gossip': case 'bathgossip': case 'idea': case 'feasibility': case 'consult': case 'rounds': case 'coffee': case 'requirement':
+    case 'standup': case 'deskchat': case 'gossip': case 'bathgossip': case 'idea': case 'feasibility': case 'consult': case 'rounds': case 'coffee': case 'requirement':
     case 'bathroom': case 'lunch': case 'lunchend': case 'fire': case 'repaired': case 'tv': case 'pane': case 'paneDone':
       return t(`sim.journal.${kind}`, vars);
     case 'newcomer': case 'farewell': return t(`sim.journal.${kind}`, { ...vars, name: extra.name || '', role: TEAM[who]?.title || who });
@@ -445,6 +445,8 @@ class Agent {
     this.tvSeat = null;    // the sofa spot they take
     this.diningSeat = null; // their chair in the dining room, while having lunch
     this.mind = freshMind(random);
+    this.stress = null;    // { n, at }: errors in a row (from the real log); 3 or more: stressed 😰
+    this.tired = false;    // their agent is running out of context: they yawn 🥱
   }
 
   get away() { return !this.seated || this.queue.length > 0; }
@@ -656,6 +658,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   let journal = [];  // what they did on their own initiative (for the terminal, the tests and the curious)
   let timers = [];   // things that happen a while later: { at, fn }
   let lastRequirement = { text: '', at: -Infinity };
+  let fatigue = null; // { left } while the agent's context is running out (less than 25 % free)
   const memory = { task: '', lastError: null, lastGreen: null, fails: [], work: {}, doing: {} }; // what the office talks about and how the work is going
   // Office life
   let bath = freshBath();
@@ -906,6 +909,19 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
           who.setState('idle', 1000);
           who.say(T('sim.btwFail'), 4500);
         }
+        break;
+      }
+      // The daily standup (server/standup.js): the team gathers at the meeting table, the manager opens
+      // it, each one tells what their agent did (the real log), and the manager closes with what is
+      // waiting for you and what is still open.
+      case 'standup': {
+        const lines = (ev.lines || []).filter((l) => agents[l.role] && !agents[l.role].hidden && !agents[l.role].lunch);
+        const members = ['manager', ...new Set(lines.map((l) => l.role).filter((r) => r !== 'manager'))];
+        for (const id of members) interrupt(agents[id]);
+        const say = [['manager', T('sim.standup.open')], ...lines.map((l) => [l.role, l.text])];
+        say.push(['manager', ev.waiting?.length ? T('sim.standup.waiting', { n: ev.waiting.length, what: short(ev.waiting[0], 50) }) : ev.open?.length ? T('sim.standup.open2', { n: ev.open.length }) : T('sim.standup.close')]);
+        banner = { text: `🗣 ${ev.text}`, tone: 'chat', until: now + 8000 };
+        scene('standup', members, say, { spot: SPOT.table, gap: 3600 });
         break;
       }
       // The analyst reviews your brief before it goes to work (server/clarify.js): she thinks it over
@@ -1711,6 +1727,8 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   //   story / requirements     → product goes to ask the TL whether it is feasible
   //   the agent awaits your OK → those not working take the chance for coffee or a chat
   //   task finished            → celebration, and the devs dream of the party pizza
+  const STRESS_MS = 5 * 60_000;
+  const STRESSED = 3;
   const TEST_RX = /\b(tests?|jest|vitest|pytest|mocha|spec|e2e|playwright|cypress|npm t|go test|cargo test)\b/i;
   const within = (list, ms) => (list || []).filter((t) => simNow - t < ms);
 
@@ -1768,6 +1786,12 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     const isTest = ev.kind === 'stage_end' || ev.role === 'qa' || TEST_RX.test(`${ev.tool || ''} ${ev.text || ''}`);
     if (ev.ok === false && !red) {
       memory.fails = [...within(memory.fails, 3 * 60_000), simNow];
+      // errors in a row stress whoever made them (three within five minutes)
+      if (a) {
+        const n = (a.stress && simNow - a.stress.at < STRESS_MS ? a.stress.n : 0) + 1;
+        a.stress = { n, at: simNow };
+        if (n === STRESSED && !a.hidden && !a.lunch) { a.say(P(L('sim.stressed')), 3200); emit(a.x, a.y - 70, 1, 'emote', null, '😰'); }
+      }
       // failing tests keep QA up at night
       if (isTest) later(R(1200, 3200), () => { if (chance(0.85)) imagine(agents.qa, { kind: 'skull', line: P(L('sim.nightmares')), cause: t('sim.cause.testsFailed') }); });
       // whoever failed is left with doubts: soon they go consult the TL
@@ -1780,7 +1804,24 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     } else if (ev.ok && isTest) {
       calm();
     }
+    if (ev.ok && a?.stress) a.stress = null; // it worked: the stress goes away
   }
+
+  /** The agent's context (the share still free, 0–1; null: unknown): running out tires the team on it. */
+  function setContext(left) {
+    const low = Number.isFinite(left) && left < 0.25;
+    const m = agents.manager;
+    if (low && !fatigue) {
+      fatigue = { left };
+      if (!m.hidden && !m.lunch) m.say(T('sim.tired', { pct: Math.round(left * 100) }), 4200);
+    } else if (!low && fatigue) {
+      fatigue = null;
+      // it was compacted (or a new session): rested again
+      if (Number.isFinite(left) && !m.hidden && !m.lunch) { m.say(P(L('sim.rested')), 3600); emit(m.x, m.y - 70, 4, 'sparkle'); }
+    } else if (low) fatigue.left = left;
+  }
+  /** Who the low context tires: the manager (who runs the agent) and whoever is working on it. */
+  const tiredOnes = () => (fatigue ? Object.values(agents).filter((a) => a.id === 'manager' || a.id === turn || ['working', 'thinking'].includes(a.state)) : []);
 
   /** All green: QA breathes easy and the rack cools down a little. */
   function calm() {
@@ -1912,7 +1953,16 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
       brain(a, dt);
       if (a.seated && a.state === 'working' && random() < dt * 2.2) emit(a.cfg.seat.x + 34, a.cfg.seat.y - 50, 1, 'code', a.cfg.shirt);
       if (a.dream && random() < dt * 3) emit(a.x + R(-20, 20), a.y - R(90, 130), 1, 'sparkle', a.dream.kind === 'rainbow' ? P(RAINBOW_COLORS) : DREAMS[a.dream.kind].glow);
+      // moods from real signals: stressed (errors in a row) sweat, tired (low context) yawn and want coffee
+      if (a.stress && now - a.stress.at > STRESS_MS) a.stress = null;
+      if (a.stress?.n >= STRESSED && !a.hidden && random() < dt * 0.15) emit(a.x + R(-6, 6), a.y - 72, 1, 'emote', null, '😰');
+      if (a.tired && !a.hidden) {
+        if (random() < dt * 0.07) emit(a.x + R(-6, 6), a.y - 72, 1, 'emote', null, '🥱');
+        a.mind.coffee = Math.min(1.2, a.mind.coffee + dt * 0.003);
+      }
     }
+    const tired = new Set(tiredOnes().map((a) => a.id));
+    for (const a of Object.values(agents)) a.tired = tired.has(a.id);
     for (const [id, g] of ghosts) {
       g.update(dt, now);
       if (g.seated && g.state === 'working' && random() < dt * 2.2) emit(g.cfg.seat.x + 20, g.cfg.seat.y - 40, 1, 'code', g.cfg.shirt);
@@ -1973,6 +2023,9 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     setPlace(p) { city = p && Number.isFinite(p.lat) && Number.isFinite(p.lon) ? p : null; },
     setWeather(w) { weather = w && WEATHER[w.kind] ? w : null; },
     watchTV: (id, opts) => watchTV(agents[id], opts),
+    setContext,
+    /** The agent's context is running out: { left } (null: fine or unknown). */
+    get fatigue() { return fatigue; },
     setBoard(session) {
       if (session && 'turn' in session) { turn = session.turn; turnPhase = session.phase; } // the server rules
       board = session ? { title: session.title, todos: session.todos || [], status: session.status, source: session.source } : { title: '', todos: [] };
@@ -1980,7 +2033,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     },
     reset() {
       for (const a of Object.values(agents)) {
-        Object.assign(a, { taskAt: -Infinity, queue: [], seated: true, x: a.cfg.seat.x, y: a.cfg.seat.y, state: 'idle', bubble: null, handUp: false, history: [], dream: null, scene: null, carry: false, perch: false, hidden: false, dance: false, food: null, lunch: null, back: false, tvSeat: null, diningSeat: null });
+        Object.assign(a, { stress: null, tired: false, taskAt: -Infinity, queue: [], seated: true, x: a.cfg.seat.x, y: a.cfg.seat.y, state: 'idle', bubble: null, handUp: false, history: [], dream: null, scene: null, carry: false, perch: false, hidden: false, dance: false, food: null, lunch: null, back: false, tvSeat: null, diningSeat: null });
         a.badges.clear();
       }
       ghosts.clear();
@@ -1989,7 +2042,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
       bath = freshBath();
       elevator = { doorAt: -Infinity, floor: 12 };
       // if it is lunchtime, they go out again on the next tick
-      lunch = null; lunchDay = null; fire = null; extinguisher = 'floor'; heat = 0; timers = [];
+      lunch = null; lunchDay = null; fire = null; extinguisher = 'floor'; heat = 0; timers = []; fatigue = null;
     },
   };
 }

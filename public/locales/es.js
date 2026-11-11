@@ -25,6 +25,7 @@ export default {
   // ---------------------------------------------------------------- office life (sim.js)
   sim: {
     journal: {
+      standup: '🗣 Daily: {names}',
       workcoffeeAlone: '{who} va por un café a pensar en lo que está haciendo ☕',
       workcoffee: '{who} va por un café con {names} a contar en qué anda ☕',
       newcomer: '{name} llega a dar una mano en {role}: {text}', farewell: '{name} terminó su parte y se va',
@@ -72,6 +73,7 @@ export default {
     askYou: '{name}, te tengo una pregunta ❓',
     chatReplies: ['¡Anotado! 📝', 'Lo vemos en la daily 👍', 'Entendido 🙌', '¡Buena idea!'],
     btwThinking: ['Mmm, buena pregunta… 🤔', 'Déjame revisar… 🔍', 'Un segundo, lo busco 📚'],
+    standup: { open: '¡Buenos días! Daily: ¿qué hizo cada uno? 🗣', waiting: '{n} cosa(s) esperan a la PO: {what}', open2: 'Quedan {n} encargo(s) abiertos. ¡Vamos! 💪', close: 'Nada pendiente. ¡Vamos! 💪' },
     clarify: { review: ['Déjame leerlo con calma 🔍', 'Reviso que tengamos todo 📋', 'Antes de partir, lo reviso 🤓'], ask: 'Tengo {n} pregunta(s) antes de empezar 📝', sent: ['Todo claro: ¡a trabajar! 🚀', 'Listo para el equipo 💪'], cancelled: 'Ok, lo dejamos' },
     btwFail: 'No logré averiguarlo 🤷',
     poke: '{from} te saluda 👋',
@@ -137,6 +139,9 @@ export default {
     },
     nightmares: ['Esos tests rojos me persiguen 💀', 'Sueño con stack traces 💀', '¿Y si también falla en producción? 💀', 'Ese bug va a volver… 💀'],
     pizzaReward: '¡Esto se merece una pizza! 🍕',
+    stressed: ['Falló otra vez… 😰', 'Tercer error seguido. Respira. 😰', '¡¿Por qué no pasa?! 😰'],
+    tired: 'Me queda poco contexto ({pct}%)… me estoy cansando 🥱',
+    rested: ['Contexto compactado: ¡como nuevo! ☕', 'Memoria fresca, ¡sigamos! 💪'],
     pizzaParty: ['¡Esto se celebra con pizza! 🍕', '¿Pedimos pizza para celebrar? 🍕'],
     rounds: ['¿Cómo vas, {name}?', '{name}, ¿necesitas algo?', '¿Todo bien por aquí, {name}?'],
     roundsReplies: ['Bien, avanzando 💪', 'Todo bajo control 👍', 'Un poco {g:trabada|trabado}, pero sale 😅', 'Casi listo 🙌'],
@@ -242,6 +247,7 @@ export default {
     cd: 'Entrando a {dir}', background: '{what} (en segundo plano)', mcp: 'Usando {server}: {what}', toolUse: 'Usando {tool}',
   },
   events: {
+    standup: '🗣 {text}',
     clarify: { review: '🔍 Revisando el encargo para {project}', ask: '❓ {n} pregunta(s) para ti: {text}', sent: '📨 El encargo pasa a trabajo: {text}', failed: '✖ No se pudo enviar el encargo: {text}', cancelled: '⊘ Encargo cancelado' },
     updateBoard: 'Actualiza el tablero', newCard: 'Nueva tarjeta: {text}', moveCard: 'Mueve una tarjeta', failed: 'Falló: {text}{detail}',
     thinking: 'Pensando…', waiting: 'El agente espera tu aprobación', error: 'Algo salió mal', compact: 'Ordena las notas (compacta el contexto)',
@@ -268,6 +274,8 @@ export default {
   offices: { main: 'Oficina principal' },
   // la analista revisa un encargo antes de que pase a trabajo (server/clarify.js)
   ingest: { tooBig: 'demasiado grande (más de {mb} MB)', convert: 'para leer {name} la oficina necesita {tool} instalado (o pídele a un agente que lo convierta: ✨ Pedírselo a un agente)', format: 'el archivo no lee archivos .{ext} (Markdown, texto, CSV, JSON, HTML, PDF o Word)', empty: '{name} no tiene texto', url: 'eso no es una dirección http(s)', fetch: 'no se pudo bajar: {error}' },
+  // la daily (server/standup.js)
+  standup: { title: 'Daily · {office} · {date}', did: 'Ayer: {did} ({steps}).', steps: { one: '1 paso', other: '{n} pasos' }, errors: { one: 'Se trabó una vez.', other: 'Se trabó {n} veces.' }, nothing: 'revisar y planificar', waitingHead: 'Esperan a la PO:', openHead: 'Quedan abiertos:', source: 'La daily', now: '🗣 Daily ahora' },
   rag: { block: 'Del archivo (cita su [id]; busca más con search_knowledge):' },
   clarify: {
     promptHead: '[revisión] Antes de que un encargo pase a trabajo, revisa si tiene todo lo necesario para hacerlo de punta a punta sin preguntarle a nadie. No cambies ningún archivo ni empieces el trabajo: sólo revísalo.',
@@ -284,7 +292,7 @@ export default {
   },
   // la señal en la pantalla cuando un agente (o la analista) te espera
   attention: {
-    one: '{who} te está esperando', many: '{n} te están esperando', since: '{min} min', answer: 'Responder', terminal: 'responde en su terminal', see: 'Ver',
+    all: 'Ver las {n}', inbox: '✋ Te están esperando', inboxHint: 'Las más antiguas primero. Cada una sigue aquí hasta que respondas.', now: 'recién', one: '{who} te está esperando', many: '{n} te están esperando', since: '{min} min', answer: 'Responder', terminal: 'responde en su terminal', see: 'Ver',
     question: 'te pregunta: {text}', clarify: '{name} tiene {n} pregunta(s) sobre tu encargo', title: '✋ ({n}) te esperan',
     sound: 'Un sonido cuando te esperan', notify: 'Una notificación del sistema cuando te esperan', notifyTitle: 'Dev Team Office: te esperan',
   },
@@ -304,7 +312,7 @@ export default {
     // the game (floors.js): each floor's scene, its people and what they say
     exec: {
       sign: 'DIRECCIÓN', board: 'DIRECTIVAS', none: 'Sin directivas: clic aquí', wall: 'LA EMPRESA',
-      working: '{n} trabajando', waiting: '{n} te espera(n) ✋', idle: 'tranquila', tasks: '{n} encargo(s)',
+      errors: '⚠{n}/h', context: 'ctx {pct}%', working: '{n} trabajando', waiting: '{n} te espera(n) ✋', idle: 'tranquila', tasks: '📋{n}',
       chat: [
         '¿Cómo van las oficinas?', 'Hay que alinear a todos los equipos', 'Revisemos el tablero', '¿Alguien vio el informe de Pagos?',
         'Necesitamos una regla común para todos los proyectos', 'La próxima directiva tiene que ser clara', 'Pidamos al archivo lo que ya sabemos de esto',
@@ -549,10 +557,10 @@ export default {
     settings: 'Ajustes', settingsKey: 'Ajustes (c)', fullscreen: 'Pantalla completa', fullscreenKey: 'Pantalla completa (f)', view: 'Vista frontal o cenital', viewKey: 'Vista frontal o cenital (v)', servicesKey: 'Servicios en segundo plano: {n} corriendo (l)',
     office: 'Oficina', officeKey: 'Elige qué oficina ver (o)', floor: 'Piso',
     sheetClose: 'Cerrar ficha', poke: '👋 Saludar', subagents: '{n} subagente(s)', nothingYet: 'Todavía no ha hecho nada en esta sesión.',
-    mood: { bath: 'en el baño 🚻', bathWait: 'esperando el baño 😣', dream: 'sueña con {dream} {emoji}', lunch: 'almorzando {food}', fire: '¡apagando el incendio! 🧯', talking: 'conversando 💬' },
+    mood: { stressed: 'estresad{g:a|o} 😰 ({n} errores seguidos)', tired: 'cansad{g:a|o} 🥱 (a su agente le queda {pct}% de contexto)', bath: 'en el baño 🚻', bathWait: 'esperando el baño 😣', dream: 'sueña con {dream} {emoji}', lunch: 'almorzando {food}', fire: '¡apagando el incendio! 🧯', talking: 'conversando 💬' },
     session: 'sesión', sessionLabel: 'Sesión', latest: 'más reciente', noTaskYet: 'Sesión sin tarea todavía', waitingAgent: 'Esperando eventos de un agente…',
     stats: { tools: 'acciones', errors: 'errores', subs: 'subagentes', status: 'estado' },
-    newBrief: '📋 Nuevo encargo', demo: '▶ Demo', demoTdd: '▶ Demo TDD', reset: '⟲ Reiniciar', connected: '{n} agente(s) conectado(s)',
+    standupBtn: '🗣 Daily', standupTip: 'La daily ahora: cada uno cuenta lo que hizo su agente en las últimas 24 horas (el acta va al archivo)', newBrief: '📋 Nuevo encargo', demo: '▶ Demo', demoTdd: '▶ Demo TDD', reset: '⟲ Reiniciar', connected: '{n} agente(s) conectado(s)',
     cancel: 'Cancelar', cancelRun: '✕ cancelar', runBy: 'Lo ejecuta {agent}: {task}', isNew: ' (nuevo)', flow: 'Flujo por roles', noActivity: 'sin actividad',
     btwUsage: 'btw <pregunta>: una pregunta al margen al agente de turno sobre el equipo, el dominio o la oficina', btwThinking: 'pensando…', btwFailed: 'sin respuesta: {error}', btwClose: 'Cerrar',
     lifeOn: 'vida de la oficina: visible', lifeOff: 'vida de la oficina: oculta',
