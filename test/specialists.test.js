@@ -174,7 +174,7 @@ test('la terminal los dibuja con sus colores (no deslavados como un recién lleg
     const scr = new Screen({ colorMode: 'truecolor' });
     scr.resize(220, 60);
     drawFrame(scr, computeLayout(220, 60), sim, model, t);
-    return scr.flush();
+    return scr.flush().replace(/\d{2}:\d{2}:\d{2}/g, 'hh:mm:ss'); // the header's clock is the real one: it may tick between two frames
   };
   // the same frame with her as a newcomer (washed towards pale blue) is not the same
   const solid = frame([]);
