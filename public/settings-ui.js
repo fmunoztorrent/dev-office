@@ -224,7 +224,33 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       el('label', { class: 'b-field' }, el('span', {}, G('startAgent')),
         el('select', { onchange: (e) => setPref({ herdr: { startAgent: e.target.value } }) },
           option('auto', G('auto'), p.herdr.startAgent === 'auto'), option('none', G('none'), p.herdr.startAgent === 'none'),
-          agents.map((a) => option(a.id, `${a.name} · ${HARNESS_NAME[a.harness]}`, a.id === p.herdr.startAgent)))));
+          agents.map((a) => option(a.id, `${a.name} · ${HARNESS_NAME[a.harness]}`, a.id === p.herdr.startAgent)))),
+      // your settings as a JSON file: to keep them, share them or take them to another machine
+      el('h3', {}, G('io')),
+      el('p', { class: 'hint' }, G('ioHint')),
+      el('div', { class: 's-row' },
+        el('a', { class: 's-mini', href: '/v1/settings/export', download: '' }, G('ioExport')),
+        el('button', { type: 'button', class: 's-mini', onclick: importSettingsFile }, G('ioImport'))),
+      el('ul', { class: 'hint s-io', id: 's-io' }));
+  }
+
+  /** ⬆ Import: a settings file (server/settings-io.js); what it brings replaces what is here, the rest stays. */
+  function importSettingsFile() {
+    const input = el('input', { type: 'file', accept: '.json,application/json', onchange: async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      let body;
+      try { body = JSON.parse(await file.text()); } catch { return msg(t('err.settingsFile.json')); }
+      const r = await api('POST', '/v1/settings/import', body);
+      if (!r.ok) return msg(r.error);
+      await load();
+      msg(t('settings.general.ioDone', r.applied), true);
+      onSaved?.();
+      show('general');
+      // what could not be brought (a project whose folder is not on this machine…)
+      if (r.skipped?.length) $('s-io').replaceChildren(...r.skipped.map((x) => el('li', {}, `✖ ${x.what}: ${x.error}`)));
+    } });
+    input.click();
   }
 
   // ------------------------------------------------------------ Oficinas
@@ -255,6 +281,8 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         // its projects: the repositories of the company that work for it
         el('div', { class: 's-dept-k' }, `${O('projects')} (${mine.length})`),
         el('div', { class: 's-entries' }, mine.length ? mine.map((a) => el('span', { title: `${tilde(a.path)}${a.instructions ? `\n📋 ${a.instructions}` : ''}` }, `${a.name} · ${HARNESS_NAME[a.harness] || a.harness}${a.instructions ? ' 📋' : ''}`)) : el('span', { class: 'hint' }, O('noProjects'))),
+        // the components of each project: what a directive can name (detected ones, and the ones you declare)
+        mine.length && st.components ? el('div', { class: 's-comps' }, mine.map((a) => componentsRow(a))) : null,
         el('div', { class: 's-row' },
           el('button', { type: 'button', class: 's-mini', onclick: () => { st.form = { ...emptyForm(), office: o.id }; show('agents'); } }, O('addProject')),
           others.length ? el('select', { class: 's-mini', 'aria-label': O('moveHere'), onchange: async (e) => {
@@ -312,10 +340,34 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
 
   /** Every department's projects (the page only has the watched office's). */
   async function loadProjects() {
-    const r = await api('GET', '/v1/agents');
+    const [r, map] = await Promise.all([api('GET', '/v1/agents'), api('GET', '/v1/map')]);
     if (!r.ok) return;
     st.projects = (r.agents || []).filter((a) => a.registered);
+    // each project's components (detected from its folder, and the ones declared): the map the directives use
+    st.components = map.ok ? Object.fromEntries(map.departments.flatMap((o) => o.projects).map((p) => [p.id, p.components])) : {};
     if (st.tab === 'offices' && $('settings').open) renderOffices();
+  }
+
+  /** A project's components: chips (the declared ones can be removed) and ＋ to declare one (name and folder). */
+  function componentsRow(a) {
+    const O = (k, v) => t(`settings.offices.${k}`, v);
+    const list = st.components?.[a.id] || [];
+    const name = el('input', { type: 'text', maxlength: 60, placeholder: O('compName'), 'aria-label': O('compName') });
+    const where = el('input', { type: 'text', maxlength: 200, placeholder: O('compPath'), 'aria-label': O('compPath') });
+    const add = async () => {
+      if (!name.value.trim()) return name.focus();
+      const r = await api('POST', '/v1/components', { project: a.id, name: name.value.trim(), path: where.value.trim() });
+      if (!r.ok) return msg(r.error);
+      msg(O('compAdded', { name: r.component.name }), true);
+      loadProjects();
+    };
+    name.onkeydown = where.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } };
+    return el('div', { class: 's-comp-row' },
+      el('b', {}, `${a.name}:`),
+      list.length ? list.map((c) => el('span', { class: `s-comp${c.declared ? ' own' : ''}`, title: [c.path, c.description, c.declared ? O('compDeclared') : O('compDetected')].filter(Boolean).join(' · ') },
+        `🧩 ${c.name}`,
+        c.declared ? el('button', { type: 'button', class: 's-x', 'aria-label': O('compRemove', { name: c.name }), onclick: async () => { const r = await api('DELETE', `/v1/components/${encodeURIComponent(c.id)}`); if (!r.ok) return msg(r.error); loadProjects(); } }, '✕') : null)) : el('span', { class: 'hint' }, O('compNone')),
+      el('span', { class: 's-comp-add' }, name, where, el('button', { type: 'button', class: 's-mini', onclick: add }, O('compAdd'))));
   }
 
   async function saveOffice() {

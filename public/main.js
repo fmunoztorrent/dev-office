@@ -249,6 +249,55 @@ function renderInbox(items = attentionItems()) {
   }
 }
 $('attention-all').onclick = () => { renderInbox(); if (!$('inbox').open) $('inbox').showModal(); };
+
+/**
+ * 🗣 (or d): the daily on demand, to be told the latest. In an office, its daily (the team also gathers
+ * at the table); on the executive floor or the archive, the company's: every department's at once.
+ * Each one tells what happened since the previous daily, and what they are on now.
+ */
+async function openDaily() {
+  const dlg = $('daily');
+  const company = game.floor !== 'office';
+  const id = office?.id || 'main';
+  $('daily-title').textContent = company ? t('ui.dailyCompany') : `${t('ui.daily')} · ${office?.name || id}`;
+  $('daily-body').replaceChildren(el('p', 'quiet', '…'));
+  $('daily-note').textContent = '';
+  if (!dlg.open) dlg.showModal();
+  let out;
+  try { out = await (await fetch(company ? '/v1/standup' : `/v1/offices/${encodeURIComponent(id)}/standup`, { method: 'POST' })).json(); } catch (err) { out = { ok: false, error: err.message }; }
+  if (!out?.ok) { $('daily-body').replaceChildren(el('p', 'quiet', out?.error || '✖')); return; }
+  const reports = out.reports || [out];
+  $('daily-body').replaceChildren(...reports.map((r) => dailyBlock(r, company)));
+  $('daily-note').textContent = reports.some((r) => r.entry) ? t('ui.dailyArchived') : '';
+}
+/** One department's daily: who did what (with their office's names), what waits for you and what is open. */
+function dailyBlock(r, company) {
+  const box = el('section');
+  const head = el('h3', '', company ? `${r.name || r.office} ` : '');
+  head.append(el('small', '', r.from || t('ui.dailyFirst')));
+  box.append(head);
+  if (r.empty) box.append(el('p', 'quiet', t('ui.dailyQuiet')));
+  else {
+    const ul = el('ul');
+    for (const l of r.lines) {
+      const li = el('li');
+      li.style.setProperty('--c', personOf(l.role)?.shirt || '#ffd166');
+      li.append(el('b', '', r.people?.[l.role] || personOf(l.role)?.name || l.role), document.createTextNode(l.text));
+      ul.append(li);
+    }
+    box.append(ul);
+  }
+  for (const [key, list] of [['ui.dailyWaiting', r.waiting], ['ui.dailyOpen', r.open]]) {
+    if (!list?.length) continue;
+    const p = el('div', 'tail');
+    p.append(el('b', '', t(key)), ...list.map((x) => el('div', '', `· ${x}`)));
+    box.append(p);
+  }
+  return box;
+}
+$('open-daily').onclick = () => openDaily();
+$('daily-again').onclick = () => openDaily();
+$('daily-close').onclick = () => $('daily').close();
 $('inbox-close').onclick = () => $('inbox').close();
 
 function announce(item) {
@@ -1084,7 +1133,7 @@ function el(tag, cls, text) {
 }
 
 $('session').onchange = (e) => { focus = e.target.value || null; renderSessions(); renderContext(); };
-$('standup').onclick = () => { send({ type: 'standup' }); $('work').close?.(); };
+$('standup').onclick = () => { $('work').close?.(); openDaily(); };
 $('demo').onclick = () => send({ type: 'command', action: 'demo' });
 $('demo-pi').onclick = () => send({ type: 'command', action: 'demo-pi' });
 $('reset').onclick = () => send({ type: 'command', action: 'reset' });
@@ -1133,6 +1182,7 @@ document.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
   if (k === 'a') { e.preventDefault(); toggleFeed(); }
   else if (k === 'w') { e.preventDefault(); openWork(); }
+  else if (k === 'd') { e.preventDefault(); openDaily(); }
   else if (k === 't') { e.preventDefault(); if (game.floor === 'exec') directivesUi.open(); else if (game.floor === 'archive') archiveUi.open({ create: true }); else openBrief(); }
   else if (e.key === 'PageUp' || e.key === 'PageDown') { e.preventDefault(); moveFloor(e.key === 'PageUp' ? -1 : 1); }
   else if (k === 'c') { e.preventDefault(); settings.open(); }

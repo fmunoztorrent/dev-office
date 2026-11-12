@@ -101,6 +101,10 @@
         <button id="open-work" class="hud-btn" type="button" data-i18n-title="ui.workKey" data-i18n-aria="ui.work" aria-controls="work">
           <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><path fill-rule="evenodd" d="M1 4h14v10H1zM2 7v6h12V7z"/><path fill-rule="evenodd" d="M5 1h6v3H9.5V2.5h-3V4H5z"/><rect x="7" y="8" width="2" height="2"/></g></svg>
         </button>
+        <!-- the daily on demand: what happened since the last one (on the executive floor, the company's) -->
+        <button id="open-daily" class="hud-btn" type="button" data-i18n-title="ui.dailyKey" data-i18n-aria="ui.daily" aria-controls="daily">
+          <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><path fill-rule="evenodd" d="M1 2h10v7H5l-3 3V9H1zM2 3v5h1v1.6L4.6 8H10V3z"/><path d="M12 5h3v7h-1v3l-3-3H6v-2h1v1h4.4L13 12.6V11h1V6h-2z"/><rect x="4" y="5" width="4" height="1"/></g></svg>
+        </button>
       </div>
       <!-- the activity: a log you read, light, over the office -->
       <section id="feed" class="feed" hidden data-i18n-aria="ui.feed">
@@ -201,6 +205,9 @@
             <button type="button" class="btn ghost" id="dv-dept-add" data-i18n="exec.ui.deptAdd">＋ New department</button>
           </div>
         </div>
+        <!-- the impact map (🗺): what the order touches, and what it names that is not on the map -->
+        <p id="dv-map" class="dv-map" hidden></p>
+        <div id="dv-ask" class="dv-ask"></div>
         <p id="dv-msg" class="b-problem" role="status" aria-live="polite"></p>
         <span class="fl-label" data-i18n="exec.ui.recent">The latest</span>
         <ul id="dv-list" class="dv-list"></ul>
@@ -211,7 +218,7 @@
       <footer class="brief-foot">
         <span class="muted" data-i18n="brief.send">⌘↵ to send</span>
         <button type="button" class="btn ghost" id="dv-cancel" data-i18n="brief.cancelBtn">Cancel</button>
-        <button type="submit" class="btn" id="dv-go" data-i18n="exec.ui.send">▶ Make it happen!</button>
+        <button type="submit" class="btn" id="dv-go" data-i18n="exec.ui.mapBtn">🗺 See the impact</button>
       </footer>
     </form>
   </dialog>
@@ -293,6 +300,22 @@
         <button type="submit" class="btn" id="cl-send" data-i18n="clarify.ui.send">▶ Send it to work</button>
       </footer>
     </form>
+  </dialog>
+
+  <!-- The daily on demand: what each one did since the last daily and what they are on (the company's: every department). -->
+  <dialog id="daily" class="brief daily" aria-labelledby="daily-title">
+    <header class="brief-head">
+      <span class="pin" aria-hidden="true"></span>
+      <h2 id="daily-title" data-i18n="ui.daily">Daily</h2>
+      <button type="button" class="brief-x" id="daily-close" data-i18n-aria="settings.close">✕</button>
+    </header>
+    <div class="brief-body">
+      <div id="daily-body" class="daily-body" aria-live="polite"></div>
+      <p class="muted" id="daily-note"></p>
+    </div>
+    <footer class="brief-foot">
+      <button type="button" class="btn ghost" id="daily-again" data-i18n="ui.dailyAgain">🗣 Again</button>
+    </footer>
   </dialog>
 
   <!-- Everything waiting for you, in one place (the banner's "See all"): oldest first, each with its button. -->

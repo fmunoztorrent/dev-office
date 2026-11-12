@@ -40,6 +40,7 @@ export function activityLine(ev) {
     case 'waiting': text = `✋ ${ev.text}`; tone = 'err'; break;
     case 'done': text = `🎉 ${ev.text}`; tone = 'ok'; break;
     case 'task': text = `📝 ${ev.text}`; break;
+    case 'standup': text = t('events.standup', { text: ev.text || '' }); break;
     case 'btw':
       text = ev.phase === 'ask' ? `❓ btw: ${ev.text}` : ev.phase === 'answer' ? `💡 ${ev.text}` : `✖ btw: ${ev.text}`;
       tone = ev.phase === 'failed' ? 'err' : ev.phase === 'answer' ? 'ok' : undefined;
@@ -93,6 +94,13 @@ export function createLog({ server, write, color = true, colorMode = '256' }) {
     if (!a) return;
     const p = ev.role ? person(office, ev.role) : null;
     line({ ts: ev.ts, office, who: a.speaker ?? (p?.name || t('events.office')), shirt: a.speaker ? null : p?.shirt, text: a.text, tone: a.tone });
+    // the daily: each one's line, then what waits for you and what is still open
+    if (ev.kind === 'standup') {
+      for (const l of ev.lines || []) { const q = person(office, l.role); line({ ts: ev.ts, office, who: `  ${q?.name || l.role}`, shirt: q?.shirt, text: l.text }); }
+      if (!ev.lines?.length) line({ ts: ev.ts, office, text: `  ${t('standup.quiet')}`, tone: 'dim' });
+      for (const w of ev.waiting || []) line({ ts: ev.ts, office, text: `  ✋ ${w}`, tone: 'warn' });
+      for (const o of ev.open || []) line({ ts: ev.ts, office, text: `  📋 ${o}`, tone: 'dim' });
+    }
   }
 
   // ---- tasks and pipelines: only when their state changes ----
@@ -187,6 +195,7 @@ export function runConsole({ server, stdin = process.stdin, stdout = process.std
         if (k === 'g' || k === 'G' || k === '\r') return game();
         if (k === 'o' || k === 'O') { log.line({ text: t('console.opening', { url: server.url }), tone: 'dim' }); openBrowser(server.url); }
         if (k === 'h' || k === 'H' || k === '?') banner();
+        if (k === 'd' || k === 'D') server.standup?.run(server.store.getPrefs().view?.office || 'main', { from: t('events.you') }); // the daily now: it prints itself
       }
     }
     function listen() {

@@ -36,19 +36,22 @@ async function projectsByOffice(offices) {
   );
 }
 
-/** Checkboxes: an office (all its projects) and each of its projects. Returns () => the chosen ids. */
-function scopePicker(box, groups, { checked = () => false } = {}) {
+/**
+ * Checkboxes: an office (all its projects) and each of its projects. Returns () => the chosen ids.
+ * `extra(project)`: what goes after a project's name (its impact: why, and the components it touches).
+ */
+function scopePicker(box, groups, { checked = () => false, extra = () => null, onChange } = {}) {
   box.innerHTML = '';
   for (const g of groups) {
     const kids = g.projects.map((a) => el('input', { type: 'checkbox', value: a.id, checked: checked(a) }));
     const all = el('input', { type: 'checkbox', disabled: !g.projects.length });
     const sync = () => { all.checked = kids.length > 0 && kids.every((k) => k.checked); all.indeterminate = !all.checked && kids.some((k) => k.checked); };
-    all.onchange = () => { for (const k of kids) k.checked = all.checked; };
-    kids.forEach((k) => { k.onchange = sync; });
+    all.onchange = () => { for (const k of kids) k.checked = all.checked; onChange?.(); };
+    kids.forEach((k) => { k.onchange = () => { sync(); onChange?.(); }; });
     sync();
     box.append(el('div', { class: 'fl-group' },
       el('label', { class: 'fl-office' }, all, el('b', {}, g.name), el('span', { class: 'fl-dim' }, g.projects.length ? t('exec.ui.all', { n: g.projects.length }) : t('exec.ui.none'))),
-      g.projects.length ? el('div', { class: 'fl-projects' }, g.projects.map((a, i) => el('label', { class: 'fl-project', title: a.path }, kids[i], `${a.name}`, el('span', { class: 'fl-dim' }, ` · ${a.harness}`)))) : null));
+      g.projects.length ? el('div', { class: 'fl-projects' }, g.projects.map((a, i) => el('label', { class: 'fl-project', title: a.path }, kids[i], `${a.name}`, el('span', { class: 'fl-dim' }, ` · ${a.harness}`), extra(a)))) : null));
   }
   return () => [...box.querySelectorAll('.fl-projects input:checked')].map((i) => i.value);
 }
@@ -64,7 +67,7 @@ function scopePicker(box, groups, { checked = () => false } = {}) {
  */
 export function createDirectivesUi({ getDirectives = () => [], getOffices = () => [], getOverview = () => [], hhmm = (ts) => new Date(ts).toLocaleTimeString(), onDepartment }) {
   const dialog = $('directives');
-  const st = { chosen: () => [], busy: false };
+  const st = { chosen: () => [], busy: false, groups: [], plan: null, answers: () => [] };
   $('dv-close').onclick = () => dialog.close();
   $('dv-cancel').onclick = () => dialog.close();
   dialog.addEventListener('click', (e) => { if (e.target === dialog) dialog.close(); });
@@ -78,11 +81,71 @@ export function createDirectivesUi({ getDirectives = () => [], getOffices = () =
     if (!dialog.open) dialog.showModal();
     render();
     const groups = await projectsByOffice(getOffices());
+    st.groups = groups;
     const any = groups.some((g) => g.projects.length);
     $('dv-offices').hidden = !any;
     $('dv-none').hidden = any;
     st.chosen = scopePicker($('dv-offices'), groups, { checked: () => groups.length === 1 });
+    forget();
     $('dv-text').focus();
+  }
+
+  // ------------------------------------------------ the impact map: what the order touches, before it goes
+
+  /** The text changed: the map has to be made again (the button goes back to 🗺). */
+  function forget() {
+    st.plan = null;
+    $('dv-map').hidden = true;
+    $('dv-ask').replaceChildren();
+    $('dv-go').textContent = t('exec.ui.mapBtn');
+  }
+  $('dv-text').addEventListener('input', () => { if (st.plan) forget(); });
+
+  /** 🗺: the departments, projects and components it touches (checked), and the questions about what is not on the map. */
+  async function mapIt(text) {
+    const out = await api('/v1/directives/plan', { text, targets: st.chosen() });
+    if (!out.ok) return say(out.error || '?');
+    const m = out.map;
+    const byId = new Map(m.departments.flatMap((o) => o.projects).map((p) => [p.id, p]));
+    st.chosen = scopePicker($('dv-offices'), st.groups, {
+      checked: (a) => !!byId.get(a.id)?.impacted,
+      extra: (a) => {
+        const p = byId.get(a.id);
+        if (!p?.impacted) return null;
+        const comps = p.components.filter((c) => c.impacted);
+        return el('span', { class: 'dv-why' }, ` ${t(`impact.why.${p.why}`)}`, ...comps.map((c) => el('span', { class: 'dv-comp', title: c.path || '' }, `🧩 ${c.name}`)));
+      },
+    });
+    $('dv-offices').hidden = false;
+    $('dv-none').hidden = true;
+    const touched = m.departments.filter((o) => o.impacted).length;
+    $('dv-map').hidden = false;
+    $('dv-map').textContent = m.matched ? t('exec.ui.mapNote', { n: m.targets.length, d: touched }) : t('impact.none');
+    renderQuestions(m.unknown);
+    st.plan = { text };
+    $('dv-go').textContent = t('exec.ui.send');
+  }
+
+  /** One question per thing it names that is not on the map: does it exist (where), create it, a new department, or nothing. */
+  function renderQuestions(unknown) {
+    const box = $('dv-ask');
+    const projects = st.groups.flatMap((g) => g.projects.map((a) => ({ ...a, dept: g.name })));
+    const rows = unknown.map((u) => {
+      const action = el('select', { 'aria-label': u.question }, ['', 'exists', 'create', 'department', 'ignore'].map((v) => el('option', { value: v }, t(`exec.ui.ans.${v || 'pick'}`))));
+      const project = el('select', { 'aria-label': t('exec.ui.ansProject') }, projects.map((a) => el('option', { value: a.id }, `${a.name} · ${a.dept}`)));
+      const where = el('input', { type: 'text', maxlength: 200, placeholder: t('exec.ui.ansPath'), 'aria-label': t('exec.ui.ansPath') });
+      const dept = el('input', { type: 'text', maxlength: 40, value: u.name, placeholder: t('exec.ui.ansDept'), 'aria-label': t('exec.ui.ansDept') });
+      const sync = () => {
+        const v = action.value;
+        project.hidden = where.hidden = !(v === 'exists' || v === 'create');
+        dept.hidden = v !== 'department';
+      };
+      action.onchange = sync;
+      sync();
+      return { u, action, project, where, dept, node: el('div', { class: 'dv-q' }, el('b', {}, u.question), el('div', { class: 'dv-q-row' }, action, project, where, dept)) };
+    });
+    box.replaceChildren(...(rows.length ? [el('span', { class: 'fl-label' }, t('impact.unknownHead')), ...rows.map((r) => r.node)] : []));
+    st.answers = () => rows.map((r) => ({ key: r.u.key, name: r.u.phrase, action: r.action.value, ...(r.action.value === 'exists' || r.action.value === 'create' ? { project: r.project.value, path: r.where.value.trim() } : {}), ...(r.action.value === 'department' ? { department: r.dept.value.trim() || r.u.name } : {}) }));
   }
 
   // A department that does not exist yet: created here (its projects, people and instructions, in ⚙ › Departments)
@@ -105,18 +168,27 @@ export function createDirectivesUi({ getDirectives = () => [], getOffices = () =
     e.preventDefault();
     if (st.busy) return;
     const text = $('dv-text').value.trim();
-    const targets = st.chosen();
     if (!text) return say(t('exec.ui.write'));
-    if (!targets.length) return say(t('exec.ui.pick'));
     st.busy = true;
     $('dv-go').disabled = true;
-    const out = await api('/v1/directives', { text, targets });
-    st.busy = false;
-    $('dv-go').disabled = false;
-    if (!out.ok) { say(out.error || '?'); return; }
-    $('dv-text').value = '';
-    say(t('exec.ui.sent', { n: out.directive.total }), true);
-    render();
+    try {
+      // first the map: what it touches, and what has to be asked
+      if (!st.plan || st.plan.text !== text) { say(''); await mapIt(text); return; }
+      const targets = st.chosen();
+      const answers = st.answers();
+      if (answers.some((a) => !a.action || ((a.action === 'exists' || a.action === 'create') && !a.project))) return say(t('exec.ui.answerAll'));
+      if (!targets.length && !answers.some((a) => a.action === 'exists' || a.action === 'create')) return say(t('exec.ui.pick'));
+      const out = await api('/v1/directives', { text, targets, answers, exact: true });
+      for (const o of out.created || []) onDepartment?.(o);
+      if (!out.ok) { if (out.needsAnswers) renderQuestions(out.map.unknown); say(out.error || '?'); return; }
+      $('dv-text').value = '';
+      forget();
+      say(t('exec.ui.sent', { n: out.directive.total }) + (out.created?.length ? ` · ${t('exec.ui.deptCreated', { name: out.created.map((o) => o.name).join(', ') })}` : ''), true);
+      render();
+    } finally {
+      st.busy = false;
+      $('dv-go').disabled = false;
+    }
   };
 
   function render() {

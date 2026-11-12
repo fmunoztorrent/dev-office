@@ -36,7 +36,9 @@ Dev Team Office es una oficina en pixel art que muestra en vivo lo que hacen los
 | `server/guides.js` | Los estándares de la empresa (los del CTO), las indicaciones de cada departamento (una oficina) y de cada proyecto (su carpeta): van arriba de cada encargo, pipeline, directiva y pregunta, bajo la línea 📁. Y la autonomía de cada departamento (`autonomyOf`) |
 | `server/rag.js` · `server/chunks.js` · `server/ingest.js` | El archivo como RAG: cargar documentos (su texto legible), cortarlos en fragmentos, buscarlos por palabras (FTS5) y por significado (embeddings opcionales), el glosario, los vacíos y el bloque «📚 Del archivo» arriba de cada encargo |
 | `server/directives.js` · `server/archive.js` | Los dos pisos compartidos: la dirección (una directiva = un encargo por proyecto, a varias oficinas) y el archivo (notas, decisiones, documentos, actas, skills y conectores; instala skills y conectores en cada proyecto) |
-| `server/standup.js` | La daily: cada mañana (9:30 de la oficina) o cuando la pidas, lo que hizo cada personaje según la bitácora real de las últimas 24 horas; el juego los junta en la mesa y el acta va al archivo |
+| `server/standup.js` | La daily: cada mañana (9:30 de la oficina) o cuando la pidas (🗣, `d`, `dev-team-office daily`, MCP `daily`), lo que hizo cada personaje desde la daily anterior según la bitácora real, y en qué está ahora; el juego los junta en la mesa y el acta va al archivo |
+| `server/components.js` | El mapa de la empresa (departamentos → proyectos → componentes: detectados de la carpeta y declarados) y el impacto de un pedido de la dirección: lo que nombra, y lo que no está en el mapa para preguntarlo |
+| `server/settings-io.js` | Tus ajustes como archivo JSON: qué es del usuario (ajustes, departamentos con sus personajes, proyectos con sus indicaciones y componentes) y cómo se importa (mezcla, pieza por pieza) |
 | `public/sim.js` | La simulación (personajes, rutas, vida de la oficina). La comparten el navegador y la terminal |
 | `public/game.js` · `public/iso.js` | El juego en canvas: la vista frontal y la cenital (cámara isométrica) |
 | `public/floors.js` · `public/floors-ui.js` | Los pisos de la dirección y del archivo: sus escenas (con el mismo dibujo del juego) y sus diálogos |
@@ -123,6 +125,11 @@ Más detalle en [docs/conventions.es.md](docs/conventions.es.md) y [CONTRIBUTING
   - `provisionTeam` sólo le da `ex-devops` y `ex-security` a un proyecto cuyo equipo es el de la oficina.
 - **El mundo va de `x = LEFT` (negativo) a `W`:** la oficina es `x ≥ 0`; a su izquierda, el pasillo (`HALL`) y el baño (`BATHROOM`). La vista frontal dibuja con el mundo corrido (`FLAT` en `game.js`), la terminal resta `LEFT` al convertir, y la ruta (`route` en `sim.js`) pasa por las puertas: nadie cruza una pared.
 - **Un encargo lleva su alcance delante:** una línea que empieza con `📁` (`server/tasks.js`, `scoped`): sólo la carpeta del proyecto y sólo lo pedido. Debajo van el modo autónomo y las indicaciones de su departamento y de su proyecto (líneas `📋 …` y `│ …`, `server/guides.js`), y lo que sabe el archivo (`📚 …`, `server/rag.js`). La oficina saca esa cabecera del título de la pizarra (`unguided`); a OpenCode el alcance además le llega como regla (`fenced`).
+- **Una directiva no sale sin su mapa de impacto** (`DirectiveDesk.plan`, `server/components.js`): se lee de las palabras del pedido, sin modelo.
+  - Lo que nombra y no está en el mapa (`unknown`) bloquea el envío (`409 needsAnswers`) hasta que haya una respuesta por cada cosa (`answers`: `exists`, `create`, `department`, `ignore`); `ask: false` se lo salta.
+  - Lo contestado queda declarado en la tabla `components`.
+  - La detección de nombres (`namedParts`) privilegia la precisión: si el pedido pregunta tonteras, hay que ajustarla allí, con su test en `test/impact.test.js`.
+  - **En los tests, un agente registrado que reciba una directiva tiene que tener un `bin` que no exista** (o el falso de `test/fixtures`): si no, se lanza el agente real.
 - **El contexto** llega como evento `context` (o el campo `context` de cualquier evento): sólo actualiza `session.context`, no va a la bitácora ni mueve a nadie.
 - **Los roles de los subagentes** salen de, en este orden:
   1. su `role:`;

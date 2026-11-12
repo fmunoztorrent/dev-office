@@ -4,6 +4,11 @@
 // registered agent through its harness (an open session of it, or a new one), and the floor follows
 // how each part goes. When the last one ends, its minutes go to the archive.
 //
+// Before it goes, the impact is mapped (server/components.js): the departments, projects and
+// components the order names, plus the projects you chose. What it seems to name that is not on the
+// map is asked first (does it exist, and where? is it a new component? a new department?); each part
+// then carries the components it touches, and the new ones to create.
+//
 // Operations does not overload a department: it takes at most `prefs.capacity` open briefs at once
 // (3 by default, counting what it already had); the rest of its parts wait their turn and go as
 // soon as one of its briefs ends.
@@ -12,6 +17,7 @@ import { EventEmitter } from 'node:events';
 import { clip } from './roles.js';
 import { t as tr } from '../public/i18n.js';
 import { MAIN_OFFICE } from './store.js';
+import { companyMap, mapImpact, impactText } from './components.js';
 
 const TEXT_MAX = 4000;
 const PARTS_MAX = 20;
@@ -75,18 +81,79 @@ export class DirectiveDesk extends EventEmitter {
     return { agents: agents.filter((a) => want.has(a.id)) };
   }
 
+  /** The company's map, with each department's name as the game says it. */
+  #map() { return companyMap(this.store, { name: (o) => this.company?.info?.(o.id)?.name || o.name || o.id }); }
+
   /**
-   * A new directive. { text, title?, offices?: [id | name | 'all'], targets?: [agent id | path], from? }
-   * Returns { ok, directive } (also when some part could not be sent: it shows why).
+   * The impact of an order before it goes: { ok, map: { departments, unknown, targets, matched }, text }.
+   * { text, offices?, targets? }: the departments and projects chosen by hand count too.
    */
-  create({ text, title, offices, targets, from } = {}) {
+  plan({ text, offices, targets } = {}) {
+    text = String(text ?? '').trim();
+    if (!text) return { ok: false, error: tr('err.taskEmpty') };
+    const pick = this.#targets({ offices, targets });
+    if (pick.error) return { ok: false, error: pick.error };
+    const map = mapImpact(this.#map(), text, { targets: pick.agents.map((a) => a.id) });
+    return { ok: true, map, text: impactText(map) };
+  }
+
+  /**
+   * Your answers about what the order names that is not on the map: [{ key | phrase, action, project?, path?, department? }]
+   *   exists      it is in that project (and folder): it is mapped as a component of it
+   *   create      it is new: it is mapped in that project, and its part says to create it
+   *   department  it is a new department: it is created (its projects come later)
+   *   ignore      it is not a part of the system
+   * Returns { fresh: Map(project id → [names to create]), created: [offices], targets: [ids], error? }.
+   */
+  #answer(unknown, answers) {
+    const fresh = new Map(), created = [], targets = [];
+    const agents = this.store.listAgents();
+    for (const u of unknown) {
+      const a = answers.find((x) => x && (x.key === u.key || x.phrase === u.phrase || x.name === u.phrase || x.name === u.name));
+      if (!a) continue;
+      if (a.action === 'exists' || a.action === 'create') {
+        const p = agents.find((x) => x.id === a.project || x.path === a.project);
+        if (!p) return { error: tr('err.unknownProject', { project: a.project || '?' }) };
+        const name = String(a.component || u.name).trim();
+        const out = this.store.addComponent({ project: p.path, name, path: a.path || '', description: a.action === 'create' ? tr('impact.newDesc') : '' });
+        if (!out.ok) return { error: out.error };
+        targets.push(p.id);
+        if (a.action === 'create') fresh.set(p.id, [...(fresh.get(p.id) || []), { name, path: out.component.path }]);
+      } else if (a.action === 'department') {
+        const out = this.store.createOffice({ name: String(a.department || u.name).trim() });
+        if (!out.ok) return { error: out.error };
+        created.push(out.office);
+      } else if (a.action !== 'ignore') return { error: tr('impact.badAnswer', { what: u.phrase }) };
+    }
+    return { fresh, created, targets };
+  }
+
+  /**
+   * A new directive. { text, title?, offices?: [id | name | 'all'], targets?: [agent id | path], answers?, ask?, exact?, from? }
+   * It goes to the projects its impact map finds (and the ones chosen); with exact, only to the chosen
+   * ones (and the ones an answer named): you saw the map and decided. If it names something that is
+   * not on the map and there is no answer for it, it does not go: { ok: false, needsAnswers, map } (ask: false skips that).
+   * Returns { ok, directive, created } (also when some part could not be sent: it shows why).
+   */
+  create({ text, title, offices, targets, answers = [], ask = true, exact = false, from } = {}) {
     text = String(text ?? '').trim();
     if (!text) return { ok: false, error: tr('err.taskEmpty') };
     if (text.length > TEXT_MAX) return { ok: false, error: tr('err.taskTooLong', { n: TEXT_MAX }) };
-    const pick = this.#targets({ offices, targets });
-    if (pick.error) return { ok: false, error: pick.error };
-    if (!pick.agents.length) return { ok: false, error: tr('err.pickProjects') };
+    const first = this.plan({ text, offices, targets });
+    if (!first.ok) return first;
+    const missing = first.map.unknown.filter((u) => !(answers || []).some((x) => x && (x.key === u.key || x.phrase === u.phrase || x.name === u.phrase || x.name === u.name)));
+    if (ask && missing.length) return { ok: false, needsAnswers: true, error: tr('impact.needAnswers', { what: missing.map((u) => `«${u.phrase}»`).join(', ') }), map: first.map, text: first.text };
+    const answered = this.#answer(first.map.unknown, answers || []);
+    if (answered.error) return { ok: false, error: answered.error };
+    // the map again: what was answered is on it now
+    const chosen = this.#targets({ offices, targets }).agents.map((a) => a.id);
+    const map = mapImpact(this.#map(), text, { targets: [...new Set([...chosen, ...answered.targets])] });
+    const agents = this.store.listAgents();
+    const going = exact ? new Set([...chosen, ...answered.targets]) : new Set(map.targets);
+    const pick = { agents: agents.filter((a) => going.has(a.id)) };
+    if (!pick.agents.length) return { ok: false, error: answered.created.length ? tr('impact.deptEmpty', { names: answered.created.map((o) => o.name).join(', ') }) : tr('err.pickProjects'), created: answered.created };
     if (pick.agents.length > PARTS_MAX) return { ok: false, error: tr('err.tooManyProjects', { n: PARTS_MAX }) };
+    const touches = (id) => map.departments.flatMap((o) => o.projects).find((p) => p.id === id)?.components.filter((c) => c.impacted) || [];
 
     const d = {
       id: `d${Date.now().toString(36)}${++this.seq}`, title: clip(title || text.split('\n')[0], 120), text, status: 'running',
@@ -97,7 +164,18 @@ export class DirectiveDesk extends EventEmitter {
     try {
       for (const a of pick.agents) {
         const others = names.filter((n) => n !== a.name);
-        const part = { target: a.id, name: a.name, harness: a.harness, office: a.office || MAIN_OFFICE, kind: null, ref: null, status: 'running', detail: '', brief: tr('exec.brief', { title: d.title, others: others.length ? others.join(', ') : '—' }) + `\n\n${text}` };
+        // the components of this project it touches, and the new ones to create in it
+        const fresh = answered.fresh.get(a.id) || [];
+        const comps = touches(a.id).filter((c) => !fresh.some((f) => f.name === c.name));
+        const lines = [
+          comps.length ? `🧩 ${tr('exec.components', { list: comps.map((c) => `${c.name}${c.path ? ` (${c.path})` : ''}`).join(', ') })}` : '',
+          ...fresh.map((f) => `🆕 ${tr('exec.newComponent', { name: f.name, path: f.path ? ` (${f.path})` : '' })}`),
+        ].filter(Boolean);
+        const part = {
+          target: a.id, name: a.name, harness: a.harness, office: a.office || MAIN_OFFICE, kind: null, ref: null, status: 'running', detail: '',
+          components: comps.map((c) => c.name), fresh: fresh.map((f) => f.name),
+          brief: tr('exec.brief', { title: d.title, others: others.length ? others.join(', ') : '—' }) + (lines.length ? `\n${lines.join('\n')}` : '') + `\n\n${text}`,
+        };
         d.parts.push(part);
         // a department with its hands full: this part waits its turn
         const busy = this.#busy(part.office);
@@ -112,7 +190,7 @@ export class DirectiveDesk extends EventEmitter {
     this.emit('created', this.#public(d));
     if (d.status !== 'running') this.#ended(d);
     this.#changed();
-    return { ok: true, directive: this.#public(d) };
+    return { ok: true, directive: this.#public(d), created: answered.created };
   }
 
   #sending = false;
@@ -206,7 +284,7 @@ export class DirectiveDesk extends EventEmitter {
     const done = d.parts.filter((p) => p.status === 'done').length;
     return {
       id: d.id, title: d.title, text: d.text, status: d.status, source: d.source, createdAt: d.createdAt, updatedAt: d.updatedAt, done, total: d.parts.length,
-      parts: d.parts.map(({ target, name, harness, office, kind, ref, status, detail }) => ({ target, name, harness, office, kind, ref, status, detail })),
+      parts: d.parts.map(({ target, name, harness, office, kind, ref, status, detail, components = [], fresh = [] }) => ({ target, name, harness, office, kind, ref, status, detail, components, fresh })),
     };
   }
 }

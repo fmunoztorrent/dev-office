@@ -18,6 +18,8 @@ test('un comando dicho en palabras: tests, scripts, git, archivos, la web', () =
     ['npm run lint -- --fix', 'Revisando el estilo del código'],
     ['npm run migrate', 'Corriendo el script «migrate»'],
     ['npm install', 'Instalando dependencias'],
+    ['npm audit --omit=dev', 'Revisando las dependencias'],
+    ['pnpm audit', 'Revisando las dependencias'],
     ['npm i zod react@18', 'Instalando zod, react'],
     ['git status --short', 'Revisando qué cambió'],
     ['git diff HEAD~1', 'Mirando los cambios'],

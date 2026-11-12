@@ -15,6 +15,7 @@ import { t, setLanguage, getLanguage } from '../public/i18n.js';
 import { systemZone, countryName, zoneInfo } from '../public/clock.js';
 import { exportCharacter, parseCharacter, changedLook, characterFile } from '../public/character.js';
 import { defaultLook } from '../public/sim.js';
+import { exportSettings, importSettings } from '../server/settings-io.js';
 import { normRole } from '../server/roles.js';
 import { compareVersions, installedVersion, officeMode, sameInstall, stopOffice, startOffice } from '../server/lifecycle.js';
 
@@ -670,6 +671,49 @@ async function cmdBtw() {
   console.log(out.ask.answer);
 }
 
+// Your settings as a JSON file (server/settings-io.js): export them, or import them. Through the API if an
+// office is running (so it applies them right away), otherwise straight in the SQLite database.
+async function cmdSettings() {
+  const [, sub, ref] = args._;
+  const live = await runningOffice();
+  if (sub === 'export') {
+    let data;
+    if (live) data = await api('/v1/settings/export');
+    else { const store = openStore(); data = exportSettings(store, { app: VERSION }); store.close(); }
+    if (!data?.kind) fail(t('cli.couldNot', { error: data?.error || t('cli.noAnswer') }));
+    const json = `${JSON.stringify(data, null, 2)}\n`;
+    const out = str(args.out);
+    if (!out) { process.stdout.write(json); return; }
+    const file = path.resolve(out.endsWith('/') || (fs.existsSync(out) && fs.statSync(out).isDirectory()) ? path.join(out, `dev-team-office-settings-${data.exportedAt.slice(0, 10)}.json`) : out);
+    fs.writeFileSync(file, json);
+    console.log(t('cli.settingsExported', { file: tilde(file) }));
+    return;
+  }
+  if (sub === 'import') {
+    if (!ref) fail(t('cli.settingsUsage'));
+    let raw;
+    try { raw = JSON.parse(fs.readFileSync(path.resolve(ref), 'utf8')); } catch (err) { fail(err instanceof SyntaxError ? t('err.settingsFile.json') : t('cli.couldNot', { error: err.message })); }
+    let out;
+    if (live) out = await api('/v1/settings/import', raw);
+    else { const store = openStore(); out = importSettings(store, raw); store.close(); }
+    if (!out?.ok) fail(t('cli.couldNot', { error: out?.error || t('cli.noAnswer') }));
+    console.log(t('settings.general.ioDone', out.applied));
+    for (const x of out.skipped || []) console.log(`  ✖ ${x.what}: ${x.error}`);
+    return;
+  }
+  fail(t('cli.settingsUsage'));
+}
+
+// The daily on demand, to be told the latest: what each one did since the last daily and what they are on
+// (the team gathers at the table in the game too). --all: the company's, every department's.
+async function cmdDaily() {
+  if (!(await runningOffice())) fail(t('cli.noOfficeOpen', { base }));
+  const office = str(args.office) || process.env.DEV_TEAM_OFFICE_OFFICE || 'main';
+  const out = await api(args.all ? '/v1/standup' : `/v1/offices/${encodeURIComponent(office)}/standup`, {});
+  if (!out?.ok) fail(t('cli.couldNot', { error: out?.error || t('cli.noAnswer') }));
+  console.log(out.text.replace(/\*\*/g, ''));
+}
+
 // The MCP server (stdio): Claude Code, Codex, OpenCode, Gemini or Cursor register it via `setup`.
 async function cmdMcp() {
   const { runMcp, startOfficeDetached } = await import('../server/mcp.js');
@@ -689,7 +733,7 @@ if (args.version) { console.log(VERSION); process.exit(0); }
 const commands = {
   open: () => cmdOpen({ game: !!args.game }), game: () => cmdOpen({ game: true }), monitor: () => cmdOpen(), serve: cmdServe, start: cmdStart, stop: cmdStop, restart: () => (args['if-outdated'] || args['if-running'] ? cmdRefresh() : cmdRestart()), watch: () => cmdWatch(args._[1]), status: cmdStatus,
   demo: cmdDemo, send: cmdSend, task: cmdTask, tasks: cmdTasks, install: cmdSetup, setup: cmdSetup, uninstall: cmdUninstall, doctor: cmdDoctor, update: cmdUpdate, agents: cmdAgents, offices: cmdOffices, departments: cmdOffices, character: cmdCharacter, config: cmdConfig,
-  pane: cmdPane, follow: cmdFollow, join: cmdJoin, prompt: cmdPrompt, team: cmdTeam, mcp: cmdMcp, btw: cmdBtw, help: () => console.log(HELP()),
+  pane: cmdPane, follow: cmdFollow, join: cmdJoin, prompt: cmdPrompt, team: cmdTeam, mcp: cmdMcp, btw: cmdBtw, daily: cmdDaily, standup: cmdDaily, settings: cmdSettings, help: () => console.log(HELP()),
 };
 const cmd = commands[args._[0] || 'open'];
 if (!cmd) fail(`${t('cli.unknownCommand', { cmd: args._[0] })}\n\n${HELP()}`);

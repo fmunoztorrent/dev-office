@@ -65,7 +65,7 @@ test('la consola: g abre el juego en la misma terminal, q vuelve a la bitácora 
     await until(() => plain(stdout.out).includes('DEV TEAM OFFICE'));
     const banner = plain(stdout.out);
     assert.match(banner, new RegExp(`Web +${server.url.replace(/[.:/]/g, '\\$&')}`));
-    assert.match(banner, /g juego · o navegador · h ayuda · q salir/);
+    assert.match(banner, /g juego · o navegador · d daily · h ayuda · q salir/);
     assert.match(banner, /fuera de herdr/);
     assert.match(banner, /nota de arranque/);
     assert.equal(stdin.raw, true);
@@ -90,4 +90,22 @@ test('la consola: g abre el juego en la misma terminal, q vuelve a la bitácora 
   } finally {
     await server.close();
   }
+});
+
+test('la bitácora escribe la daily entera: la línea de cada uno, lo que te espera y lo que sigue abierto', async () => {
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false, places: false, standup: { every: 0 } });
+  let out = '';
+  const log = createLog({ server, write: (s) => { out += s; }, color: false });
+  try {
+    server.company.ingest('generic', { session: 's1', kind: 'tool_start', role: 'backend', tool: 'Edit', text: 'Editando el carrito' });
+    server.company.ingest('generic', { session: 's1', kind: 'tool_end', role: 'backend', tool: 'Edit', ok: true });
+    server.company.ingest('generic', { session: 's1', kind: 'tool_start', role: 'security', tool: 'Bash', input: { command: 'npm audit' } });
+    server.standup.run('main');
+    assert.match(out, /🗣 Daily · Oficina principal · \d{4}-\d{2}-\d{2}/);
+    assert.match(out, / {2}Diego {2}Ayer: editando el carrito \(1 paso\)\./);
+    assert.match(out, / {2}Inés {2}Ahora: /, 'la especialista de visita también');
+    out = '';
+    server.standup.run('main');
+    assert.match(out, /Nada nuevo desde la última daily\./);
+  } finally { log.close(); await server.close(); }
 });

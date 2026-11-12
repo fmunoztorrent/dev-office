@@ -4,6 +4,19 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-12
+
+### Added
+
+- **The daily on demand, to be told the latest.** The 🗣 button at the bottom left (or `d`) runs it and shows it in a dialog: what each one did **since the previous daily** (the first time, the last 24 hours), what they are on now, what is waiting for you and what is still open. On the executive floor it is the company's daily, every department's (`POST /v1/standup`). Also `d` in the terminal log (it prints the whole daily), `dev-team-office daily [--office] [--all]` and the `daily` MCP tool, so your agent tells it to you.
+- **Your settings as a JSON file.** ⚙ › General › ⬇ Export / ⬆ Import (also `dev-team-office settings export|import`, `GET /v1/settings/export`, `POST /v1/settings/import`). It carries what is yours: the general settings, the departments (instructions, autonomy and characters) and the registered projects with their instructions and declared components. Not the history (log, briefs, directives, dailies), the archive or where you are looking. Importing merges, checks each piece on its own and says what it skipped (a project whose folder is not on this machine).
+- **A directive's impact map.** Before it goes, operations maps which departments, projects and components it touches (**🗺 See the impact**), from what it names plus what you picked. Each project's components are detected from its folder (its workspaces, or `apps/`, `packages/`, `services/`…) and can be declared in ⚙ › Departments. **What it names that is not on the map is asked first**: does it exist (in which project and folder), must it be created, is it a new department, or is it not a component? The answers stay on the map, and each brief says the components it touches and the new ones to create. `GET /v1/map`, `POST /v1/components`, `POST /v1/directives/plan`; `POST /v1/directives` answers `409` until it has its answers. For agents: `map_impact`, and `send_directive` with `answers`.
+
+### Changed
+
+- The daily tells what happened since the previous one (not always the last 24 hours), what each one is on now, and counts the questions to you as waiting, not as work. In the afternoon Marco no longer says good morning.
+- `npm audit` is said in words ("Auditing the dependencies").
+
 ## [0.17.0] - 2026-11-12
 
 ### Added
@@ -242,7 +255,8 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.14.0...v0.15.0

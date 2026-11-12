@@ -364,3 +364,21 @@ test('`dev-team-office join` desde la terminal: lo mismo que join_office', async
     await server.close();
   }
 });
+
+test('daily: el agente te cuenta lo último (lo que hizo cada uno desde la anterior); all: toda la empresa', async () => {
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false, places: false, standup: { every: 0 } });
+  const mcp = createMcp({ base: server.url, socket: null, cwd: project(), env: {} });
+  try {
+    server.company.ingest('generic', { session: 's1', source: 'claude', cwd: '/tmp/tienda', kind: 'tool_start', role: 'backend', tool: 'Edit', text: 'Editando el carrito' });
+    server.company.ingest('generic', { session: 's1', source: 'claude', cwd: '/tmp/tienda', kind: 'tool_end', role: 'backend', tool: 'Edit', ok: true });
+    const { call } = await session(mcp, 'claude-code');
+    let r = await call('daily');
+    assert.equal(r.error, false, r.text);
+    assert.match(r.text, /^🗣 Daily · Oficina principal · \d{4}-\d{2}-\d{2}\n- \*\*Diego \(Backend\)\*\*: Ayer: editando el carrito \(1 paso\)\./);
+    assert.equal(r.json.reports[0].office, 'main');
+    r = await call('daily', { all: true });
+    assert.match(r.text, /Nada nuevo desde la última daily/, 'la segunda: desde la anterior');
+    assert.equal(r.json.reports.length, server.company.ids().length);
+    assert.equal((await call('daily', { office: 'nope' })).error, true);
+  } finally { await server.close(); }
+});

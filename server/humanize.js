@@ -136,6 +136,7 @@ function say({ prog, args }) {
     if (sub === 'test' || sub === 't') return testsOf(args.slice(1));
     if (sub === 'run' || sub === 'run-script') return args[1] ? script(args[1], args.slice(2)) : t('act.script', { name: '?' });
     if (sub === 'publish') return t('act.publish');
+    if (sub === 'audit') return t('act.audit');
     if (sub === 'exec' || sub === 'x') return say(command(args.slice(1).join(' ')));
     return prog === 'npm' ? t('act.tool', { prog }) : script(sub, args.slice(1)); // yarn dev, pnpm build
   }

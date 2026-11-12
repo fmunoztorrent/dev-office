@@ -21,6 +21,8 @@ import { PipelineHub } from './pipeline.js';
 import { AgentRegistry } from './registry.js';
 import { ClarifyDesk } from './clarify.js';
 import { Standup } from './standup.js';
+import { exportSettings, importSettings } from './settings-io.js';
+import { companyMap } from './components.js';
 import { autonomyOf } from './guides.js';
 import { search as ragSearch, createEmbedder, createIndexer } from './rag.js';
 import { fromFile, fromUrl } from './ingest.js';
@@ -42,7 +44,7 @@ import { zoneInfo, systemZone } from '../public/clock.js';
 import { insideDir as inside } from './paths.js';
 import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.17.0';
+export const VERSION = '0.18.0';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
 const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
@@ -125,7 +127,12 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   const indexer = createIndexer(store, embedder);
   archive.on('saved', () => indexer.kick());
   // the daily standup, each morning in each office (and on demand)
-  const standup = new Standup({ company, archive, store, hub, clarify, ...standupOpt });
+  // how the daily's text names each one: "Diego (Backend)", with the office's names
+  const personIn = (id, role) => {
+    const look = { ...defaultLook(role), ...(store.getAppearance(id)?.[role] || {}) };
+    return look.name ? `${look.name} (${look.title || t(`team.titles.${role}`, { g: look.sex })})` : role;
+  };
+  const standup = new Standup({ company, archive, store, hub, clarify, who: personIn, ...standupOpt });
   const directives = new DirectiveDesk({ store, registry, hub, pipelines, archive, company });
   const startedAt = Date.now();
   const bus = new EventEmitter(); // changes the interfaces see: settings, appearance, weather, offices, log
@@ -404,6 +411,14 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     return out;
   }
 
+  /** After importing settings: everything they touch is applied and the interfaces are told. */
+  function settingsImported(out) {
+    if (out.lang) setLanguage(out.lang);
+    officesChanged();
+    bus.emit('prefs', prefs());
+    for (const o of company.list()) bus.emit('appearance', o.id, store.getAppearance(o.id));
+  }
+
   function officesChanged() {
     company.load();
     refreshWeather();
@@ -445,10 +460,13 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       case 'clarify_cancel':
         return clarify.cancel(msg.id);
       case 'standup':
-        return standup.run(here, { from: t('events.you') });
+        return msg.all ? standup.runAll({ from: t('events.you') }) : standup.run(here, { from: t('events.you') });
       // the executive floor: one order for several offices or projects, and cancelling it
-      case 'directive':
-        return directives.create({ text: msg.text, title: msg.title, offices: msg.offices, targets: msg.targets, from: msg.from });
+      case 'directive': {
+        const out = directives.create({ text: msg.text, title: msg.title, offices: msg.offices, targets: msg.targets, answers: msg.answers, ask: msg.ask !== false, from: msg.from });
+        if (out.created?.length) officesChanged();
+        return out;
+      }
       case 'directive_cancel':
         return directives.cancel(msg.id);
       case 'pipeline_start':
@@ -572,6 +590,18 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         }
         return json(res, 200, out);
       }
+      // Your settings as a JSON file (server/settings-io.js): to keep them or take them to another machine
+      if (req.method === 'GET' && p === '/v1/settings/export') {
+        const data = exportSettings(store, { app: VERSION });
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'content-disposition': `attachment; filename="dev-team-office-settings-${data.exportedAt.slice(0, 10)}.json"`, 'cache-control': 'no-store' });
+        return res.end(`${JSON.stringify(data, null, 2)}\n`);
+      }
+      if (req.method === 'POST' && p === '/v1/settings/import') {
+        const out = importSettings(store, await body(req));
+        if (!out.ok) return json(res, 400, out);
+        settingsImported(out);
+        return json(res, 200, out);
+      }
       // The company's offices (teams or domains)
       if (req.method === 'GET' && p === '/v1/offices') return json(res, 200, { ok: true, offices: company.list(), view: view() });
       if (req.method === 'POST' && p === '/v1/offices') {
@@ -584,7 +614,9 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         return json(res, out.ok ? 201 : 400, out);
       }
       let m;
-      // The daily standup now (it also happens by itself every morning)
+      // The daily standup now (it also happens by itself every morning): what happened since the last
+      // one. /v1/standup is the company's: every department's at once.
+      if (req.method === 'POST' && p === '/v1/standup') return json(res, 200, standup.runAll({ from: t('events.you') }));
       if (req.method === 'POST' && (m = p.match(/^\/v1\/offices\/([^/]+)\/standup$/))) {
         const id = decodeURIComponent(m[1]);
         if (!company.has(id)) return json(res, 404, { ok: false, error: t('err.unknownOffice', { office: id }) });
@@ -763,10 +795,31 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       if (req.method === 'GET' && p === '/v1/asks') return json(res, 200, { ok: true, asks: asks.list(valid(q('office')), Number(q('limit')) || 20) });
       // The executive floor: directives (one order for several offices or projects) and how each office is doing
       if (req.method === 'GET' && p === '/v1/directives') return json(res, 200, { ok: true, directives: directives.list(Number(q('limit')) || 12), overview: overview() });
+      // The company's map: departments → projects → components (detected from each folder, and the declared ones)
+      if (req.method === 'GET' && p === '/v1/map') return json(res, 200, { ok: true, departments: companyMap(store, { name: (o) => officeName(o.id) }) });
+      if (req.method === 'POST' && p === '/v1/components') {
+        const b = await body(req);
+        const a = store.listAgents().find((x) => x.id === b.project || x.path === b.project);
+        if (!a) return json(res, 400, { ok: false, error: t('err.unknownProject', { project: b.project || '?' }) });
+        const out = store.addComponent({ project: a.path, name: b.name, path: b.path, description: b.description });
+        return json(res, out.ok ? 201 : 400, out);
+      }
+      if (req.method === 'DELETE' && (m = p.match(/^\/v1\/components\/([^/]+)$/))) {
+        const out = store.deleteComponent(decodeURIComponent(m[1]));
+        return json(res, out.ok ? 200 : out.status || 400, out);
+      }
+      // the impact before it goes: the departments, projects and components it touches, and what is not on the map
+      if (req.method === 'POST' && p === '/v1/directives/plan') {
+        const b = await body(req);
+        const out = directives.plan({ text: b.text, offices: b.offices, targets: b.targets ?? b.projects });
+        if (out.ok) floor('exec', 'impact', { text: clip(b.text, 80), total: out.map.targets.length, unknown: out.map.unknown.length });
+        return json(res, out.ok ? 200 : 400, out);
+      }
       if (req.method === 'POST' && p === '/v1/directives') {
         const b = await body(req);
-        const out = directives.create({ text: b.text, title: b.title, offices: b.offices, targets: b.targets ?? b.projects, from: b.from });
-        return json(res, out.ok ? 201 : 400, out);
+        const out = directives.create({ text: b.text, title: b.title, offices: b.offices, targets: b.targets ?? b.projects, answers: b.answers, ask: b.ask !== false, exact: !!b.exact, from: b.from });
+        if (out.created?.length) { officesChanged(); for (const o of out.created) floor('exec', 'department', { text: o.name }); }
+        return json(res, out.ok ? 201 : out.needsAnswers ? 409 : 400, out);
       }
       if ((m = p.match(/^\/v1\/directives\/([^/]+)(\/cancel)?$/))) {
         const id = decodeURIComponent(m[1]);

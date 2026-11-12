@@ -125,6 +125,18 @@ body[data-floor="exec"] .screen[data-view="flat"] .hud-tl, body[data-floor="arch
 .inbox-text span { overflow-wrap: anywhere; }
 .inbox .muted, .clarify .muted { color: #5c4630; margin: 2px 0 0; }
 .inbox-since { flex: none; font: 18px/1 "VT323", monospace; color: #6b4d00; }
+/* the daily: one block per department, a line per character */
+.daily { width: min(620px, calc(100vw - 32px)); }
+.daily-body { display: grid; gap: 14px; max-height: 62vh; overflow: auto; }
+.daily-body h3 { margin: 0 0 6px; font: 20px/1.1 "VT323", monospace; color: #3b2a14; }
+.daily-body h3 small { font-size: 16px; color: #6b4d00; }
+.daily-body ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.daily-body li { padding: 7px 10px; background: #fff8dc; box-shadow: inset 3px 0 0 var(--c, #ffd166); font-size: 13px; overflow-wrap: anywhere; }
+.daily-body li b { color: #2b2d42; margin-right: 4px; }
+.daily-body .quiet { margin: 0; color: #5c4630; font-size: 13px; }
+.daily-body .tail { margin: 6px 0 0; font-size: 13px; color: #3b2a14; }
+.daily-body .tail b { display: block; margin-bottom: 2px; }
+.daily .muted { color: #5c4630; margin: 8px 0 0; }
 .btn.danger { color: #b3261e; }
 
 /* btw: the side question and its answer, top center */
@@ -543,6 +555,24 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
 .fl-office { display: flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
 .fl-projects { display: flex; flex-wrap: wrap; gap: 4px 14px; padding-left: 24px; }
 .fl-project { display: flex; gap: 6px; align-items: center; font-size: 13px; cursor: pointer; overflow-wrap: anywhere; }
+/* the impact map: why each project is in, the components it touches, and the questions about what is not on the map */
+.fl-project { flex-wrap: wrap; }
+.s-comps { display: grid; gap: 4px; margin: 4px 0; font-size: 12px; }
+.s-comp-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.s-comp { display: inline-flex; align-items: center; gap: 2px; padding: 0 5px; background: #f1ead4; border: 1px dashed #c8b98a; }
+.s-comp.own { background: #fff3c4; border-style: solid; border-color: #e0c060; }
+.s-comp .s-x { border: 0; background: none; padding: 0 2px; cursor: pointer; font-size: 11px; color: #9a3b3b; }
+.s-comp-add { display: flex; gap: 4px; flex: 1 1 100%; }
+.brief .s-comp-add input[type="text"] { width: auto; min-width: 0; flex: 1 1 120px; font-size: 12px; padding: 3px 6px; }
+.brief .dv-q-row input[type="text"] { width: auto; }
+.dv-why { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 12px; color: #6b4d00; }
+.dv-comp { padding: 0 5px; background: #fff3c4; border: 1px solid #e0c060; font-size: 12px; color: #3b2a14; }
+.dv-map { margin: 8px 0 0; font-size: 13px; color: #3b2a14; }
+.dv-ask { display: grid; gap: 8px; margin-top: 6px; }
+.dv-q { padding: 8px 10px; background: #fff8dc; box-shadow: inset 3px 0 0 #ef476f; display: grid; gap: 6px; font-size: 13px; }
+.dv-q-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.dv-q-row select, .dv-q-row input { font: inherit; font-size: 13px; padding: 3px 6px; min-width: 0; flex: 1 1 140px; }
+.dv-q-row [hidden] { display: none; }
 .fl-scope input[type="checkbox"] { accent-color: #9c2c3f; width: 15px; height: 15px; }
 .fl-pill { font: 15px/1 "VT323", monospace; padding: 2px 6px; background: var(--ink); color: #ffd166; white-space: nowrap; }
 .fl-pill.done { color: #06d6a0; } .fl-pill.failed { color: #ef476f; } .fl-pill.partial { color: #f4a261; } .fl-pill.cancelled, .fl-pill.interrupted { color: #adb5bd; }

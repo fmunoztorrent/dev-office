@@ -73,7 +73,7 @@ export default {
     askYou: '{name}, I have a question for you ❓',
     chatReplies: ['Noted! 📝', "Let's cover it at the daily 👍", 'Got it 🙌', 'Good idea!'],
     btwThinking: ['Hmm, good question… 🤔', 'Let me check… 🔍', 'One sec, looking it up 📚'],
-    standup: { visitor: 'From {name} ({role}): {text}', open: 'Good morning! Daily: what did each one do? 🗣', waiting: '{n} thing(s) waiting for the PO: {what}', open2: '{n} brief(s) still open. Let’s go! 💪', close: 'Nothing pending. Let’s go! 💪' },
+    standup: { visitor: 'From {name} ({role}): {text}', open: 'Good morning! Daily: what did each one do? 🗣', openLater: 'Daily! What is new since the last one? 🗣', waiting: '{n} thing(s) waiting for the PO: {what}', open2: '{n} brief(s) still open. Let’s go! 💪', close: 'Nothing pending. Let’s go! 💪' },
     clarify: { review: ['Let me read it carefully 🔍', 'Checking we have everything 📋', 'Before starting, let me review it 🤓'], ask: 'I have {n} question(s) before we start 📝', sent: ['All clear: to work! 🚀', 'Ready for the team 💪'], cancelled: 'Ok, we drop it' },
     btwFail: "I couldn't find out 🤷",
     poke: '{from} says hi 👋',
@@ -232,7 +232,7 @@ export default {
   act: {
     tests: 'Running the tests', testsOf: 'Running the tests of {target}', build: 'Building the project', dev: 'Starting the dev server',
     lint: 'Checking the code style', format: 'Formatting the code', typecheck: 'Checking the types', script: 'Running the “{name}” script',
-    install: 'Installing dependencies', installPkgs: 'Installing {pkgs}', uninstall: 'Removing dependencies', publish: 'Publishing the package', tool: 'Using {prog}',
+    install: 'Installing dependencies', installPkgs: 'Installing {pkgs}', uninstall: 'Removing dependencies', publish: 'Publishing the package', audit: 'Auditing the dependencies', tool: 'Using {prog}',
     gitStatus: 'Checking what changed', gitDiff: 'Looking at the changes', gitLog: 'Going over the history', gitShow: 'Looking at a commit', gitAdd: 'Staging the changes',
     gitCommit: 'Committing: “{msg}”', gitCommitPlain: 'Making a commit', gitPush: 'Pushing the changes', gitPull: 'Pulling changes from the repo',
     gitCheckout: 'Switching to {ref}', gitBranch: 'Checking the branches', gitStash: 'Setting changes aside', gitMerge: 'Merging branches', gitRebase: 'Reordering commits',
@@ -275,8 +275,16 @@ export default {
   offices: { main: 'Main office' },
   // the analyst reviews a brief before it goes to work (server/clarify.js)
   ingest: { tooBig: 'too big (more than {mb} MB)', convert: 'to read {name} the office needs {tool} installed (or ask an agent to convert it: ✨ Ask an agent)', format: 'the archive does not read .{ext} files (Markdown, text, CSV, JSON, HTML, PDF or Word)', empty: '{name} has no text', url: 'that is not an http(s) address', fetch: 'could not download it: {error}' },
+  // the settings as a JSON file (server/settings-io.js): what could not be imported
+  settingsIo: { department: 'Department {name}', characters: 'Characters of {name}', pref: 'Setting {key}', project: 'Project {name}', component: 'Component {name} of {project}', instructions: 'Instructions of {path}' },
+  // a directive's impact map (server/components.js)
+  impact: {
+    ask: 'Does "{what}" exist? In which project and folder, or must it be created?', none: 'I could not tell which departments or projects it touches: choose them or name them.', unknownHead: 'It names things that are not on the map:',
+    why: { named: 'it names it', chosen: 'you chose it', part: 'it names one of its components', department: 'it names its department' },
+    newDesc: 'new (a directive asked for it)', needAnswers: 'Before it goes, tell me what {what} is: whether it exists and where, whether it must be created, or whether it is a new department.', badAnswer: 'What is "{what}"? Answer: it exists, create it, a new department, or not a component.', deptEmpty: '{names} was created, but it has no projects yet: add one (⚙ › Departments) and send the directive again.',
+  },
   // the daily standup (server/standup.js)
-  standup: { title: 'Daily · {office} · {date}', did: 'Yesterday: {did} ({steps}).', steps: { one: '1 step', other: '{n} steps' }, errors: { one: 'It got stuck once.', other: 'It got stuck {n} times.' }, nothing: 'reviewing and planning', waitingHead: 'Waiting for the PO:', openHead: 'Still open:', source: 'The daily', now: '🗣 Daily now' },
+  standup: { title: 'Daily · {office} · {date}', did: 'Yesterday: {did} ({steps}).', didSince: '{from}: {did} ({steps}).', since: { today: 'since {at}', yesterday: 'since yesterday at {at}', day: 'since {date}' }, doing: 'Now: {what}.', doingOnly: 'Now: {what} ({steps}).', quiet: 'Nothing new since the last daily.', steps: { one: '1 step', other: '{n} steps' }, errors: { one: 'It got stuck once.', other: 'It got stuck {n} times.' }, nothing: 'reviewing and planning', waitingHead: 'Waiting for the PO:', openHead: 'Still open:', source: 'The daily', now: '🗣 Daily now' },
   rag: { block: 'From the archive (cite its [id]; search more with search_knowledge):' },
   clarify: {
     promptHead: '[review] Before a brief goes to work, check whether it has everything needed to do it end to end without asking anyone. Do not change any file and do not start the work: only review it.',
@@ -327,6 +335,7 @@ export default {
       },
       react: {
         order: 'I need everyone to do this: "{title}"',
+        impact: '🗺 Mapping the impact: it touches {n} project(s)', impactAsk: 'and {n} thing(s) I do not have on the map: we have to ask',
         wait: '({n} wait their turn: I won’t overload anyone)',
         split: 'Splitting it across {n} project(s): {offices}',
         department: 'New department: {name}. It needs its repositories, its people and its instructions before it can take orders', departmentOk: 'Good: get it ready',
@@ -356,6 +365,7 @@ export default {
     from: 'Executive floor',
     waitTurn: 'the department has {n} brief(s) open',
     brief: '🏛 Directive from the executive floor: "{title}". Also working on it: {others}. Do this project\'s part.',
+    components: 'Components of this project it touches: {list}.', newComponent: 'New component "{name}"{path}: create it as part of this directive.',
     interrupted: 'the office restarted before it ended',
     minuteTitle: 'Minutes: {title}', minuteAsked: 'Asked by: {who}', minuteParts: 'How it ended in each project:',
     log: { created: '🏛 Directive "{title}" to {n} project(s): {offices}', department: '🏛 New department: {name}', ended: '🏛 Directive "{title}": {status} ({done}/{total})' },
@@ -368,6 +378,8 @@ export default {
       },
       title: '🏛 Directives', text: 'What must they do?', placeholder: 'One order for several offices or projects: "Every API exposes /health"',
       scope: 'Who', all: 'all its projects ({n})', none: 'no registered projects', noAgents: 'Register each department’s projects in ⚙ › Departments (or ⚙ › Agents) to give them directives.',
+      mapBtn: '🗺 See the impact', mapNote: 'It touches {n} project(s) in {d} department(s): check who gets it (the checked ones) and answer what is not on the map.', answerAll: 'Answer what each thing that is not on the map is (and in which project, if it exists or must be created)',
+      ans: { pick: '— what is it? —', exists: 'It exists, in…', create: 'Create it, in…', department: 'It is a new department', ignore: 'It is not a component' }, ansProject: 'project', ansPath: 'folder (optional)', ansDept: 'department name',
       send: '▶ Make it happen!', recent: 'The latest', empty: 'No directives yet.', pick: 'Pick at least one project', write: 'Write the directive',
       sent: 'Directive sent to {n} project(s)', stop: '⏹ Stop', progress: '{done} of {total}', by: 'by {who}',
       deptPh: 'A department that does not exist yet…', deptAdd: '＋ New department', deptName: 'Write the new department’s name', deptCreated: 'Department “{name}” created: add its projects, people and instructions in ⚙ › Departments.',
@@ -423,7 +435,7 @@ export default {
     pathMissing: 'the path is missing', pathRelative: '{path}: use the full path (e.g. ~/Workspace/my-project)', pathNotFound: '{path}: that folder does not exist',
     harness: 'choose the agent for that path: claude-code, opencode or pi', args: '{name}: args must be a list of strings',
     agentExists: 'that agent is already registered for that path', saveFailed: 'could not save: {error}', agentsMax: 'at most {n} agents',
-    unknownAgent: 'unknown agent', unknownGap: 'unknown gap', character: { json: 'that file is not JSON', kind: 'that is not a Dev Team Office character (its "kind" must be "dev-team-office/character")' }, unknownRole: 'unknown role: {role}', oneOf: '{role}: "{key}" must be one of: {values}', notEditable: '{role}: "{key}" cannot be changed',
+    unknownAgent: 'unknown agent', unknownGap: 'unknown gap', componentName: 'the component needs a name', componentPath: 'the component\'s folder goes inside the project (relative, without ..)', unknownComponent: 'unknown component', settingsFile: { json: 'that file is not JSON', kind: 'those are not Dev Team Office settings (its "kind" must be "dev-team-office/settings")', version: 'those settings come from a newer Dev Team Office: update it first (dev-team-office update)' }, character: { json: 'that file is not JSON', kind: 'that is not a Dev Team Office character (its "kind" must be "dev-team-office/character")' }, unknownRole: 'unknown role: {role}', oneOf: '{role}: "{key}" must be one of: {values}', notEditable: '{role}: "{key}" cannot be changed',
     color: '{role}.{key}: use a color like #3f73f0', empty: '{role}.{key} cannot be empty',
     unknownOffice: 'unknown department (office): {office}', officeName: 'give the department a name', officeExists: 'there is already a department with that name', autonomy: 'autonomy must be one of: {levels} (or empty: the company’s)',
     officesMax: 'at most {n} offices', mainOffice: 'the main office cannot be deleted', timezone: 'unknown time zone: {tz}',
@@ -516,6 +528,7 @@ export default {
     keys: { field: 'field', change: 'change', action: 'action', save: 'save', close: 'close', tabs: '◂ ▸ switch tab' },
     yes: 'yes', no: 'no',
     general: {
+      io: 'Your settings (a JSON file)', ioHint: 'Exports what is yours: the general settings, the departments (with their instructions, autonomy and characters) and the registered projects with their instructions and components. Not the log, the briefs, the directives or the archive. Importing replaces what the file brings and leaves the rest; a project whose folder is not on this machine is skipped.', ioExport: '⬇ Export settings', ioImport: '⬆ Import settings', ioDone: 'Settings imported: {prefs} settings, {departments} departments, {characters} characters, {projects} projects, {components} components.',
       archive: 'Archive (the agents’ knowledge)', archivePush: 'What the archive knows goes on top of every brief and question (the glossary terms and the most relevant passages)', embeddings: 'Semantic search', embed_off: 'Off: by words only (offline)', embed_ollama: 'Ollama, on this machine', embed_openai: 'An OpenAI-compatible API (OpenAI, Voyage…)', embedModel: 'Embedding model', embedUrl: 'Address', embedOllamaHint: 'Install Ollama and run: ollama pull nomic-embed-text. Nothing leaves this machine.', embedKeyHint: 'Its key goes in the DEV_TEAM_OFFICE_EMBED_KEY environment variable (never in the database). The archive’s text is sent to that API to be embedded.', indexStatus: '🧠 {chunks} chunk(s) indexed · {embedded} with embedding', reindex: '↻ Index it again',
       autonomy: 'Autonomy', clarify: 'Before a brief goes to work, the analyst checks it has everything (and asks you only what is missing)', autonomous: 'The agents work on their own to the end (they ask only what only you can answer)',
       language: 'Language', timezone: 'Time zone', tzSystem: 'the system one ({tz})', tzHint: 'The time zone gives the date, the time and the country. Each office can have its own (⚙ › Offices).',
@@ -539,7 +552,7 @@ export default {
       newTitle: 'New department', editTitle: 'Edit “{name}”', created: 'Done: “{name}” is now part of the company.', updated: 'Department updated.', deleted: 'Department deleted (its projects moved to the main one).',
       confirmDelete: 'Delete the department “{name}”? Its projects move to the main one; their folders are not touched.', cancel: 'Cancel',
       instructions: 'Instructions', instructionsPh: 'How to work in this department: conventions, what to never do, who to ask… They go with every brief, directive and question to its projects.',
-      projects: 'Projects', noProjects: 'No projects yet.', addProject: '＋ New project', moveHere: 'Bring a project here…', people: 'People', editPeople: 'Edit its people', hasInstructions: '📋 with instructions',
+      projects: 'Projects', noProjects: 'No projects yet.', compName: 'component', compPath: 'folder (optional)', compAdd: '＋ Component', compAdded: 'Component "{name}" on the map', compNone: 'a single piece', compDeclared: 'declared by you', compDetected: 'detected in its folder', compRemove: 'Remove {name} from the map', addProject: '＋ New project', moveHere: 'Bring a project here…', people: 'People', editPeople: 'Edit its people', hasInstructions: '📋 with instructions',
     },
     agents: {
       instructions: 'Project instructions', instructionsPh: 'How to work with this project (for every agent in its folder): commands, conventions, what not to touch… They go with every brief, pipeline and question.', hasInstructions: '📋 instructions',
@@ -576,7 +589,7 @@ export default {
     mood: { stressed: 'stressed 😰 ({n} errors in a row)', tired: 'tired 🥱 (their agent has {pct}% context left)', bath: 'in the bathroom 🚻', bathWait: 'waiting for the bathroom 😣', dream: 'dreaming of {dream} {emoji}', lunch: 'having lunch {food}', fire: 'putting out the fire! 🧯', talking: 'chatting 💬' },
     session: 'session', sessionLabel: 'Session', latest: 'most recent', noTaskYet: 'Session without a task yet', waitingAgent: 'Waiting for events from an agent…',
     stats: { tools: 'actions', errors: 'errors', subs: 'subagents', status: 'status' },
-    standupBtn: '🗣 Daily', standupTip: 'The daily standup now: each one tells what their agent did in the last 24 hours (the minutes go to the archive)', newBrief: '📋 New brief', demo: '▶ Demo', demoTdd: '▶ TDD demo', reset: '⟲ Reset', connected: '{n} agent(s) connected',
+    standupBtn: '🗣 Daily', standupTip: 'The daily standup now: each one tells what their agent did since the last daily and what they are on (the minutes go to the archive)', dailyKey: 'Daily: the latest (d)', daily: 'Daily', dailyCompany: 'The company’s daily', dailyQuiet: 'Nothing new since the last daily.', dailyArchived: '📚 The minutes are in the archive (minutes, “daily”).', dailyFirst: 'in the last 24 hours', dailyWaiting: 'Waiting for you', dailyOpen: 'Still open', dailyAgain: '🗣 Again', newBrief: '📋 New brief', demo: '▶ Demo', demoTdd: '▶ TDD demo', reset: '⟲ Reset', connected: '{n} agent(s) connected',
     cancel: 'Cancel', cancelRun: '✕ cancel', runBy: 'Run by {agent}: {task}', isNew: ' (new)', flow: 'Flow by role', noActivity: 'no activity',
     btwUsage: 'btw <question>: a side question to the agent on duty about the team, the domain or the office', btwThinking: 'thinking…', btwFailed: 'no answer: {error}', btwClose: 'Close',
     lifeOn: 'office life: shown', lifeOff: 'office life: hidden',
@@ -589,7 +602,7 @@ export default {
   },
   console: {
     web: 'Web', webHint: '(o: open it in the browser)', game: 'Game', gameHint: 'g: open it in this terminal (q goes back to the log)', keys: 'Keys',
-    keysLine: 'g game · o browser · h help · q quit',
+    keysLine: 'g game · o browser · d daily · h help · q quit',
     herdrOn: 'inside herdr (pane {pane}): agents open in a new pane', herdrOff: 'outside herdr: agents run in the background',
     logStart: '— log: what the agents are doing —', opening: 'Opening {url} in the browser…', back: '— back in the log ({n} new line(s)) —', bye: 'Closing the office…',
     task: '📨 {text} → {status}{detail}', run: '▶ “{name}”: {status}{stage}', weather: '{icon} Outside {office}: {label}{temp}', lang: '⚙ Language: {lang}',
@@ -656,6 +669,13 @@ Usage:
   dev-team-office mcp             The MCP server (stdio) that setup registers in each agent.
   dev-team-office btw "<question>" [--office <id>]
                                   A side question to the agent on duty about the team (like /btw).
+  dev-team-office settings export [--out <file or folder>]
+  dev-team-office settings import <file.json>
+                                  Your settings as JSON: the general ones, the departments (with their characters) and
+                                  the projects with their instructions. Importing replaces what the file brings, the rest stays.
+  dev-team-office daily [--office <id>] [--all]
+                                  The daily on demand, to be told the latest: what each one did since the last daily
+                                  and what they are on now (in the game they gather at the table). --all: the company's.
   dev-team-office team [--from <packsRoot>]
                                   The shipped teams (installable agent packs) and their roles.
   dev-team-office team install <team> --agent <cli> [--project <dir>] [--from <packsRoot>]
@@ -700,7 +720,7 @@ API: docs/api.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
     paneUsage: 'Usage: dev-team-office pane [--role qa] [--title "tests"] [--agent pi|claude|opencode|codex] -- <command or prompt>',
     teams: 'Teams:', teamNone: '(no team packs shipped)',
     teamUsage: 'Usage: dev-team-office team [list] | dev-team-office team install <team> --agent <pi|claude|opencode|codex> [--project <dir>] [--from <packsRoot>]',
-    btwUsage: 'Usage: dev-team-office btw "<question>" [--office <id>]', btwAsking: '❓ asking {agent}…',
+    settingsUsage: 'Usage: dev-team-office settings export [--out <file>]  ·  settings import <file.json>', settingsExported: 'Settings exported to {file}', btwUsage: 'Usage: dev-team-office btw "<question>" [--office <id>]', btwAsking: '❓ asking {agent}…',
     updateGit: 'Updating the git clone at {dir} (git pull --ff-only)…',
     updateGitFailed: 'Could not update {dir} with git pull --ff-only (local changes, or another branch?): update it by hand, then dev-team-office restart',
     replaced: 'The office {old} that was running was replaced by this one ({version})',

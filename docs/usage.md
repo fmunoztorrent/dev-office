@@ -69,7 +69,7 @@ In both views (and in the terminal game):
 | The terminal | `dev-team-office task "Add pagination" --agent pi`, or `dev-team-office prompt <id> "…" --pipeline <entry>` |
 | Your agent | Directly in its session: the office sees it all the same |
 | Another agent (MCP) | The `send_task` tool |
-| The executive floor | A **directive**: one order for several offices or projects at once (the board up there, or `t` on that floor; `send_directive` over MCP). See the README's «Two more floors» |
+| The executive floor | A **directive**: one order for several offices or projects at once (the board up there, or `t` on that floor; `send_directive` over MCP). Before it goes, 🗺 maps its impact (departments, projects and components) and asks about what it names that is not on the map. See the README's «Two more floors» |
 
 Each brief goes with its scope in front (a line starting with 📁): the agent works only inside its project's folder and only on what was asked. That line is not part of the request: the whiteboard's title is only what you wrote. OpenCode also gets a real rule (files outside the folder are denied).
 
@@ -154,4 +154,4 @@ A question written on a character's sheet in the browser ("who is on the tests?"
 | Monitor | `o` browser · `g` game · `←→` office · `r` answer the agent's question · `1`–`9`/`l` a service's logs · `q` quit |
 | Log | `g` game · `o` browser · `h` help · `q` close |
 | Game (terminal) | `t` brief · click the whiteboard: its tasks (with tickets) or a brief · `c` settings · `o` office · `a` activity · `tab`/arrows pick · `m` message · `b` btw · `s` greet · `x` cancel · `l` services (or click the rack) · `d`/`p` demos · `r` restart · `q` back |
-| Game (browser) | `t` brief (on the executive floor, a directive; in the archive, a new entry) · `c` settings · `o` next floor · `PgUp`/`PgDn` floor up or down · `a` activity · `w` work (the task, pipelines, tasks, demos and the team) · `f` full screen · `v` front or top-down view · `l` services (or click the rack) · `r` answer the agent's question (or the ✋ chip) · `esc` close |
+| Game (browser) | `t` brief (on the executive floor, a directive; in the archive, a new entry) · `c` settings · `o` next floor · `PgUp`/`PgDn` floor up or down · `a` activity · `w` work (the task, pipelines, tasks, demos and the team) · `d` the daily now (what is new since the last one; on the executive floor, the company's) · `f` full screen · `v` front or top-down view · `l` services (or click the rack) · `r` answer the agent's question (or the ✋ chip) · `esc` close |

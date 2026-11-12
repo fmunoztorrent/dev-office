@@ -937,7 +937,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         const members = ['manager', ...new Set(lines.map((l) => l.role).filter((r) => r !== 'manager' && agents[r]))];
         for (const id of members) interrupt(agents[id]);
         // the visiting specialists are not at the table: the manager tells what they did
-        const say = [['manager', T('sim.standup.open')], ...lines.map((l) => (agents[l.role] ? [l.role, l.text] : ['manager', T('sim.standup.visitor', { name: VISITORS[l.role].name, role: VISITORS[l.role].title, text: l.text })]))];
+        const say = [['manager', T(wallDate().getHours() >= 5 && wallDate().getHours() < 12 ? 'sim.standup.open' : 'sim.standup.openLater')], ...lines.map((l) => (agents[l.role] ? [l.role, l.text] : ['manager', T('sim.standup.visitor', { name: VISITORS[l.role].name, role: VISITORS[l.role].title, text: l.text })]))];
         say.push(['manager', ev.waiting?.length ? T('sim.standup.waiting', { n: ev.waiting.length, what: short(ev.waiting[0], 50) }) : ev.open?.length ? T('sim.standup.open2', { n: ev.open.length }) : T('sim.standup.close')]);
         banner = { text: `🗣 ${ev.text}`, tone: 'chat', until: now + 8000 };
         scene('standup', members, say, { spot: SPOT.table, gap: 3600 });

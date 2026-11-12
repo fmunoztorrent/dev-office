@@ -77,7 +77,7 @@ test('en disco: permisos 0600, migraciones y lo que había en config.json', () =
     assert.equal(store.listAgents().length, 1);
     store.close();
     const db = new DatabaseSync(file);
-    assert.equal(db.prepare('PRAGMA user_version').get().user_version, 7);
+    assert.equal(db.prepare('PRAGMA user_version').get().user_version, 8);
     db.close();
     assert.ok(fs.existsSync(legacy)); // the old config.json is not deleted
   } finally {
@@ -113,7 +113,7 @@ test('migración 3: una base de la versión 2 conserva sus agentes, admite Codex
     assert.deepEqual(store.listAsks({ office: 'main' }), []);
   } finally { store.close(); }
   const db = new DatabaseSync(file);
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 7);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 8);
   db.close();
 });
 

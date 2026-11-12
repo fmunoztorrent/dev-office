@@ -32,7 +32,7 @@ test('el informe sale de la bitácora real: qué hizo cada uno, cuántos pasos y
     const r = server.standup.report('main');
     assert.equal(r.empty, false);
     assert.deepEqual(r.lines.map((l) => l.role), ['backend', 'qa'], 'en orden, sólo quien trabajó');
-    assert.deepEqual(r.lines[0], { role: 'backend', did: ['Editando el carrito', 'Corriendo los tests'], steps: 2, errors: 1 });
+    assert.deepEqual(r.lines[0], { role: 'backend', did: ['Editando el carrito', 'Corriendo los tests'], steps: 2, errors: 1, doing: null });
     assert.equal(Standup.say(r.lines[0]), 'Ayer: editando el carrito y corriendo los tests (2 pasos). Se trabó una vez.');
     assert.equal(Standup.say({ role: 'qa', did: [], steps: 0, errors: 0 }), 'Ayer: revisar y planificar (0 pasos).');
     assert.match(r.date, /^\d{4}-\d{2}-\d{2}$/);
@@ -42,7 +42,7 @@ test('el informe sale de la bitácora real: qué hizo cada uno, cuántos pasos y
   } finally { await server.close(); }
 });
 
-test('la daily: el juego reúne al equipo, el acta va al archivo (actas, «daily») y se puede pedir cuando quieras', async () => {
+test('la daily: el juego reúne al equipo, el acta va al archivo (actas, «daily») y se puede pedir cuando quieras; lo que está en curso va como «ahora»', async () => {
   const { server, ev } = await office();
   try {
     ev({ kind: 'tool_start', role: 'frontend', tool: 'Edit', text: 'Maquetando el checkout' });
@@ -50,20 +50,20 @@ test('la daily: el juego reúne al equipo, el acta va al archivo (actas, «daily
     assert.equal(res.status, 200);
     const out = await res.json();
     assert.equal(out.ok, true);
-    assert.deepEqual(out.lines, [{ role: 'frontend', text: 'Ayer: maquetando el checkout (1 paso).' }]);
+    assert.deepEqual(out.lines, [{ role: 'frontend', text: 'Ahora: maquetando el checkout (1 paso).' }]);
     // the event the game draws
     const log = server.company.get('main').log;
     const e = log.findLast((x) => x.kind === 'standup');
     assert.ok(e, 'el evento llega a la bitácora');
     assert.equal(e.role, 'manager');
-    assert.deepEqual(e.lines, [{ role: 'frontend', text: 'Ayer: maquetando el checkout (1 paso).' }]);
+    assert.deepEqual(e.lines, [{ role: 'frontend', text: 'Ahora: maquetando el checkout (1 paso).' }]);
     assert.match(e.text, /^Daily · .+ · \d{4}-\d{2}-\d{2}$/);
     // the minutes, in the archive
     const minutes = server.store.listKnowledge({ kind: 'minute' });
     assert.equal(minutes.length, 1);
     assert.deepEqual(minutes[0].tags, ['daily']);
     assert.equal(minutes[0].office, 'main');
-    assert.match(server.store.getKnowledge(minutes[0].id).body, /- \*\*frontend\*\*: Ayer: maquetando el checkout/);
+    assert.match(server.store.getKnowledge(minutes[0].id).body, /- \*\*frontend\*\*: Ahora: maquetando el checkout/);
     // an unknown office
     assert.equal((await fetch(`${server.url}/v1/offices/nope/standup`, { method: 'POST' })).status, 404);
   } finally { await server.close(); }
@@ -109,4 +109,49 @@ test('en el juego la daily reúne en la mesa a quien trabajó y cada uno dice lo
   assert.ok(lines.includes('qa: Ayer: probando el pago (1 paso).'));
   assert.ok(lines.some((l) => /^manager: 1 cosa\(s\) esperan a la PO: ¿Pesos o dólares\?/.test(l)));
   assert.ok(sim.journal.some((j) => j.kind === 'standup'), 'queda en la bitácora de la oficina');
+});
+
+test('a pedido, para saber lo último: cada daily cuenta lo que pasó desde la anterior, y su texto entero vuelve', async () => {
+  const { server, ev } = await office();
+  try {
+    ev({ kind: 'tool_start', role: 'backend', tool: 'Edit', text: 'Editando el carrito' });
+    ev({ kind: 'tool_end', role: 'backend', tool: 'Edit', ok: true });
+    const first = await (await fetch(`${server.url}/v1/offices/main/standup`, { method: 'POST' })).json();
+    assert.equal(first.from, null, 'la primera: las últimas 24 horas');
+    assert.match(first.text, /^🗣 Daily · .+ · \d{4}-\d{2}-\d{2}\n- \*\*Diego \(Backend\)\*\*: Ayer: editando el carrito \(1 paso\)\.$/);
+    // right after: nothing new
+    const quiet = server.standup.run('main');
+    assert.equal(quiet.empty, true);
+    assert.match(quiet.from, /^desde las \d{2}:\d{2}$/);
+    assert.match(quiet.text, /· desde las \d{2}:\d{2}\nNada nuevo desde la última daily\./);
+    // new work: only that (Diego's editing was already told), and what each one is on now
+    ev({ kind: 'tool_start', role: 'qa', tool: 'Bash', text: 'Probando el pago' });
+    ev({ kind: 'tool_end', role: 'qa', tool: 'Bash', ok: false });
+    ev({ kind: 'tool_start', role: 'qa', tool: 'Bash', text: 'Corriendo la regresión' });
+    ev({ kind: 'tool_start', role: 'devops', tool: 'Bash', text: 'Construyendo la imagen' });
+    ev({ kind: 'tool_start', role: 'backend', tool: 'AskUserQuestion', text: '¿Pesos o dólares?' }); // that waits for you: it is not work
+    const next = server.standup.run('main');
+    assert.deepEqual(next.waiting, ['¿Pesos o dólares?']);
+    assert.deepEqual(next.lines.map((l) => l.role), ['qa', 'devops']);
+    assert.match(next.lines[0].text, /^Desde las \d{2}:\d{2}: probando el pago \(2 pasos\)\. Se trabó una vez\. Ahora: corriendo la regresión\.$/);
+    assert.match(next.text, /- \*\*Andrés \(QA\)\*\*: Desde las/);
+    assert.match(next.text, /- \*\*Rafa \(DevOps\/SRE\)\*\*: Ahora: construyendo la imagen \(1 paso\)\./, 'los especialistas de visita también');
+    // the company's daily: every department, at once
+    server.store.createOffice?.({ id: 'pagos', name: 'Pagos', timezone: 'UTC' });
+    server.company.load?.();
+    const all = await (await fetch(`${server.url}/v1/standup`, { method: 'POST' })).json();
+    assert.equal(all.ok, true);
+    assert.ok(all.reports.length >= 1);
+    assert.ok(all.reports.every((r) => typeof r.text === 'string'));
+    assert.equal(all.text, all.reports.map((r) => r.text).join('\n\n'));
+  } finally { await server.close(); }
+});
+
+test('Standup.from: desde cuándo, en palabras y en la hora de la oficina', () => {
+  const now = Date.UTC(2026, 10, 12, 15, 0);
+  assert.equal(Standup.from(null, now, 'UTC'), null);
+  assert.equal(Standup.from(Date.UTC(2026, 10, 12, 9, 30), now, 'UTC'), 'desde las 09:30');
+  assert.equal(Standup.from(Date.UTC(2026, 10, 11, 9, 30), now, 'UTC'), 'desde ayer a las 09:30');
+  assert.equal(Standup.from(Date.UTC(2026, 10, 9, 9, 30), now, 'UTC'), 'desde el 2026-11-09');
+  assert.equal(Standup.from(Date.UTC(2026, 10, 12, 9, 30), now, 'America/Santiago'), 'desde las 06:30');
 });

@@ -101,6 +101,13 @@ const TOOLS = [
     annotations: { readOnlyHint: true, openWorldHint: false },
   },
   {
+    name: 'daily',
+    title: 'Daily standup (the latest)',
+    description: 'The daily on demand, to tell the user the latest: what each character (role) did since the previous daily, what they are on now, what is waiting for the user and which briefs are still open. It also gathers the team at the table in the game and saves the minutes to the archive (minutes, tag daily). all=true: every department (office) of the company. The text comes in the office\'s language.',
+    inputSchema: { type: 'object', properties: { office: { type: 'string', description: 'Office (department) id; defaults to the main one' }, all: { type: 'boolean', description: 'Every department at once' } }, additionalProperties: false },
+    annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  {
     name: 'office_start',
     title: 'Start the office',
     description: 'Starts Dev Team Office in the background if it is not running (web game at http://127.0.0.1:4317, log in ~/.dev-team-office/office.log) and returns its URL. With open=true it also opens the browser.',
@@ -268,7 +275,7 @@ const TOOLS = [
   {
     name: 'send_directive',
     title: 'Send a directive',
-    description: "The executive floor: one order for several offices or projects at once (\"every API exposes /health\"). The office sends each project's agent a brief with its part (to an open session or a new one) and follows how each part goes; when all end, its minutes go to the archive. Pick the projects (ids or paths, see list_projects) and/or whole offices (ids or names, \"all\" for every registered project).",
+    description: "The executive floor: one order for several offices or projects at once (\"every API exposes /health\"). First the office maps its impact (map_impact): the departments, projects and components it names, plus the projects or offices you pick (ids or paths, see list_projects; office ids or names, \"all\" for every registered project). If the order names something that is not on the map (\"the notifications service\"), it does not go: ask the user, for each one, whether it exists and where (project and folder), whether it must be created (in which project), or whether it is a new department, then call again with `answers`. Each project's agent gets a brief with its part and the components it touches; when all end, its minutes go to the archive.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -276,11 +283,43 @@ const TOOLS = [
         title: { type: 'string', description: 'Short title (defaults to the first line)' },
         offices: { type: 'array', items: { type: 'string' }, description: 'Offices (ids or names) whose registered projects all get it, or ["all"]' },
         projects: { type: 'array', items: { type: 'string' }, description: 'Registered project ids or full paths' },
+        answers: {
+          type: 'array',
+          description: 'What the user said about each thing the order names that is not on the map (one per question)',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'The thing as the question named it, e.g. "servicio de notificaciones"' },
+              action: { type: 'string', enum: ['exists', 'create', 'department', 'ignore'], description: 'exists: it is in `project` (and `path`); create: it is new, to be created in `project`; department: it is a new department; ignore: not a part of the system' },
+              project: { type: 'string', description: 'For exists or create: the registered project (id or path)' },
+              path: { type: 'string', description: 'Its folder inside the project (optional)' },
+              department: { type: 'string', description: 'For department: its name (defaults to the thing\'s name)' },
+            },
+            required: ['name', 'action'],
+            additionalProperties: false,
+          },
+        },
       },
       required: ['text'],
       additionalProperties: false,
     },
     annotations: { readOnlyHint: false, openWorldHint: true },
+  },
+  {
+    name: 'map_impact',
+    title: 'Map the impact of an order',
+    description: 'Before a directive: which departments, projects and components of the company an order touches (by what it names, plus the projects or offices you pick), and what it names that is not on the map (to ask the user about). Read-only.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'The order' },
+        offices: { type: 'array', items: { type: 'string' } },
+        projects: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['text'],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true, openWorldHint: false },
   },
   {
     name: 'list_directives',
@@ -468,6 +507,13 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
       };
     },
 
+    async daily({ office, all } = {}) {
+      need(await running(), 'Dev Team Office is not running: start it with office_start');
+      const out = okOr(await api(all ? '/v1/standup' : `/v1/offices/${encodeURIComponent(office || 'main')}/standup`, {}));
+      const reports = (out.reports || [out]).map((r) => ({ office: r.office, name: r.name, from: r.from, empty: r.empty, lines: r.lines, people: r.people, waiting: r.waiting, open: r.open }));
+      return { text: out.text, data: { reports } };
+    },
+
     async office_start({ open } = {}) {
       need(startOffice || (await running()), 'cannot start the office from here');
       const { h, started } = await ensureRunning();
@@ -617,9 +663,8 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
       return { text: `Opened pane ${out.pane}${reported ? ` (office ${reported.office}, ${reported.role})` : ' (the office is offline: it will not show in the game)'}`, data: { pane: out.pane, office: reported?.office || null, role: reported?.role || null } };
     },
 
-    async send_directive({ text, title, offices = [], projects = [] } = {}) {
+    async send_directive({ text, title, offices = [], projects = [], answers = [] } = {}) {
       need(String(text || '').trim(), 'text is required');
-      need(offices.length || projects.length, 'pick projects (list_projects) and/or offices ("all" for every one)');
       need(await running(), 'the office is not running: start it with office_start');
       // a department that does not exist yet: say how to create it (operations cannot split an order to nobody)
       for (const ref of offices) {
@@ -632,9 +677,27 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
         const dir = where(ref);
         return need(all.find((a) => realDir(a.path) === dir), `no registered project at ${dir}: use register_project first`).id;
       });
-      const d = okOr(await api('/v1/directives', { text, ...(title ? { title } : {}), offices, targets, from: `MCP · ${client.name || 'agent'}` })).directive;
-      const line = (p) => `  ${p.name} (${p.office}): ${p.status}${p.detail ? ` — ${p.detail}` : ''}`;
-      return { text: `🏛 Directive ${d.id} "${d.title}" sent to ${d.total} project(s):\n${d.parts.map(line).join('\n')}`, data: d };
+      const project = (ref) => (ref && /[/~]/.test(ref) ? all.find((a) => realDir(a.path) === where(ref))?.id || ref : ref);
+      const said = answers.map((x) => ({ ...x, project: project(x.project) }));
+      const out = await api('/v1/directives', { text, ...(title ? { title } : {}), offices, targets, answers: said, from: `MCP · ${client.name || 'agent'}` });
+      // it names things that are not on the map: the user has to say what they are
+      if (out?.needsAnswers) {
+        const asks = out.map.unknown.map((u) => `  - "${u.phrase}": ${u.question}`).join('\n');
+        throw new ToolError(`Not sent yet. ${out.text}\n\nAsk the user about each of these, then call send_directive again with answers [{ name, action: exists|create|department|ignore, project?, path?, department? }]:\n${asks}`);
+      }
+      const d = okOr(out).directive;
+      const line = (p) => `  ${p.name} (${p.office}): ${p.status}${p.detail ? ` — ${p.detail}` : ''}${p.components?.length ? ` · components: ${p.components.join(', ')}` : ''}${p.fresh?.length ? ` · new: ${p.fresh.join(', ')}` : ''}`;
+      const created = out.created?.length ? `\nNew department(s): ${out.created.map((o) => o.name).join(', ')} (give them projects with register_project)` : '';
+      return { text: `🏛 Directive ${d.id} "${d.title}" sent to ${d.total} project(s):\n${d.parts.map(line).join('\n')}${created}`, data: d };
+    },
+
+    async map_impact({ text, offices = [], projects = [] } = {}) {
+      need(String(text || '').trim(), 'text is required');
+      need(await running(), 'the office is not running: start it with office_start');
+      const all = await listAgents();
+      const targets = projects.map((ref) => (/[/~]/.test(ref) ? need(all.find((a) => realDir(a.path) === where(ref)), `no registered project at ${where(ref)}`).id : ref));
+      const out = okOr(await api('/v1/directives/plan', { text, offices, targets }));
+      return { text: out.text, data: out.map };
     },
 
     async list_directives() {

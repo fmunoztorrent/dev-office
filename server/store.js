@@ -217,6 +217,16 @@ const MIGRATIONS = [
    );`,
   // 6 → 7: each department's autonomy (null: the company's)
   `ALTER TABLE offices ADD COLUMN autonomy TEXT;`,
+  // 7 → 8: the components of each project you declare (the rest are detected from its folder: server/components.js)
+  `CREATE TABLE components (
+     id          TEXT PRIMARY KEY,
+     project     TEXT NOT NULL,               -- the project's folder (real path)
+     name        TEXT NOT NULL,
+     path        TEXT NOT NULL DEFAULT '',    -- its folder inside the project ('' : not said)
+     description TEXT NOT NULL DEFAULT '',
+     created_at  INTEGER NOT NULL,
+     UNIQUE (project, name)
+   );`,
 ];
 
 class Invalid extends Error {}
@@ -405,6 +415,39 @@ export class Store {
     else this.db.prepare('INSERT INTO projects (path, instructions, updated_at) VALUES (?, ?, ?) ON CONFLICT (path) DO UPDATE SET instructions = excluded.instructions, updated_at = excluded.updated_at').run(key, clean, Date.now());
     return clean;
   }
+  // ---------------------------------------------------------------- a project's components (declared)
+
+  /** The components declared for a project's folder (all of them without `project`). */
+  listComponents(project = null) {
+    const rows = project ? this.db.prepare('SELECT * FROM components WHERE project = ? ORDER BY name').all(realDir(String(project))) : this.db.prepare('SELECT * FROM components ORDER BY project, name').all();
+    return rows.map((r) => ({ id: r.id, project: r.project, name: r.name, path: r.path, description: r.description, createdAt: r.created_at }));
+  }
+
+  /** Declares a component of a project: { project (its folder), name, path? (inside it), description? }. Same name: updated. */
+  addComponent({ project, name, path: sub = '', description = '' } = {}) {
+    return this.#write(() => {
+      const dir = String(project ?? '').trim();
+      if (!dir || !path.isAbsolute(dir)) fail(t('err.pathRelative', { path: dir }));
+      const clean = String(name ?? '').trim().slice(0, 60);
+      if (!clean) fail(t('err.componentName'));
+      const rel = String(sub ?? '').trim().replace(/^\.?\/+|\/+$/g, '').slice(0, 200);
+      if (rel.split('/').includes('..') || path.isAbsolute(rel)) fail(t('err.componentPath'));
+      const key = realDir(dir);
+      const now = Date.now();
+      const id = this.db.prepare('SELECT id FROM components WHERE project = ? AND name = ? COLLATE NOCASE').get(key, clean)?.id || `c${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+      this.db.prepare('INSERT INTO components (id, project, name, path, description, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET path = excluded.path, description = excluded.description')
+        .run(id, key, clean, rel, String(description ?? '').trim().slice(0, 300), now);
+      return { ok: true, component: this.listComponents(key).find((c) => c.id === id) };
+    });
+  }
+
+  deleteComponent(id) {
+    const r = this.db.prepare('DELETE FROM components WHERE id = ?').run(String(id));
+    return r.changes ? { ok: true } : { ok: false, status: 404, error: t('err.unknownComponent') };
+  }
+
+  /** Every folder with instructions: [{ path, instructions }]. */
+  listProjectInstructions() { return this.db.prepare('SELECT path, instructions FROM projects ORDER BY path').all().map((r) => ({ path: r.path, instructions: r.instructions })); }
   /** Sets (or, empty, removes) a project folder's instructions: an existing absolute path. */
   setProjectInstructions(dir, text) {
     return this.#write(() => {
@@ -527,6 +570,9 @@ export class Store {
   /** The day (in the office's zone) each office had its last standup (server/standup.js). */
   getStandupDay(office) { return this.#get(`standup:${office}`, null); }
   setStandupDay(office, day) { this.#put(`standup:${office}`, String(day)); }
+  /** When the office's last daily was (ms): the next one tells what happened since then. */
+  getStandupAt(office) { const v = Number(this.#get(`standupAt:${office}`, 0)); return Number.isFinite(v) && v > 0 ? v : null; }
+  setStandupAt(office, at) { this.#put(`standupAt:${office}`, String(Math.round(at))); }
 
   // ---------------------------------------------------------------- appearance (per office)
 
