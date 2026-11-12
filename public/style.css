@@ -59,7 +59,14 @@ body[data-floor="exec"] .screen[data-view="flat"] .hud-tl, body[data-floor="arch
 .ctx-chip.mid .ctx-fill { background: linear-gradient(#ffd8a8 0 30%, #ff922b 30%); }
 .ctx-chip.low .ctx-fill { background: linear-gradient(#ffb3b3 0 30%, #f03e3e 30%); }
 .ctx-chip.low .ctx-pct { color: #ff6b6b; }
-@media (prefers-reduced-motion: reduce) { .ctx-trail, .ctx-fill { transition: none; } }
+/* the used tokens (they move even with a 1M window) and the auto-compaction's limit, a notch on the bar */
+.ctx-used { font-size: 15px; color: #8d96b8; } .ctx-used:empty { display: none; }
+.ctx-mark { position: absolute; top: -1px; bottom: -1px; width: 2px; margin-left: -1px; background: #9be7ff; box-shadow: 0 0 0 1px #000a, 0 0 6px #9be7ffaa; pointer-events: none; z-index: 1; }
+/* just compacted: how full it is is not known until the next answer */
+.ctx-chip.compacted .ctx-fill { background: repeating-linear-gradient(-45deg, #9be7ff 0 4px, #5fb4d4 4px 8px); animation: ctx-pack 1.2s linear infinite; }
+.ctx-chip.compacted .ctx-heart { color: #9be7ff; text-shadow: 0 0 6px #9be7ff88; }
+@keyframes ctx-pack { to { background-position: 11px 0; } }
+@media (prefers-reduced-motion: reduce) { .ctx-trail, .ctx-fill { transition: none; } .ctx-chip.compacted .ctx-fill { animation: none; } }
 .hud-btn {
   position: relative; width: var(--hud); height: var(--hud); padding: calc(var(--hud) * .2); cursor: pointer;
   display: grid; place-items: center; color: var(--accent);
@@ -656,3 +663,16 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
 .ar-drop.over { background: #fff3c4; }
 .ar-gaps-tab { color: #b3261e !important; font-weight: 600; }
 .ar-gap .ar-row { margin-top: 4px; }
+
+/* ⚙ › Mine: your private skills and your own tools */
+.s-mine { list-style: none; margin: 4px 0 8px; padding: 0; display: grid; gap: 6px; }
+.s-mine-row { display: grid; grid-template-columns: minmax(9em, auto) 1fr auto auto auto; align-items: center; gap: 8px; padding: 6px 8px; background: #f6f3ea; box-shadow: 0 0 0 2px #e4ddcc; }
+.s-mine-row.off { opacity: .6; }
+.s-mine-name { font: 15px/1.2 "VT323", ui-monospace, monospace; color: var(--ink); white-space: nowrap; }
+.s-mine-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; }
+.s-mine-form { display: grid; gap: 6px; padding: 10px; margin: 4px 0 10px; background: #fbf9f3; box-shadow: 0 0 0 2px #e4ddcc; }
+.s-mine-form textarea { width: 100%; box-sizing: border-box; resize: vertical; }
+.s-code { font: 13px/1.35 ui-monospace, "SF Mono", Menlo, monospace; tab-size: 2; }
+.s-compact { display: inline-flex; gap: 6px; align-items: center; }
+.s-compact select, .b-field .s-compact select { width: auto; }
+@media (max-width: 640px) { .s-mine-row { grid-template-columns: 1fr auto auto auto; } .s-mine-title { grid-column: 1 / -1; order: 5; white-space: normal; } }

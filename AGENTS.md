@@ -38,6 +38,8 @@ Dev Team Office es una oficina en pixel art que muestra en vivo lo que hacen los
 | `server/directives.js` · `server/archive.js` | Los dos pisos compartidos: la dirección (una directiva = un encargo por proyecto, a varias oficinas) y el archivo (notas, decisiones, documentos, actas, skills y conectores; instala skills y conectores en cada proyecto) |
 | `server/standup.js` | La daily: cada mañana (9:30 de la oficina) o cuando la pidas (🗣, `d`, `dev-team-office daily`, MCP `daily`), lo que hizo cada personaje desde la daily anterior según la bitácora real, y en qué está ahora; el juego los junta en la mesa y el acta va al archivo |
 | `server/components.js` | El mapa de la empresa (departamentos → proyectos → componentes: detectados de la carpeta y declarados) y el impacto de un pedido de la dirección: lo que nombra, y lo que no está en el mapa para preguntarlo |
+| `server/compact.js` · `public/compact.js` | La autocompactación: pasado tu tope (`prefs.compact`, 400k tokens por defecto), la oficina le pide al agente que compacte: por WebSocket a la extensión que `can` compact (Pi, OpenCode), `/compact` en su pane de herdr cuando termina su turno, o un aviso en la bitácora; y los Claude Code que abre llevan el tope en su entorno |
+| `server/mine.js` | Lo tuyo (⚙ › Mío): skills privadas instaladas en tus carpetas personales de cada agente (nunca en un repo) y tus herramientas (scripts que el MCP ofrece como `my_<nombre>` y corre en la carpeta del agente) |
 | `server/settings-io.js` | Tus ajustes como archivo JSON: qué es del usuario (ajustes, departamentos con sus personajes, proyectos con sus indicaciones y componentes) y cómo se importa (mezcla, pieza por pieza) |
 | `public/sim.js` | La simulación (personajes, rutas, vida de la oficina). La comparten el navegador y la terminal |
 | `public/game.js` · `public/iso.js` | El juego en canvas: la vista frontal y la cenital (cámara isométrica) |
@@ -131,6 +133,11 @@ Más detalle en [docs/conventions.es.md](docs/conventions.es.md) y [CONTRIBUTING
   - La detección de nombres (`namedParts`) privilegia la precisión: si el pedido pregunta tonteras, hay que ajustarla allí, con su test en `test/impact.test.js`.
   - **En los tests, un agente registrado que reciba una directiva tiene que tener un `bin` que no exista** (o el falso de `test/fixtures`): si no, se lanza el agente real.
 - **El contexto** llega como evento `context` (o el campo `context` de cualquier evento): sólo actualiza `session.context`, no va a la bitácora ni mueve a nadie.
+  - **Pi avisa del fin de un mensaje antes de guardarlo en la sesión:** en `message_end`, `getContextUsage()` va un mensaje atrasado. Por eso la extensión usa el `usage` de la respuesta misma, y el conteo de Pi recién en `turn_end`/`agent_end`.
+  - **Después de compactar** no se sabe cuánto ocupa hasta la próxima respuesta: un `compact` marca `context.compacted` y el hook de Claude Code no informa el uso de antes de la marca `compact_boundary` del transcript. En OpenCode, el mensaje-resumen de una compactación (`summary`) no cuenta.
+  - **Compactar lo hace el agente, nunca la oficina,** y nunca en medio de una respuesta: la extensión espera a quedar libre (Pi: `agent_settled`; OpenCode: `session.idle`), y en herdr se escribe `/compact` sólo al terminar el turno (`Compactor` lleva la cuenta de qué sesión está libre).
+- **El badge** (`ev.badge`, `badgeFor` en `server/humanize.js`) es un ícono y una o dos palabras, nunca el comando. La simulación lo guarda en `actor.tag` y lo borra cuando termina el turno de esa sesión; el de un subagente va en su recién llegado, no en el personaje de su rol.
+- **Lo tuyo nunca toca tu HOME real en un test:** `Mine` (y `startServer({ mine: { home } })`, `importSettings(store, raw, { mine })`) recibe el `home`. La oficina de prueba del navegador también se levanta con un `HOME` temporal si vas a guardar skills. Los agentes no pueden crear skills ni herramientas tuyas por MCP, a propósito: una skill privada corre en todas tus sesiones.
 - **Los roles de los subagentes** salen de, en este orden:
   1. su `role:`;
   2. su nombre (`SUBAGENT_ROLES`);

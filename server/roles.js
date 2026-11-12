@@ -1,7 +1,7 @@
 // Decides which team member stands for each of the agent's actions.
 
 import { t } from '../public/i18n.js';
-import { humanizeCommand, humanizeTool } from './humanize.js';
+import { humanizeCommand, humanizeTool, myToolOf } from './humanize.js';
 import { TEXT_RULES, VISITOR_ROLES } from '../integrations/common/devteam.mjs';
 
 export const ROLE_IDS = ['po', 'analyst', 'manager', 'tl', 'qa', 'backend', 'frontend', 'designer'];
@@ -179,9 +179,12 @@ export function describe(tool = '', input = {}) {
     case 'exitplanmode': return t('events.plan');
     case 'enterplanmode': return t('events.planning');
     case 'skill': return clip(t('events.skill', { skill: input.skill || '' }));
-    default:
+    default: {
+      const mine = myToolOf(tool, input); // one of your own tools
+      if (mine) return clip(t('act.myTool', { name: mine }));
       if (tl.startsWith('mcp__')) return clip(humanizeTool(tool));
       return clip(f ? t('act.read', { file: base(f) }) : tool ? humanizeTool(tool) : t('events.working'));
+    }
   }
 }
 

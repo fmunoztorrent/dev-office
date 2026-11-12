@@ -9,6 +9,7 @@
 //   projects     the registered agents (folder, harness, executable, arguments, department) with their
 //                instructions and the components you declared (the map the directives use); and the
 //                instructions of folders that are not registered
+//   mine         what is yours (⚙ › Mine): your private skills and your own tools (server/mine.js)
 //
 // What is not: what belongs to the game (the default team, the map, the phases, which character does
 // each tool) and what is history or content rather than a setting (the log, the briefs, the directives,
@@ -26,6 +27,7 @@ import os from 'node:os';
 import { MAIN_OFFICE, DEFAULT_PREFS } from './store.js';
 import { realDir } from './paths.js';
 import { t } from '../public/i18n.js';
+import { Mine } from './mine.js';
 
 export const SETTINGS_KIND = 'dev-team-office/settings';
 export const SETTINGS_VERSION = 1;
@@ -54,7 +56,8 @@ export function exportSettings(store, { app = '' } = {}) {
   });
   const registered = new Set(agents.map((a) => a.path));
   const instructions = (store.listProjectInstructions?.() || []).filter((x) => !registered.has(x.path));
-  return { kind: SETTINGS_KIND, version: SETTINGS_VERSION, app, exportedAt: new Date().toISOString(), prefs, departments, projects, instructions };
+  const mine = (kind) => (store.listMine?.(kind) || []).map((e) => ({ name: e.name, title: e.title, body: e.body, enabled: e.enabled, ...(e.config ? { config: e.config } : {}) }));
+  return { kind: SETTINGS_KIND, version: SETTINGS_VERSION, app, exportedAt: new Date().toISOString(), prefs, departments, projects, instructions, mine: { skills: mine('skill'), tools: mine('tool') } };
 }
 
 /** Is it a settings file? Returns { ok, data } or { ok: false, error } (said in the game's language). */
@@ -72,11 +75,11 @@ export function parseSettings(raw) {
  * and the rest is applied. Returns { ok, applied: { prefs, departments, characters, projects,
  * instructions }, skipped: [{ what, error }], lang? } (lang: it changed the language).
  */
-export function importSettings(store, raw) {
+export function importSettings(store, raw, { mine: yours = new Mine({ store }) } = {}) {
   const parsed = parseSettings(raw);
   if (!parsed.ok) return parsed;
   const d = parsed.data;
-  const applied = { prefs: 0, departments: 0, characters: 0, projects: 0, components: 0, instructions: 0 };
+  const applied = { prefs: 0, departments: 0, characters: 0, projects: 0, components: 0, instructions: 0, skills: 0, tools: 0 };
   const skipped = [];
   const skip = (what, error) => skipped.push({ what, error: String(error || '') });
 
@@ -136,6 +139,16 @@ export function importSettings(store, raw) {
     if (!isObj(x) || !x.path) continue;
     const out = store.setProjectInstructions(x.path, x.instructions ?? '');
     if (out.ok) applied.instructions++; else skip(t('settingsIo.instructions', { path: x.path }), out.error);
+  }
+  // what is yours: your skills (installed in your personal folders) and your tools, by name
+  if (isObj(d.mine)) {
+    for (const [kind, list] of [['skill', d.mine.skills], ['tool', d.mine.tools]]) {
+      for (const e of Array.isArray(list) ? list : []) {
+        if (!isObj(e)) continue;
+        const out = yours.save({ kind, name: e.name, title: e.title, body: e.body, enabled: e.enabled !== false, ...(kind === 'tool' ? { config: e.config } : {}) });
+        if (out.ok) applied[`${kind}s`]++; else skip(t(`settingsIo.${kind}`, { name: e.name || '?' }), out.error);
+      }
+    }
   }
   return { ok: true, applied, skipped, lang: isObj(d.prefs) && d.prefs.lang ? store.getPrefs().lang : undefined };
 }

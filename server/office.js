@@ -4,6 +4,7 @@ import { ALL_ROLE_IDS, roleForTool, roleForText, describe, clip, normRole, agent
 import { t } from '../public/i18n.js';
 import { realDir, insideDir } from './paths.js';
 import { unguided } from './guides.js';
+import { badgeFor, myToolOf } from './humanize.js';
 
 const LOG_MAX = 300;
 const SESSIONS_MAX = 30;
@@ -42,7 +43,7 @@ function excerpt(text, { max = 1200, lines = 14, head = false } = {}) {
   return kept.length > max ? (head ? `${kept.slice(0, max - 1)}…` : `…${kept.slice(-(max - 1))}`) : kept;
 }
 /** Announcements: they are logged but do not change any role's state. */
-const ANNOUNCEMENTS = new Set(['dispatch', 'clarify', 'standup', 'pane_open', 'pane_close', 'pane_state', 'service_up', 'service_down']);
+const ANNOUNCEMENTS = new Set(['dispatch', 'clarify', 'standup', 'pane_open', 'pane_close', 'pane_state', 'service_up', 'service_down', 'autocompact']);
 /** What state a character ends up in after one of its events (shared by the office and the monitor);
  *  `null` for announcements, which do not change the state (nor set it to idle). */
 export const roleStatus = (ev) => (ANNOUNCEMENTS.has(ev.kind) ? null : ev.phase === 'red' ? 'red' : ev.kind === 'tool_end' && !ev.ok ? 'blocked' : ev.kind === 'waiting' ? 'waiting' : ev.kind === 'done' ? 'done' : ev.kind === 'turn_end' || ev.kind === 'session_end' ? 'idle' : 'working');
@@ -186,10 +187,13 @@ export class Office extends EventEmitter {
         ev.role = agentRole(r.role) || sub.role || roleForTool(tool, input);
         if (sub.phase && ev.role === sub.role) ev.phase = sub.phase;
       } else {
-        ev.role = agentRole(r.role) || s.turn || roleForTool(tool, input);
+        const mine = myToolOf(tool, input); // one of your own tools: the character you chose for it
+        ev.role = agentRole(r.role) || (mine && normRole(this.myToolRole?.(mine))) || s.turn || roleForTool(tool, input);
         if (s.turn && ev.role === s.turn) ev.phase = s.phase;
       }
       ev.text = clip(r.text && start ? r.text : describe(tool, input), 90);
+      // what they are doing, as small as it gets, over their head (✏️ cart.js, 🧪 tests)
+      if (start) { const b = badgeFor(tool, input); if (b) ev.badge = clip(b, 24); }
       // the command line itself, apart from the words: for whoever wants to see it (never in a bubble)
       if (COMMAND_TOOLS.has(tl) && (input.command || input.cmd)) ev.command = clip(String(input.command || input.cmd), 300);
       if (!start && !ev.ok) ev.text = clip(t('events.failed', { text: ev.text, detail: r.text ? ` — ${r.text}` : '' }), 120);
@@ -240,10 +244,19 @@ export class Office extends EventEmitter {
       case 'todos':
         s.todos = normTodos(r.todos);
         return { ...ev, role: 'manager', text: t('events.updateBoard') };
-      case 'thinking': return { ...ev, role: role || s.turn || 'tl', text: clip(r.text || t('events.thinking')) };
+      case 'thinking': return { ...ev, role: role || s.turn || 'tl', text: clip(r.text || t('events.thinking')), badge: t('badge.think') };
       case 'waiting': return { ...ev, role: (sub && role) || 'manager', text: clip(r.text || t('events.waiting'), 140) };
       case 'error': return { ...ev, ok: false, role: role || 'tl', text: clip(r.text || t('events.error'), 140) };
-      case 'compact': return { ...ev, role: 'manager', text: t('events.compact') };
+      // the office asked the agent to compact (server/compact.js): how, and why
+      // (failed: the agent could not; it says why, and it is asked again later)
+      case 'autocompact': {
+        const via = ['agent', 'pane', 'manual', 'failed'].includes(r.via) ? r.via : 'agent';
+        return { ...ev, role: 'manager', via, text: via === 'failed' ? t('events.autocompact.failed', { reason: clip(r.text, 140) }) : clip(r.text, 200) };
+      }
+      case 'compact':
+        // until its next answer the agent does not know how full it is: the bar says it is compacting
+        if (s.context) s.context = { ...s.context, compacted: ev.ts };
+        return { ...ev, role: 'manager', text: t('events.compact') };
       // Quiet end of turn: releases the declared turn without celebrating anything (that is `done`, the merge).
       case 'turn_end': {
         const was = s.turn;
@@ -344,7 +357,7 @@ export class Office extends EventEmitter {
     if (sub.role === 'qa') sub.phase = tddPhase(desc);
     s.subagents.push(sub);
     if (s.subagents.length > 40) s.subagents.splice(0, s.subagents.length - 40);
-    return { ...ev, kind: 'subagent_start', role: sub.role, subId: sub.id, agentType: sub.agentType, text: sub.desc, ...(sub.phase ? { phase: sub.phase } : {}), ...(task ? { task: excerpt(task, { max: 600, lines: 8, head: true }) } : {}) };
+    return { ...ev, kind: 'subagent_start', role: sub.role, subId: sub.id, agentType: sub.agentType, text: sub.desc, badge: clip(`👥 ${clip(sub.agentType || sub.desc, 12)}`, 24), ...(sub.phase ? { phase: sub.phase } : {}), ...(task ? { task: excerpt(task, { max: 600, lines: 8, head: true }) } : {}) };
   }
 
   #endSub(s, ev, { agentId, toolUseId, desc, fromHook, output }) {
@@ -368,7 +381,7 @@ export class Office extends EventEmitter {
     if ((ev.kind === 'tool_end' && !ev.ok && ev.phase !== 'red') || ev.kind === 'error') s.errors++;
     // an agent that asks you something with its question tool is waiting for you too
     const asksYou = ev.kind === 'tool_start' && ASK_TOOL.test(ev.tool || '');
-    if (!['chat', 'poke', 'dispatch', 'btw', 'clarify', 'standup'].includes(ev.kind)) s.status = asksYou ? 'waiting' : SESSION_STATUS[ev.kind] || 'active';
+    if (!['chat', 'poke', 'dispatch', 'btw', 'clarify', 'standup', 'autocompact'].includes(ev.kind)) s.status = asksYou ? 'waiting' : SESSION_STATUS[ev.kind] || 'active';
     // what it is waiting for, and since when: the screen's "they are waiting for you" signal
     if (s.status === 'waiting') s.waiting = { text: ev.text || s.waiting?.text || '', since: s.waiting?.since || ev.ts, question: asksYou || !!s.waiting?.question, role: ev.role || null };
     else delete s.waiting;

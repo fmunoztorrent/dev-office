@@ -60,6 +60,8 @@ export class Company extends EventEmitter {
     office.id = id;
     // which subagent is which character according to each session's folder (set by the server)
     office.rolesFor = (cwd) => this.rolesFor?.(cwd) || null;
+    // the character you chose for one of your own tools (⚙ › Mine), if any (set by the server)
+    office.myToolRole = (name) => this.myToolRole?.(name) || null;
     office.on('event', (ev, session) => this.emit('event', id, ev, session));
     office.on('raw', (raw, ev) => this.emit('raw', id, raw, ev));
     office.on('reset', () => this.emit('reset', id));

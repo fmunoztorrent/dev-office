@@ -20,6 +20,8 @@ import { TaskHub, AGENT_LABEL } from './tasks.js';
 import { PipelineHub } from './pipeline.js';
 import { AgentRegistry } from './registry.js';
 import { ClarifyDesk } from './clarify.js';
+import { Compactor, claudeCompactEnv } from './compact.js';
+import { Mine } from './mine.js';
 import { Standup } from './standup.js';
 import { exportSettings, importSettings } from './settings-io.js';
 import { companyMap } from './components.js';
@@ -44,7 +46,7 @@ import { zoneInfo, systemZone } from '../public/clock.js';
 import { insideDir as inside } from './paths.js';
 import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.18.1';
+export const VERSION = '0.19.0';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
 const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
@@ -80,7 +82,7 @@ class HttpError extends Error {
  *                 says it, so `update` knows whether it can bring the office back by itself
  * @returns {Promise<{company, office, url, socket, command, handleMessage, close, …}>}
  */
-export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {}, clarify: clarifyOpt = {}, rag: ragOpt = {}, standup: standupOpt = {}, mode = 'terminal', outdatedAfter = 3000 } = {}) {
+export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {}, clarify: clarifyOpt = {}, rag: ragOpt = {}, standup: standupOpt = {}, mine: mineOpt = {}, mode = 'terminal', outdatedAfter = 3000 } = {}) {
   const ownStore = !db || typeof db === 'string';
   const store = ownStore ? openStore(db || dbFile()) : db; // oficinas, agentes, ajustes e historial
   setLanguage(store.getPrefs().lang);
@@ -133,6 +135,9 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     return look.name ? `${look.name} (${look.title || t(`team.titles.${role}`, { g: look.sex })})` : role;
   };
   const standup = new Standup({ company, archive, store, hub, clarify, who: personIn, ...standupOpt });
+  // what is yours: your private skills (in your personal folders) and your own tools (offered by the MCP)
+  const mine = new Mine({ store, ...mineOpt });
+  company.myToolRole = (name) => store.findMine('tool', name)?.config?.role || null;
   const directives = new DirectiveDesk({ store, registry, hub, pipelines, archive, company });
   const startedAt = Date.now();
   const bus = new EventEmitter(); // changes the interfaces see: settings, appearance, weather, offices, log
@@ -340,7 +345,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     }
     if (!installed(a.harness) && !a.bin) return { ok: false, error: t('err.notInstalled', { bin: HARNESSES[a.harness]?.bin || a.harness }) };
     const where = a.office || company.officeForPath(a.path) || view();
-    const env = { DEV_TEAM_OFFICE_URL: officeUrl(), DEV_TEAM_OFFICE_OFFICE: where, ...(socketPath ? { DEV_TEAM_OFFICE_SOCKET: socketPath } : {}) };
+    const env = { DEV_TEAM_OFFICE_URL: officeUrl(), DEV_TEAM_OFFICE_OFFICE: where, ...(socketPath ? { DEV_TEAM_OFFICE_SOCKET: socketPath } : {}), ...(a.harness === 'claude-code' ? claudeCompactEnv(prefs()) : {}) };
     try {
       const label = `${AGENT_LABEL[a.harness] || a.harness} · ${a.name}`;
       const out = await herdr.launchAgent({ harness: a.harness, cwd: a.path, bin: a.bin, args: a.args || [], env, direction: prefs().herdr.direction, office: where, officeName: company.info(where)?.name || '', role: 'manager', title: label, label });
@@ -597,7 +602,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         return res.end(`${JSON.stringify(data, null, 2)}\n`);
       }
       if (req.method === 'POST' && p === '/v1/settings/import') {
-        const out = importSettings(store, await body(req));
+        const out = importSettings(store, await body(req), { mine });
         if (!out.ok) return json(res, 400, out);
         settingsImported(out);
         return json(res, 200, out);
@@ -808,6 +813,18 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const out = store.deleteComponent(decodeURIComponent(m[1]));
         return json(res, out.ok ? 200 : out.status || 400, out);
       }
+      // What is yours (⚙ › Mine): your private skills and your own tools (server/mine.js)
+      if (req.method === 'GET' && p === '/v1/mine') return json(res, 200, { ok: true, ...mine.list() });
+      // the MCP server (in each agent) offers your tools that are on: whole, with their scripts
+      if (req.method === 'GET' && p === '/v1/mine/tools') return json(res, 200, { ok: true, tools: store.listMine('tool').filter((x) => x.enabled) });
+      if ((req.method === 'POST' && p === '/v1/mine') || (req.method === 'PUT' && (m = p.match(/^\/v1\/mine\/([^/]+)$/)))) {
+        const out = mine.save({ ...(await body(req)), ...(m ? { id: decodeURIComponent(m[1]) } : {}) });
+        return json(res, out.ok ? (out.created ? 201 : 200) : 400, out);
+      }
+      if (req.method === 'DELETE' && (m = p.match(/^\/v1\/mine\/([^/]+)$/))) {
+        const out = mine.remove(decodeURIComponent(m[1]));
+        return json(res, out.ok ? 200 : out.status || 400, out);
+      }
       // the impact before it goes: the departments, projects and components it touches, and what is not on the map
       if (req.method === 'POST' && p === '/v1/directives/plan') {
         const b = await body(req);
@@ -926,6 +943,9 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   company.on('event', (id, event, session) => toOffice(id, { type: 'event', event, session, office: id }));
   company.on('event', (id, event) => bus.emit('activity', id, event));
   company.on('event', (_id, event) => { if (event.kind === 'turn_end' || event.kind === 'done') hub.sessionSettled(event.session); });
+  // past your threshold, the agent is asked to compact its context (server/compact.js)
+  const compactor = new Compactor({ prefs, hub, herdr, company });
+  company.on('event', (id, event, session) => compactor.onEvent(id, event, session));
   company.on('reset', (id) => toOffice(id, { type: 'snapshot', state: fullState(id) }));
   services.on('change', (id) => toOffice(id, { type: 'services', services: services.list(id), office: id }));
   prompts.on('change', (id) => toOffice(id, { type: 'prompts', prompts: promptsOf(id), office: id }));
@@ -1027,6 +1047,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     embedder,
     indexer,
     standup,
+    mine,
     directives,
     overview,
     bus,

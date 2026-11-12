@@ -134,7 +134,8 @@ Cualquier agente con MCP (Gemini CLI, Cursor…) puede usar el [servidor MCP](mc
 
 Dos cosas más que un harness le puede contar a la oficina:
 
-- **Qué tan lleno está su contexto**, para la barra de contexto: `{ kind: "context", context: { used, max } }` (tokens), después de cada respuesta, o `context` en cualquier evento. Pi lo informa con `ctx.getContextUsage()`, OpenCode con los tokens de cada mensaje y el `limit.context` de su modelo, y el hook de Claude Code desde el transcript.
+- **Qué tan lleno está su contexto**, para la barra de contexto: `{ kind: "context", context: { used, max } }` (tokens), después de cada respuesta, o `context` en cualquier evento. Pi lo informa con el uso de cada respuesta (Pi les avisa a las extensiones de un mensaje antes de guardarlo, así que `ctx.getContextUsage()` se usa recién después del turno), OpenCode con los tokens de cada mensaje y el `limit.context` de su modelo (el resumen de una compactación no cuenta), y el hook de Claude Code desde el transcript (nada después de un `compact_boundary` hasta la próxima respuesta).
+- **Compactar cuando se lo piden** (opcional): regístrate con `can: [..., "compact"]` y, al recibir `{ type: "compact", session, used, at }`, compacta la sesión cuando quede libre y después informa `{ kind: "compact" }` (o `{ kind: "autocompact", via: "failed", text }` si no pudo). Sin eso, dentro de herdr la oficina escribe `/compact` en el pane del agente cuando termina su turno.
 - **Su modelo al arrancar:** cuando un encargo abre una sesión nueva con un perfil de modelos, la oficina agrega el parámetro propio del harness (`--model`, o `-m` en OpenCode y Codex). La ejecución de un pipeline puede traer `models` (rol → modelo) para las etapas que no fijan uno.
 
 ## Cómo llega el mapa de roles a la oficina

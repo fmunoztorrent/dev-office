@@ -230,6 +230,7 @@ export default {
   // ---------------------------------------------------------------- what the agent does (server)
   // what a command or a tool does, in words (server/humanize.js): never the command itself
   act: {
+    myTool: 'Usando tu herramienta «{name}»',
     tests: 'Corriendo los tests', testsOf: 'Corriendo los tests de {target}', build: 'Compilando el proyecto', dev: 'Levantando el servidor de desarrollo',
     lint: 'Revisando el estilo del código', format: 'Ordenando el formato del código', typecheck: 'Revisando los tipos', script: 'Corriendo el script «{name}»',
     install: 'Instalando dependencias', installPkgs: 'Instalando {pkgs}', uninstall: 'Quitando dependencias', publish: 'Publicando el paquete', audit: 'Revisando las dependencias', tool: 'Usando {prog}',
@@ -247,11 +248,14 @@ export default {
     panes: 'Ordenando los paneles', office: 'Hablando con la oficina', agent: 'Pidiéndole algo a {agent}', other: 'Usando {prog}', shell: 'Trabajando en la terminal',
     cd: 'Entrando a {dir}', background: '{what} (en segundo plano)', mcp: 'Usando {server}: {what}', toolUse: 'Usando {tool}',
   },
+  // the badge over each character: what they are doing, as small as it gets (server/humanize.js)
+  badge: { read: 'leer', edit: 'editar', search: 'buscar', plan: 'plan', ask: '❓ a ti', team: 'equipo', think: '💭 piensa' },
   events: {
     standup: '🗣 {text}',
     clarify: { review: '🔍 Revisando el encargo para {project}', ask: '❓ {n} pregunta(s) para ti: {text}', sent: '📨 El encargo pasa a trabajo: {text}', failed: '✖ No se pudo enviar el encargo: {text}', cancelled: '⊘ Encargo cancelado' },
     updateBoard: 'Actualiza el tablero', newCard: 'Nueva tarjeta: {text}', moveCard: 'Mueve una tarjeta', failed: 'Falló: {text}{detail}',
     thinking: 'Pensando…', waiting: 'El agente espera tu aprobación', error: 'Algo salió mal', compact: 'Ordena las notas (compacta el contexto)',
+    autocompact: { agent: '🗜 El contexto va en {used} (tope {at}): le pido al agente que lo compacte', pane: '🗜 El contexto va en {used} (tope {at}): /compact en su pane', manual: '🗜 El contexto va en {used} (tope {at}): escribe /compact en su sesión para compactarlo', failed: '🗜 No se pudo compactar: {reason}' },
     done: '¡Tarea terminada!', sessionStart: 'Nueva sesión de trabajo', sessionEnd: 'Sesión cerrada', serviceUp: 'Levantó un servicio: {name}', serviceDown: 'El servicio se detuvo: {name}', you: 'Tú', office: 'Oficina', subtask: 'Subtarea',
     permission: 'Permiso para {tool}', interrupted: 'Interrumpido', turnEnd: 'termina su turno{text}',
     read: 'Leyendo {file}', write: 'Creando {file}', edit: 'Editando {file}', grep: 'Buscando "{pattern}"', glob: 'Revisando {pattern}', files: 'archivos',
@@ -276,7 +280,7 @@ export default {
   // la analista revisa un encargo antes de que pase a trabajo (server/clarify.js)
   ingest: { tooBig: 'demasiado grande (más de {mb} MB)', convert: 'para leer {name} la oficina necesita {tool} instalado (o pídele a un agente que lo convierta: ✨ Pedírselo a un agente)', format: 'el archivo no lee archivos .{ext} (Markdown, texto, CSV, JSON, HTML, PDF o Word)', empty: '{name} no tiene texto', url: 'eso no es una dirección http(s)', fetch: 'no se pudo bajar: {error}' },
   // los ajustes como archivo JSON (server/settings-io.js): qué no se pudo importar
-  settingsIo: { department: 'Departamento {name}', characters: 'Personajes de {name}', pref: 'Ajuste {key}', project: 'Proyecto {name}', component: 'Componente {name} de {project}', instructions: 'Indicaciones de {path}' },
+  settingsIo: { skill: 'Skill {name}', tool: 'Herramienta {name}', department: 'Departamento {name}', characters: 'Personajes de {name}', pref: 'Ajuste {key}', project: 'Proyecto {name}', component: 'Componente {name} de {project}', instructions: 'Indicaciones de {path}' },
   // el mapa de impacto de una directiva (server/components.js)
   impact: {
     ask: '¿Existe «{what}»? ¿En qué proyecto y carpeta está, o hay que crearlo?', none: 'No identifiqué qué departamentos ni proyectos toca: elígelos o nómbralos.', unknownHead: 'Nombra cosas que no están en el mapa:',
@@ -435,7 +439,7 @@ export default {
     pathMissing: 'falta la ruta', pathRelative: '{path}: usa la ruta completa (p. ej. ~/Workspace/mi-proyecto)', pathNotFound: '{path}: no existe esa carpeta',
     harness: 'elige el agente que atiende esa ruta: claude-code, opencode o pi', args: '{name}: args debe ser una lista de textos',
     agentExists: 'ese agente ya está registrado en esa ruta', saveFailed: 'no se pudo guardar: {error}', agentsMax: 'como máximo {n} agentes',
-    unknownAgent: 'agente desconocido', unknownGap: 'vacío desconocido', componentName: 'el componente necesita un nombre', componentPath: 'la carpeta del componente va dentro del proyecto (relativa, sin ..)', unknownComponent: 'componente desconocido', settingsFile: { json: 'ese archivo no es JSON', kind: 'eso no son ajustes de Dev Team Office (su "kind" debe ser "dev-team-office/settings")', version: 'esos ajustes son de una versión más nueva de Dev Team Office: actualízala primero (dev-team-office update)' }, character: { json: 'ese archivo no es JSON', kind: 'eso no es un personaje de Dev Team Office (su "kind" debe ser "dev-team-office/character")' }, unknownRole: 'rol desconocido: {role}', oneOf: '{role}: «{key}» debe ser uno de: {values}', notEditable: '{role}: no se puede cambiar "{key}"',
+    unknownAgent: 'agente desconocido', unknownGap: 'vacío desconocido', componentName: 'el componente necesita un nombre', componentPath: 'la carpeta del componente va dentro del proyecto (relativa, sin ..)', unknownComponent: 'componente desconocido', mineKind: 'es una skill o una herramienta (kind: skill | tool)', mineName: 'el nombre va en minúsculas, con guiones, de 2 a 40 caracteres (empieza con una letra)', mineTitle: 'falta qué hace y cuándo usarla', mineScript: 'la herramienta necesita su programa', unknownMine: 'no existe esa skill o herramienta tuya', mineExists: 'ya tienes una que se llama «{name}»', mineMax: 'puedes tener hasta {n}', mineRun: 'se corre con uno de: {runs}', mineParams: 'hasta 8 parámetros', mineParam: 'el parámetro «{name}» va en minúsculas (letras, números y _) y sin repetirse', mineTimeout: 'el tope es de 1 a 600 segundos', settingsFile: { json: 'ese archivo no es JSON', kind: 'eso no son ajustes de Dev Team Office (su "kind" debe ser "dev-team-office/settings")', version: 'esos ajustes son de una versión más nueva de Dev Team Office: actualízala primero (dev-team-office update)' }, character: { json: 'ese archivo no es JSON', kind: 'eso no es un personaje de Dev Team Office (su "kind" debe ser "dev-team-office/character")' }, unknownRole: 'rol desconocido: {role}', oneOf: '{role}: «{key}» debe ser uno de: {values}', notEditable: '{role}: no se puede cambiar "{key}"',
     color: '{role}.{key}: usa un color como #3f73f0', empty: '{role}.{key} no puede quedar vacío',
     unknownOffice: 'departamento (oficina) desconocido: {office}', officeName: 'ponle un nombre al departamento', officeExists: 'ya hay un departamento con ese nombre', autonomy: 'la autonomía debe ser una de: {levels} (o vacía: la de la empresa)',
     officesMax: 'como máximo {n} oficinas', mainOffice: 'la oficina principal no se puede eliminar', timezone: 'zona horaria desconocida: {tz}',
@@ -524,12 +528,23 @@ export default {
       active: 'Perfil por defecto', label: 'Nombre', for: 'Para:', default: 'Por defecto', same: 'igual que el por defecto ({model})', remove: 'Quitar este perfil', add: '✚ Nuevo perfil', newLabel: 'Perfil {n}',
     },
     title: '⚙ Ajustes', loading: 'Cargando…', close: 'Cerrar', save: 'Guardar', saved: 'Guardado: ya se está usando.', file: 'se guarda en {file}',
-    tabs: { general: 'General', offices: 'Departamentos', agents: 'Agentes', look: 'Personajes', models: 'Modelos' },
+    tabs: { general: 'General', offices: 'Departamentos', agents: 'Agentes', look: 'Personajes', models: 'Modelos', mine: 'Mío' },
+    // what is yours, not the company's: your private skills and your own tools (server/mine.js)
+    mine: {
+      intro: 'Lo tuyo, no de la empresa: no va al archivo ni a los encargos, ni a ningún repo. Viaja en tu archivo de ajustes.',
+      skills: 'Mis skills', skillsHint: 'Se instalan en tus carpetas personales de cada agente ({dirs}) y las usa en cualquier proyecto. Apagarla o borrarla la saca de ahí.', noDirs: 'no encontré ningún agente en esta máquina (~/.claude, ~/.pi, ~/.config/opencode, ~/.codex)',
+      tools: 'Mis herramientas', toolsHint: 'Programas chicos tuyos para tareas concretas. Tus agentes los ven como herramientas MCP (my_<nombre>) y los corren en la carpeta en la que trabajan: los parámetros llegan en orden ($1, $2… o argv) y como variables TOOL_<NOMBRE>.',
+      none: 'Todavía no tienes.', add: '+ Nueva', edit: 'Editar', remove: 'Borrar', removeConfirm: '¿Borrar «{name}»?', on: 'activa', off: 'apagada', save: 'Guardar', cancel: 'Cancelar',
+      name: 'Nombre', namePh: 'en-minúsculas-con-guiones', title: 'Qué hace y cuándo usarla', titlePh: 'Ej.: Revisa un PR como a mí me gusta, antes de aprobarlo',
+      body: 'Instrucciones (Markdown)', script: 'El programa', run: 'Con', params: 'Parámetros', paramsPh: 'uno por línea: nombre: qué es (con ? al final del nombre, opcional)', timeout: 'Tope (segundos)', role: 'Quién la usa en el juego', roleAuto: 'Según lo que haga', enabled: 'Activa',
+      installed: 'Instalada en {where}', conflict: 'Ya hay una skill «{name}» tuya en {dir} que no es de la oficina: no la toqué.', saved: 'Guardado.', removed: 'Borrado.',
+    },
     keys: { field: 'campo', change: 'cambia', action: 'acción', save: 'guardar', close: 'cerrar', tabs: '◂ ▸ cambia de pestaña' },
     yes: 'sí', no: 'no',
     general: {
-      io: 'Tus ajustes (archivo JSON)', ioHint: 'Exporta lo que es tuyo: los ajustes generales, los departamentos (con sus indicaciones, su autonomía y sus personajes) y los proyectos registrados con sus indicaciones y sus componentes. No van la bitácora, los encargos, las directivas ni el archivo. Importar reemplaza lo que trae el archivo y deja lo demás; un proyecto cuya carpeta no está en esta máquina se salta.', ioExport: '⬇ Exportar ajustes', ioImport: '⬆ Importar ajustes', ioDone: 'Ajustes importados: {prefs} ajustes, {departments} departamentos, {characters} personajes, {projects} proyectos, {components} componentes.',
+      io: 'Tus ajustes (archivo JSON)', ioHint: 'Exporta lo que es tuyo: los ajustes generales, los departamentos (con sus indicaciones, su autonomía y sus personajes) los proyectos registrados con sus indicaciones y sus componentes, y lo tuyo (tus skills y tus herramientas). No van la bitácora, los encargos, las directivas ni el archivo. Importar reemplaza lo que trae el archivo y deja lo demás; un proyecto cuya carpeta no está en esta máquina se salta.', ioExport: '⬇ Exportar ajustes', ioImport: '⬆ Importar ajustes', ioDone: 'Ajustes importados: {prefs} ajustes, {departments} departamentos, {characters} personajes, {projects} proyectos, {components} componentes, {skills} skills, {tools} herramientas.',
       archive: 'Archivo (lo que saben los agentes)', archivePush: 'Lo que sabe el archivo va arriba de cada encargo y pregunta (los términos del glosario y los fragmentos más relevantes)', embeddings: 'Búsqueda semántica', embed_off: 'Apagada: sólo por palabras (sin internet)', embed_ollama: 'Ollama, en esta máquina', embed_openai: 'Una API compatible con OpenAI (OpenAI, Voyage…)', embedModel: 'Modelo de embeddings', embedUrl: 'Dirección', embedOllamaHint: 'Instala Ollama y corre: ollama pull nomic-embed-text. Nada sale de esta máquina.', embedKeyHint: 'Su clave va en la variable de entorno DEV_TEAM_OFFICE_EMBED_KEY (nunca en la base). El texto del archivo se manda a esa API para sacar sus embeddings.', indexStatus: '🧠 {chunks} fragmento(s) indexado(s) · {embedded} con embedding', reindex: '↻ Indexarlo de nuevo',
+      compact: 'Contexto de los agentes', compactAuto: 'Compactarlo solo al pasar el tope', compactAt: 'Tope', compact_tokens: 'tokens', compact_pct: '% de su ventana', compactHint: 'Pasado el tope, la oficina le pide al agente que compacte su contexto cuando termina su turno: Pi y OpenCode lo hacen solos; en herdr, se escribe /compact en su pane; los Claude Code que abre la oficina compactan solos en ese tope. Si no, la bitácora te avisa.',
       autonomy: 'Autonomía', clarify: 'Antes de que un encargo pase a trabajo, la analista revisa que tenga todo (y te pregunta sólo lo que falta)', autonomous: 'Los agentes trabajan solos hasta terminar (preguntan sólo lo que únicamente tú puedes responder)',
       language: 'Idioma', timezone: 'Zona horaria', tzSystem: 'la del sistema ({tz})', tzHint: 'De la zona horaria salen la fecha, la hora y el país. Cada oficina puede tener la suya (⚙ › Oficinas).',
       city: 'Ciudad', cityZone: 'la de la zona horaria ({city})', cityHint: 'De la ciudad salen el clima, el sol y la luna. Escribe para buscar entre las ciudades del país de la zona horaria: en Chile, por ejemplo, Concepción y Punta Arenas comparten la zona horaria de Santiago.',
@@ -581,7 +596,7 @@ export default {
   ui: {
     lately: 'Lo último que hizo', newcomerOf: 'Recién llegado · {role} · {project}', visitorOf: 'De visita · {role} · {project}', talkEmpty: 'Pregúntale a {name} algo sobre lo que está haciendo (con ?) y te contesta su agente. Lo demás te lo contesta con sus palabras.', talkEmptyTeam: 'Dile algo a todo el equipo.',
     contextNone: 'El contexto del agente, como barra de vida: aparece cuando un agente lo informa (Claude Code, Pi y OpenCode lo hacen mientras trabajan).',
-    context: 'Contexto · {agent}', contextAria: 'Contexto: queda {pct}% libre ({used} de {max} usados)',
+    context: 'Contexto · {agent}', contextAria: 'Contexto: queda {pct}% libre ({used} de {max} usados)', contextLimit: 'Se compacta solo en {at}', contextCompacted: 'Compactado: se sabrá cuánto ocupa con su próxima respuesta',
     canvas: 'La oficina: clic en un personaje para ver su ficha, en la pizarra para un nuevo encargo',
     settings: 'Ajustes', settingsKey: 'Ajustes (c)', fullscreen: 'Pantalla completa', fullscreenKey: 'Pantalla completa (f)', view: 'Vista frontal o cenital', viewKey: 'Vista frontal o cenital (v)', servicesKey: 'Servicios en segundo plano: {n} corriendo (l)',
     office: 'Oficina', officeKey: 'Elige qué oficina ver (o)', floor: 'Piso',

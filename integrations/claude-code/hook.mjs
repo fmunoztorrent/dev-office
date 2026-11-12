@@ -88,6 +88,7 @@ function duplicatedByPlugin() {
 
 // How full the session's context is: the transcript's last assistant message says what it read
 // (input + cache) and wrote; the window is 1M if the model says so or it is already past 200k.
+// After a compaction (its boundary comes after the last answer) it is not known until the next answer.
 // It reads only the end of the file (the last MB), and never fails.
 const CONTEXT_EVENTS = new Set(['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'Stop', 'PreCompact']);
 function contextOf(file) {
@@ -101,6 +102,7 @@ function contextOf(file) {
     fs.readSync(fd, buf, 0, len, size - len);
     const lines = buf.toString('utf8').split('\n');
     for (let i = lines.length - 1; i >= 0; i--) {
+      if (lines[i].includes('"compact_boundary"')) return null;
       if (!lines[i].includes('"usage"')) continue;
       let e;
       try { e = JSON.parse(lines[i]); } catch { continue; }

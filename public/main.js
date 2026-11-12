@@ -11,6 +11,7 @@ import { drawSprite } from './sprite.js';
 import { season, isSouth, daylight, weatherIcon } from './sky.js';
 import { t, ta, setLanguage, onLanguage, getLanguage, timeOf } from './i18n.js';
 import { countryName } from './clock.js';
+import { thresholdOf, kTokens } from './compact.js';
 
 const $ = (id) => document.getElementById(id);
 const OFFICE_SESSION = 'office'; // chat, greetings and panes: not an agent session
@@ -382,6 +383,7 @@ function onPrefs(p) {
   $('screen').dataset.view = game.view;
   setLanguage(p.lang);
   settings?.refresh?.();
+  renderContext(); // the auto-compaction's limit on the bar
 }
 
 // ---------------------------------------------------------------- the offices
@@ -604,7 +606,6 @@ $('feed-life').onchange = (e) => {
 
 // ---------------------------------------------------------------- the context bar
 
-const kTokens = (n) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}M` : `${Math.round(n / 1000)}k`);
 /** The context left, as a health bar next to the weather: the focused session's or, without a
  * chosen one, the latest session whose agent reports it. It is always there on an office's floor:
  * empty and grey until an agent reports its context (Claude Code, Pi and OpenCode do). */
@@ -615,6 +616,9 @@ function renderContext() {
   const bar = $('ctx-bar');
   bar.hidden = game.floor !== 'office';
   bar.classList.toggle('none', !c);
+  bar.classList.toggle('compacted', !!c?.compacted);
+  $('ctx-mark').hidden = true;
+  $('ctx-used').textContent = '';
   if (!c) {
     game.sim.setContext(null);
     $('ctx-fill').style.width = $('ctx-trail').style.width = '0%';
@@ -628,13 +632,17 @@ function renderContext() {
   }
   const left = Math.max(0, Math.min(1, 1 - c.used / c.max));
   const pct = Math.round(left * 100);
-  game.sim.setContext(left); // running out tires the team (sim.js)
+  game.sim.setContext(c.compacted ? null : left); // running out tires the team (sim.js)
   $('ctx-fill').style.width = `${left * 100}%`;
   $('ctx-trail').style.width = `${left * 100}%`;
   $('ctx-who').textContent = '';
-  $('ctx-pct').textContent = `${pct}%`;
+  $('ctx-pct').textContent = c.compacted ? '🗜' : `${pct}%`;
+  // the tokens used (a 1M window barely moves the %) and where it compacts by itself
+  $('ctx-used').textContent = c.compacted ? '' : kTokens(c.used);
+  const at = thresholdOf(prefs, c);
+  if (at) { $('ctx-mark').hidden = false; $('ctx-mark').style.left = `${(1 - at / c.max) * 100}%`; }
   const label = t('ui.contextAria', { pct, used: kTokens(c.used), max: kTokens(c.max) });
-  bar.title = `${t('ui.context', { agent: AGENT_NAME[s.source] || s.source || '' })} · ${projectOf(s.id) || ''}`.replace(/ · $/, '') + `\n${label}`;
+  bar.title = `${t('ui.context', { agent: AGENT_NAME[s.source] || s.source || '' })} · ${projectOf(s.id) || ''}`.replace(/ · $/, '') + `\n${c.compacted ? t('ui.contextCompacted') : label}${at ? `\n${t('ui.contextLimit', { at: kTokens(at) })}` : ''}`;
   $('ctx-meter').setAttribute('aria-valuenow', String(pct));
   $('ctx-meter').setAttribute('aria-label', label);
   bar.classList.toggle('mid', pct <= 50 && pct > 25);

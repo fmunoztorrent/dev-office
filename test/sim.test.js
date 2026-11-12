@@ -3,7 +3,7 @@
 import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createSim, assignees, PRODUCT, TECH, TEAM, UNICORN, SKULL, PIZZA, rainbowPixels, DINING, DINING_SEATS, RACK, SOFA, TV, HOT_DESKS, BATHROOM, ELEVATOR, OFFICE_DOOR } from '../public/sim.js';
+import { createSim, assignees, PRODUCT, TECH, TEAM, UNICORN, SKULL, PIZZA, rainbowPixels, DINING, DINING_SEATS, RACK, SOFA, TV, HOT_DESKS, BATHROOM, ELEVATOR, OFFICE_DOOR, TAG_MS } from '../public/sim.js';
 import { Screen } from '../tui/screen.js';
 import { computeLayout, drawFrame } from '../tui/view.js';
 
@@ -597,4 +597,23 @@ test('el ánimo sale de señales reales: con poco contexto el manager y quien tr
   run(1);
   assert.equal(sim.agents.manager.tired, false);
   assert.ok(said.some((s) => s.who === 'manager' && /(compactado|Memoria fresca)/.test(s.text)));
+});
+
+// The badge over each character: it comes with what their agent does and goes when that session's turn
+// ends (another session's turn does not take it away), or after a while without news.
+test('el badge sobre cada personaje: llega con lo que hace su agente y se va al terminar su turno', () => {
+  const { sim, run } = office();
+  sim.handle({ kind: 'tool_start', session: 's1', role: 'backend', tool: 'Edit', text: 'Editando el carrito', badge: '✏️ cart.js' });
+  sim.handle({ kind: 'tool_start', session: 's2', role: 'qa', tool: 'Bash', text: 'Corriendo los tests', badge: '🧪 tests' });
+  assert.equal(sim.agents.backend.badge, '✏️ cart.js');
+  assert.equal(sim.agents.qa.badge, '🧪 tests');
+  sim.handle({ kind: 'turn_end', session: 's1', role: 'manager', text: 'termina su turno' });
+  assert.equal(sim.agents.backend.badge, null, 'su sesión terminó el turno');
+  assert.equal(sim.agents.qa.badge, '🧪 tests', 'la otra sesión sigue');
+  // a newcomer (a subagent) wears its own
+  sim.handle({ kind: 'subagent_start', session: 's2', role: 'frontend', subId: 'sub-1', agentType: 'ex-frontend', text: 'La pantalla de pago', badge: '👥 ex-frontend' });
+  assert.equal(sim.ghosts[0].badge, '👥 ex-frontend');
+  // without news it goes away by itself
+  run(TAG_MS / 1000 + 5);
+  assert.equal(sim.agents.qa.badge, null);
 });

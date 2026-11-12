@@ -60,7 +60,9 @@ En las dos vistas (y en el juego de la terminal):
 - **Cada subagente es alguien nuevo:** un extra translúcido de su rol (otro nombre, la misma camisa) que llega en el ascensor, al final del pasillo, recibe un escritorio propio en la fila de adelante (aparece con él y se va con él; pasados siete, en la mesa de reuniones), hace el trabajo del subagente y se va al terminar. La placa de su escritorio dice quién es y para qué proyecto vino.
 - **Los especialistas de visita, Rafa (DevOps/SRE) e Inés (seguridad),** tampoco tienen escritorio: cuando el trabajo del agente es suyo (un despliegue, un contenedor, un workflow de CI; una auditoría, un escáner, una llave) suben igual por el ascensor, sólidos y siempre la misma persona, y se van al terminar el turno.
 - **La pizarra con tickets** se expande al hacerle clic: las tareas como post-its en tres columnas. En la terminal, `t` o Enter ahí abre un encargo nuevo.
-- **La barra de contexto** (navegador, pequeña, junto al clima): cuánto contexto le queda al agente de la sesión enfocada, o al último que lo informa.
+- **La barra de contexto** (navegador, pequeña, junto al clima): cuánto contexto le queda al agente de la sesión enfocada, o al último que lo informa, con los tokens usados y una muesca donde se compacta solo (⚙ › General, 400k por defecto: la oficina le pide al agente que compacte cuando termina su turno).
+- **Un badge sobre cada personaje** dice lo que hace su agente, lo más chico posible (`✏️ cart.js`, `🧪 tests`, `💾 commit`); se va cuando termina el turno.
+- **El cielo tiene vida:** pájaros en V de día, un avión de vez en cuando (su estela; de noche, sus luces), un globo aerostático en días calmos, murciélagos al atardecer, estrellas fugaces y un satélite en noches despejadas. Con lluvia no vuela nada.
 
 ## Pedirle algo al equipo
 

@@ -87,7 +87,7 @@ test('extensión de Pi: corre el pipeline en su sesión, con setModel por etapa,
       await fire('session_start');
       const project = await until(() => server.pipelines.projects().find((p) => p.name === 'Integrado'));
       assert.deepEqual(project.pipelines[0].hosts, [{ agent: 'pi', session: 'pi-int', live: true }]);
-      assert.deepEqual(server.hub.snapshot().agents[0].can, ['task', 'pipeline']);
+      assert.deepEqual(server.hub.snapshot().agents[0].can, ['task', 'pipeline', 'compact']);
 
       const { run } = await call(server.url, 'POST', '/v1/pipelines', { pipeline: 'tdd', task: 'Cupones' });
       const done = await until(() => server.pipelines.snapshot().runs.find((r) => r.id === run.id && r.status === 'done'));
@@ -461,6 +461,110 @@ test('plugin de OpenCode: corre el pipeline en su sesión con el modelo de cada 
       await hooks['tool.execute.after']({ sessionID: 'ses_1', tool: 'bash', callID: 'c3' }, { metadata: { exit: 0 } });
       const svc = await until(() => server.services.list('main').find((s) => s.name === 'npm run dev'));
       assert.deepEqual([svc.agent, svc.session, path.basename(svc.log)], ['opencode', 'ses_1', 'dev.log']);
+    });
+  } finally {
+    await server.close();
+  }
+});
+
+// The context bar and the auto-compaction with Pi: when an answer ends, its own usage says how full the
+// context is (Pi tells extensions before saving the message, so its estimate would be one behind); past
+// your limit the office asks and Pi compacts when it is free (ctx.compact), and the bar says so.
+test('extensión de Pi: el contexto exacto de cada respuesta y la compactación que pide la oficina', { skip: !process.features?.typescript && 'Node sin soporte de TypeScript' }, async () => {
+  const dir = tempProject();
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
+  server.store.setPrefs({ compact: { at: 100_000 } });
+  const cwd = process.cwd();
+  const isTTY = process.stdin.isTTY;
+  process.chdir(dir);
+  process.stdin.isTTY = true; // the extension only connects in interactive sessions
+  const handlers = {};
+  let idle = false;
+  const compacts = [];
+  const ctx = {
+    model: { provider: 'anthropic', id: 'claude-opus-5-5', contextWindow: 1_000_000 },
+    isIdle: () => idle,
+    // Pi's own count: one message behind (it does not have the answer that is ending yet)
+    getContextUsage: () => ({ tokens: 20_000, contextWindow: 1_000_000, percent: 2 }),
+    compact: (opts) => { compacts.push(opts); },
+  };
+  const fire = async (name, ev = {}) => { for (const h of handlers[name] || []) await h(ev, ctx); };
+  const pi = { on: (name, h) => { (handlers[name] ||= []).push(h); }, registerCommand: () => {}, setModel: async () => true, setThinkingLevel: () => {}, sendUserMessage: () => {} };
+  const answer = (input) => ({ message: { role: 'assistant', stopReason: 'stop', usage: { input, output: 500, cacheRead: 0, cacheWrite: 0, totalTokens: input + 500 }, content: [{ type: 'text', text: 'ok' }] } });
+  try {
+    await withEnv({ DEV_TEAM_OFFICE_URL: server.url, DEV_TEAM_OFFICE_LIB: path.join(ROOT, 'integrations', 'common', 'devteam.mjs'), DEV_TEAM_OFFICE_SESSION: 'pi-ctx', DEV_TEAM_OFFICE_AUTOSTART: '0' }, async () => {
+      (await import(pathToFileURL(path.join(ROOT, 'integrations', 'pi', 'dev-team-office.ts')).href + '?ctx')).default(pi);
+      await fire('session_start');
+      await until(() => server.hub.snapshot().agents.some((a) => a.can?.includes('compact')));
+      await fire('message_end', answer(80_000));
+      const c = await until(() => server.office.sessionSummary('pi-ctx')?.context);
+      assert.deepEqual([c.used, c.max], [80_500, 1_000_000], 'el uso de la respuesta, no la estimación atrasada');
+      // past the limit, in the middle of a turn: the office asks, Pi waits until it is free
+      await fire('message_end', answer(120_000));
+      await until(() => server.office.log.some((e) => e.kind === 'autocompact' && e.session === 'pi-ctx'));
+      await sleep(50);
+      assert.equal(compacts.length, 0, 'nunca en medio de una respuesta');
+      await fire('agent_end');
+      idle = true;
+      await fire('agent_settled', { aborted: false });
+      assert.equal(compacts.length, 1);
+      // Pi compacts: the bar says so until the next answer
+      await fire('session_compact', { reason: 'manual' });
+      await until(() => server.office.sessionSummary('pi-ctx').context.compacted);
+      // it could not (nothing to compact): a notice, not an error
+      compacts[0].onError(new Error('Nothing to compact (session too small)'));
+      const failed = await until(() => server.office.log.find((e) => e.kind === 'autocompact' && e.via === 'failed'));
+      assert.match(failed.text, /No se pudo compactar: Nothing to compact/);
+      assert.ok(!server.office.log.some((e) => e.kind === 'error'));
+      await fire('session_shutdown');
+    });
+  } finally {
+    process.chdir(cwd);
+    process.stdin.isTTY = isTTY;
+    await server.close();
+  }
+});
+
+test('plugin de OpenCode: el contexto (sin contar el resumen de una compactación) y la compactación que pide la oficina', async () => {
+  const dir = tempProject();
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
+  server.store.setPrefs({ compact: { at: 100_000 } });
+  const summarized = [];
+  let lookups = 0;
+  const client = {
+    session: {
+      summarize: async (req) => { summarized.push(req); return { data: true }; },
+      prompt: async () => ({ data: {} }), abort: async () => ({ data: true }),
+    },
+    // the first lookup fails: it is not cached as "no window"
+    config: { providers: async () => (++lookups === 1 ? { error: { message: 'busy' } } : { data: { providers: [{ id: 'anthropic', models: { 'claude-opus-5-5': { limit: { context: 1_000_000 } } } }] } }) },
+    tui: { showToast: async () => {}, appendPrompt: async () => {}, submitPrompt: async () => {} },
+  };
+  const msg = (id, tokens, extra = {}) => ({ event: { type: 'message.updated', properties: { info: { id, sessionID: 'ses_c', role: 'assistant', providerID: 'anthropic', modelID: 'claude-opus-5-5', tokens, ...extra } } } });
+  try {
+    await withEnv({ DEV_TEAM_OFFICE_URL: server.url, DEV_TEAM_OFFICE_LIB: path.join(ROOT, 'integrations', 'common', 'devteam.mjs') }, async () => {
+      const { DevTeamOffice } = await import(pathToFileURL(path.join(ROOT, 'integrations', 'opencode', 'dev-team-office.js')).href + '?ctx');
+      const hooks = await DevTeamOffice({ client, directory: dir });
+      await hooks.event({ event: { type: 'session.created', properties: { info: { id: 'ses_c' } } } });
+      await until(() => server.hub.snapshot().agents.some((a) => a.session === 'ses_c' && a.can?.includes('compact')));
+      await hooks.event(msg('m1', { input: 50_000, output: 100, reasoning: 0, cache: { read: 0, write: 0 } }));
+      await hooks.event(msg('m2', { total: 60_100, input: 60_000, output: 100, reasoning: 0, cache: { read: 0, write: 0 } }));
+      assert.equal((await until(() => server.office.sessionSummary('ses_c')?.context)).used, 60_100);
+      await hooks['chat.message']({ sessionID: 'ses_c' }, { parts: [{ type: 'text', text: 'sigue' }] });
+      await hooks.event(msg('m3', { total: 130_000, input: 129_900, output: 100, reasoning: 0, cache: { read: 0, write: 0 } }));
+      await until(() => server.office.log.some((e) => e.kind === 'autocompact' && e.session === 'ses_c'));
+      await sleep(50);
+      assert.deepEqual(summarized, [], 'trabajando: espera a que quede libre');
+      await hooks.event({ event: { type: 'session.idle', properties: { sessionID: 'ses_c' } } });
+      await until(() => summarized.length);
+      assert.deepEqual(summarized[0], { path: { id: 'ses_c' }, body: { providerID: 'anthropic', modelID: 'claude-opus-5-5' } });
+      // the compaction's summary read the whole old conversation: it does not count as the context
+      await hooks.event({ event: { type: 'session.compacted', properties: { sessionID: 'ses_c' } } });
+      await hooks.event(msg('m4', { total: 131_000, input: 130_900, output: 100, reasoning: 0, cache: { read: 0, write: 0 } }, { summary: true }));
+      await sleep(80);
+      const after = server.office.sessionSummary('ses_c').context;
+      assert.ok(after.compacted);
+      assert.equal(after.used, 130_000);
     });
   } finally {
     await server.close();

@@ -583,6 +583,8 @@ function drawPerson(g, a, sim, model, now) {
     scr.rect(x0 - 1, y, sw + 2, 1, C.select);
   }
   if (!sitting) g.centered(a.x, headRow - 1, c.name, C.white, -1);
+  // what their agent is doing, as small as it gets (✏️ cart.js, 🧪 tests), over the head (or the name)
+  if (a.badge && !a.bubble && big) g.centered(a.x, headRow - (sitting ? 1 : 2), ` ${a.badge} `, hex(c.shirt), C.frame);
   if (a.seated && a.food && big) scr.text(X(c.seat.x - 30), g.row(c.seat.y - 18), a.food, C.white, -1, L.ox + L.pw - X(c.seat.x - 30));
   const icon = STATUS_ICON[a.state] || (a.badges.size ? '🤖' : '');
   if (icon) scr.text(x0 + sw + 1, headRow, icon, C.white, -1, L.ox + L.pw - (x0 + sw + 1));

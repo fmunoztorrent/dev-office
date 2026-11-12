@@ -5,6 +5,7 @@
 //                office. What its harness brings (Errementari, commands, prompts, .devteam/) is
 //                detected, and a prompt sent from the whiteboard starts THAT pipeline.
 //   Characters   how the characters of the office being watched look.
+//   Mine         what is yours, not the company's: your private skills and your own tools (server/mine.js).
 
 import { personOf, defaultLook, VISITORS, APPEARANCE_KEYS, LOOK_PALETTES, SEXES, PERSONALITIES, STYLES, randomLook, lookForSex } from './sim.js';
 import { exportCharacter, parseCharacter, characterFile } from './character.js';
@@ -137,6 +138,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     else if (tab === 'offices') { renderOffices(); loadProjects(); }
     else if (tab === 'agents') renderAgents();
     else if (tab === 'models') { st.models = null; renderModels(); }
+    else if (tab === 'mine') renderMine();
     else { st.looks = null; renderLook(); }
   }
 
@@ -194,6 +196,8 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       el('h3', {}, G('autonomy')),
       check(p.autonomy?.clarify !== false, G('clarify'), (e) => setPref({ autonomy: { clarify: e.target.checked } })),
       check(p.autonomy?.autonomous !== false, G('autonomous'), (e) => setPref({ autonomy: { autonomous: e.target.checked } })),
+      // the agents' context: past the limit it is compacted on its own (server/compact.js)
+      compactGroup(p.compact || { auto: true, at: 400000, unit: 'tokens' }, G, check),
       // the archive as a RAG: its chunks go on top of every brief; embeddings for the semantic search
       el('h3', {}, G('archive')),
       check(p.archive?.push !== false, G('archivePush'), (e) => setPref({ archive: { push: e.target.checked } })),
@@ -234,6 +238,26 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       el('ul', { class: 'hint s-io', id: 's-io' }));
   }
 
+  /** The auto-compaction: on or off, and its limit (in thousands of tokens, or a share of the window). */
+  function compactGroup(c, G, check) {
+    const pct = c.unit === 'pct';
+    const save = () => {
+      const unit = $('s-compact-unit').value;
+      const n = Number($('s-compact-at').value) || 0;
+      setPref({ compact: { unit, at: unit === 'pct' ? n : n * 1000 } });
+    };
+    return [
+      el('h3', {}, G('compact')),
+      check(c.auto, G('compactAuto'), (e) => setPref({ compact: { auto: e.target.checked } })),
+      el('label', { class: 'b-field' }, el('span', {}, G('compactAt')),
+        el('span', { class: 's-compact' },
+          el('input', { id: 's-compact-at', type: 'number', class: 's-num', min: 10, max: pct ? 99 : 10000, step: pct ? 1 : 10, value: pct ? c.at : Math.round(c.at / 1000), onchange: save, disabled: c.auto ? undefined : true }),
+          el('select', { id: 's-compact-unit', 'aria-label': G('compactAt'), disabled: c.auto ? undefined : true, onchange: (e) => setPref({ compact: { unit: e.target.value } }) },
+            option('tokens', `k ${G('compact_tokens')}`, !pct), option('pct', G('compact_pct'), pct)))),
+      el('p', { class: 'hint' }, G('compactHint')),
+    ];
+  }
+
   /** ⬆ Import: a settings file (server/settings-io.js); what it brings replaces what is here, the rest stays. */
   function importSettingsFile() {
     const input = el('input', { type: 'file', accept: '.json,application/json', onchange: async () => {
@@ -251,6 +275,80 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       if (r.skipped?.length) $('s-io').replaceChildren(...r.skipped.map((x) => el('li', {}, `✖ ${x.what}: ${x.error}`)));
     } });
     input.click();
+  }
+
+  // ------------------------------------------------------------ Mine: your private skills and your own tools
+
+  const TOOL_RUNS = ['sh', 'bash', 'node', 'python3'];
+  /** An entry as its form edits it (a tool's parameters, one per line: "name: what it is", "name?" optional). */
+  const mineForm = (e = {}, kind = e.kind) => ({
+    kind, id: e.id || null, name: e.name || '', title: e.title || '', body: e.body || '', enabled: e.enabled !== false,
+    run: e.config?.run || 'sh', timeout: e.config?.timeout || 60, role: e.config?.role || '',
+    params: (e.config?.params || []).map((p) => `${p.name}${p.required ? '' : '?'}${p.description ? `: ${p.description}` : ''}`).join('\n'),
+  });
+  const paramsOf = (text) => String(text || '').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
+    const m = l.match(/^([^:?\s]+)(\?)?\s*(?::\s*(.*))?$/) || [];
+    return { name: (m[1] || l).toLowerCase(), required: !m[2], description: m[3] || '' };
+  });
+  const minePayload = (f) => ({
+    kind: f.kind, name: f.name.trim(), title: f.title, body: f.body, enabled: f.enabled,
+    ...(f.kind === 'tool' ? { config: { run: f.run, params: paramsOf(f.params), timeout: Number(f.timeout) || 60, ...(f.role ? { role: f.role } : {}) } } : {}),
+  });
+
+  async function saveMine(f) {
+    const r = await api(f.id ? 'PUT' : 'POST', f.id ? `/v1/mine/${encodeURIComponent(f.id)}` : '/v1/mine', minePayload(f));
+    if (!r.ok) { msg(r.error); return false; }
+    const M = (k, v) => t(`settings.mine.${k}`, v);
+    const clash = (r.installed || []).find((x) => !x.ok && x.reason === 'exists');
+    const where = (r.installed || []).filter((x) => x.ok).map((x) => tilde(x.dir)).join(' · ');
+    msg(clash ? M('conflict', { name: r.entry.name, dir: tilde(clash.dir) }) : where ? M('installed', { where }) : M('saved'), !clash);
+    return true;
+  }
+
+  async function renderMine() {
+    const panel = document.querySelector('[data-panel="mine"]');
+    const M = (k, v) => t(`settings.mine.${k}`, v);
+    const r = await api('GET', '/v1/mine');
+    if (!r.ok) return msg(r.error);
+    const f = st.mineForm;
+    const dirs = (r.dirs || []).map((d) => tilde(d.dir)).join(' · ') || M('noDirs');
+    const row = (e) => el('li', { class: `s-mine-row${e.enabled ? '' : ' off'}` },
+      el('span', { class: 's-mine-name' }, e.kind === 'tool' ? `🧰 my_${e.name.replace(/-/g, '_')}` : `📘 ${e.name}`),
+      el('span', { class: 'hint s-mine-title' }, e.title),
+      el('label', { class: 'b-check' }, el('input', { type: 'checkbox', checked: e.enabled ? true : undefined, onchange: async (ev) => { if (await saveMine({ ...mineForm(e), enabled: ev.target.checked })) renderMine(); } }), M(e.enabled ? 'on' : 'off')),
+      el('button', { type: 'button', class: 's-mini', onclick: () => { st.mineForm = mineForm(e); renderMine(); } }, M('edit')),
+      el('button', { type: 'button', class: 's-mini', onclick: async () => {
+        if (!confirm(M('removeConfirm', { name: e.name }))) return;
+        const x = await api('DELETE', `/v1/mine/${encodeURIComponent(e.id)}`);
+        if (!x.ok) return msg(x.error);
+        if (st.mineForm?.id === e.id) st.mineForm = null;
+        msg(M('removed'), true);
+        renderMine();
+      } }, M('remove')));
+    const list = (items) => (items.length ? el('ul', { class: 's-mine' }, items.map(row)) : el('p', { class: 'hint' }, M('none')));
+    const field = (label, input) => el('label', { class: 'b-field' }, el('span', {}, label), input);
+    const bind = (k) => (e) => { f[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value; };
+    const form = () => el('div', { class: 's-mine-form' },
+      field(M('name'), el('input', { type: 'text', value: f.name, placeholder: M('namePh'), maxlength: 40, oninput: bind('name') })),
+      field(M('title'), el('input', { type: 'text', value: f.title, placeholder: M('titlePh'), maxlength: 300, oninput: bind('title') })),
+      f.kind === 'tool' ? [
+        field(M('run'), el('select', { onchange: bind('run') }, TOOL_RUNS.map((x) => option(x, x, x === f.run)))),
+        field(M('script'), el('textarea', { rows: 8, class: 's-code', spellcheck: 'false', value: f.body, placeholder: f.run === 'python3' ? 'import sys\nprint(sys.argv[1:])' : f.run === 'node' ? 'console.log(process.argv.slice(1))' : 'echo "$1"', oninput: bind('body') })),
+        field(M('params'), el('textarea', { rows: 3, value: f.params, placeholder: M('paramsPh'), oninput: bind('params') })),
+        field(M('timeout'), el('input', { type: 'number', class: 's-num', min: 1, max: 600, value: f.timeout, oninput: bind('timeout') })),
+        field(M('role'), el('select', { onchange: bind('role') }, option('', M('roleAuto'), !f.role), ROLE_ORDER.filter((x) => x !== 'po').map((x) => option(x, `${personOf(x)?.name || x} · ${t(`team.titles.${x}`)}`, x === f.role)))),
+      ] : field(M('body'), el('textarea', { rows: 10, value: f.body, oninput: bind('body') })),
+      el('label', { class: 'b-check' }, el('input', { type: 'checkbox', checked: f.enabled ? true : undefined, onchange: bind('enabled') }), M('enabled')),
+      el('div', { class: 's-row' },
+        el('button', { type: 'button', class: 'btn', onclick: async () => { if (await saveMine(f)) { st.mineForm = null; renderMine(); } } }, M('save')),
+        el('button', { type: 'button', class: 's-mini', onclick: () => { st.mineForm = null; renderMine(); } }, M('cancel'))));
+    const add = (kind) => el('div', { class: 's-row' }, el('button', { type: 'button', class: 's-mini', onclick: () => { st.mineForm = mineForm({}, kind); renderMine(); } }, M('add')));
+    put(panel,
+      el('p', { class: 'hint' }, M('intro')),
+      el('h3', {}, M('skills')), el('p', { class: 'hint' }, M('skillsHint', { dirs })),
+      list(r.skills), f?.kind === 'skill' ? form() : add('skill'),
+      el('h3', {}, M('tools')), el('p', { class: 'hint' }, M('toolsHint')),
+      list(r.tools), f?.kind === 'tool' ? form() : add('tool'));
   }
 
   // ------------------------------------------------------------ Oficinas

@@ -178,6 +178,17 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
       f.push({ type: 'info', text: `  ${t('settings.general.cityHint')}` });
       f.push({ type: 'select', label: t('settings.general.weather'), value: () => t(p.weather ? 'settings.general.weatherOn' : 'settings.general.weatherOff'), cycle: () => setPref({ weather: !p.weather }) });
       f.push({ type: 'select', label: t('settings.general.life'), value: () => yesNo(p.log.life), cycle: () => setPref({ log: { life: !p.log.life } }) });
+      // the agents' context: past the limit it is compacted on its own (the limit cycles through some usual ones)
+      const c = p.compact || { auto: true, at: 400000, unit: 'tokens' };
+      const LIMITS = [['tokens', 200000], ['tokens', 300000], ['tokens', 400000], ['tokens', 500000], ['tokens', 600000], ['tokens', 800000], ['pct', 70], ['pct', 80], ['pct', 90]];
+      const limitText = (x) => (x.unit === 'pct' ? `${x.at} ${t('settings.general.compact_pct')}` : `${Math.round(x.at / 1000)}k ${t('settings.general.compact_tokens')}`);
+      f.push({ type: 'heading', text: t('settings.general.compact') });
+      f.push({ type: 'select', label: t('settings.general.compactAuto'), value: () => yesNo(c.auto), cycle: () => setPref({ compact: { auto: !c.auto } }) });
+      f.push({ type: 'select', label: t('settings.general.compactAt'), value: () => limitText(c), cycle: () => {
+        const i = LIMITS.findIndex(([u, n]) => u === c.unit && n === c.at);
+        const [unit, at] = LIMITS[(i + 1) % LIMITS.length];
+        setPref({ compact: { unit, at } });
+      } });
       f.push({ type: 'heading', text: t('settings.general.herdr') });
       f.push({ type: 'info', text: `  ${s.herdr?.available ? t('settings.general.herdrOn', { pane: s.herdr.pane || '?' }) : t('settings.general.herdrOff')}` });
       f.push({ type: 'select', label: t('settings.general.herdrLaunch'), value: () => yesNo(p.herdr.launch), cycle: () => setPref({ herdr: { launch: !p.herdr.launch } }) });

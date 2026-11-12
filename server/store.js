@@ -66,6 +66,9 @@ export const DEFAULT_PREFS = {
   // the archive as a RAG: its chunks go on top of every brief (push), and optionally they get an
   // embedding for the semantic search (off | ollama | openai, with its model and URL)
   archive: { push: true, embeddings: 'off', model: '', url: '' },
+  // the agents' context: past this much it is compacted on its own (server/compact.js); `at` is tokens
+  // (unit: tokens) or a share of the model's window (unit: pct)
+  compact: { auto: true, at: 400_000, unit: 'tokens' },
 };
 
 // The default language (until one is chosen in ⚙): $DEV_TEAM_OFFICE_LANG, otherwise English.
@@ -227,7 +230,26 @@ const MIGRATIONS = [
      created_at  INTEGER NOT NULL,
      UNIQUE (project, name)
    );`,
+  // 8 → 9: what is yours (⚙ › Mine): your private skills and your own tools (server/mine.js)
+  `CREATE TABLE mine (
+     id         TEXT PRIMARY KEY,
+     kind       TEXT NOT NULL CHECK (kind IN ('skill', 'tool')),
+     name       TEXT NOT NULL,
+     title      TEXT NOT NULL,                -- what it does and when to use it
+     body       TEXT NOT NULL DEFAULT '',     -- a skill's instructions (Markdown) or a tool's script
+     config     TEXT,                         -- JSON: a tool's runtime, parameters, time limit and role
+     enabled    INTEGER NOT NULL DEFAULT 1,
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL,
+     UNIQUE (kind, name)
+   );`,
 ];
+
+// what is yours (⚙ › Mine): how many, how long, and how your tools run
+export const MINE_KINDS = ['skill', 'tool'];
+export const TOOL_RUNTIMES = ['sh', 'bash', 'node', 'python3'];
+const MINE_MAX = 200;
+const MINE_BODY_MAX = 64 * 1024;
 
 class Invalid extends Error {}
 const fail = (msg) => { throw new Invalid(msg); };
@@ -235,6 +257,28 @@ const slug = (s, fallback = 'agente') => String(s).toLowerCase().normalize('NFD'
 /** Lowercase and without accents: to compare words. */
 const fold = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 const json = (v, fallback) => { try { return JSON.parse(v); } catch { return fallback; } };
+
+/** A tool's config, checked: { run, params: [{ name, description, required }], timeout, role }. */
+function toolConfig(c = {}) {
+  if (c !== null && typeof c !== 'object') fail(t('err.prefValue', { key: 'config' }));
+  c ||= {};
+  const run = c.run ?? 'sh';
+  if (!TOOL_RUNTIMES.includes(run)) fail(t('err.mineRun', { runs: TOOL_RUNTIMES.join(', ') }));
+  const params = Array.isArray(c.params) ? c.params : [];
+  if (params.length > 8) fail(t('err.mineParams'));
+  const seen = new Set();
+  const list = params.map((p) => {
+    const name = String(p?.name ?? '').trim().toLowerCase();
+    if (!/^[a-z][a-z0-9_]{0,23}$/.test(name) || seen.has(name)) fail(t('err.mineParam', { name }));
+    seen.add(name);
+    return { name, description: String(p?.description ?? '').trim().slice(0, 200), required: p?.required !== false };
+  });
+  const timeout = c.timeout === undefined || c.timeout === null || c.timeout === '' ? 60 : Number(c.timeout);
+  if (!Number.isInteger(timeout) || timeout < 1 || timeout > 600) fail(t('err.mineTimeout'));
+  const role = c.role ? String(c.role).toLowerCase() : null;
+  if (role && !/^[a-z]{2,12}$/.test(role)) fail(t('err.prefValue', { key: 'role' }));
+  return { run, params: list, timeout, ...(role ? { role } : {}) };
+}
 const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
 
 /** Opens (and creates or migrates) the database. `file` ':memory:' is for the tests. */
@@ -446,6 +490,63 @@ export class Store {
     return r.changes ? { ok: true } : { ok: false, status: 404, error: t('err.unknownComponent') };
   }
 
+  // ---------------------------------------------------------------- what is yours: private skills and own tools
+
+  #mine(r) {
+    if (!r) return null;
+    const config = json(r.config, {}) || {};
+    return { id: r.id, kind: r.kind, name: r.name, title: r.title, body: r.body, enabled: !!r.enabled, ...(r.kind === 'tool' ? { config } : {}), createdAt: r.created_at, updatedAt: r.updated_at };
+  }
+  /** Your private skills and your own tools (kind: only one of them). */
+  listMine(kind = null) {
+    const rows = kind ? this.db.prepare('SELECT * FROM mine WHERE kind = ? ORDER BY name').all(String(kind)) : this.db.prepare('SELECT * FROM mine ORDER BY kind, name').all();
+    return rows.map((r) => this.#mine(r));
+  }
+  getMine(id) { return this.#mine(this.db.prepare('SELECT * FROM mine WHERE id = ?').get(String(id))); }
+  findMine(kind, name) { return this.#mine(this.db.prepare('SELECT * FROM mine WHERE kind = ? AND name = ?').get(String(kind), String(name ?? '').toLowerCase())); }
+
+  /**
+   * Saves a skill or a tool of yours: { id?, kind, name, title, body, enabled?, config? }. Without `id`, one
+   * with the same kind and name is updated. A tool's config: { run: sh | bash | node | python3, params:
+   * [{ name, description?, required? }], timeout (seconds), role? }. Returns { ok, entry, created, was }.
+   */
+  saveMine(input = {}) {
+    return this.#write(() => {
+      const kind = input.kind;
+      if (!MINE_KINDS.includes(kind)) fail(t('err.mineKind'));
+      const name = String(input.name ?? '').trim().toLowerCase();
+      if (!/^[a-z][a-z0-9-]{1,39}$/.test(name)) fail(t('err.mineName'));
+      const title = String(input.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
+      if (!title) fail(t('err.mineTitle'));
+      const body = String(input.body ?? '');
+      if (body.length > MINE_BODY_MAX) fail(t('err.knowledgeTooLong', { n: MINE_BODY_MAX / 1024 }));
+      if (kind === 'tool' && !body.trim()) fail(t('err.mineScript'));
+      const config = kind === 'tool' ? toolConfig(input.config) : null;
+      const current = input.id ? this.getMine(input.id) : this.findMine(kind, name);
+      if (input.id && !current) fail(t('err.unknownMine'));
+      if (current && current.kind !== kind) fail(t('err.mineKind'));
+      const clash = this.findMine(kind, name);
+      if (clash && clash.id !== current?.id) fail(t('err.mineExists', { name }));
+      const enabled = input.enabled === undefined ? (current ? current.enabled : true) : !!input.enabled;
+      const now = Date.now();
+      if (current) {
+        this.db.prepare('UPDATE mine SET name = ?, title = ?, body = ?, config = ?, enabled = ?, updated_at = ? WHERE id = ?').run(name, title, body, config && JSON.stringify(config), enabled ? 1 : 0, now, current.id);
+        return { ok: true, entry: this.getMine(current.id), created: false, was: current };
+      }
+      if (this.db.prepare('SELECT count(*) AS n FROM mine').get().n >= MINE_MAX) fail(t('err.mineMax', { n: MINE_MAX }));
+      const id = `m${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+      this.db.prepare('INSERT INTO mine (id, kind, name, title, body, config, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, kind, name, title, body, config && JSON.stringify(config), enabled ? 1 : 0, now, now);
+      return { ok: true, entry: this.getMine(id), created: true, was: null };
+    });
+  }
+
+  deleteMine(id) {
+    const e = this.getMine(id);
+    if (!e) return { ok: false, status: 404, error: t('err.unknownMine') };
+    this.db.prepare('DELETE FROM mine WHERE id = ?').run(e.id);
+    return { ok: true, entry: e };
+  }
+
   /** Every folder with instructions: [{ path, instructions }]. */
   listProjectInstructions() { return this.db.prepare('SELECT path, instructions FROM projects ORDER BY path').all().map((r) => ({ path: r.path, instructions: r.instructions })); }
   /** Sets (or, empty, removes) a project folder's instructions: an existing absolute path. */
@@ -548,6 +649,22 @@ export class Store {
               } else fail(t('err.pref', { key: `archive.${ak}` }));
             }
             break;
+          case 'compact': {
+            if (!isObj(v)) fail(t('err.prefValue', { key: k }));
+            const unit = next.compact.unit;
+            for (const [ck, cv] of Object.entries(v)) {
+              if (ck === 'auto') next.compact.auto = bool('compact.auto', cv);
+              else if (ck === 'unit') next.compact.unit = ['tokens', 'pct'].includes(cv) ? cv : fail(t('err.prefValue', { key: 'compact.unit' }));
+              else if (ck === 'at') next.compact.at = Number(cv);
+              else fail(t('err.pref', { key: `compact.${ck}` }));
+            }
+            // another unit without a value: that unit's default
+            if (next.compact.unit !== unit && v.at === undefined) next.compact.at = next.compact.unit === 'pct' ? 80 : DEFAULT_PREFS.compact.at;
+            // a number of tokens (10k to 10M) or a share of the window (10 to 99 %)
+            if (!Number.isFinite(next.compact.at) || (next.compact.unit === 'pct' ? next.compact.at < 10 || next.compact.at > 99 : next.compact.at < 10_000 || next.compact.at > 10_000_000)) fail(t('err.prefValue', { key: 'compact.at' }));
+            next.compact.at = next.compact.unit === 'pct' ? Math.round(next.compact.at) : Math.round(next.compact.at / 1000) * 1000;
+            break;
+          }
           case 'models': {
             // a whole set ({ active, profiles }) or just which one is active ({ active })
             const merged = isObj(v) && !v.profiles ? { ...next.models, ...v } : v;

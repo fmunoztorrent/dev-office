@@ -3,7 +3,7 @@
 import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { humanizeCommand, humanizeTool, segments } from '../server/humanize.js';
+import { humanizeCommand, humanizeTool, segments, badgeFor } from '../server/humanize.js';
 import { describe } from '../server/roles.js';
 
 test('un comando dicho en palabras: tests, scripts, git, archivos, la web', () => {
@@ -49,4 +49,29 @@ test('las comillas no se parten y las herramientas sin descripción se dicen por
   // describe() (what the office logs and the bubbles say) never carries the command line
   assert.equal(describe('Bash', { command: 'cd /p && git push' }), 'Subiendo los cambios');
   assert.equal(describe('ask_user_choice', { question: '¿5000 o 10000?' }), 'Te pregunta: ¿5000 o 10000?');
+});
+
+// The badge over each character: what their agent is doing, as small as it gets (an icon and a word).
+test('el badge: un ícono y una o dos palabras, nunca el comando entero', () => {
+  const cases = [
+    ['Bash', { command: 'cd api && npm test -- --watch=false' }, '🧪 tests'],
+    ['Bash', { command: 'node --test test/a.test.js' }, '🧪 tests'],
+    ['Bash', { command: 'npm run dev' }, '▶️ dev'],
+    ['Bash', { command: 'pnpm install' }, '📦 deps'],
+    ['Bash', { command: 'cargo build --release' }, '🔨 build'],
+    ['Bash', { command: 'git commit -m "fix: el carrito"' }, '💾 commit'],
+    ['Bash', { command: 'git push origin main' }, '🚀 push'],
+    ['Bash', { command: 'curl -s https://api.example.com/v1/x' }, '🌐 api.example…'],
+    ['Bash', { command: 'python3 scripts/migrate.py --dry' }, '▶️ migrate.py'],
+    ['Edit', { file_path: '/repo/src/cart.js' }, '✏️ cart.js'],
+    ['read', { path: '/repo/README.md' }, '📖 README.md'], // Pi's
+    ['edit', { filePath: '/repo/src/pay.ts' }, '✏️ pay.ts'], // OpenCode's
+    ['Grep', { pattern: 'total' }, '🔍 total'],
+    ['TodoWrite', {}, '📋 plan'],
+    ['AskUserQuestion', {}, '❓ a ti'],
+    ['Task', { subagent_type: 'ex-qa' }, '👥 ex-qa'],
+    ['mcp__linear__create_issue', {}, '🔌 linear'],
+  ];
+  for (const [tool, input, want] of cases) assert.equal(badgeFor(tool, input), want, `${tool} ${JSON.stringify(input)}`);
+  for (const [tool, input] of cases) assert.ok([...badgeFor(tool, input)].length <= 16, 'corto');
 });

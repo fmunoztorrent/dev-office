@@ -265,6 +265,70 @@ function layout(x0, x1) {
 }
 
 /**
+ * What flies in the sky at second `t` (always the same for the same moment and weather): birds by day,
+ * a plane now and then (its contrail by day, its lights at night), a hot-air balloon on a calm clear day,
+ * bats at dusk, and shooting stars and a satellite on a clear night. Nothing flies in the rain, a storm
+ * or fog. Each one: { kind, x, y, dir, … } in the band [top, low] of the landscape [x0, x1].
+ */
+export function skyLife({ t, light: L, weather: w, x0, x1, top, low, lod = 'full' }) {
+  const out = [];
+  const W = x1 - x0, span = Math.max(1, low - top);
+  const less = lod === 'low';
+  const calm = !WET.has(w.kind) && w.kind !== 'storm' && w.kind !== 'fog';
+  if (!calm) return out;
+  /** A crossing of `period` seconds that happens in some of its turns: its progress (0–1) and its turn, or null. */
+  const crossing = (period, chance, salt) => {
+    const turn = Math.floor(t / period), u = (t / period) % 1;
+    return hash(turn * 3.71 + salt) < chance ? { turn, u } : null;
+  };
+  // birds: flocks in a V (by day and at dusk), their wings beating
+  if (L.night < 0.55) {
+    for (let f = 0; f < (less ? 1 : 3); f++) {
+      const c = crossing(34 + f * 17, 0.7, f * 5.3);
+      if (!c) continue;
+      const dir = hash(c.turn + f * 1.9) < 0.5 ? 1 : -1;
+      const fx = dir > 0 ? x0 - 30 + c.u * (W + 60) : x1 + 30 - c.u * (W + 60);
+      const fy = top + 6 + hash(c.turn * 1.3 + f) * span * 0.65 + Math.sin(t * 0.8 + f) * 2;
+      const n = 3 + Math.floor(hash(c.turn + f * 2.3) * 5);
+      for (let i = 0; i < n; i++) {
+        const row = Math.ceil(i / 2), side = i % 2 ? 1 : -1;
+        out.push({ kind: 'bird', x: Math.round(fx - dir * row * 6), y: Math.round(fy + side * row * 3), dir, flap: Math.floor(t * 5 + i * 1.7) % 2 });
+      }
+    }
+  }
+  // a plane, high and slow: a contrail by day, its lights at night (it still flies over the clouds)
+  const plane = crossing(70, 0.55, 9.1);
+  if (plane) {
+    const dir = hash(plane.turn + 4.4) < 0.5 ? 1 : -1;
+    out.push({ kind: 'plane', x: Math.round(dir > 0 ? x0 - 20 + plane.u * (W + 40) : x1 + 20 - plane.u * (W + 40)), y: Math.round(top + 4 + hash(plane.turn * 2.7) * span * 0.25), dir, night: L.night > 0.4, blink: Math.floor(t * 1.6) % 2 });
+  }
+  // a hot-air balloon on a calm clear day, drifting with the wind
+  if (!less && L.night < 0.3 && w.clouds < 0.6 && w.wind < 18) {
+    const b = crossing(240, 0.5, 2.2);
+    if (b) out.push({ kind: 'balloon', x: Math.round(x0 - 16 + b.u * (W + 32)), y: Math.round(top + span * (0.25 + 0.3 * hash(b.turn + 7)) + Math.sin(t * 0.4) * 3), hue: Math.floor(hash(b.turn + 1.1) * 3) });
+  }
+  // bats at dusk, flitting near the rooftops
+  if (L.dusk > 0.2 && L.night > 0.25 && L.night < 0.85) {
+    for (let i = 0; i < (less ? 1 : 3); i++) {
+      const cx = x0 + hash(i + 0.31) * W, cy = low - 14 - hash(i + 0.77) * span * 0.35;
+      out.push({ kind: 'bat', x: Math.round(cx + Math.sin(t * 1.3 + i * 2) * 26 + Math.sin(t * 3.1 + i) * 6), y: Math.round(cy + Math.cos(t * 2.3 + i) * 8), flap: Math.floor(t * 9 + i) % 2 });
+    }
+  }
+  // on a clear night: a shooting star now and then, and a satellite crossing slowly
+  if (L.night > 0.6 && w.clouds < 0.5) {
+    const k = Math.floor(t / 9), u = (t % 9) / 0.9; // it lasts the first 0.9 s of its 9
+    if (u < 1 && hash(k * 1.77 + 0.3) < 0.45) {
+      const sx = x0 + 20 + hash(k + 0.6) * (W - 40), sy = top + 4 + hash(k + 0.9) * span * 0.4;
+      const dir = hash(k + 0.2) < 0.5 ? 1 : -1;
+      out.push({ kind: 'meteor', x: Math.round(sx + dir * u * 34), y: Math.round(sy + u * 14), dir, fade: 1 - u });
+    }
+    const s = crossing(150, 0.6, 5.5);
+    if (s) out.push({ kind: 'satellite', x: Math.round(x0 + s.u * W), y: Math.round(top + 6 + hash(s.turn + 3.3) * span * 0.3) });
+  }
+  return out;
+}
+
+/**
  * The landscape behind the glass, back to front, and the glass on top (frames, reflections,
  * drops, fogging). All clipped to the rectangle [x0, x1] × [top, bottom].
  * @param lod 'full' (browser) or 'low' (terminal: fewer small details)
@@ -371,6 +435,38 @@ export function outdoor({ date = new Date(), weather, light, now = 0, x0 = 0, x1
     disc(cx, cy - Math.round(4 * s), Math.round(8 * s), cloudCol, 0.9);
     disc(cx + Math.round(9 * s), cy - 1, Math.round(6 * s), cloudCol, 0.9);
     R(cx - Math.round(14 * s), cy, Math.round(30 * s), Math.round(5 * s), cloudCol, 0.9);
+  }
+
+  // life in the sky (skyLife): what flies over the hills, in front of the clouds
+  const sil = mixc(0x3b4252, 0x0e1222, L.night); // a silhouette against the sky
+  for (const f of skyLife({ t, light: L, weather: w, x0, x1, top, low: HZ - 10, lod })) {
+    const { x, y } = f;
+    if (f.kind === 'bird') {
+      R(x, y, 1, 1, sil, 0.9);
+      for (const s of [-1, 1]) f.flap ? (R(x + s, y - 1, 1, 1, sil, 0.9), R(x + 2 * s, y - 2, 1, 1, sil, 0.9)) : (R(x + s, y, 1, 1, sil, 0.9), R(x + 2 * s, y + 1, 1, 1, sil, 0.9));
+    } else if (f.kind === 'plane') {
+      if (f.night) {
+        R(x, y, 1, 1, 0xf4f7ff, f.blink ? 1 : 0.25, true);
+        R(x - f.dir * 2, y, 1, 1, 0xff3b3b, 0.9, true);
+        R(x + f.dir, y + 1, 1, 1, 0x4dff8a, 0.8, true);
+      } else {
+        for (let k = 0; k < 12; k++) R(x - f.dir * (5 + k * 3), y, 3, 1, 0xffffff, 0.32 * (1 - k / 12)); // its contrail
+        R(x - 3, y, 7, 1, lit(0xe9eef5));
+        R(x - f.dir * 3, y - 1, 1, 1, lit(0xc9d1dc));
+        R(x, y + 1, 2, 1, lit(0xc9d1dc));
+      }
+    } else if (f.kind === 'balloon') {
+      const c = [0xe63946, 0xffb703, 0x2a9d8f][f.hue];
+      disc(x, y, 5, lit(c));
+      R(x - 1, y - 5, 3, 10, lit(0xf1faee), 0.85); // its stripe
+      R(x - 3, y + 4, 1, 4, lit(0x5a4636)); R(x + 3, y + 4, 1, 4, lit(0x5a4636));
+      R(x - 2, y + 8, 5, 3, lit(0x8c5a33));
+    } else if (f.kind === 'bat') {
+      R(x, y, 1, 1, 0x14161f, 0.95);
+      if (f.flap) { R(x - 1, y - 1, 1, 1, 0x14161f, 0.95); R(x + 1, y - 1, 1, 1, 0x14161f, 0.95); } else R(x - 2, y, 5, 1, 0x14161f, 0.95);
+    } else if (f.kind === 'meteor') {
+      for (let k = 0; k < 9; k++) R(Math.round(x - f.dir * k * 1.6), Math.round(y - k * 0.6), 1, 1, k ? 0xfff3c8 : 0xffffff, f.fade * (1 - k / 9), true);
+    } else if (f.kind === 'satellite') R(x, y, 1, 1, 0xeef2ff, 0.75, true);
   }
 
   // the city: buildings with windows (at night, some lit)

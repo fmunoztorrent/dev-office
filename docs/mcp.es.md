@@ -38,6 +38,8 @@ página sirve para entender qué hace y para registrarlo a mano en otro cliente.
 | `get_knowledge` | `id` \| `name` + `kind?` | Una entrada completa (una skill o un conector también por su nombre). Cuenta como una lectura |
 | `save_knowledge` | `kind`, `title`, `body?`, `name?`, `tags?`, `office?`, `command?` + `args?` \| `url?`, `id?` | Guarda una nota, decisión, documento, skill (`name`, `title`: qué hace y cuándo usarla, `body`: sus instrucciones) o conector (`name`, `command`/`args` o `url`; sin secretos). El mismo `name` (o el `id`) la actualiza. Funciona también con la oficina apagada |
 | `list_teams` · `install_team` | `team`, `harness`, `project?` | Los team packs (un subagente por rol), para Pi, Claude Code, OpenCode o Codex |
+| `my_<nombre>` | los parámetros de la herramienta | **Las herramientas propias del usuario** (⚙ › Mío, [api.es.md](api.es.md#lo-tuyo-skills-privadas-y-tus-herramientas)): cada una activa es una herramienta en sí, con su descripción y sus parámetros. Corre en la carpeta del agente y contesta su salida y su código (error si no es 0 o se le acabó el tiempo). Funciona también con la oficina apagada (lee la base) |
+| `list_my_tools` · `run_my_tool` | — · `name`, `args?` | Las herramientas del usuario, y correr una por su nombre: también una agregada después de que empezó la sesión (la lista de herramientas se lee cuando el agente se conecta) |
 
 Los resultados son texto: una línea para leer y, debajo, el JSON con los datos.
 

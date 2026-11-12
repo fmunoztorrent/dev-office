@@ -4,6 +4,34 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-11-12
+
+### Added
+
+- **Auto-compaction.** Past your limit (⚙ › General › The agents' context: **400k tokens by default**, or a share of the model's window; `prefs.compact`), the office asks the agent to compact its context. The agent does it, its own way, and never in the middle of an answer:
+  - **Pi and OpenCode** get `{ type: "compact" }` over their connection and compact when they are free (`ctx.compact()`, `client.session.summarize`).
+  - **Inside herdr**, any other agent (Claude Code, Codex…) gets `/compact` typed in its pane when its turn ends.
+  - **The Claude Code sessions the office opens** get the limit as their own (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, or `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`) and compact by themselves.
+  - **Otherwise** the log tells you to type `/compact`. Each request is an `autocompact` line in the log; one that could not be done says why.
+- **A badge over each character** with what their agent is doing, as small as it gets: `✏️ cart.js`, `🧪 tests`, `💾 commit`, `🔍 total`, `👥 ex-qa`… (`ev.badge`). It goes when that session's turn ends; a subagent's is its newcomer's. In the browser's two views and in the terminal game.
+- **⚙ › Mine: what is yours, not the company's.**
+  - **Private skills:** installed in your personal folder of each agent (`~/.claude/skills`, `~/.agents/skills`), never in a repo; off or deleted, they are taken out, and a skill of yours there without the office's mark is never stepped on.
+  - **Your own tools:** small programs of yours (sh, bash, node or python3) with their parameters, a time limit and who uses them in the game. Your agents see each one as the MCP tool `my_<name>` (and `list_my_tools`, `run_my_tool`) and run it in the folder they work in; the parameters arrive in order and as `TOOL_<NAME>`. In the game: "Using your tool “deploy”", by the character you chose.
+  - Neither goes to the archive or the briefs; both travel in your settings file. Agents cannot create them. `GET|POST /v1/mine`, `PUT|DELETE /v1/mine/<id>`, `GET /v1/mine/tools`.
+- **The sky has life:** birds in a V, a plane now and then (its contrail by day, its lights at night), a hot-air balloon on calm days, bats at dusk, shooting stars and a satellite on clear nights. Nothing flies in the rain or the fog. The same in the terminal (fewer).
+- **The archive's ground has fossils:** ammonites, trilobites, fish, a fern, shells, bones and a whole dinosaur at the bottom, around the room in both views (in the front view, the ground now shows around the archive).
+- **A more elegant executive floor:** walnut parquet, a Persian rug, velvet drapes, a crystal chandelier, mahogany paneling with gilded moldings and brass sconces, leather chairs, a mahogany table with orchids, bankers' lamps, a library, a globe, a marble bust and a sideboard with the coffee service. At night its lamps glow warm.
+
+### Changed
+
+- **The context bar** says the tokens used next to the % (with a 1M window the % barely moves), marks with a notch where it compacts by itself, and shows a session that just compacted as such until its next answer.
+
+### Fixed
+
+- **Pi:** the context reported when an answer ended was one message behind (Pi tells extensions about a message before saving it in the session). It now takes the answer's own usage, and Pi's count after each turn; a context of a replaced session no longer breaks it.
+- **OpenCode:** a failed lookup of the model's window was remembered as "no window", and the bar never showed up again for that model; it no longer throws into OpenCode either. A compaction's summary no longer counts as the context, and a message's session is taken from the message.
+- **Claude Code:** right after a compaction, the bar no longer goes back to the usage from before it.
+
 ## [0.18.1] - 2026-11-12
 
 0.17.0 was never published by itself (its CI run failed on a test that depended on the clock), so 0.18.0 brought it too, although its release notes left it out: **two visiting specialists, DevOps/SRE (Rafa) and security (Inés)**, who come up by the elevator when the agent's work is theirs, sit at a hot desk while it lasts and leave when the turn ends. See 0.18.0 below for the whole of it.
@@ -257,7 +285,8 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.18.1...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.18.1...v0.19.0
 [0.18.1]: https://github.com/fmunoztorrent/dev-office/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.16.0...v0.18.0
 [0.16.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.15.0...v0.16.0

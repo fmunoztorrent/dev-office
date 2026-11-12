@@ -2,7 +2,7 @@
 import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { season, moonPhase, sunTimes, weatherKind, fromOpenMeteo, simulatedWeather, daylight, outdoor, lightning, isSouth, parsePlace, placeLocation } from '../public/sky.js';
+import { season, moonPhase, sunTimes, weatherKind, fromOpenMeteo, simulatedWeather, daylight, outdoor, lightning, isSouth, parsePlace, placeLocation, skyLife } from '../public/sky.js';
 
 test('la estación depende de la fecha y del hemisferio', () => {
   const oct = new Date(2026, 9, 16), jan = new Date(2026, 0, 10), jul = new Date(2026, 6, 10), may = new Date(2026, 4, 5);
@@ -113,4 +113,28 @@ test('la ciudad guardada: nombre, coordenadas o las dos cosas', () => {
   const long = placeLocation({ name: 'x'.repeat(200), lat: -36.82699, lon: -73.04977 });
   assert.ok(long.length <= 80);
   assert.deepEqual(parsePlace(long).lat, -36.827);
+});
+
+// Life in the sky: what flies depends on the hour and the weather, and it is always the same for the same
+// moment (the browser and the terminal see the same birds).
+test('el cielo tiene vida: pájaros, avión y globo de día; murciélagos al atardecer; estrellas fugaces de noche; nada con lluvia', () => {
+  const day = { night: 0, dusk: 0, alt: 0.6 }, dusk = { night: 0.5, dusk: 0.6, alt: -0.05 }, night = { night: 1, dusk: 0, alt: -0.5 };
+  const clear = { kind: 'clear', clouds: 0.1, wind: 5 };
+  const seen = (light, weather, lod) => {
+    const kinds = new Set();
+    for (let t = 0; t < 900; t += 0.5) for (const f of skyLife({ t, light, weather, x0: 0, x1: 704, top: 6, low: 76, lod })) {
+      kinds.add(f.kind);
+      assert.ok(f.y >= -10 && f.y <= 90, `${f.kind} dentro del cielo`);
+    }
+    return [...kinds].sort();
+  };
+  assert.deepEqual(seen(day, clear), ['balloon', 'bird', 'plane']);
+  assert.deepEqual(seen(dusk, clear), ['bat', 'bird', 'plane']);
+  assert.deepEqual(seen(night, clear), ['meteor', 'plane', 'satellite']);
+  assert.ok(skyLife({ t: 0, light: night, weather: clear, x0: 0, x1: 704, top: 6, low: 76 }).every((f) => f.kind !== 'plane' || f.night), 'de noche, el avión es sus luces');
+  for (const kind of ['rain', 'storm', 'fog', 'snow', 'drizzle']) assert.deepEqual(seen(day, { kind, clouds: 0.9, wind: 10 }), kind === 'snow' ? ['bird', 'plane'] : [], kind);
+  assert.deepEqual(seen(day, { kind: 'cloudy', clouds: 0.8, wind: 30 }), ['bird', 'plane'], 'sin globo con viento y nubes');
+  // the same moment, the same sky; the terminal sees fewer (one flock, no balloon)
+  assert.deepEqual(skyLife({ t: 123.4, light: day, weather: clear, x0: 0, x1: 704, top: 6, low: 76 }), skyLife({ t: 123.4, light: day, weather: clear, x0: 0, x1: 704, top: 6, low: 76 }));
+  assert.ok(!seen(day, clear, 'low').includes('balloon'));
 });

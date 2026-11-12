@@ -214,6 +214,80 @@ export function humanizeCommand(line) {
   return background ? t('act.background', { what: text }) : text;
 }
 
+/**
+ * One of your own tools (server/mine.js), as the agent calls it through the office's MCP
+ * (mcp__dev-team-office__my_deploy, dev-team-office_my_deploy, run_my_tool { name }): its name, or null.
+ */
+export function myToolOf(tool, input = {}) {
+  const tl = String(tool || '').toLowerCase();
+  if (/(^|_)list_my_tools$/.test(tl)) return null;
+  if (/(^|_)run_my_tool$/.test(tl)) return input?.name ? String(input.name).toLowerCase().replace(/^my_/, '').replace(/_/g, '-') : null;
+  if (!/^my_|dev-team-office/.test(tl)) return null;
+  const m = tl.match(/(?:^|_)my_([a-z0-9_]+)$/);
+  return m ? m[1].replace(/_/g, '-') : null;
+}
+
+// ---------------------------------------------------------------- the badge
+// What someone is doing, as small as it gets: an icon and a word or two, over their head (✏️ cart.js,
+// 🧪 tests, 💾 commit). The bubble and the log say it in full; the badge is to see it at a glance.
+
+const BADGE_MAX = 12;
+const tag = (icon, word) => `${icon} ${short(word, BADGE_MAX)}`.trim();
+
+/** One simple command, as a badge. */
+function commandBadge({ prog, args }) {
+  const sub = args[0];
+  if (prog === 'git') {
+    const a = args.filter((w) => !flag(w));
+    return { commit: tag('💾', 'commit'), push: tag('🚀', 'push'), pull: tag('⬇️', 'pull'), fetch: tag('⬇️', 'fetch'), merge: tag('🔀', 'merge'), rebase: tag('🔀', 'rebase'), diff: tag('🌿', 'diff'), log: tag('🌿', 'log'), status: tag('🌿', 'status') }[a[0]] || tag('🌿', 'git');
+  }
+  if (prog === 'gh') return tag('🐙', sub || 'gh');
+  if (['npx', 'bunx'].includes(prog)) return commandBadge(command(args.filter((w) => !flag(w) || w === '--test').join(' ')));
+  const isTest = TEST_RUNNERS.has(prog) || (prog === 'node' && args.includes('--test')) || ((PKG_MANAGERS.has(prog) || ['go', 'cargo', 'deno', 'dotnet', 'mvn', 'gradle', 'mix'].includes(prog)) && (/^t(est)?$/.test(sub || '') || (sub === 'run' && /^test/.test(args[1] || ''))));
+  if (isTest) return tag('🧪', 'tests');
+  if (PKG_MANAGERS.has(prog) || ['brew', 'apt', 'apt-get', 'pip', 'pip3', 'pipx', 'uv', 'poetry', 'gem', 'composer'].includes(prog)) {
+    if (!sub || ['install', 'i', 'ci', 'add', 'uninstall', 'remove', 'rm'].includes(sub) || !PKG_MANAGERS.has(prog)) return tag('📦', 'deps');
+    const name = sub === 'run' || sub === 'run-script' ? args[1] || '' : sub;
+    if (/^(dev|start|serve|preview|watch)/.test(name)) return tag('▶️', name);
+    if (/^build/.test(name)) return tag('🔨', 'build');
+    if (/^(lint|check|format|fmt|typecheck|types)/.test(name)) return tag('🧹', name);
+    return tag('▶️', name || prog);
+  }
+  if (['build', 'compile', 'package'].includes(sub) || ['tsc', 'webpack', 'esbuild', 'rollup', 'tsup', 'make'].includes(prog)) return tag('🔨', prog === 'make' && sub ? sub : 'build');
+  if (['eslint', 'biome', 'ruff', 'flake8', 'pylint', 'rubocop', 'golangci-lint', 'shellcheck', 'prettier', 'black', 'gofmt', 'rustfmt'].includes(prog)) return tag('🧹', prog);
+  if (['grep', 'rg', 'ag', 'ack', 'find', 'fd'].includes(prog)) return tag('🔍', prog);
+  if (['cat', 'head', 'tail', 'less', 'bat', 'ls', 'tree'].includes(prog)) { const f = lastArg(args); return tag('📖', f ? base(f) : prog); }
+  if (['curl', 'wget', 'http', 'xh'].includes(prog)) { const url = args.find((w) => /^https?:\/\//.test(w)); try { return tag('🌐', new URL(url).host); } catch { return tag('🌐', 'web'); } }
+  if (['docker', 'podman', 'docker-compose', 'kubectl', 'helm', 'terraform'].includes(prog)) return tag('🐳', sub || prog);
+  if (['vite', 'next', 'nuxt', 'astro'].includes(prog)) return tag('▶️', prog);
+  if (RUNTIMES.has(prog)) { const f = firstArg(args.filter((w) => w !== 'run')); return tag('▶️', f ? base(f) : prog); }
+  if (['rm', 'mv', 'cp', 'mkdir', 'touch', 'chmod'].includes(prog)) return tag('🗂', prog);
+  if (['ssh', 'scp', 'rsync'].includes(prog)) return tag('🛰', prog);
+  return tag('⌨️', prog);
+}
+
+/** The badge of a tool with its input: ✏️ cart.js, 🔍 "total", 🧪 tests… (null: nothing to say). */
+export function badgeFor(tool, input = {}) {
+  const tl = String(tool || '').toLowerCase();
+  const file = input.file_path || input.filePath || input.path || input.notebook_path || '';
+  const mine = myToolOf(tool, input);
+  if (mine) return tag('🧰', mine);
+  if (/^(bash|shell|exec|exec_command|local_shell|unified_exec|run_command|terminal)$/.test(tl)) {
+    const main = segments(input.command || input.cmd || '').map(command).find((c) => c.prog && !NOISE.has(c.prog));
+    return main ? commandBadge(main) : tag('⌨️', 'shell');
+  }
+  if (/^(read|view|notebookread|read_file|cat)$/.test(tl)) return tag('📖', base(file) || t('badge.read'));
+  if (/^(edit|multiedit|write|notebookedit|apply_patch|patch|create|str_replace_editor|write_file|edit_file)$/.test(tl)) return tag('✏️', base(file) || t('badge.edit'));
+  if (/^(grep|glob|search|find|ls|list|list_dir|codebase_search)$/.test(tl)) return tag('🔍', input.pattern || input.query || base(file) || t('badge.search'));
+  if (/^(websearch|web_search)$/.test(tl)) return tag('🌐', input.query || 'web');
+  if (/^(webfetch|web_fetch|fetch)$/.test(tl)) { try { return tag('🌐', new URL(input.url).host); } catch { return tag('🌐', 'web'); } }
+  if (/^(todowrite|todo|update_plan|taskcreate|taskupdate)$/.test(tl)) return tag('📋', t('badge.plan'));
+  if (/^(askuserquestion|question|ask_user_choice|ask_user_question|ask_user)$/.test(tl)) return t('badge.ask');
+  if (/^(task|agent|subagent|subagent_run|subagent_continue)$/.test(tl)) return tag('👥', input.subagent_type || input.agent || t('badge.team'));
+  if (/^mcp__/.test(tl)) { const [, server, ...rest] = String(tool).split('__'); return tag('🔌', server === 'dev-team-office' ? rest.join(' ') : server); }
+  return tl ? tag('🛠', tool) : null;
+}
+
 /** A tool with no description of its own (an MCP's, an extension's): its name, in words. */
 export function humanizeTool(tool) {
   const name = String(tool || '');

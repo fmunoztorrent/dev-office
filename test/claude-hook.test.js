@@ -158,6 +158,16 @@ test('el hook manda cuánto contexto lleva la sesión (del transcript) y sigue s
     fs.appendFileSync(ctx.transcript, `${JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-5-5', usage: { ...usage, cache_read_input_tokens: 400_000 }, content: [] } })}\n`);
     await hook(ctx, server.url, { hook_event_name: 'Stop' });
     assert.equal(server.office.sessionSummary('c1').context.max, 1_000_000);
+    // it compacts: until its next answer the transcript's last usage is the old one, and it is not sent
+    await hook(ctx, server.url, { hook_event_name: 'PreCompact', trigger: 'manual' });
+    assert.ok(server.office.sessionSummary('c1').context.compacted, 'la barra dice que compacta');
+    fs.appendFileSync(ctx.transcript, `${JSON.stringify({ type: 'system', subtype: 'compact_boundary', content: 'Conversation compacted', compactMetadata: { trigger: 'manual', preTokens: 485_000 } })}\n`);
+    await hook(ctx, server.url, { hook_event_name: 'SessionStart', source: 'compact' });
+    assert.ok(server.office.sessionSummary('c1').context.compacted, 'no vuelve al uso de antes');
+    fs.appendFileSync(ctx.transcript, `${JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-5-5', usage: { ...usage, cache_read_input_tokens: 20_000 }, content: [] } })}\n`);
+    await hook(ctx, server.url, { hook_event_name: 'Stop' });
+    const after = server.office.sessionSummary('c1').context;
+    assert.deepEqual([after.used, after.compacted], [25_000, undefined]);
   } finally {
     await server.close();
   }

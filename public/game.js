@@ -1093,6 +1093,22 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     ctx.globalAlpha = 1;
   }
 
+  // What their agent is doing, as small as it gets (✏️ cart.js, 🧪 tests): a pill over their head, edged
+  // in their shirt's color. Above the name when they walk; a speech bubble covers it while they talk.
+  function drawTag(a, now) {
+    const text = a.badge;
+    if (!text || (a.ghost && a.fade < 0.5)) return;
+    const head = feetY(a) - 21 * P - (sitting(a) ? 0 : fpx(14)) - 5 + Math.sin(now / 420 + a.x) * 1;
+    ctx.font = `${fpx(13)}px ${FONT}, ${EMOJI}`;
+    const w = Math.ceil(ctx.measureText(text).width) + 10, h = fpx(13) + 4;
+    const bx = Math.round(iso ? a.x - w / 2 : Math.max(LEFT + 2, Math.min(W - w - 2, a.x - w / 2))), by = Math.round(head - h);
+    R(bx - 1, by - 1, w + 2, h + 2, a.cfg.shirt || '#8d99ae');
+    R(bx, by, w, h, '#161a2bee');
+    R(bx + w / 2 - 2, by + h + 1, 4, 2, a.cfg.shirt || '#8d99ae'); // the tip, toward the head
+    ctx.fillStyle = '#f1f3fa'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, bx + w / 2, by + h / 2 + 1);
+  }
+
   function drawBubble(a, now) {
     const b = a.bubble;
     if (!b || a.hidden) return;
@@ -1621,6 +1637,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     drawLightsIso(now, light);
     for (const a of Object.values(agents)) { use(personM(a)); drawDream(a, now); }
     if (person(selected)) { use(personM(person(selected))); drawPlumbob(person(selected), now); }
+    for (const a of [...Object.values(agents), ...sim.ghosts]) if (!a.bubble) { use(personM(a)); drawTag(a, now); }
     for (const a of Object.values(agents)) { use(personM(a)); drawBubble(a, now); }
     for (const g of sim.ghosts) if (g.fade > 0.5) { use(personM(g)); drawBubble(g, now); }
     use(ID);
@@ -1682,13 +1699,81 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
       use(ID);
     } finally { wing = null; }
   }
-  /** Behind the archive, in the top-down view: the ground it is dug into. */
+  /**
+   * The ground the archive is dug into (behind it in the top-down view, around it in the front one): its
+   * strata, its pebbles and its fossils, the older the deeper (ammonites, trilobites, fish, a fern, shells,
+   * bones and, at the bottom, a dinosaur). They sit where the room does not cover them in either view.
+   */
   function drawUnderground() {
     use(ID);
-    const bands = ['#3b2f2a', '#4a3a31', '#3f3129', '#54443a', '#3a2e27'];
-    for (let i = 0, y = 0; y < H; i++, y += 70) R(0, y, WORLD_W, 70, bands[i % bands.length]);
-    for (let i = 0; i < 60; i++) R((hash(i) * WORLD_W) | 0, (hash(i + 99) * H) | 0, 4 + ((hash(i + 7) * 8) | 0), 3, '#6b5a4e');
+    const bands = ['#3b2f2a', '#4a3a31', '#3f3129', '#54443a', '#3a2e27', '#463830', '#33281f'];
+    for (let i = 0, y = 0; y < H; i++, y += 70) { R(0, y, WORLD_W, 70, bands[i % bands.length]); R(0, y, WORLD_W, 1, '#2a201a'); }
+    for (let i = 0; i < 70; i++) {
+      const x = (hash(i) * WORLD_W) | 0, y = (hash(i + 99) * H) | 0, w = 4 + ((hash(i + 7) * 8) | 0);
+      R(x, y, w, 3, '#6b5a4e'); R(x + 1, y, w - 2, 1, '#7e6c5e');
+    }
+    for (const f of FOSSILS) (FOSSIL_DRAW[f.kind] || (() => {}))(f.x, f.y, f);
   }
+  // the fossils: [kind, x, y] in the world (seen in the top-down view, in the front one's margins, or both)
+  const FOSSILS = [
+    ['fish', 640, 30], ['bone', 860, 34], ['shell', 400, 26], ['fish', 980, 120], ['trilobite', 1190, 120],
+    ['ammonite', 25, 180], ['ammonite', 1190, 300], ['fish', 26, 400], ['fern', 1188, 430], ['shell', 22, 560],
+    ['ammonite', 1200, 610], ['trilobite', 420, 722], ['ammonite', 600, 736], ['bones', 1060, 650], ['trilobite', 1150, 700],
+    ['dino', 150, 664],
+  ].map(([kind, x, y]) => ({ kind, x, y }));
+  const BONE = { '#': '#e2d3ae', '+': '#b8a57e', '-': '#8c7a58', '*': '#f3ead2', v: '#f3ead2', o: '#2b211c', '~': '#2c231d' };
+  /** A small pixel map (a character per pixel of `s` px, centered on x, y). */
+  const sprite = (rows, x, y, s = 2) => {
+    const x0 = Math.round(x - (rows[0].length * s) / 2), y0 = Math.round(y - (rows.length * s) / 2);
+    rows.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (BONE[row[i]]) R(x0 + i * s, y0 + j * s, s, s, BONE[row[i]]); });
+  };
+  const hollow = (x, y, rx, ry, a = 1) => { ctx.globalAlpha = a; ctx.fillStyle = BONE.o; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; };
+  const FOSSIL_DRAW = {
+    // a spiral shell with its ribs, coiled in its hollow
+    ammonite(x, y) {
+      hollow(x, y, 14, 13);
+      for (let a = 0, i = 0; a < Math.PI * 5.4; a += Math.min(0.35, 2.4 / (1.2 + a * 1.62)), i++) {
+        const r = 1.2 + a * 1.62;
+        R(Math.round(x + Math.cos(a) * r) - 1, Math.round(y + Math.sin(a) * r * 0.94) - 1, 3, 3, i % 4 === 0 ? BONE['-'] : a > Math.PI * 4.6 ? BONE['*'] : BONE['#']);
+      }
+    },
+    trilobite: (x, y) => sprite([
+      '   ooooo   ', '  o##*##o  ', ' o##+#+##o ', 'o#-#####-#o', 'o#########o', ' o+#+*+#+o ', ' o#######o ',
+      ' o+#+*+#+o ', ' o#######o ', '  o+#*#+o  ', '  o#####o  ', '   o+#+o   ', '   o###o   ', '    o#o    ', '     o     ',
+    ], x, y),
+    fish: (x, y) => sprite([
+      'oo                 oooo ', 'o#o  #  #  #  #   o##*#o', ' o#o  #  #  #  # o#-###o', '  ##################+##o',
+      ' o#o  #  #  #  # o#####o', 'o#o  #  #  #  #   o###o ', 'oo                 ooo  ',
+    ], x, y),
+    bone: (x, y) => sprite([' oo        oo ', 'o#*o      o#*o', 'o##*#######+#o', 'o#+o      o#+o', ' oo        oo '], x, y),
+    bones: (x, y) => { sprite([' oo      oo ', 'o#*######+#o', ' oo      oo '], x - 10, y); sprite(['  o  ', ' o#o ', 'o#*#o', ' o#o ', '  o  '], x + 14, y + 8); sprite(['oo  ', 'o#o ', ' o#o', '  o#', '   o'], x + 4, y - 10); },
+    fern: (x, y) => sprite([
+      '    ~    ', '  ~ ~ ~  ', ' ~~ ~ ~~ ', '  ~ ~ ~  ', '~~~ ~ ~~~', ' ~~ ~ ~~ ', '~~~ ~ ~~~', '  ~ ~ ~  ', '~~~ ~ ~~~', ' ~~ ~ ~~ ', '  ~ ~ ~  ', '    ~    ', '    ~    ',
+    ], x, y),
+    shell: (x, y) => sprite(['   ooooo   ', ' oo#+#+#oo ', 'o#+#*#+#+#o', 'o+#+#+#+#+o', 'o#+#+#+#+#o', ' o+#+#+#+o ', '  o#+#+#o  ', '   o###o   ', '    ooo    '], x, y),
+    // at the bottom of everything: a whole dinosaur, lying on its side (x, y: its feet)
+    dino(x, y) {
+      hollow(x + 88, y - 30, 98, 42, 0.45);
+      const spine = [[0, -22], [20, -24], [40, -28], [60, -34], [80, -38], [100, -38], [120, -34], [134, -40], [144, -50], [150, -58]];
+      const at = (u) => { const i = Math.min(spine.length - 2, Math.floor(u * (spine.length - 1))), k = u * (spine.length - 1) - i; return [x + spine[i][0] + (spine[i + 1][0] - spine[i][0]) * k, y + spine[i][1] + (spine[i + 1][1] - spine[i][1]) * k]; };
+      for (let u = 0; u <= 1; u += 1 / 34) {
+        const [vx, vy] = at(u), big = u > 0.35 && u < 0.85;
+        R(Math.round(vx) - 1, Math.round(vy) - 1, big ? 4 : 3, big ? 4 : 3, BONE['#']);
+        if (big) R(Math.round(vx), Math.round(vy) - 6, 2, 4, BONE['+']); // the spines on its back
+      }
+      // the ribs, under the back
+      for (let rx = 70; rx <= 116; rx += 7) {
+        const [bx, by] = at(rx / 150);
+        for (let k = 0; k < 7; k++) R(Math.round(bx - k * 0.8), Math.round(by + 3 + k * 2.6), 2, 2, k > 4 ? BONE['+'] : BONE['#']);
+      }
+      // the hind leg (thigh, shin, foot) and the small arm
+      for (const [ax, ay, bx2, by2] of [[64, -32, 74, -14], [74, -14, 66, -2], [66, -2, 80, 0], [118, -32, 124, -22], [124, -22, 130, -24]]) {
+        for (let k = 0; k <= 8; k++) R(Math.round(x + ax + ((bx2 - ax) * k) / 8) - 2, Math.round(y + ay + ((by2 - ay) * k) / 8) - 2, 4, 4, k % 4 ? BONE['#'] : BONE['*']);
+      }
+      // its skull, the teeth showing
+      sprite(['   ######   ', ' ##+######* ', '##o##+######', '############', '#-v-v-v-v-##', ' #########  ', '  #######   '], x + 158, y - 62);
+    },
+  };
 
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
@@ -1702,7 +1787,8 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     if (floor !== 'office') {
       // the shared floors keep the office's 960-wide plan: in the front view, scaled to fit under the HUD's band
       ctx.save();
-      if (!iso) { use(ID); R(0, 0, WORLD_W, H, '#1b1f33'); use(FLOOR_FLAT); ctx.beginPath(); ctx.rect(0, 0, W, FLOOR_H); ctx.clip(); }
+      // (around the archive, the ground it is dug into, with its fossils)
+      if (!iso) { use(ID); if (floor === 'archive') drawUnderground(); else R(0, 0, WORLD_W, H, '#1b1f33'); use(FLOOR_FLAT); ctx.beginPath(); ctx.rect(0, 0, W, FLOOR_H); ctx.clip(); }
       drawFloor(G, floors[floor], now, light, { hover: floorHover, selected: floorSel });
       ctx.restore();
       use(ID);
@@ -1747,6 +1833,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     drawLights(now, light);
     for (const a of Object.values(agents)) drawDream(a, now);
     drawPlumbob(person(selected), now);
+    for (const a of [...Object.values(agents), ...sim.ghosts]) if (!a.bubble) drawTag(a, now);
     for (const a of Object.values(agents)) drawBubble(a, now);
     for (const g of sim.ghosts) if (g.fade > 0.5) drawBubble(g, now);
     use(ID);

@@ -203,8 +203,8 @@ Format and protocol with the agents: [pipelines.md](pipelines.md).
 | `PUT` | `/v1/settings` | `{ prefs?: { … }, appearance?: { role: { name?, title?, sex?, personality?, style?, shirt?, pants?, hair?, skin?, long?, beard?, glasses? } \| null }, office? }` |
 | `GET` | `/v1/characters/<role>?office=<id>` | Answers the character as JSON, to share it: `{ kind: "dev-team-office/character", version: 1, role, name, sex, personality, style, shirt, … }` |
 | `PUT` | `/v1/characters/<role>?office=<id>` | That JSON: it becomes that office's `<role>` (unknown or invalid keys are ignored; `400` if it is not a character) |
-| `GET` | `/v1/settings/export` | Your settings as a JSON file (`attachment`): `{ kind: "dev-team-office/settings", version: 1, app, exportedAt, prefs, departments: [{ id, name, timezone, location, instructions, autonomy, characters }], projects: [{ name, path, harness, bin?, args?, department, instructions, components? }], instructions: [{ path, instructions }] }`. Not the history (the log, briefs, directives, dailies, questions), the archive, nor the floor or office being watched (`prefs.view` keeps only `mode`). No secret is stored, so none travels |
-| `POST` | `/v1/settings/import` | That JSON. It merges: what it brings replaces what is here and the rest stays (a department's characters are left as the file has them). Each piece is checked on its own: `{ ok, applied: { prefs, departments, characters, projects, components, instructions }, skipped: [{ what, error }] }` (a project whose folder is not on this machine is skipped). `400` if it is not a settings file or comes from a newer version |
+| `GET` | `/v1/settings/export` | Your settings as a JSON file (`attachment`): `{ kind: "dev-team-office/settings", version: 1, app, exportedAt, prefs, departments: [{ id, name, timezone, location, instructions, autonomy, characters }], projects: [{ name, path, harness, bin?, args?, department, instructions, components? }], instructions: [{ path, instructions }], mine: { skills: [{ name, title, body, enabled }], tools: [{ name, title, body, enabled, config }] } }`. Not the history (the log, briefs, directives, dailies, questions), the archive, nor the floor or office being watched (`prefs.view` keeps only `mode`). No secret is stored, so none travels |
+| `POST` | `/v1/settings/import` | That JSON. It merges: what it brings replaces what is here and the rest stays (a department's characters are left as the file has them). Each piece is checked on its own: `{ ok, applied: { prefs, departments, characters, projects, components, instructions, skills, tools }, skipped: [{ what, error }] }` (a project whose folder is not on this machine is skipped; your skills are installed in this machine's personal folders). `400` if it is not a settings file or comes from a newer version |
 
 `prefs` (the general settings, all optional when changing them):
 
@@ -222,9 +222,37 @@ Format and protocol with the agents: [pipelines.md](pipelines.md).
 | `autonomy` | `{ clarify: bool, autonomous: bool }`: the analyst reviews each brief first; every brief asks the agent to work on its own to the end (both on by default). A department with its own `autonomy` (`guided` \| `balanced` \| `autonomous`) overrides it |
 | `standards` | The company's standards (the CTO's), up to 4000 characters: on top of every brief, before the department's and the project's instructions |
 | `capacity` | How many open briefs a department takes at once from a directive (1–20, 3 by default); the rest of its parts wait their turn (`status: "waiting"`) |
+| `compact` | `{ auto: bool, at: number, unit: "tokens" \| "pct" }`: past this much an agent's context is compacted on its own (on, 400 000 tokens by default; `pct`: a share of the model's window, 10–99; tokens: 10k–10M). Changing `unit` without `at` takes that unit's default (80 % or 400k). See [Auto-compaction](#auto-compaction) |
 
 - **Validation:** everything is validated before writing. On an error, the response is `400 { error }` (in the game's language) and nothing is touched.
 - **Live:** when the settings change the server broadcasts `{ type: "prefs", prefs }`; the appearance, `{ type: "appearance", appearance, office }` to whoever watches that office; the agents or sessions, `{ type: "targets", targets }`.
+
+## Auto-compaction
+
+When an agent's context goes past `prefs.compact` (400k tokens by default), the office asks the agent to compact it. It never touches the conversation itself:
+
+- **Pi and OpenCode connected to the office** (their extension registers with `can: [..., "compact"]`): they get `{ "type": "compact", "session", "used", "at" }` and compact when they are free (Pi: `ctx.compact()`; OpenCode: `client.session.summarize`), never in the middle of an answer or a pipeline.
+- **Any other agent in a herdr pane** (Claude Code, Codex…): when its turn ends, `/compact` is typed in its prompt.
+- **Otherwise** (Claude Code in a terminal of its own): the log says so, once, for you to type `/compact`.
+- **The Claude Code sessions the office opens** get the limit as their own (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, or `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` with `pct`): they compact by themselves.
+
+Each request leaves an `autocompact` event in the log (`via`: `agent`, `pane`, `manual`, or `failed` when the agent could not and says why). It is asked again after 10 minutes if the context is still past the limit; a compaction (`compact`) resets it. Until its next answer, the context bar shows the session as just compacted (`context.compacted`).
+
+## Yours: private skills and your own tools
+
+What is yours, not the company's (⚙ › Mine). It does not go to the archive, the briefs or any repo, and it travels in your settings file.
+
+| Method | Path | Body |
+|---|---|---|
+| `GET` | `/v1/mine` | `{ skills, tools, dirs }` (`dirs`: where your skills are installed: `~/.claude/skills` if Claude Code is on this machine, `~/.agents/skills` if Pi, OpenCode or Codex are) |
+| `POST` | `/v1/mine` | `{ kind: "skill" \| "tool", name, title, body, enabled?, config? }`: creates it, or updates the one of that kind and name. `201` (created) or `200`, with `installed: [{ dir, ok, action \| reason }]` for a skill |
+| `PUT` | `/v1/mine/<id>` | The same, to change that one (renaming a skill takes the old one out of your folders) |
+| `DELETE` | `/v1/mine/<id>` | Deletes it (a skill also leaves your folders) |
+| `GET` | `/v1/mine/tools` | Your tools that are on, whole (with their scripts): what the MCP server offers |
+
+- **A skill** (`name`: lowercase with dashes; `title`: what it does and when to use it; `body`: its instructions in Markdown) is written as `<dir>/<name>/SKILL.md` in each of `dirs`, with the office's mark. Off (`enabled: false`) or deleted, it is taken out. A skill of yours there without the mark is never stepped on (`reason: "exists"`).
+- **A tool** (`body`: its script) has `config: { run: "sh" | "bash" | "node" | "python3", params: [{ name, description?, required? }], timeout: 1–600 (seconds, 60 by default), role? }`. Your agents see it as the MCP tool `my_<name>` ([mcp.md](mcp.md)) and run it in the folder they work in: the parameters arrive in order (`$1`, `$2`… in sh/bash, `process.argv.slice(1)` in node, `sys.argv[1:]` in python3) and as `TOOL_<NAME>` variables. In the game it is used by the `role` you chose (otherwise, by what it does), said as "Using your tool “deploy”", with its badge 🧰.
+- Agents cannot create or change them (no MCP tool saves one): what runs in every session of yours is only yours to define.
 
 ## The weather outside
 
@@ -279,7 +307,7 @@ An agent that wants to receive tasks opens `ws://127.0.0.1:4317/v1/ws` and regis
 
 ```jsonc
 → { "type": "register", "agent": "pi", "session": "pi-1234", "cwd": "/path", "pid": 1234,
-    "can": ["task", "pipeline"], "project": { "dir", "name", "pipelines": [...] } }
+    "can": ["task", "pipeline", "compact"], "project": { "dir", "name", "pipelines": [...] } }
    // can be repeated when it changes session
 ← { "type": "task", "id": "t3", "text": "Add pagination", "session": "pi-1234" }
 → { "type": "task_update", "id": "t3", "status": "accepted" }
@@ -289,6 +317,8 @@ An agent that wants to receive tasks opens `ws://127.0.0.1:4317/v1/ws` and regis
 ← { "type": "pipeline", "id": "p1", "session": "pi-1234", "pipeline": "feature-tdd", "task": "…" }
 → { "type": "pipeline_update", "id": "p1", "status": "running", "stages": [...] }
 ← { "type": "pipeline_cancel", "id": "p1" }
+← { "type": "compact", "session": "pi-1234", "used": 412000, "at": 400000 }
+   // only to those that can: compact the context when free (see Auto-compaction)
 ```
 
 A registered connection does not receive the office's event broadcast, only its tasks. From a viewer, `{ "type": "task", text, agent, session?, mode?, cwd?, ref? }` creates a task; with `ref`, the server answers with an `ack`.
@@ -339,9 +369,12 @@ it received, or the oldest open one) and its work is done by that subagent's cha
 | `dispatch` | A task sent from the office (emitted by the server) | You (the PO) take the card to the manager |
 | `waiting` | The agent waits for the user | Orange banner; the manager goes to your desk (the PO's) and raises his hand |
 | `error` | A general error | The character gets stuck |
-| `compact` | Context compaction | The manager tidies up notes |
+| `compact` | Context compaction | The manager tidies up notes; the context bar shows it as just compacted until the next answer |
+| `autocompact` | The office asked the agent to compact (emitted by the server): `via` `agent` \| `pane` \| `manual` \| `failed` | A line in the log |
 | `done` | End of the task | Celebration at the table |
 | `context` | How full the agent's context is: `context: { used, max }` (tokens). Any event can also carry `context` | The context bar, at the bottom center. It is not logged |
+
+The office adds a `badge` to each `tool_start`, `thinking` and `subagent_start`: what is being done, as small as it gets (`✏️ cart.js`, `🧪 tests`, `💾 commit`, `🔍 total`, `👥 ex-qa`, `🧰 deploy`). The game draws it over the character until that session's turn ends.
 
 Roles: `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`, and the visiting specialists `devops` and `security` (no desk: they come up by the elevator while their work lasts). Aliases like `architect`, `arquitecto`, `tester`, `ux`, `sre` or `appsec` are accepted too. The PO is the user: a `role` of `po` sent by an agent is drawn as the analyst.
 

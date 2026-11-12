@@ -28,8 +28,8 @@
         <span class="ctx-chip" id="ctx-bar" hidden>
           <span class="ctx-heart" aria-hidden="true">♥</span>
           <b id="ctx-who"></b>
-          <span class="ctx-track" id="ctx-meter" role="meter" aria-valuemin="0" aria-valuemax="100"><span class="ctx-trail" id="ctx-trail"></span><span class="ctx-fill" id="ctx-fill"></span></span>
-          <span class="ctx-pct" id="ctx-pct"></span>
+          <span class="ctx-track" id="ctx-meter" role="meter" aria-valuemin="0" aria-valuemax="100"><span class="ctx-trail" id="ctx-trail"></span><span class="ctx-fill" id="ctx-fill"></span><span class="ctx-mark" id="ctx-mark" hidden></span></span>
+          <span class="ctx-pct" id="ctx-pct"></span><small class="ctx-used" id="ctx-used"></small>
         </span>
         <button id="svc-chip" class="svc-chip" type="button" hidden data-i18n-title="ui.servicesKey"></button>
         <button id="ask-chip" class="ask-chip" type="button" hidden></button>
@@ -380,6 +380,7 @@
         <button type="button" role="tab" data-tab="agents" aria-selected="false" data-i18n="settings.tabs.agents">Agents</button>
         <button type="button" role="tab" data-tab="look" aria-selected="false" data-i18n="settings.tabs.look">Characters</button>
         <button type="button" role="tab" data-tab="models" aria-selected="false" data-i18n="settings.tabs.models">Models</button>
+        <button type="button" role="tab" data-tab="mine" aria-selected="false" data-i18n="settings.tabs.mine">Mine</button>
       </nav>
       <div class="brief-body">
         <section data-panel="general" class="s-panel"></section>
@@ -387,6 +388,7 @@
         <section data-panel="agents" class="s-panel" hidden></section>
         <section data-panel="look" class="s-panel" hidden></section>
         <section data-panel="models" class="s-panel" hidden></section>
+        <section data-panel="mine" class="s-panel" hidden></section>
         <p id="s-msg" class="b-problem" role="status"></p>
       </div>
       <footer class="brief-foot">

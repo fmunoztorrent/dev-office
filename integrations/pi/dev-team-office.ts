@@ -15,6 +15,8 @@
 // - pipeline: runs a .devteam/ pipeline INSIDE this session, stage by stage: switches model
 //             with setModel, sends the stage's prompt, waits for Pi to finish (agent_settled),
 //             runs the gate and goes on. Loops and gates are decided by devteam.mjs.
+// - context:  how full the context is, after each answer (the office's bar).
+// - compact:  the office asks to compact it (past your threshold, ⚙ › General): Pi does it when free.
 
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { spawn } from 'node:child_process';
@@ -248,34 +250,63 @@ export default function (pi: ExtensionAPI) {
     const output = nested || sub ? resultText(event, sub) : '';
     report({ kind: 'tool_end', tool: event.toolName, toolUseId: event.toolCallId, input: event.input, ok: !event.isError, ...(output ? { output } : {}) });
   });
-  // How full the context is (Pi says it: getContextUsage), after each answer, when it moved.
+  // How full the context is, when it moved. When an answer ends, the answer itself says it exactly (its
+  // usage: what the model read, cached or not, and what it wrote): Pi tells extensions about a message
+  // before saving it in the session, so getContextUsage() would still be one message behind. After each
+  // turn (its tool results saved) and at the end, Pi's own count (getContextUsage). Right after a
+  // compaction Pi does not know it yet (null) until the next answer: nothing is sent.
   // A nested subagent's context is its own: it is not the session's bar.
   let lastContext = '';
-  const reportContext = (c: any) => {
+  const usedBy = (m: any) => {
+    const u = m?.role === 'assistant' && m.stopReason !== 'aborted' && m.stopReason !== 'error' ? m.usage : null;
+    return u ? Number(u.totalTokens) || (Number(u.input) || 0) + (Number(u.output) || 0) + (Number(u.cacheRead) || 0) + (Number(u.cacheWrite) || 0) : 0;
+  };
+  const reportContext = (c: any, message?: any) => {
     if (nested) return;
-    const u = c?.getContextUsage?.();
-    if (!u || u.tokens == null || !u.contextWindow) return;
-    const key = `${Math.round(u.tokens / 1000)}/${u.contextWindow}`;
+    let u: any = null;
+    try { u = c?.getContextUsage?.(); } catch { /* a context of a session that was replaced */ }
+    const max = Number(u?.contextWindow) || Number(c?.model?.contextWindow) || 0;
+    const used = usedBy(message) || Number(u?.tokens) || 0;
+    if (!max || !used) return;
+    const key = `${Math.round(used / 1000)}/${max}`;
     if (key === lastContext) return;
     lastContext = key;
-    report({ kind: 'context', context: { used: u.tokens, max: u.contextWindow } });
+    report({ kind: 'context', context: { used, max } });
   };
   pi.on('message_end', async (event: any, c: any) => {
-    if (event.message?.role === 'assistant') reportContext(c || ctx);
+    if (event.message?.role === 'assistant') reportContext(c || ctx, event.message);
     if (event.message?.role !== 'assistant' || !lib) return;
     const t = lib.textOf(event.message);
     if (t) lastText = t;
   });
-  pi.on('session_compact', async () => report({ kind: 'compact' }));
+  pi.on('turn_end', async (_e: any, c: any) => { ctx = c; reportContext(c); });
+  pi.on('session_compact', async () => { lastContext = ''; compacting = false; report({ kind: 'compact' }); });
   // with a pipeline in progress each stage ends a turn: the pipeline says "done" at the end
   pi.on('agent_end', async (_e: any, c: any) => { ctx = c; reportContext(c); if (!run) report({ kind: 'turn_end' }); });
   pi.on('agent_settled', async (event: any, c: any) => {
     ctx = c;
-    if (!run || !waiting) return;
+    if (!run || !waiting) return compactIfAsked();
     waiting = false;
     if (event.aborted) { run.cancel('cancelado en Pi'); return finish(); }
     await apply(await run.advance(lastText));
   });
+
+  // The office asks to compact the context (it went past your threshold, ⚙ › General): Pi does it
+  // (ctx.compact) when it is free, never in the middle of an answer or of a pipeline (compacting aborts
+  // what is running).
+  let compactAsked = false;
+  let compacting = false;
+  function compactIfAsked() {
+    if (!compactAsked || compacting || run || !ctx?.compact || !(ctx.isIdle?.() ?? false)) return;
+    compactAsked = false;
+    compacting = true;
+    try {
+      ctx.compact({
+        onComplete: () => { compacting = false; },
+        onError: (err: any) => { compacting = false; report({ kind: 'autocompact', via: 'failed', text: String(err?.message || err) }); },
+      });
+    } catch { compacting = false; }
+  }
   // Pi closes right away: pending notices are awaited (each one has its own 1.5 s cap)
   pi.on('session_shutdown', async () => { closed = true; clearTimeout(retry); ws?.close(); report({ kind: 'session_end' }); await chain; });
 
@@ -315,6 +346,7 @@ export default function (pi: ExtensionAPI) {
     run = null;
     if (originalModel) pi.setModel(originalModel).catch(() => {}); // back to the model the session had
     originalModel = null;
+    setTimeout(compactIfAsked, 0); // a compaction asked for while the pipeline ran
   }
 
   async function startPipeline(msg: any) {
@@ -359,7 +391,7 @@ export default function (pi: ExtensionAPI) {
 
   function register() {
     const project = lib ? lib.catalogEntry(lib.loadProject(cwd)) : null;
-    wsSend({ type: 'register', agent: 'pi', session, cwd, pid: process.pid, can: lib ? ['task', 'pipeline'] : ['task'], project, ...WHERE });
+    wsSend({ type: 'register', agent: 'pi', session, cwd, pid: process.pid, can: lib ? ['task', 'pipeline', 'compact'] : ['task', 'compact'], project, ...WHERE });
     reportAgentRoles();
   }
   let retry: any = null;
@@ -386,6 +418,9 @@ export default function (pi: ExtensionAPI) {
         run.cancel();
         ctx?.abort?.();
         finish();
+      } else if (msg.type === 'compact') {
+        compactAsked = true;
+        compactIfAsked();
       }
     };
     ws.onclose = () => { const was = ws?.readyState; ws = null; if (was !== undefined) showStatus(false); if (!closed) { retry = setTimeout(connect, 3000); retry.unref?.(); } };

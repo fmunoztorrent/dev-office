@@ -19,6 +19,7 @@ import { realDir } from './paths.js';
 import { guideFor, guideText } from './guides.js';
 import { spawnOffice } from './lifecycle.js';
 import { KNOWLEDGE_KINDS } from './store.js';
+import { toolSpec, toolNamed, runTool } from './mine.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
@@ -28,6 +29,7 @@ const INSTRUCTIONS = `Dev Team Office is a live pixel-art office that shows what
 To add yourself and this project to the office in one step, call join_office (or the user runs the \`join\` prompt): it starts the office if needed, registers the project and returns which character plays each subagent.
 Use these tools to: register the current project (register_project) so the office can send it work; see what a project's harness brings (detect_project); tell the office which role and phase you are in while you work (report_activity: task → phase … → done); send a prompt to another registered agent (send_task); and open herdr panes for side activities (open_pane).
 The company has two shared floors. The archive keeps what the company knows: before starting a task, search it (search_knowledge, then get_knowledge for the whole entry) for decisions, docs, skills and connectors that apply; when you settle something worth keeping (a decision, a convention, how something works), save it (save_knowledge). The executive floor gives orders that cover several offices or projects at once (send_directive, list_directives); when a brief starts with 🏛 it is your part of one: do only this project's part.
+The user may have their own tools (small programs they defined in the office): they show up as my_<name> tools; list_my_tools lists them and run_my_tool runs one by name. Use them when they fit what you are doing: they are what the user wants used for that.
 If the office is not running, office_start opens it; office_status gives its URL. Reporting is best effort: never stop or retry your real work because the office is offline.`;
 
 /** The connecting client's harness, from the name it sends in `initialize` (clientInfo.name). */
@@ -377,6 +379,25 @@ const TOOLS = [
     },
     annotations: { readOnlyHint: false, openWorldHint: false },
   },
+  {
+    name: 'list_my_tools',
+    title: "List the user's own tools",
+    description: "The user's own tools: small programs they defined in Dev Team Office (› Mine) for concrete jobs, with what each does and its parameters. Each one is also a tool of its own (my_<name>); run_my_tool runs one by name (also one added after this session started).",
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  },
+  {
+    name: 'run_my_tool',
+    title: "Run one of the user's tools",
+    description: "Runs one of the user's own tools (see list_my_tools) in your working folder, with its parameters, and returns its output and exit code.",
+    inputSchema: {
+      type: 'object',
+      properties: { name: { type: 'string', description: 'The tool (as list_my_tools names it)' }, args: { type: 'object', additionalProperties: { type: 'string' }, description: 'Its parameters, by name' } },
+      required: ['name'],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, openWorldHint: true },
+  },
 ];
 
 class ToolError extends Error {}
@@ -441,6 +462,27 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
       const d = detectHarness(a.path);
       return { ...a, exists: d.exists, kinds: d.kinds, entries: d.entries.filter((e) => e.harnesses.includes(a.harness)).map((e) => ({ id: e.id, label: e.label })), sessions: [] };
     });
+  }
+
+  // the user's own tools (server/mine.js): from the office (or its database, if it is off), a few seconds fresh
+  let mineCache = { at: 0, tools: [] };
+  async function myTools() {
+    if (Date.now() - mineCache.at < 3000) return mineCache.tools;
+    let tools = [];
+    try {
+      if (await running()) tools = (await api('/v1/mine/tools'))?.tools || [];
+      else if (openStore) tools = local().listMine('tool').filter((x) => x.enabled);
+    } catch { tools = []; }
+    mineCache = { at: Date.now(), tools };
+    return tools;
+  }
+  async function useMine(name, args = {}) {
+    const tool = toolNamed(await myTools(), name);
+    need(tool, `no tool of the user named "${name}" (list_my_tools lists them)`);
+    const out = await runTool(tool, args, { cwd, env });
+    if (out.invalid) throw new ToolError(out.output);
+    const head = out.timedOut ? `${tool.name}: stopped after ${tool.config?.timeout || 60} s` : `${tool.name}: exit ${out.code}`;
+    return { text: `${head}\n${out.output.trim() || '(no output)'}`, error: out.timedOut || out.code !== 0 };
   }
 
   const summarize = (a) => ({ id: a.id, name: a.name, path: a.path, harness: a.harness, office: a.office, ...(a.instructions ? { instructions: a.instructions } : {}), ...(a.kinds?.length ? { kinds: a.kinds } : {}), ...(a.entries ? { entries: a.entries.map((e) => e.id) } : {}), ...(a.sessions ? { openSessions: a.sessions.filter((s) => s.live).length } : {}) });
@@ -774,6 +816,19 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
       return { text: `📚 ${out.created ? 'Saved' : 'Updated'} in the archive: ${e.id} [${e.kind}] ${e.name ? `${e.name} — ` : ''}${e.title}${live ? '' : ' · the office is offline: it shows up when it opens'}`, data: { id: e.id, kind: e.kind, name: e.name, title: e.title, created: !!out.created } };
     },
 
+    async list_my_tools() {
+      const tools = await myTools();
+      const line = (x) => `my_${x.name.replace(/-/g, '_')} — ${x.title} (${x.config?.run || 'sh'}${x.config?.params?.length ? `; ${x.config.params.map((p) => `${p.name}${p.required ? '' : '?'}`).join(', ')}` : ''})`;
+      return { text: tools.length ? tools.map(line).join('\n') : 'The user has no tools of their own yet (they are defined in Dev Team Office › ⚙ › Mine).', data: { tools: tools.map((x) => ({ name: x.name, title: x.title, run: x.config?.run, params: x.config?.params || [] })) } };
+    },
+
+    async run_my_tool({ name, args } = {}) {
+      need(name, 'name is required');
+      const out = await useMine(name, args && typeof args === 'object' ? args : {});
+      if (out.error) throw new ToolError(out.text);
+      return { text: out.text };
+    },
+
     async list_teams() {
       const { listTeams } = await import('../bin/team.js');
       const teams = listTeams();
@@ -789,6 +844,15 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
   };
 
   async function call(name, args) {
+    // one of the user's own tools (my_<name>): it runs here, where the agent works
+    if (!handlers[name] && /^my_/.test(String(name))) {
+      try {
+        const out = await useMine(name, args || {});
+        return { content: [{ type: 'text', text: out.text }], ...(out.error ? { isError: true } : {}) };
+      } catch (err) {
+        return { content: [{ type: 'text', text: err instanceof ToolError ? err.message : `Error: ${err.message}` }], isError: true };
+      }
+    }
     const fn = handlers[name];
     if (!fn) return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
     try {
@@ -823,7 +887,7 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
         });
       }
       case 'ping': return reply({});
-      case 'tools/list': return reply({ tools: TOOLS });
+      case 'tools/list': return reply({ tools: [...TOOLS, ...(await myTools()).map(toolSpec)] });
       case 'tools/call': return reply(await call(params?.name, params?.arguments));
       case 'resources/list': return reply({ resources: [] });
       case 'prompts/list': return reply({ prompts: PROMPTS });

@@ -208,6 +208,8 @@ export const ELEVATOR = { x: -112, w: 96, spot: { x: HALL.spine, y: 134 } };
 const DOOR_IN = { x: 14, y: CORRIDOR_LOW }, DOOR_OUT = { x: HALL.spine, y: CORRIDOR_LOW };
 const NEWCOMER_NAMES = ['Nico', 'Sam', 'Alex', 'Robin', 'Fran', 'Dani', 'Cami', 'Juli', 'Ale', 'Gabi', 'Santi', 'Vale', 'Noa', 'Eli'];
 const FADE_MS = 900;
+// how long the badge of what their agent does stays without news (the end of the turn takes it away first)
+export const TAG_MS = 120_000;
 const DEVS = ['backend', 'frontend', 'designer'];
 const SPEED = 120; // world px per second when walking
 export const LUNCH = { start: 13 * 60, end: 14 * 60 }; // minutes of the day
@@ -444,6 +446,7 @@ class Agent {
     this.text = '';
     this.bubble = null;
     this.badges = new Map(); // assigned subagents: id → description
+    this.tag = null;         // what their agent is doing, as a badge over their head: { text, session, until }
     this.walkT = 0;
     this.taskAt = -Infinity; // the last time they did real work (their screen stays on a while)
     this.lastActive = clock() + random() * 20_000;
@@ -471,6 +474,8 @@ class Agent {
   get walking() { return this.queue[0]?.t === 'walk'; }
 
   say(text, ms = 3800, tone) { this.bubble = { text, until: this.clock() + ms, tone }; }
+  /** The badge over their head (what their agent is doing), while it lasts. */
+  get badge() { return this.tag && !this.hidden && this.clock() < this.tag.until ? this.tag.text : null; }
 
   setState(state, ms = 6000) {
     this.state = state;
@@ -771,6 +776,12 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     const a = ghost || agents[ev.role] || specialist(ev); // DevOps and security have no desk: they come up
     const now = simNow;
     if (a) log(a, ev.text);
+    // the badge over their head: what their agent is doing now (it goes when the turn ends, or after a while)
+    // (a subagent's is its newcomer's, not its role's character's: see subagent_start)
+    if (a && ev.badge && ev.kind !== 'subagent_start') a.tag = { text: ev.badge, session: ev.session || null, until: now + TAG_MS };
+    if (['turn_end', 'done', 'session_end'].includes(ev.kind) && !ev.subId) {
+      for (const x of [...Object.values(agents), ...ghosts.values()]) if (x.tag && (!ev.session || !x.tag.session || x.tag.session === ev.session)) x.tag = null;
+    }
     switch (ev.kind) {
       case 'session_start':
         agents.manager.say(T('sim.sessionStart'));
@@ -844,6 +855,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         if (g) {
           // a newcomer: Marco brings them the card, and their role's character says hello
           g.badges.set(ev.subId, ev.text);
+          if (ev.badge) g.tag = { text: ev.badge, session: ev.session || null, until: now + TAG_MS };
           note('newcomer', ev.role, { name: g.cfg.name, text: ev.text });
           const main = agents[ev.role];
           if (main?.free) later(R(900, 1800), () => main.say(T('sim.newcomer.welcome', { name: g.cfg.name, g: g.cfg.sex }), 2600));
@@ -853,6 +865,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
           break;
         }
         a.badges.set(ev.subId, ev.text);
+        if (ev.badge) a.tag = { text: ev.badge, session: ev.session || null, until: now + TAG_MS }; // no newcomer: the role's character does it
         const m = agents.manager;
         const line = T('sim.assignSub', { name: a.cfg.name, text: ev.text });
         if (ev.role !== 'manager') visit(m, ev.role, line, { carry: true, after: () => work(a, T('sim.subtask', { text: ev.text }), 'working', 7000) });
@@ -2093,7 +2106,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     },
     reset() {
       for (const a of Object.values(agents)) {
-        Object.assign(a, { stress: null, tired: false, taskAt: -Infinity, queue: [], seated: true, x: a.cfg.seat.x, y: a.cfg.seat.y, state: 'idle', bubble: null, handUp: false, history: [], dream: null, scene: null, carry: false, perch: false, hidden: false, dance: false, food: null, lunch: null, back: false, tvSeat: null, diningSeat: null });
+        Object.assign(a, { stress: null, tired: false, taskAt: -Infinity, queue: [], seated: true, x: a.cfg.seat.x, y: a.cfg.seat.y, state: 'idle', bubble: null, handUp: false, history: [], dream: null, scene: null, carry: false, perch: false, hidden: false, dance: false, food: null, lunch: null, back: false, tvSeat: null, diningSeat: null, tag: null });
         a.badges.clear();
       }
       ghosts.clear();

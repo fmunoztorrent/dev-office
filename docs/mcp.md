@@ -38,6 +38,8 @@ This page explains what it does and how to register it by hand in another client
 | `get_knowledge` | `id` \| `name` + `kind?` | An entry whole (a skill or connector also by its name). It counts as a read |
 | `save_knowledge` | `kind`, `title`, `body?`, `name?`, `tags?`, `office?`, `command?` + `args?` \| `url?`, `id?` | Saves a note, decision, doc, skill (`name`, `title`: what it does and when to use it, `body`: its instructions) or connector (`name`, `command`/`args` or `url`; no secrets). The same `name` (or `id`) updates it. Works with the office off too |
 | `list_teams` · `install_team` | `team`, `harness`, `project?` | The team packs (one subagent per role), for Pi, Claude Code, OpenCode or Codex |
+| `my_<name>` | the tool's parameters | **The user's own tools** (⚙ › Mine, [api.md](api.md#yours-private-skills-and-your-own-tools)): each one that is on is a tool of its own, with its description and parameters. It runs in the agent's folder and answers its output and exit code (an error if it is not 0 or it ran out of time). Works with the office off too (it reads the database) |
+| `list_my_tools` · `run_my_tool` | — · `name`, `args?` | The user's tools, and running one by name: also one added after the session started (the tool list is read when the agent connects) |
 
 Results are text: a line to read and, below it, the JSON with the data.
 

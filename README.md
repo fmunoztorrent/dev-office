@@ -71,7 +71,9 @@ What you see in the office:
 - **They walk:** their feet step (a stride, the other foot in the air, the toes pointing the way) and their arms swing.
 - **The chit-chat follows the work:** while there is a task they talk about who is doing what, how the board is going, who got stuck or that they are waiting for your OK.
 - **The whiteboard, expanded:** with tickets on it, clicking it grows it over the office and shows the tasks as **post-its** in three columns (to do, doing, done). Without tickets, the click opens a new brief.
-- **The context, as a health bar** ♥: next to the connection and the weather (top left), how much context the focused session's agent has left, or the latest one that reports it (Claude Code, Pi and OpenCode do). It empties as the context fills up, turning orange, then red; hovering it shows the agent and the tokens. Until an agent reports it, it is there, grey.
+- **The context, as a health bar** ♥: next to the connection and the weather (top left), how much context the focused session's agent has left, or the latest one that reports it (Claude Code, Pi and OpenCode do, after each answer). It empties as the context fills up, turning orange, then red; next to the % it says the tokens used (`312k`: a 1M window barely moves the %), and a light-blue notch marks where it compacts by itself. Hovering it shows the agent and the tokens. Until an agent reports it, it is there, grey.
+- **Auto-compaction:** past your limit (⚙ › General › The agents' context: **400k tokens by default**, or a share of the window), the office asks the agent to compact its context when its turn ends. Pi and OpenCode do it themselves; inside herdr, `/compact` is typed in the agent's pane; the Claude Code sessions the office opens get the limit as their own (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`); otherwise the log tells you to type `/compact`. While it compacts, the bar turns striped light blue 🗜.
+- **A badge over each character**, as small as it gets, with what their agent is doing right now: `✏️ cart.js`, `🧪 tests`, `💾 commit`, `🔍 total`, `🌐 docs.python.org`, `👥 ex-qa`, `🧰 deploy`. It goes when that session's turn ends (in the browser's two views and in the terminal game).
 - **An error:** the character shakes with red sparks and the Tech Lead comes over to help.
 - **A pending permission:** the manager goes to your desk (the PO's) to ask for your OK, raises his hand and an orange banner shows up. If the agent asks you something (`AskUserQuestion`), he brings you the question.
 - **`Stop`:** confetti, and the whole team celebrates at the meeting table.
@@ -87,7 +89,7 @@ On top of that, each character has **a life of their own**: needs that grow over
 - **The office takes the whole floor:** its door (with its EXIT sign) opens to a **hallway** with the **elevator** at its end, and next to it is the **bathroom 🚻**, a room with two stalls and a sink with its mirror. Whoever goes walks in, takes a free stall (its light turns red), then washes their hands; with both taken, the next one waits in the hallway, restless. At the mirror there is **whispering 🤫**: whoever meets there gossips, and the product team sometimes goes together just for that.
 - **Sometimes the server catches fire 🔥:** the alarm goes off, product screams, Diego (or whoever is around) grabs the extinguisher, the technical team puts it out, restarts the servers and Tomás schedules the postmortem.
 - **The café** is a modern office's: neon, tiles, an espresso machine with steam, a display case with cakes, a drinks fridge, a high table and an oak floor. **Below it, the dining room:** a low wall with glass and its sign separates it (you enter through the door or from the lower aisle), a ceramic floor, a rug, the long table with its tablecloth and two pendant lamps that light the table at night.
-- **The back wall is glass.** Behind it you see the city at the real time: the sun crosses the sky and sets behind the hills, the sky turns reddish at sunset, at night the buildings' windows, the street lamps and the car lights come on, and the moon rises with the day's phase.
+- **The back wall is glass.** Behind it you see the city at the real time: the sun crosses the sky and sets behind the hills, the sky turns reddish at sunset, at night the buildings' windows, the street lamps and the car lights come on, and the moon rises with the day's phase. **The sky has life:** birds in a V, a plane now and then (its contrail by day, its lights at night), a hot-air balloon on calm days, bats at dusk, shooting stars and a satellite on clear nights; nothing flies in the rain.
 - **The date matters:** the season (by hemisphere) changes the park, with flowers in spring, deep green in summer, red leaves falling in autumn and bare trees in winter. The snow on the hills and the times of sunrise and sunset change too.
 - **The weather is the real one** (from each office's city), from [Open-Meteo](https://open-meteo.com) (free, no API key): clouds, fog, drizzle, rain with drops sliding down the glass, snow, and storms with lightning that lights up the office. When it is cold, the glass fogs up. When the weather changes someone comments on it, rain makes people want coffee and TV, and sometimes thunder scares someone. Offline, the office makes up a weather by season. The weather also shows in the HUD and on the TV.
 - **The living room** has a TV on a tripod and a sofa. When they have nothing to do, the technical people sometimes sit down to watch it, from behind (more often when it rains). The TV shows the weather, the team news ("LIVE: the team is working on…"), football if someone is watching, and **breaking news** if the server catches fire.
@@ -260,7 +262,9 @@ The order goes to **operations** (the COO), who splits it across the departments
 
 The directives dialog also shows **the company**: each department's health now, its autonomy and how its briefs flowed in the last 7 days (how many, how many without failing, and the median time from sent to done).
 
-**📚 The archive**, in the basement: what the company knows, shared by every office and every agent.
+The executive floor is dressed for it: a walnut parquet, a Persian rug under the boardroom table, velvet drapes on the window, a crystal chandelier (warm at night, like the brass sconces and the bankers' lamps), leather chairs, a library, a globe, a marble bust and a sideboard with the coffee service.
+
+**📚 The archive**, in the basement: what the company knows, shared by every office and every agent. It is dug into the ground, and the ground has its **fossils**: ammonites, trilobites, fish, a fern, shells, bones and, at the bottom, a whole dinosaur (around the room in both views).
 
 - **The company's knowledge base (a RAG):** notes, decisions, documents, the **glossary** (each term with its definition and synonyms) and the directives' minutes. **📥 Load** brings in files (Markdown, text, CSV, JSON, HTML; PDF and Word with `pdftotext` or `pandoc` on the machine), dropped or picked, or a web address; each one can be for the whole company, a department or a project, and valid until a date.
   - **You read it as a document** (rendered Markdown, ⬇ .md to download it): the readable text is kept as it is.
@@ -380,9 +384,10 @@ The office's gear (top right, on the web and in the terminal; also with `c`):
 
 | Tab | What is there |
 |---|---|
-| General | **Your settings as a JSON file:** ⬇ Export / ⬆ Import what is yours (the general settings, the departments with their instructions, autonomy and characters, the projects with their instructions and components), to keep them or take them to another machine; not the history or the archive (also `dev-team-office settings export|import`). **Language** (English by default, or Spanish: it changes everything live, on the web, in the terminal and in the log), the company's **time zone** (search by typing the city, the region or the country) and its **city** (among the cities of that zone's country), real or simulated weather, office life in the log, the **office view** (front or isometric top-down), and herdr: agents in panes, each subagent in its pane, which way the pane opens and which agent opens at start |
+| General | **Your settings as a JSON file:** ⬇ Export / ⬆ Import what is yours (the general settings, the departments with their instructions, autonomy and characters, the projects with their instructions and components, your skills and tools), to keep them or take them to another machine; not the history or the archive (also `dev-team-office settings export|import`). **Language** (English by default, or Spanish: it changes everything live, on the web, in the terminal and in the log), the company's **time zone** (search by typing the city, the region or the country) and its **city** (among the cities of that zone's country), real or simulated weather, office life in the log, the **office view** (front or isometric top-down), and herdr: agents in panes, each subagent in its pane, which way the pane opens and which agent opens at start |
 | Departments | The departments maintainer: each department (an office) with its **instructions**, its **projects** (＋ a new one, or bring an existing one into it), its **people** (👥 edit its characters), its time zone and its city for the weather; view, edit and delete (its projects move to the main one) |
 | Agents | The maintainer: add (full path + CLI + department; it detects its harness as you type it), the **project's instructions**, edit, delete and ✉ send it a prompt. Also the open sessions that are not registered |
+| Mine | **What is yours, not the company's.** **My skills:** private skills (what it does and when to use it, and its instructions), installed in your personal folder of each agent (`~/.claude/skills`, `~/.agents/skills`), never in a repo; turning one off takes it out. **My tools:** small programs of yours for concrete jobs (a script in sh, bash, node or python3, with its parameters, a time limit and who uses it in the game): your agents see each one as the MCP tool `my_<name>` and run it in the folder they work in. Neither goes to the archive or the briefs, and both travel in your settings file. Agents cannot create them: only you |
 | Characters | Name, title, **sex** (their face, their default look and how the texts about them are written: *Diseñadora*/*Diseñador*), **personality** (chatty, focused, anxious, calm or dreamer: how often they chat, take breaks, doubt, watch TV or daydream), **style** (how they answer you, like Claude's: normal, concise, explanatory, teacher or formal), colors with a palette and a free picker (skin, hair, shirt, pants), long hair, beard and glasses of each character of the office you are watching. In the terminal, ◂ ▸ go through each palette and typing `#rrggbb` gives any other color. **⬇ Export / ⬆ Import:** a character as a JSON file, to share them (also `dev-team-office character export|import` and `GET|PUT /v1/characters/<role>`) |
 
 **Everything "local" comes from the time zone:** the date and time (the clock, lunch, day and night), the **country** and the city (from the IANA zone table, offline: `America/Santiago` → Chile, Santiago, −33.45, −70.67) and, with those coordinates, **the weather**. By default, the system's zone.
@@ -393,7 +398,8 @@ Everything is saved in an **SQLite** database (also from the CLI: `dev-team-offi
 - `agents`: the registered agents (with their office);
 - `projects`: each project folder's instructions;
 - `settings`: the general settings (`prefs`: language, time zone, weather, herdr, log and the office being watched) and each office's appearance;
-- `prompts`: the history of what you sent them and how it ended.
+- `prompts`: the history of what you sent them and how it ended;
+- `mine`: your private skills and your own tools.
 
 Databases from earlier versions migrate by themselves (the main office is added). `DEV_TEAM_OFFICE_LANG=es` picks the language until one has been saved.
 
@@ -467,6 +473,8 @@ server/archive.js       the archive: the company's knowledge, and installing its
 server/standup.js       the daily standup: each character's report from the real log, and its minutes
 server/components.js    the company's map (departments → projects → components) and an order's impact on it
 server/settings-io.js   your settings as a JSON file: export and import
+server/compact.js       auto-compaction: past your limit, the agent is asked to compact (its way)
+server/mine.js          yours: private skills (in your personal folders) and your own tools (run through the MCP)
 server/ws.js            dependency-free WebSocket (RFC 6455)
 server/server.js        HTTP + WebSocket API over TCP and a Unix socket
 server/adapters.js      native payload → generic format
@@ -492,6 +500,7 @@ public/settings-ui.js   ⚙ Settings on the web
 public/sprite.js        a character's portrait (sheet and settings)
 public/game.js          the office on canvas, for the browser (glass, lights, night, effects), in front or top-down view
 public/floors.js        the two shared floors on canvas (the executive one and the archive): their scenes and people
+public/compact.js       the auto-compaction's limit in tokens (shared by the server and the context bar)
 public/floors-ui.js     their dialogs: directives and the archive
 public/iso.js           the top-down view's isometric camera (floor, walls and sprites with affine transforms)
 tui/                    the office in the terminal: half-block framebuffer, view, keyboard and mouse

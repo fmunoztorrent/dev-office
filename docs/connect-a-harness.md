@@ -137,7 +137,8 @@ Any agent with MCP (Gemini CLI, Cursor…) can use the [MCP server](mcp.md) to r
 
 Two more things a harness can tell the office:
 
-- **How full its context is**, for the context bar: `{ kind: "context", context: { used, max } }` (tokens), after each answer, or `context` on any event. Pi reports it with `ctx.getContextUsage()`, OpenCode from each message's tokens and its model's `limit.context`, and Claude Code's hook from the transcript.
+- **How full its context is**, for the context bar: `{ kind: "context", context: { used, max } }` (tokens), after each answer, or `context` on any event. Pi reports it from each answer's own usage (Pi tells extensions about a message before saving it, so `ctx.getContextUsage()` is used only after the turn), OpenCode from each message's tokens and its model's `limit.context` (a compaction's summary does not count), and Claude Code's hook from the transcript (nothing after a `compact_boundary` until the next answer).
+- **Compacting when asked** (optional): register with `can: [..., "compact"]` and, on `{ type: "compact", session, used, at }`, compact the session when it is free, then report `{ kind: "compact" }` (or `{ kind: "autocompact", via: "failed", text }` if it could not). Without it, inside herdr the office types `/compact` in the agent's pane when its turn ends.
 - **Its model on start:** when a brief opens a new session with a model profile, the office adds the harness's own flag (`--model`, or `-m` in OpenCode and Codex). A pipeline run may bring `models` (role → model) for the stages that set none.
 
 ## How the role map reaches the office

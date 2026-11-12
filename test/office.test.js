@@ -380,3 +380,13 @@ test('el contexto de cada sesión: cuánto lleva usado su agente, sin pasar por 
   pi({ child: '7', kind: 'context', context: { used: 1, max: 10 } });
   assert.equal(o.sessionSummary('ctx-1').context.used, 50_000);
 });
+
+test('cada acción trae su badge (lo que hace, en un ícono y una palabra), y pensar también', () => {
+  const o = new Office();
+  const [edit] = o.ingest('claude-code', { session_id: 'b1', cwd: '/tmp/tienda', hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: '/tmp/tienda/src/cart.js' }, tool_use_id: 'u1' });
+  assert.equal(edit.badge, '✏️ cart.js');
+  const [end] = o.ingest('claude-code', { session_id: 'b1', cwd: '/tmp/tienda', hook_event_name: 'PostToolUse', tool_name: 'Edit', tool_input: { file_path: '/tmp/tienda/src/cart.js' }, tool_use_id: 'u1', tool_response: {} });
+  assert.equal(end.badge, undefined, 'el fin no cambia el badge');
+  const [think] = o.ingest('pi', { session: 'p1', kind: 'thinking' });
+  assert.equal(think.badge, '💭 piensa');
+});

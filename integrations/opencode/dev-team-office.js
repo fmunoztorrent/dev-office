@@ -10,6 +10,8 @@
 //             if it is a command of your harness, like Errementari's `/task`) or to the TUI prompt.
 // - pipeline: runs a .devteam/ pipeline INSIDE the session, stage by stage, with each stage's model
 //             and agent (`client.session.prompt`). Gates and loops: devteam.mjs.
+// - context:  how full each session's context is (the office's bar), from its answers' tokens.
+// - compact:  the office asks to compact it (past your threshold): `client.session.summarize`, when free.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -71,7 +73,7 @@ export const DevTeamOffice = async ({ client, directory }) => {
   const wsSend = (m) => ws?.readyState === 1 && ws.send(JSON.stringify(m));
   const register = () => wsSend({
     type: 'register', agent: 'opencode', session: lastSession, cwd, pid: process.pid,
-    can: lib ? ['task', 'pipeline'] : ['task'], project: lib ? lib.catalogEntry(lib.loadProject(cwd)) : null, ...WHERE,
+    can: lib ? ['task', 'pipeline', 'compact'] : ['task', 'compact'], project: lib ? lib.catalogEntry(lib.loadProject(cwd)) : null, ...WHERE,
   });
   const seen = (session) => {
     if (!session || session === lastSession || parentOf.get(session)) return;
@@ -127,25 +129,44 @@ export const DevTeamOffice = async ({ client, directory }) => {
   }
 
   // How full a session's context is: an assistant message's tokens (what it read, cached or not, and
-  // what it wrote) against its model's window (the provider says it: limit.context).
-  const windows = new Map(); // "provider/model" → context window
+  // what it wrote) against its model's window (the provider says it: limit.context). A compaction's
+  // summary is not the conversation (it read the whole old one): it does not count.
+  const windows = new Map(); // "provider/model" → context window (only the ones found: a failed lookup is retried)
   const lastContext = new Map(); // session → what was sent (only when it moves)
+  const modelOf = new Map(); // session → { providerID, modelID } of its last answer (to compact it)
   async function windowOf(providerID, modelID) {
     const key = `${providerID}/${modelID}`;
     if (!windows.has(key)) {
-      const cfg = unwrap(await client.config.providers().catch(() => null)) || {};
+      let cfg = {};
+      try { cfg = unwrap(await client.config.providers()) || {}; } catch { /* asked again with the next answer */ }
       const model = (cfg.providers || []).find((x) => x.id === providerID)?.models?.[modelID];
-      windows.set(key, Number(model?.limit?.context) || 0);
+      const n = Number(model?.limit?.context) || 0;
+      if (!n) return 0;
+      windows.set(key, n);
     }
     return windows.get(key);
   }
   async function contextOf(info) {
     const tk = info?.tokens;
-    if (info?.role !== 'assistant' || !tk) return null;
-    const used = (tk.input || 0) + (tk.cache?.read || 0) + (tk.cache?.write || 0) + (tk.output || 0) + (tk.reasoning || 0);
+    if (info?.role !== 'assistant' || !tk || info.summary) return null;
+    if (info.providerID && info.modelID) modelOf.set(info.sessionID, { providerID: info.providerID, modelID: info.modelID });
+    const used = Number(tk.total) || (tk.input || 0) + (tk.cache?.read || 0) + (tk.cache?.write || 0) + (tk.output || 0) + (tk.reasoning || 0);
     const max = used ? await windowOf(info.providerID, info.modelID) : 0;
     return used && max ? { used, max } : null;
   }
+
+  // The office asks to compact a session's context (past your threshold, ⚙ › General): OpenCode
+  // summarizes it (session.summarize) when the session is free, never in the middle of an answer.
+  const idle = new Set();          // sessions that are not working
+  const compactAsked = new Set();  // sessions to compact when they are free
+  function compactIfAsked(session) {
+    if (!compactAsked.has(session) || !idle.has(session) || (run && session === runSession)) return;
+    const model = modelOf.get(session);
+    if (!model || typeof client.session.summarize !== 'function') return;
+    compactAsked.delete(session);
+    client.session.summarize({ path: { id: session }, body: model }).then(unwrap).catch((err) => send({ session, cwd, kind: 'autocompact', via: 'failed', text: errText(err) }));
+  }
+  const busy = (session) => { if (session) idle.delete(session); };
 
   // ---- pipelines inside the session ----
 
@@ -188,7 +209,7 @@ export const DevTeamOffice = async ({ client, directory }) => {
         step = run.fail(`OpenCode: ${errText(err)}`);
       }
     }
-    if (run === me) run = null;
+    if (run === me) { run = null; compactIfAsked(runSession); }
   }
 
   function cancelPipeline(id) {
@@ -209,6 +230,7 @@ export const DevTeamOffice = async ({ client, directory }) => {
       if (msg.type === 'task') runTask(msg);
       else if (msg.type === 'pipeline') startPipeline(msg).catch((err) => wsSend({ type: 'pipeline_update', id: msg.id, status: 'failed', detail: errText(err) }));
       else if (msg.type === 'pipeline_cancel') cancelPipeline(msg.id);
+      else if (msg.type === 'compact' && (msg.session || lastSession)) { compactAsked.add(msg.session || lastSession); compactIfAsked(msg.session || lastSession); }
     };
     ws.onclose = () => { ws = null; setTimeout(connect, 3000)?.unref?.(); };
     ws.onerror = () => {};
@@ -221,6 +243,7 @@ export const DevTeamOffice = async ({ client, directory }) => {
   const commandArgs = new Map();
   return {
     'tool.execute.before': async (input, output) => {
+      busy(input.sessionID);
       const at = await where(input.sessionID);
       seen(input.sessionID);
       if (input.tool === 'bash' && output?.args) {
@@ -238,16 +261,20 @@ export const DevTeamOffice = async ({ client, directory }) => {
     event: async ({ event }) => {
       const p = event.properties || {};
       if (event.type === 'session.created' || event.type === 'session.updated') learn(p.info);
-      const session = p.sessionID || p.info?.id || p.info?.sessionID;
+      // a message's info carries its session (its own id is the message's); a session's info is the session
+      const session = p.sessionID || p.info?.sessionID || p.info?.id;
       if (!session || !TRACKED.has(event.type)) return;
       seen(session);
       const at = await where(session);
       switch (event.type) {
         case 'session.created': return send({ ...at, cwd, kind: 'session_start' });
         // with a pipeline in progress each stage ends a turn: the pipeline says when it is "done"
-        case 'session.idle': return run && session === runSession ? undefined : send({ ...at, cwd, kind: 'turn_end' });
+        case 'session.idle':
+          idle.add(session);
+          compactIfAsked(session);
+          return run && session === runSession ? undefined : send({ ...at, cwd, kind: 'turn_end' });
         case 'session.error': return send({ ...at, cwd, kind: 'error', text: p.error?.data?.message || p.error?.name });
-        case 'session.compacted': return send({ ...at, cwd, kind: 'compact' });
+        case 'session.compacted': lastContext.delete(session); return send({ ...at, cwd, kind: 'compact' });
         case 'permission.updated':
         case 'permission.asked': return send({ ...at, cwd, kind: 'waiting', text: p.title || 'OpenCode pide permiso' });
         case 'todo.updated': return run && session === runSession ? undefined : send({ ...at, cwd, kind: 'todos', todos: p.todos });
@@ -264,6 +291,7 @@ export const DevTeamOffice = async ({ client, directory }) => {
     // User message → new task for the team (stage prompts are not). In a child session it is the
     // assignment the parent gave its subagent: that is how the office knows which one it is.
     'chat.message': async (input, output) => {
+      busy(input.sessionID);
       const at = await where(input.sessionID);
       seen(input.sessionID);
       const text = output?.parts?.filter((x) => x.type === 'text').map((x) => x.text).join(' ');

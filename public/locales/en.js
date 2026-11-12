@@ -230,6 +230,7 @@ export default {
   // ---------------------------------------------------------------- what the agent does (server)
   // what a command or a tool does, in words (server/humanize.js): never the command itself
   act: {
+    myTool: 'Using your tool “{name}”',
     tests: 'Running the tests', testsOf: 'Running the tests of {target}', build: 'Building the project', dev: 'Starting the dev server',
     lint: 'Checking the code style', format: 'Formatting the code', typecheck: 'Checking the types', script: 'Running the “{name}” script',
     install: 'Installing dependencies', installPkgs: 'Installing {pkgs}', uninstall: 'Removing dependencies', publish: 'Publishing the package', audit: 'Auditing the dependencies', tool: 'Using {prog}',
@@ -247,11 +248,14 @@ export default {
     panes: 'Arranging the panes', office: 'Talking to the office', agent: 'Asking {agent} for something', other: 'Using {prog}', shell: 'Working in the terminal',
     cd: 'Going into {dir}', background: '{what} (in the background)', mcp: 'Using {server}: {what}', toolUse: 'Using {tool}',
   },
+  // the badge over each character: what they are doing, as small as it gets (server/humanize.js)
+  badge: { read: 'read', edit: 'edit', search: 'search', plan: 'plan', ask: '❓ you', team: 'team', think: '💭 thinks' },
   events: {
     standup: '🗣 {text}',
     clarify: { review: '🔍 Reviewing the brief for {project}', ask: '❓ {n} question(s) for you: {text}', sent: '📨 The brief goes to work: {text}', failed: '✖ The brief could not be sent: {text}', cancelled: '⊘ Brief cancelled' },
     updateBoard: 'Updates the board', newCard: 'New card: {text}', moveCard: 'Moves a card', failed: 'Failed: {text}{detail}',
     thinking: 'Thinking…', waiting: 'The agent is waiting for your approval', error: 'Something went wrong', compact: 'Tidies up the notes (compacts the context)',
+    autocompact: { agent: '🗜 The context is at {used} (limit {at}): asking the agent to compact it', pane: '🗜 The context is at {used} (limit {at}): /compact in its pane', manual: '🗜 The context is at {used} (limit {at}): type /compact in its session to compact it', failed: '🗜 It could not compact: {reason}' },
     done: 'Task done!', sessionStart: 'New work session', sessionEnd: 'Session closed', serviceUp: 'Started a service: {name}', serviceDown: 'The service stopped: {name}', you: 'You', office: 'Office', subtask: 'Subtask',
     permission: 'Permission for {tool}', interrupted: 'Interrupted', turnEnd: 'ends the turn{text}',
     read: 'Reading {file}', write: 'Creating {file}', edit: 'Editing {file}', grep: 'Searching "{pattern}"', glob: 'Looking through {pattern}', files: 'files',
@@ -276,7 +280,7 @@ export default {
   // the analyst reviews a brief before it goes to work (server/clarify.js)
   ingest: { tooBig: 'too big (more than {mb} MB)', convert: 'to read {name} the office needs {tool} installed (or ask an agent to convert it: ✨ Ask an agent)', format: 'the archive does not read .{ext} files (Markdown, text, CSV, JSON, HTML, PDF or Word)', empty: '{name} has no text', url: 'that is not an http(s) address', fetch: 'could not download it: {error}' },
   // the settings as a JSON file (server/settings-io.js): what could not be imported
-  settingsIo: { department: 'Department {name}', characters: 'Characters of {name}', pref: 'Setting {key}', project: 'Project {name}', component: 'Component {name} of {project}', instructions: 'Instructions of {path}' },
+  settingsIo: { skill: 'Skill {name}', tool: 'Tool {name}', department: 'Department {name}', characters: 'Characters of {name}', pref: 'Setting {key}', project: 'Project {name}', component: 'Component {name} of {project}', instructions: 'Instructions of {path}' },
   // a directive's impact map (server/components.js)
   impact: {
     ask: 'Does "{what}" exist? In which project and folder, or must it be created?', none: 'I could not tell which departments or projects it touches: choose them or name them.', unknownHead: 'It names things that are not on the map:',
@@ -435,7 +439,7 @@ export default {
     pathMissing: 'the path is missing', pathRelative: '{path}: use the full path (e.g. ~/Workspace/my-project)', pathNotFound: '{path}: that folder does not exist',
     harness: 'choose the agent for that path: claude-code, opencode or pi', args: '{name}: args must be a list of strings',
     agentExists: 'that agent is already registered for that path', saveFailed: 'could not save: {error}', agentsMax: 'at most {n} agents',
-    unknownAgent: 'unknown agent', unknownGap: 'unknown gap', componentName: 'the component needs a name', componentPath: 'the component\'s folder goes inside the project (relative, without ..)', unknownComponent: 'unknown component', settingsFile: { json: 'that file is not JSON', kind: 'those are not Dev Team Office settings (its "kind" must be "dev-team-office/settings")', version: 'those settings come from a newer Dev Team Office: update it first (dev-team-office update)' }, character: { json: 'that file is not JSON', kind: 'that is not a Dev Team Office character (its "kind" must be "dev-team-office/character")' }, unknownRole: 'unknown role: {role}', oneOf: '{role}: "{key}" must be one of: {values}', notEditable: '{role}: "{key}" cannot be changed',
+    unknownAgent: 'unknown agent', unknownGap: 'unknown gap', componentName: 'the component needs a name', componentPath: 'the component\'s folder goes inside the project (relative, without ..)', unknownComponent: 'unknown component', mineKind: 'it is a skill or a tool (kind: skill | tool)', mineName: 'the name goes in lowercase, with dashes, 2 to 40 characters (starting with a letter)', mineTitle: 'what it does and when to use it is missing', mineScript: 'the tool needs its program', unknownMine: 'no such skill or tool of yours', mineExists: 'you already have one called “{name}”', mineMax: 'you can have up to {n}', mineRun: 'it runs with one of: {runs}', mineParams: 'up to 8 parameters', mineParam: 'the parameter “{name}” goes in lowercase (letters, digits and _) and only once', mineTimeout: 'the limit is 1 to 600 seconds', settingsFile: { json: 'that file is not JSON', kind: 'those are not Dev Team Office settings (its "kind" must be "dev-team-office/settings")', version: 'those settings come from a newer Dev Team Office: update it first (dev-team-office update)' }, character: { json: 'that file is not JSON', kind: 'that is not a Dev Team Office character (its "kind" must be "dev-team-office/character")' }, unknownRole: 'unknown role: {role}', oneOf: '{role}: "{key}" must be one of: {values}', notEditable: '{role}: "{key}" cannot be changed',
     color: '{role}.{key}: use a color like #3f73f0', empty: '{role}.{key} cannot be empty',
     unknownOffice: 'unknown department (office): {office}', officeName: 'give the department a name', officeExists: 'there is already a department with that name', autonomy: 'autonomy must be one of: {levels} (or empty: the company’s)',
     officesMax: 'at most {n} offices', mainOffice: 'the main office cannot be deleted', timezone: 'unknown time zone: {tz}',
@@ -524,12 +528,23 @@ export default {
       active: 'Default profile', label: 'Name', for: 'For:', default: 'Default', same: 'same as the default ({model})', remove: 'Remove this profile', add: '✚ New profile', newLabel: 'Profile {n}',
     },
     title: '⚙ Settings', loading: 'Loading…', close: 'Close', save: 'Save', saved: 'Saved: already in use.', file: 'stored in {file}',
-    tabs: { general: 'General', offices: 'Departments', agents: 'Agents', look: 'Characters', models: 'Models' },
+    tabs: { general: 'General', offices: 'Departments', agents: 'Agents', look: 'Characters', models: 'Models', mine: 'Mine' },
+    // what is yours, not the company's: your private skills and your own tools (server/mine.js)
+    mine: {
+      intro: 'Yours, not the company’s: it does not go to the archive or the briefs, nor to any repo. It travels in your settings file.',
+      skills: 'My skills', skillsHint: 'Installed in your personal folders of each agent ({dirs}), for it to use in any project. Turning one off or deleting it takes it out of there.', noDirs: 'I found no agent on this machine (~/.claude, ~/.pi, ~/.config/opencode, ~/.codex)',
+      tools: 'My tools', toolsHint: 'Small programs of yours for concrete jobs. Your agents see them as MCP tools (my_<name>) and run them in the folder they work in: the parameters arrive in order ($1, $2… or argv) and as TOOL_<NAME> variables.',
+      none: 'None yet.', add: '+ New', edit: 'Edit', remove: 'Delete', removeConfirm: 'Delete “{name}”?', on: 'on', off: 'off', save: 'Save', cancel: 'Cancel',
+      name: 'Name', namePh: 'lowercase-with-dashes', title: 'What it does and when to use it', titlePh: 'E.g.: Reviews a PR the way I like, before approving it',
+      body: 'Instructions (Markdown)', script: 'The program', run: 'With', params: 'Parameters', paramsPh: 'one per line: name: what it is (a ? after the name: optional)', timeout: 'Limit (seconds)', role: 'Who uses it in the game', roleAuto: 'By what it does', enabled: 'On',
+      installed: 'Installed in {where}', conflict: 'There is already a skill “{name}” of yours in {dir} that is not the office’s: I left it alone.', saved: 'Saved.', removed: 'Deleted.',
+    },
     keys: { field: 'field', change: 'change', action: 'action', save: 'save', close: 'close', tabs: '◂ ▸ switch tab' },
     yes: 'yes', no: 'no',
     general: {
-      io: 'Your settings (a JSON file)', ioHint: 'Exports what is yours: the general settings, the departments (with their instructions, autonomy and characters) and the registered projects with their instructions and components. Not the log, the briefs, the directives or the archive. Importing replaces what the file brings and leaves the rest; a project whose folder is not on this machine is skipped.', ioExport: '⬇ Export settings', ioImport: '⬆ Import settings', ioDone: 'Settings imported: {prefs} settings, {departments} departments, {characters} characters, {projects} projects, {components} components.',
+      io: 'Your settings (a JSON file)', ioHint: 'Exports what is yours: the general settings, the departments (with their instructions, autonomy and characters) the registered projects with their instructions and components, and what is yours (your skills and tools). Not the log, the briefs, the directives or the archive. Importing replaces what the file brings and leaves the rest; a project whose folder is not on this machine is skipped.', ioExport: '⬇ Export settings', ioImport: '⬆ Import settings', ioDone: 'Settings imported: {prefs} settings, {departments} departments, {characters} characters, {projects} projects, {components} components, {skills} skills, {tools} tools.',
       archive: 'Archive (the agents’ knowledge)', archivePush: 'What the archive knows goes on top of every brief and question (the glossary terms and the most relevant passages)', embeddings: 'Semantic search', embed_off: 'Off: by words only (offline)', embed_ollama: 'Ollama, on this machine', embed_openai: 'An OpenAI-compatible API (OpenAI, Voyage…)', embedModel: 'Embedding model', embedUrl: 'Address', embedOllamaHint: 'Install Ollama and run: ollama pull nomic-embed-text. Nothing leaves this machine.', embedKeyHint: 'Its key goes in the DEV_TEAM_OFFICE_EMBED_KEY environment variable (never in the database). The archive’s text is sent to that API to be embedded.', indexStatus: '🧠 {chunks} chunk(s) indexed · {embedded} with embedding', reindex: '↻ Index it again',
+      compact: 'The agents’ context', compactAuto: 'Compact it by itself past the limit', compactAt: 'Limit', compact_tokens: 'tokens', compact_pct: '% of its window', compactHint: 'Past the limit, the office asks the agent to compact its context when its turn ends: Pi and OpenCode do it themselves; inside herdr, /compact is typed in its pane; the Claude Code sessions the office opens compact by themselves at that limit. Otherwise the log tells you.',
       autonomy: 'Autonomy', clarify: 'Before a brief goes to work, the analyst checks it has everything (and asks you only what is missing)', autonomous: 'The agents work on their own to the end (they ask only what only you can answer)',
       language: 'Language', timezone: 'Time zone', tzSystem: 'the system one ({tz})', tzHint: 'The time zone gives the date, the time and the country. Each office can have its own (⚙ › Offices).',
       city: 'City', cityZone: 'the time zone’s ({city})', cityHint: 'The city gives the weather, the sun and the moon. Type to search among the cities of the time zone’s country: in Chile, for example, Concepción and Punta Arenas share Santiago’s time zone.',
@@ -581,7 +596,7 @@ export default {
   ui: {
     lately: 'What they did lately', newcomerOf: 'Newcomer · {role} · {project}', visitorOf: 'Visiting · {role} · {project}', talkEmpty: 'Ask {name} something about what they are doing (end with ?) and their agent answers. Anything else, they answer in their own words.', talkEmptyTeam: 'Say something to the whole team.',
     contextNone: 'The agent’s context, as a health bar: it shows up when an agent reports it (Claude Code, Pi and OpenCode do while they work).',
-    context: 'Context · {agent}', contextAria: 'Context: {pct}% free ({used} of {max} used)',
+    context: 'Context · {agent}', contextAria: 'Context: {pct}% free ({used} of {max} used)', contextLimit: 'Compacts by itself at {at}', contextCompacted: 'Compacted: how full it is will be known with its next answer',
     canvas: 'The office: click a character to see their card, the board for a new brief',
     settings: 'Settings', settingsKey: 'Settings (c)', fullscreen: 'Fullscreen', fullscreenKey: 'Fullscreen (f)', view: 'Front or top-down view', viewKey: 'Front or top-down view (v)', servicesKey: 'Background services: {n} running (l)',
     office: 'Office', officeKey: 'Pick which office to view (o)', floor: 'Floor',

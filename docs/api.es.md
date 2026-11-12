@@ -203,8 +203,8 @@ Formato y protocolo con los agentes: [pipelines.es.md](pipelines.es.md).
 | `PUT` | `/v1/settings` | `{ prefs?: { … }, appearance?: { rol: { name?, title?, sex?, personality?, style?, shirt?, pants?, hair?, skin?, long?, beard?, glasses? } \| null }, office? }` |
 | `GET` | `/v1/characters/<rol>?office=<id>` | Contesta el personaje como JSON, para compartirlo: `{ kind: "dev-team-office/character", version: 1, role, name, sex, personality, style, shirt, … }` |
 | `PUT` | `/v1/characters/<rol>?office=<id>` | Ese JSON: pasa a ser el `<rol>` de esa oficina (las claves desconocidas o inválidas se ignoran; `400` si no es un personaje) |
-| `GET` | `/v1/settings/export` | Tus ajustes como archivo JSON (`attachment`): `{ kind: "dev-team-office/settings", version: 1, app, exportedAt, prefs, departments: [{ id, name, timezone, location, instructions, autonomy, characters }], projects: [{ name, path, harness, bin?, args?, department, instructions, components? }], instructions: [{ path, instructions }] }`. No va el historial (la bitácora, los encargos, las directivas, las dailies, las preguntas), el archivo, ni el piso u oficina que se está mirando (`prefs.view` guarda sólo `mode`). No se guarda ningún secreto, así que no viaja ninguno |
-| `POST` | `/v1/settings/import` | Ese JSON. Mezcla: lo que trae reemplaza lo de aquí y lo demás se queda (los personajes de un departamento quedan como en el archivo). Cada pieza se revisa por separado: `{ ok, applied: { prefs, departments, characters, projects, components, instructions }, skipped: [{ what, error }] }` (un proyecto cuya carpeta no está en esta máquina se salta). `400` si no es un archivo de ajustes o viene de una versión más nueva |
+| `GET` | `/v1/settings/export` | Tus ajustes como archivo JSON (`attachment`): `{ kind: "dev-team-office/settings", version: 1, app, exportedAt, prefs, departments: [{ id, name, timezone, location, instructions, autonomy, characters }], projects: [{ name, path, harness, bin?, args?, department, instructions, components? }], instructions: [{ path, instructions }], mine: { skills: [{ name, title, body, enabled }], tools: [{ name, title, body, enabled, config }] } }`. No va el historial (la bitácora, los encargos, las directivas, las dailies, las preguntas), el archivo, ni el piso u oficina que se está mirando (`prefs.view` guarda sólo `mode`). No se guarda ningún secreto, así que no viaja ninguno |
+| `POST` | `/v1/settings/import` | Ese JSON. Mezcla: lo que trae reemplaza lo de aquí y lo demás se queda (los personajes de un departamento quedan como en el archivo). Cada pieza se revisa por separado: `{ ok, applied: { prefs, departments, characters, projects, components, instructions, skills, tools }, skipped: [{ what, error }] }` (un proyecto cuya carpeta no está en esta máquina se salta; tus skills se instalan en las carpetas personales de esta máquina). `400` si no es un archivo de ajustes o viene de una versión más nueva |
 
 `prefs` (los ajustes generales, todos opcionales al cambiarlos):
 
@@ -222,9 +222,37 @@ Formato y protocolo con los agentes: [pipelines.es.md](pipelines.es.md).
 | `autonomy` | `{ clarify: bool, autonomous: bool }`: la analista revisa cada encargo primero; cada encargo le pide al agente trabajar solo hasta terminar (los dos encendidos por defecto). Un departamento con su propia `autonomy` (`guided` \| `balanced` \| `autonomous`) la reemplaza |
 | `standards` | Los estándares de la empresa (los del CTO), hasta 4000 caracteres: arriba de cada encargo, antes de las indicaciones del departamento y del proyecto |
 | `capacity` | Cuántos encargos abiertos toma un departamento a la vez de una directiva (1–20, 3 por defecto); el resto de sus partes espera turno (`status: "waiting"`) |
+| `compact` | `{ auto: bool, at: number, unit: "tokens" \| "pct" }`: pasado esto, el contexto de un agente se compacta solo (encendido, 400 000 tokens por defecto; `pct`: una parte de la ventana del modelo, 10–99; tokens: 10k–10M). Cambiar `unit` sin `at` toma el valor por defecto de esa unidad (80 % o 400k). Ver [Autocompactación](#autocompactación) |
 
 - **Validación:** todo se valida antes de escribir. Si hay un error, la respuesta es `400 { error }` (en el idioma del juego) y no se toca nada.
 - **En vivo:** al cambiar los ajustes el servidor difunde `{ type: "prefs", prefs }`; la apariencia, `{ type: "appearance", appearance, office }` a quienes miran esa oficina; los agentes o las sesiones, `{ type: "targets", targets }`.
+
+## Autocompactación
+
+Cuando el contexto de un agente pasa `prefs.compact` (400k tokens por defecto), la oficina le pide al agente que lo compacte. Nunca toca la conversación ella misma:
+
+- **Pi y OpenCode conectados a la oficina** (su extensión se registra con `can: [..., "compact"]`): reciben `{ "type": "compact", "session", "used", "at" }` y compactan cuando quedan libres (Pi: `ctx.compact()`; OpenCode: `client.session.summarize`), nunca en medio de una respuesta ni de un pipeline.
+- **Cualquier otro agente en un pane de herdr** (Claude Code, Codex…): cuando termina su turno, se escribe `/compact` en su prompt.
+- **Si no** (Claude Code en una terminal suya): la bitácora te avisa, una vez, para que escribas `/compact`.
+- **Los Claude Code que abre la oficina** reciben el tope como propio (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, o `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` con `pct`): compactan solos.
+
+Cada pedido deja un evento `autocompact` en la bitácora (`via`: `agent`, `pane`, `manual`, o `failed` cuando el agente no pudo y dice por qué). Se vuelve a pedir a los 10 minutos si el contexto sigue sobre el tope; una compactación (`compact`) lo reinicia. Hasta su próxima respuesta, la barra de contexto muestra la sesión como recién compactada (`context.compacted`).
+
+## Lo tuyo: skills privadas y tus herramientas
+
+Lo que es tuyo, no de la empresa (⚙ › Mío). No va al archivo, a los encargos ni a ningún repo, y viaja en tu archivo de ajustes.
+
+| Método | Ruta | Cuerpo |
+|---|---|---|
+| `GET` | `/v1/mine` | `{ skills, tools, dirs }` (`dirs`: dónde se instalan tus skills: `~/.claude/skills` si Claude Code está en esta máquina, `~/.agents/skills` si están Pi, OpenCode o Codex) |
+| `POST` | `/v1/mine` | `{ kind: "skill" \| "tool", name, title, body, enabled?, config? }`: la crea, o actualiza la de ese tipo y nombre. `201` (creada) o `200`, con `installed: [{ dir, ok, action \| reason }]` para una skill |
+| `PUT` | `/v1/mine/<id>` | Lo mismo, para cambiar esa (renombrar una skill saca la anterior de tus carpetas) |
+| `DELETE` | `/v1/mine/<id>` | La borra (una skill también sale de tus carpetas) |
+| `GET` | `/v1/mine/tools` | Tus herramientas activas, enteras (con su programa): lo que ofrece el servidor MCP |
+
+- **Una skill** (`name`: en minúsculas con guiones; `title`: qué hace y cuándo usarla; `body`: sus instrucciones en Markdown) se escribe como `<dir>/<name>/SKILL.md` en cada una de `dirs`, con la marca de la oficina. Apagada (`enabled: false`) o borrada, se saca. Una skill tuya ahí sin la marca nunca se pisa (`reason: "exists"`).
+- **Una herramienta** (`body`: su programa) tiene `config: { run: "sh" | "bash" | "node" | "python3", params: [{ name, description?, required? }], timeout: 1–600 (segundos, 60 por defecto), role? }`. Tus agentes la ven como la herramienta MCP `my_<name>` ([mcp.es.md](mcp.es.md)) y la corren en la carpeta en la que trabajan: los parámetros llegan en orden (`$1`, `$2`… en sh/bash, `process.argv.slice(1)` en node, `sys.argv[1:]` en python3) y como variables `TOOL_<NOMBRE>`. En el juego la usa el `role` que elegiste (si no, según lo que hace), dicho como «Usando tu herramienta «deploy»», con su badge 🧰.
+- Los agentes no pueden crearlas ni cambiarlas (ninguna herramienta MCP guarda una): lo que corre en cada sesión tuya sólo lo defines tú.
 
 ## El clima de afuera
 
@@ -279,7 +307,7 @@ Un agente que quiere recibir tareas abre `ws://127.0.0.1:4317/v1/ws` y se regist
 
 ```jsonc
 → { "type": "register", "agent": "pi", "session": "pi-1234", "cwd": "/ruta", "pid": 1234,
-    "can": ["task", "pipeline"], "project": { "dir", "name", "pipelines": [...] } }
+    "can": ["task", "pipeline", "compact"], "project": { "dir", "name", "pipelines": [...] } }
    // se puede repetir cuando cambia de sesión
 ← { "type": "task", "id": "t3", "text": "Agrega paginación", "session": "pi-1234" }
 → { "type": "task_update", "id": "t3", "status": "accepted" }
@@ -289,6 +317,8 @@ Un agente que quiere recibir tareas abre `ws://127.0.0.1:4317/v1/ws` y se regist
 ← { "type": "pipeline", "id": "p1", "session": "pi-1234", "pipeline": "feature-tdd", "task": "…" }
 → { "type": "pipeline_update", "id": "p1", "status": "running", "stages": [...] }
 ← { "type": "pipeline_cancel", "id": "p1" }
+← { "type": "compact", "session": "pi-1234", "used": 412000, "at": 400000 }
+   // sólo a los que pueden: compactar el contexto cuando quede libre (ver Autocompactación)
 ```
 
 Una conexión registrada no recibe la difusión de eventos de la oficina, sólo sus tareas. Desde un visor, `{ "type": "task", text, agent, session?, mode?, cwd?, ref? }` crea una tarea; con `ref`, el servidor responde con un `ack`.
@@ -338,9 +368,12 @@ suyos: no cambian la sesión del padre. Una `phase` suya cambia la fase del suba
 | `dispatch` | Tarea enviada desde la oficina (la emite el servidor) | Tú (la PO) le llevas la tarjeta al manager |
 | `waiting` | El agente espera al usuario | Banner naranja; el manager va a tu escritorio (el de la PO) y levanta la mano |
 | `error` | Error general | El personaje se bloquea |
-| `compact` | Compactación de contexto | El manager ordena notas |
+| `compact` | Compactación de contexto | El manager ordena notas; la barra de contexto la muestra recién compactada hasta la próxima respuesta |
+| `autocompact` | La oficina le pidió al agente que compacte (lo emite el servidor): `via` `agent` \| `pane` \| `manual` \| `failed` | Una línea en la bitácora |
 | `done` | Fin de la tarea | Celebración en la mesa |
 | `context` | Qué tan lleno está el contexto del agente: `context: { used, max }` (tokens). Cualquier evento puede traer también `context` | La barra de contexto, abajo al centro. No va a la bitácora |
+
+La oficina le agrega un `badge` a cada `tool_start`, `thinking` y `subagent_start`: lo que se está haciendo, lo más chico posible (`✏️ cart.js`, `🧪 tests`, `💾 commit`, `🔍 total`, `👥 ex-qa`, `🧰 deploy`). El juego lo dibuja sobre el personaje hasta que termina el turno de esa sesión.
 
 Roles: `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`, y los especialistas de visita `devops` y `security` (sin escritorio: suben por el ascensor mientras dura su trabajo). También se aceptan alias como `arquitecto`, `tester`, `ux`, `sre` o `appsec`. La PO es el usuario: un `role` `po` que mande un agente se dibuja como la analista.
 

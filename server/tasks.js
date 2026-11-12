@@ -24,6 +24,7 @@ import { guideFor, guideText, autonomyOf, GUIDE_MARK } from './guides.js';
 import { contextBlock } from './rag.js';
 import { t as tr } from '../public/i18n.js';
 import { MAIN_OFFICE } from './store.js';
+import { claudeCompactEnv } from './compact.js';
 
 export const AGENT_LABEL = { 'claude-code': 'Claude Code', opencode: 'OpenCode', pi: 'Pi' };
 /**
@@ -215,6 +216,8 @@ export class TaskHub extends EventEmitter {
     const env = { DEV_TEAM_OFFICE_URL: this.officeUrl, DEV_TEAM_OFFICE_OFFICE: task.office, ...(this.socket ? { DEV_TEAM_OFFICE_SOCKET: this.socket } : {}) };
     // the Pi extension adopts this session id: so the task knows which session is doing it
     if (task.agent === 'pi') { env.DEV_TEAM_OFFICE_SESSION = `pi-${task.id}`; task.session = env.DEV_TEAM_OFFICE_SESSION; }
+    // a Claude Code compacts by itself at your threshold (server/compact.js)
+    if (task.agent === 'claude-code') Object.assign(env, claudeCompactEnv(this.prefs()));
     this.#set(task, 'running', tr('task.inPane', { agent: label, pane: '…' }));
     try {
       const prefs = this.prefs() || {};
@@ -279,6 +282,7 @@ export class TaskHub extends EventEmitter {
     // the Pi extension adopts this session id: so the task knows which session is doing it
     if (task.agent === 'pi') { env.DEV_TEAM_OFFICE_SESSION = `pi-${task.id}`; task.session = env.DEV_TEAM_OFFICE_SESSION; } else delete env.DEV_TEAM_OFFICE_SESSION;
     Object.assign(env, fenced(task.agent, env));
+    if (task.agent === 'claude-code') Object.assign(env, claudeCompactEnv(this.prefs()));
     let child;
     try {
       child = spawn(exe, argv, { cwd: task.cwd, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });

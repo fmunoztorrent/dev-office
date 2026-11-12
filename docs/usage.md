@@ -59,7 +59,9 @@ In both views (and in the terminal game):
 - **Each subagent is a newcomer:** a translucent extra of its role (another name, the same shirt) who arrives by the elevator at the end of the hallway, gets a desk of their own in the front row (it appears with them and goes with them; past seven, at the meeting table), does the subagent's work and leaves when it ends. Their desk's plate says who they are and which project they came for.
 - **The visiting specialists, Rafa (DevOps/SRE) and Inés (security),** have no desk either: when the agent's work is theirs (a deploy, a container, a CI workflow; an audit, a scanner, a key) they come up by the elevator the same way, solid and always the same person, and leave when the turn ends.
 - **The whiteboard with tickets** expands when clicked: the tasks as post-its in three columns. In the terminal, `t` or Enter there opens a new brief.
-- **The context bar** (browser, small, next to the weather): how much context the focused session's agent has left, or the latest one that reports it.
+- **The context bar** (browser, small, next to the weather): how much context the focused session's agent has left, or the latest one that reports it, with the tokens used and a notch where it compacts by itself (⚙ › General, 400k by default: the office asks the agent to compact when its turn ends).
+- **A badge over each character** says what their agent is doing, as small as it gets (`✏️ cart.js`, `🧪 tests`, `💾 commit`); it goes when the turn ends.
+- **The sky has life:** birds in a V by day, a plane now and then (its contrail; at night, its lights), a hot-air balloon on calm days, bats at dusk, shooting stars and a satellite on clear nights. Nothing flies in the rain.
 
 ## Asking the team for something
 
