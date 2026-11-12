@@ -1,6 +1,6 @@
 ---
 name: dev-team-office
-description: Report to Dev Team Office (a live pixel-art office where each character is a role of a dev team) which role has the turn and which phase you are in — analyst, manager, tech lead/architect, QA (RED/GREEN), backend, frontend, designer. Use it in any development task with stages (feature, bug, refactor, TDD, spike), to register the current project with the office, to send work to another registered agent, or to open herdr panes for side activities.
+description: Report to Dev Team Office (a live pixel-art office where each character is a role of a dev team) which role has the turn and which phase you are in — analyst, manager, tech lead/architect, QA (RED/GREEN), backend, frontend, designer, and the visiting DevOps/SRE and security specialists. Use it in any development task with stages (feature, bug, refactor, TDD, spike), to register the current project with the office, to send work to another registered agent, or to open herdr panes for side activities.
 ---
 
 # Dev Team Office: work as a team, and let the office show it
@@ -52,11 +52,14 @@ node <skill-folder>/office-event.mjs done "summary"
 | `backend` | Backend | server, API, data, migrations | `implement`, `fix`, `refactor`, `migration` |
 | `frontend` | Frontend | components, pages, styles | `implement`, `fix`, `refactor` |
 | `designer` | Designer | UX flows, UI, tokens, visual review | `ux`, `ui`, `visual-review` |
+| `devops` | DevOps/SRE (visiting) | CI/CD, containers, infrastructure, deploys, observability | `infra`, `release` |
+| `security` | Security (visiting) | security review, vulnerabilities, secrets, dependency audits | `audit` |
 
 The product owner is the user: they give the orders and decide what gets done. Never report as `po`; when you need their decision, send `wait "question"` and ask them.
 
 Any role can use `blocked`. Spanish phase names also work (`implementa`, `aprueba`, `arquitectura`…),
-and `architect` is an alias of `tl`.
+and `architect` is an alias of `tl` (`sre` and `infra` of `devops`; `appsec` and `seguridad` of `security`).
+DevOps and security have no desk: they come up to the office while their work lasts and leave after it.
 
 ## Reference flows
 

@@ -39,7 +39,7 @@ Other ways:
 
 With the Claude Code plugin there is nothing else to install: ask Claude to open the office (the `office_start` MCP tool starts it in the background and gives you the URL).
 
-**To add a project to the game** (any folder, with any agent): open your agent there and use `/mcp__dev-team-office__join` (the MCP server's prompt, in Claude Code), ask it to "join the office" (the `join_office` tool), `/office` in Pi, or `dev-team-office join` in the terminal. In one step it starts the office if needed, registers the repo root with its agent and tells you which character plays each subagent (by its `role:`, its name or its description). **If your agent lacks roles (or brings no subagents), it completes the team with the office's** (architect, explorer, backend, frontend and QA) in the project, in the agent's own format: `.claude/agents`, `.opencode/agents`, `.pi/agents` or `.codex/agents` ([details](docs/installation.md#if-your-agent-brings-no-team)).
+**To add a project to the game** (any folder, with any agent): open your agent there and use `/mcp__dev-team-office__join` (the MCP server's prompt, in Claude Code), ask it to "join the office" (the `join_office` tool), `/office` in Pi, or `dev-team-office join` in the terminal. In one step it starts the office if needed, registers the repo root with its agent and tells you which character plays each subagent (by its `role:`, its name or its description). **If your agent lacks roles (or brings no subagents), it completes the team with the office's** (architect, explorer, backend and frontend, QA and, if its team is the office's, the two visiting specialists: DevOps/SRE and security) in the project, in the agent's own format: `.claude/agents`, `.opencode/agents`, `.pi/agents` or `.codex/agents` ([details](docs/installation.md#if-your-agent-brings-no-team)).
 
 **With Pi you do not even need that:** after `setup`, open `pi` in your project. If the office is not running, Pi starts it in the background, registers the project (its git root) and tells you the URL; each subagent it launches shows up as its character. `/office` does it on demand and `/office open` opens it in the browser (with `DEV_TEAM_OFFICE_AUTOSTART=0`, Pi only starts it with `/office`).
 
@@ -53,6 +53,13 @@ With the Claude Code plugin there is nothing else to install: ask Claude to open
 | Diego | Backend | Editing server code, migrations, shell commands |
 | Lucía | Frontend | `.tsx/.vue/.css/...`, `components/`, `pages/`, dev servers |
 | Camila | Designer | `.svg/.png`, `design/`, tokens, the Figma MCP |
+
+And two **visiting specialists**, without a desk of their own: when the work is theirs they come up by the elevator, sit at a hot desk while it lasts and leave when the agent's turn ends (a subagent of their role is them too; a second one at the same time is a newcomer of that role). They are people, not extras: always the same one, drawn solid, and customizable in ⚙ › Characters like the rest.
+
+| Character | Role | What of the agent brings them up |
+|---|---|---|
+| Rafa | DevOps/SRE | CI/CD (`.github/workflows/`, `.gitlab-ci.yml`, `gh run`), containers (`Dockerfile`, `compose.yaml`, `docker`), clusters and IaC (`k8s/`, `helm`, `terraform`, `*.tf`), clouds and deploys (`aws`, `gcloud`, `vercel`, `npm publish`, `deploy`), the Sentry/Datadog/cloud MCPs |
+| Inés | Security | Scanners (`npm audit`, `snyk`, `trivy`, `semgrep`, `gitleaks`, `pip-audit`…), `SECURITY.md`, `security/`, keys and certificates (`.pem`, `.key`), `dependabot.yml`, secret scanning; subagents that review security (OWASP, vulnerabilities, threat models) |
 
 What you see in the office:
 

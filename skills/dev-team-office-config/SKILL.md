@@ -17,11 +17,13 @@ referencia rutas del repo, sólo el contrato y la librería instalada.
 - Quiere que los **personajes reflejen los subagentes** del harness.
 - Los subagentes de un harness caen siempre en el **mismo personaje** (síntoma de un mapa de roles vacío).
 
-## El contrato: 8 roles y un `role:` opcional
+## El contrato: 10 roles y un `role:` opcional
 
-La oficina conoce **exactamente 8 roles**:
+La oficina conoce **exactamente 10 roles**:
 
-`po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`
+`po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`, `devops`, `security`
+
+`devops` y `security` son los especialistas de visita: no tienen escritorio, suben a la oficina mientras dura su trabajo.
 
 La PO es el usuario (da las órdenes): un subagente con `role: po` se dibuja como `analyst`.
 

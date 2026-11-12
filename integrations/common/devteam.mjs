@@ -22,9 +22,14 @@ import { spawn } from 'node:child_process';
 
 export const CONFIG_DIR = '.devteam';
 export const ROLE_IDS = ['po', 'analyst', 'manager', 'tl', 'qa', 'backend', 'frontend', 'designer'];
-export const ROLE_NAME = { po: 'Product Owner', analyst: 'Analista de negocio', manager: 'Manager', tl: 'Tech Lead', qa: 'QA', backend: 'Backend', frontend: 'Frontend', designer: 'Diseñadora' };
-const DEFAULT_PHASE = { po: 'criterios', analyst: 'analiza', manager: 'planifica', tl: 'arquitectura', qa: 'verifica', backend: 'implementa', frontend: 'implementa', designer: 'ui' };
+// The visiting specialists: no desk of their own in the office; they come by the elevator when the work is theirs.
+export const VISITOR_ROLES = ['devops', 'security'];
+const ALL_ROLES = [...ROLE_IDS, ...VISITOR_ROLES];
+export const ROLE_NAME = { po: 'Product Owner', analyst: 'Analista de negocio', manager: 'Manager', tl: 'Tech Lead', qa: 'QA', backend: 'Backend', frontend: 'Frontend', designer: 'Diseñadora', devops: 'DevOps/SRE', security: 'Seguridad' };
+const DEFAULT_PHASE = { po: 'criterios', analyst: 'analiza', manager: 'planifica', tl: 'arquitectura', qa: 'verifica', backend: 'implementa', frontend: 'implementa', designer: 'ui', devops: 'infra', security: 'audita' };
 const ROLE_ALIASES = {
+  sre: 'devops', ops: 'devops', infra: 'devops', infrastructure: 'devops', infraestructura: 'devops', platform: 'devops', plataforma: 'devops', 'site-reliability': 'devops', cicd: 'devops', 'ci-cd': 'devops',
+  seguridad: 'security', sec: 'security', secops: 'security', appsec: 'security', infosec: 'security', ciberseguridad: 'security', cybersecurity: 'security', 'security-engineer': 'security',
   arquitecto: 'tl', arquitecta: 'tl', architect: 'tl', 'tech-lead': 'tl', techlead: 'tl', lead: 'tl', reviewer: 'tl',
   tester: 'qa', test: 'qa', testing: 'qa', calidad: 'qa', analista: 'analyst', ba: 'analyst', business: 'analyst',
   pm: 'manager', 'project-manager': 'manager', scrum: 'manager', 'product-owner': 'po', producto: 'po', product: 'po',
@@ -35,6 +40,8 @@ const PHASE_ALIASES = {
   story: 'historia', criteria: 'criterios', accept: 'acepta', analysis: 'analiza', research: 'investiga', plan: 'planifica',
   architecture: 'arquitectura', approve: 'aprueba', changes: 'cambios', 'test-plan': 'plan-pruebas', regression: 'regresion',
   verify: 'verifica', implement: 'implementa', migration: 'migracion', 'visual-review': 'revision-visual', blocked: 'bloqueado',
+  infrastructure: 'infra', infraestructura: 'infra', provision: 'infra', ci: 'infra', audit: 'audita', auditar: 'audita', auditoria: 'audita',
+  'security-review': 'audita', 'threat-model': 'audita', hardening: 'audita',
 };
 const MAX_STAGES = 40;
 const OUTPUT_MAX = 6000;
@@ -51,10 +58,10 @@ export const HARNESS_IDS = Object.keys(HARNESSES);
 export const harnessId = (h) => ({ claude: 'claude-code', 'claude-code': 'claude-code', pi: 'pi', opencode: 'opencode', codex: 'codex' }[String(h || '').toLowerCase()] || null);
 
 const clip = (s, n) => { s = String(s ?? '').trim(); return s.length > n ? `${s.slice(0, n - 1)}…` : s; };
-export const normRole = (r) => { const k = String(r ?? '').toLowerCase().trim(); return ROLE_IDS.includes(k) ? k : ROLE_ALIASES[k] || null; };
+export const normRole = (r) => { const k = String(r ?? '').toLowerCase().trim(); return ALL_ROLES.includes(k) ? k : ROLE_ALIASES[k] || null; };
 // The PO is the user (they give the orders and decide what gets done): an agent never plays it.
 // What an agent would do as PO (stories, criteria, priorities, acceptance) is the analyst's.
-export const AGENT_ROLE_IDS = ROLE_IDS.filter((r) => r !== 'po');
+export const AGENT_ROLE_IDS = ALL_ROLES.filter((r) => r !== 'po');
 export const agentRole = (r) => { const k = normRole(r); return k === 'po' ? 'analyst' : k; };
 export const normPhase = (p) => {
   const k = String(p ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, '-').slice(0, 30);
@@ -277,6 +284,8 @@ export const SUBAGENT_ROLES = {
   'sdd-apply': 'backend', 'sdd-remediate': 'backend', 'sdd-verify': 'qa', 'sdd-archive': 'manager', 'gentle-ai-explore': 'analyst',
   'gentle-ai-worker': 'backend', 'gentle-ai-verify': 'qa', 'review-risk': 'tl', 'review-readability': 'tl', 'review-reliability': 'tl',
   'review-resilience': 'tl', 'jd-judge-a': 'tl', 'jd-judge-b': 'tl', 'jd-fix-agent': 'backend',
+  devops: 'devops', sre: 'devops', 'devops-engineer': 'devops', 'platform-engineer': 'devops', deployer: 'devops',
+  security: 'security', 'security-reviewer': 'security', 'security-auditor': 'security', 'security-review': 'security', appsec: 'security', pentester: 'security',
 };
 // Did the harness declare a role with a value? undefined (no key), null and blank text count
 // as "not declared": the predicate shared by roleOfAgent and detectHarness.
@@ -284,14 +293,17 @@ export const hasDeclaredRole = (declared) => declared !== undefined && declared 
 
 // The role a text suggests (a subagent's description, a task's label). null if nothing matches.
 export const TEXT_RULES = [
+  // the visiting specialists first: what is theirs is very specific
+  ['security', /security|seguridad|vulnerab|\bcve\b|owasp|pentest|penetration|threat model|amenazas?\b|hardening|secrets? scan|secret leak|credenciales|xss|csrf|sql injection|\bsast\b|\bdast\b|appsec|ciberseg/i],
+  ['devops', /devops|\bsre\b|infra(structure|estructura)?\b|docker|container|contenedor|kubernetes|\bk8s\b|helm|terraform|ansible|pulumi|\bci\b|ci\/cd|github actions|workflows? de ci|deploy|despliegue|desplegar|observab|monitoring|monitoreo|alerting|on-?call|incident|incidente|uptime|\bslo\b|cloud|\baws\b|\bgcp\b|azure/i],
   ['analyst', /product|producto|user stor|historias? de usuario|backlog|priori|roadmap|acceptance|aceptaci[oó]n|criterios?/i],
   ['qa', /\bqa\b|\btests?\b|testing|pruebas?\b|\be2e\b|end-to-end|regresi[oó]n|verificar|verify|calidad|quality|cobertura|coverage/i],
   ['designer', /dise[ñn]|design|\bux\b|figma|mockup|wireframe|paleta|palette|tipograf|typograph|brand|marca|icono|icon|logo|visual/i],
   ['frontend', /front|\bui\b|css|component|react|vue|svelte|p[aá]gina|\bpage|layout|responsive|html|browser|navegador|vista/i],
   ['backend', /back(?!log)|\bapi\b|endpoint|server|servidor|database|base de datos|\bdb\b|sql|migra|auth|queue|cola|worker|cache/i],
-  ['tl', /review|revis|refactor|architect|arquitect|\bplan|bug|debug|security|seguridad|performance|rendimiento|lint/i],
+  ['tl', /review|revis|refactor|architect|arquitect|\bplan|bug|debug|performance|rendimiento|lint/i],
   ['analyst', /analy|anali|research|investig|explor|busca|search|find|requirement|requisit|negocio|business|datos|data|m[eé]trica|metric|document/i],
-  ['manager', /coordin|status|report|estado|deploy|release|schedule|agenda/i],
+  ['manager', /coordin|status|report|estado|release|schedule|agenda/i],
 ];
 export function roleFromText(text = '') {
   for (const [role, rx] of TEXT_RULES) if (rx.test(String(text))) return role;

@@ -253,13 +253,14 @@ test('join_office en una carpeta sin subagentes: la oficina le da su equipo y to
     const { call } = await session(mcp, 'claude-code');
     let r = await call('join_office');
     assert.equal(r.error, false, r.text);
-    assert.match(r.text, /✓ It had no subagents with a role, so the office gave it its team \(Example Team\): 5 subagent\(s\) in \.claude\/agents\/\. Restart Claude Code to load them/);
-    assert.deepEqual(fs.readdirSync(path.join(dir, '.claude', 'agents')).sort(), ['ex-architect.md', 'ex-backend.md', 'ex-explorer.md', 'ex-frontend.md', 'ex-qa.md']);
+    assert.match(r.text, /✓ It had no subagents with a role, so the office gave it its team \(Example Team\): 7 subagent\(s\) in \.claude\/agents\/\. Restart Claude Code to load them/);
+    assert.deepEqual(fs.readdirSync(path.join(dir, '.claude', 'agents')).sort(), ['ex-architect.md', 'ex-backend.md', 'ex-devops.md', 'ex-explorer.md', 'ex-frontend.md', 'ex-qa.md', 'ex-security.md']);
     assert.equal(r.json.given.fresh, true);
     const by = Object.fromEntries(r.json.team.map((x) => [x.name, [x.role, x.character]]));
     assert.deepEqual(by['ex-qa'], ['qa', 'Andrés']);
     assert.deepEqual(by['ex-architect'], ['tl', 'Tomás']);
     assert.match(r.text, /ex-backend → Diego \(Backend\)\n/);
+    assert.match(r.text, /ex-devops → Rafa \(DevOps\/SRE\)\n.*\n.*\n.*\n  ex-security → Inés \(Seguridad\)\n/, 'los especialistas de visita también');
     // the session that asked and the one already open know who is who
     const sessions = server.company.get('main').sessions;
     assert.equal(sessions.get('cc-20')?.agentRoles?.['ex-qa'], 'qa');
@@ -355,8 +356,8 @@ test('`dev-team-office join` desde la terminal: lo mismo que join_office', async
     assert.match(out.text, /✓ Registered: api — pi at/);
     assert.match(out.text, /power-sync → Diego \(Backend\)/);
     // the subagents it brings are Claude Code's: Pi gets the office team in .pi/agents
-    assert.match(out.text, /gave it its team \(Example Team\): 5 subagent\(s\) in \.pi\/agents\/\. Pi uses them from the next subagent call/);
-    assert.equal(fs.readdirSync(path.join(dir, '.pi', 'agents')).length, 5);
+    assert.match(out.text, /gave it its team \(Example Team\): 7 subagent\(s\) in \.pi\/agents\/\. Pi uses them from the next subagent call/);
+    assert.equal(fs.readdirSync(path.join(dir, '.pi', 'agents')).length, 7);
     assert.ok(!out.text.includes('"team"'), 'sin el JSON de la herramienta');
     assert.deepEqual(server.store.listAgents().map((a) => [a.path, a.harness, a.office]), [[dir, 'pi', 'pagos']]);
   } finally {

@@ -7,13 +7,13 @@
 // Everything is saved in the SQLite database (through the office's API).
 // Keys: ↑↓/tab field · ◂▸ change · typing edits · Enter action · ctrl+s save · esc close
 
-import { TEAM, DEFAULT_TEAM, APPEARANCE_KEYS, LOOK_PALETTES, SEXES, PERSONALITIES, STYLES, randomLook, lookForSex } from '../public/sim.js';
+import { personOf, defaultLook, APPEARANCE_KEYS, LOOK_PALETTES, SEXES, PERSONALITIES, STYLES, randomLook, lookForSex } from '../public/sim.js';
 import { t, LANGUAGES } from '../public/i18n.js';
 import { allZones, zoneInfo, countryName } from '../public/clock.js';
 import { parsePlace } from '../public/sky.js';
 import { hex, fit, strWidth } from './screen.js';
 
-const ROLES = ['po', 'analyst', 'manager', 'tl', 'qa', 'backend', 'frontend', 'designer'];
+const ROLES = ['po', 'analyst', 'manager', 'tl', 'qa', 'backend', 'frontend', 'designer', 'devops', 'security']; // the last two: the visiting specialists
 const HARNESS_NAME = { pi: 'Pi', 'claude-code': 'Claude Code', opencode: 'OpenCode', codex: 'Codex' };
 const TABS = ['general', 'offices', 'agents', 'look'];
 const C = Object.fromEntries(Object.entries({
@@ -75,7 +75,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
   async function load() {
     await Promise.all([loadSettings(), loadAgents()]);
     s.loading = false;
-    s.looks = Object.fromEntries(ROLES.map((role) => [role, Object.fromEntries(APPEARANCE_KEYS.map((k) => [k, TEAM[role][k]]))]));
+    s.looks = Object.fromEntries(ROLES.map((role) => [role, Object.fromEntries(APPEARANCE_KEYS.map((k) => [k, personOf(role)[k]]))]));
   }
 
   /** A general setting: saved when changed. */
@@ -265,7 +265,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
       }
       for (const k of ['long', 'beard', 'glasses']) f.push({ type: 'select', label: L(k), value: () => yesNo(look[k]), cycle: () => { look[k] = !look[k]; } });
       f.push({ type: 'action', label: '', value: () => L('random'), run: () => { Object.assign(look, randomLook(look.sex)); } });
-      f.push({ type: 'action', label: '', value: () => L('reset'), run: () => { Object.assign(look, DEFAULT_TEAM[s.role]); } });
+      f.push({ type: 'action', label: '', value: () => L('reset'), run: () => { Object.assign(look, defaultLook(s.role)); } });
     }
     return f;
   }
@@ -281,7 +281,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
     if (s.tab !== 'look') return;
     const appearance = {};
     for (const role of ROLES) {
-      const changed = Object.fromEntries(APPEARANCE_KEYS.filter((k) => s.looks[role][k] !== DEFAULT_TEAM[role][k]).map((k) => [k, s.looks[role][k]]));
+      const changed = Object.fromEntries(APPEARANCE_KEYS.filter((k) => s.looks[role][k] !== defaultLook(role)[k]).map((k) => [k, s.looks[role][k]]));
       appearance[role] = Object.keys(changed).length ? changed : null;
     }
     const r = await api('PUT', '/v1/settings', { appearance, office: office() });

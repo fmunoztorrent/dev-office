@@ -10,7 +10,7 @@ const USAGE = `Usage:
   node office-event.mjs end ["turn summary"]
   node office-event.mjs done ["final summary"]
 
-Roles: analyst · manager · tl (architect) · qa · backend · frontend · designer (the product owner is the user)
+Roles: analyst · manager · tl (architect) · qa · backend · frontend · designer · devops (sre) · security (the product owner is the user)
 Phases: see SKILL.md (red, green, implement, architecture, review, approve, …)`;
 
 const URL_BASE = (process.env.DEV_TEAM_OFFICE_URL || 'http://127.0.0.1:4317').replace(/\/$/, '');

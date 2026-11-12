@@ -39,7 +39,7 @@ Otras formas:
 
 Con el plugin de Claude Code no hace falta instalar nada más: pídele a Claude que abra la oficina (la herramienta MCP `office_start` la levanta en segundo plano y te da la URL).
 
-**Para sumar un proyecto al juego** (cualquier carpeta, con cualquier agente): abre tu agente ahí y usa `/mcp__dev-team-office__join` (el prompt del servidor MCP, en Claude Code), pídele «súmate a la oficina» (la herramienta `join_office`), `/office` en Pi, o `dev-team-office join` en la terminal. En un paso levanta la oficina si hace falta, registra la raíz del repo con su agente y te dice qué personaje hace cada subagente (por su `role:`, su nombre o su descripción). **Si a tu agente le faltan roles (o no trae subagentes), le completa el equipo con el de la oficina** (arquitecto, explorador, backend, frontend y QA) en el proyecto, en su formato: `.claude/agents`, `.opencode/agents`, `.pi/agents` o `.codex/agents` ([detalle](docs/installation.es.md#si-tu-agente-no-trae-equipo)).
+**Para sumar un proyecto al juego** (cualquier carpeta, con cualquier agente): abre tu agente ahí y usa `/mcp__dev-team-office__join` (el prompt del servidor MCP, en Claude Code), pídele «súmate a la oficina» (la herramienta `join_office`), `/office` en Pi, o `dev-team-office join` en la terminal. En un paso levanta la oficina si hace falta, registra la raíz del repo con su agente y te dice qué personaje hace cada subagente (por su `role:`, su nombre o su descripción). **Si a tu agente le faltan roles (o no trae subagentes), le completa el equipo con el de la oficina** (arquitecto, explorador, backend y frontend, QA y, si su equipo es el de la oficina, los dos especialistas de visita: DevOps/SRE y seguridad) en el proyecto, en su formato: `.claude/agents`, `.opencode/agents`, `.pi/agents` o `.codex/agents` ([detalle](docs/installation.es.md#si-tu-agente-no-trae-equipo)).
 
 **Con Pi ni siquiera eso:** después de `setup`, abre `pi` en tu proyecto. Si la oficina no está corriendo, Pi la levanta en segundo plano, registra el proyecto (su raíz git) y te dice la URL; cada subagente que lance aparece como su personaje. `/office` lo hace a pedido y `/office open` la abre en el navegador (con `DEV_TEAM_OFFICE_AUTOSTART=0`, Pi sólo la levanta con `/office`).
 
@@ -53,6 +53,13 @@ Con el plugin de Claude Code no hace falta instalar nada más: pídele a Claude 
 | Diego | Backend | Edición de código de servidor, migraciones, comandos de shell |
 | Lucía | Frontend | `.tsx/.vue/.css/...`, `components/`, `pages/`, dev servers |
 | Camila | Diseñadora | `.svg/.png`, `design/`, tokens, MCP de Figma |
+
+Y dos **especialistas de visita**, sin escritorio propio: cuando el trabajo es suyo suben por el ascensor, se sientan en un escritorio libre mientras dura y se van cuando termina el turno del agente (un subagente de su rol también son ellos; un segundo al mismo tiempo es alguien nuevo de ese rol). Son personas, no extras: siempre los mismos, dibujados sólidos, y se personalizan en ⚙ › Personajes como el resto.
+
+| Personaje | Rol | Qué del agente los hace subir |
+|---|---|---|
+| Rafa | DevOps/SRE | CI/CD (`.github/workflows/`, `.gitlab-ci.yml`, `gh run`), contenedores (`Dockerfile`, `compose.yaml`, `docker`), clústeres e IaC (`k8s/`, `helm`, `terraform`, `*.tf`), nubes y despliegues (`aws`, `gcloud`, `vercel`, `npm publish`, `deploy`), los MCP de Sentry, Datadog o de la nube |
+| Inés | Seguridad | Escáneres (`npm audit`, `snyk`, `trivy`, `semgrep`, `gitleaks`, `pip-audit`…), `SECURITY.md`, `security/`, llaves y certificados (`.pem`, `.key`), `dependabot.yml`, el escaneo de secretos; subagentes que revisan seguridad (OWASP, vulnerabilidades, modelos de amenazas) |
 
 Lo que se ve en la oficina:
 

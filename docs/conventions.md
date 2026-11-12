@@ -57,7 +57,7 @@ To add something:
 ## Events and roles
 
 - Everything that enters the office is translated into the **generic format** ([`api.md`](api.md#generic-event-format)).
-- **Eight roles:** `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`. The PO is the user: what an agent declares as `po` is drawn as the analyst (`agentRole`).
+- **Ten roles:** `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`, and the visiting specialists `devops` and `security` (`VISITOR_ROLES`), who have no desk: in the game they are `sim.ghosts` with `specialist: true`, called by their work (`specialist()` in `public/sim.js`); `personOf(role)` gives anyone's look. The PO is the user: what an agent declares as `po` is drawn as the analyst (`agentRole`).
 - A subagent declares its own with `role:` in its file. If it does not, it is inferred from its name and then from its description ([`connect-a-harness.md`](connect-a-harness.md)).
 - A declared role that does not exist is **not** silently replaced: it is left out and reported.
 - **Everything a subagent does carries its `subId`.**

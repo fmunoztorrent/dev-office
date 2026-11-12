@@ -2,12 +2,18 @@
 
 import { t } from '../public/i18n.js';
 import { humanizeCommand, humanizeTool } from './humanize.js';
-import { TEXT_RULES } from '../integrations/common/devteam.mjs';
+import { TEXT_RULES, VISITOR_ROLES } from '../integrations/common/devteam.mjs';
 
 export const ROLE_IDS = ['po', 'analyst', 'manager', 'tl', 'qa', 'backend', 'frontend', 'designer'];
+// The visiting specialists (DevOps/SRE and security): they have no desk of their own. When the work
+// is theirs, they come up by the elevator, sit at a hot desk while it lasts and leave.
+export { VISITOR_ROLES };
+export const ALL_ROLE_IDS = [...ROLE_IDS, ...VISITOR_ROLES];
 
 // Alternative names an agent may use when declaring a role.
 const ROLE_ALIASES = {
+  sre: 'devops', ops: 'devops', infra: 'devops', infrastructure: 'devops', infraestructura: 'devops', platform: 'devops', plataforma: 'devops', 'site-reliability': 'devops', cicd: 'devops', 'ci-cd': 'devops',
+  seguridad: 'security', sec: 'security', secops: 'security', appsec: 'security', infosec: 'security', ciberseguridad: 'security', cybersecurity: 'security', 'security-engineer': 'security',
   arquitecto: 'tl', arquitecta: 'tl', architect: 'tl', 'tech-lead': 'tl', techlead: 'tl', lead: 'tl', reviewer: 'tl',
   tester: 'qa', test: 'qa', testing: 'qa', calidad: 'qa',
   analista: 'analyst', ba: 'analyst', business: 'analyst', negocio: 'analyst',
@@ -19,12 +25,13 @@ const ROLE_ALIASES = {
 
 export function normRole(r) {
   const k = String(r ?? '').toLowerCase().trim();
-  return ROLE_IDS.includes(k) ? k : ROLE_ALIASES[k] || null;
+  return ALL_ROLE_IDS.includes(k) ? k : ROLE_ALIASES[k] || null;
 }
 
 // The PO is the user: they give the orders and decide what gets done. An agent never plays it:
 // what it would report as PO (stories, criteria, priorities, acceptance) is drawn as the analyst.
-export const AGENT_ROLE_IDS = ROLE_IDS.filter((r) => r !== 'po');
+export const AGENT_ROLE_IDS = ALL_ROLE_IDS.filter((r) => r !== 'po');
+export const isVisitor = (r) => VISITOR_ROLES.includes(r);
 export function agentRole(r) {
   const k = normRole(r);
   return k === 'po' ? 'analyst' : k;
@@ -39,6 +46,8 @@ const PHASE_ALIASES = {
   changes: 'cambios', 'request-changes': 'cambios', 'test-plan': 'plan-pruebas', regression: 'regresion',
   verify: 'verifica', verificar: 'verifica', implement: 'implementa', implementar: 'implementa', migration: 'migracion',
   'visual-review': 'revision-visual', blocked: 'bloqueado',
+  infrastructure: 'infra', infraestructura: 'infra', provision: 'infra', provisiona: 'infra', ci: 'infra',
+  audit: 'audita', auditar: 'audita', auditoria: 'audita', 'security-review': 'audita', 'threat-model': 'audita', hardening: 'audita',
 };
 
 export function normPhase(p) {
@@ -48,7 +57,10 @@ export function normPhase(p) {
 
 const PATH_RULES = [
   ['qa', /(^|\/)(tests?|__tests__|__snapshots__|e2e|cypress|qa)\/|\.(test|spec|e2e)\.[a-z]+$|(playwright|cypress|vitest|jest)\.config/i],
-  ['tl', /\.github\/|(^|\/)ci\/|eslint|prettier|tsconfig|package\.json$|dockerfile|\.ya?ml$/i],
+  // the visiting specialists: security policies, scanners and keys; CI/CD, containers and infrastructure
+  ['security', /(^|\/)security\.md$|(^|\/)(security|secrets?)\/|\.snyk$|gitleaks|semgrep|codeql|trivy|(^|\/)dependabot\.ya?ml$|\.(pem|key|crt|p12|pfx)$/i],
+  ['devops', /(^|\/)\.github\/workflows\/|(^|\/)\.gitlab-ci\.ya?ml$|(^|\/)\.(circleci|buildkite)\/|jenkinsfile$|dockerfile|\.dockerignore$|(^|\/)(docker-)?compose(\.[\w-]+)?\.ya?ml$|(^|\/)(ci|k8s|kubernetes|helm|charts|terraform|ansible|infra|infrastructure|deploy|deployment|ops)\/|\.(tf|tfvars|hcl)$|(^|\/)(fly\.toml|vercel\.json|netlify\.toml|procfile|nginx\.conf|caddyfile|skaffold\.ya?ml)$/i],
+  ['tl', /\.github\/|eslint|prettier|tsconfig|package\.json$|\.ya?ml$/i],
   ['designer', /\.(svg|png|jpe?g|gif|webp|ico|fig|sketch|xd)$|(^|\/)design\/|figma|tokens?\.(json|css|ts)$|(^|\/)(icons|assets\/img)\//i],
   ['frontend', /\.(css|scss|sass|less|html?|jsx|tsx|vue|svelte|astro)$|(^|\/)(components?|pages?|views?|ui|public|styles?|client|frontend|web)\//i],
   ['analyst', /\.(md|mdx|txt|rst|docx?|csv)$|(^|\/)docs?\/|readme|requirements|stor(y|ies)|(^|\/)adr\//i],
@@ -59,10 +71,17 @@ export function roleForPath(p = '') {
   return 'backend';
 }
 
+// What only the visiting specialists run: security scanners; containers, clusters, clouds and deploys.
+const SECURITY_CMD = /\b(npm|pnpm|yarn|bun) audit\b|\b(snyk|trivy|grype|semgrep|gitleaks|trufflehog|bandit|pip-audit|cargo[ -]audit|osv-scanner|govulncheck|brakeman|nuclei|nmap|checkov|tfsec|kube-bench|dependency-check)\b/i;
+const DEVOPS_CMD = /\b(docker|docker-compose|podman|kubectl|helm|minikube|terraform|tofu|terragrunt|pulumi|ansible|ansible-playbook|vagrant|packer|gcloud|doctl|flyctl|vercel|netlify|heroku|railway|wrangler|systemctl|journalctl|nginx|caddy|certbot|eksctl|skaffold|argocd)\b|\baws [a-z]|\baz (login|group|vm|aks|webapp|account|storage)\b|\bfly (deploy|launch|ssh|logs|status)\b|\b(npm|pnpm|yarn) publish\b|\bdeploy\b/i;
+
 export function roleForCommand(c = '') {
+  if (/^\s*gh (workflow|run)\b/.test(c)) return 'devops';
   if (/^\s*(git|gh)\b/.test(c)) return 'tl';
+  if (SECURITY_CMD.test(c)) return 'security';
   if (/\b(test|tests|jest|vitest|pytest|mocha|cypress|playwright|coverage|go test|cargo test)\b/i.test(c)) return 'qa';
   if (/\b(lint|eslint|prettier|tsc|typecheck|go vet|cargo clippy)\b/i.test(c)) return 'tl';
+  if (DEVOPS_CMD.test(c)) return 'devops';
   if (/\b(vite|next|nuxt|storybook|tailwind|webpack|astro|npm run (dev|preview))\b/i.test(c)) return 'frontend';
   if (/\b(svgo|magick|imagemagick|sharp|ffmpeg)\b/i.test(c)) return 'designer';
   return 'backend';
@@ -80,6 +99,9 @@ const AGENT_TYPES = {
   'sdd-remediate': 'backend', 'sdd-verify': 'qa', 'sdd-archive': 'manager', 'gentle-ai-explore': 'analyst',
   'gentle-ai-worker': 'backend', 'gentle-ai-verify': 'qa', 'review-risk': 'tl', 'review-readability': 'tl',
   'review-reliability': 'tl', 'review-resilience': 'tl', 'jd-judge-a': 'tl', 'jd-judge-b': 'tl', 'jd-fix-agent': 'backend',
+  // the visiting specialists
+  devops: 'devops', sre: 'devops', 'devops-engineer': 'devops', infra: 'devops', 'platform-engineer': 'devops', deployer: 'devops',
+  security: 'security', 'security-reviewer': 'security', 'security-auditor': 'security', 'security-review': 'security', appsec: 'security', pentester: 'security',
 };
 
 // the text → role rules are the shared library's (subagent detection uses them too)
@@ -99,6 +121,8 @@ export function filePathOf(input = {}) {
 export function roleForTool(tool = '', input = {}) {
   const t = tool.toLowerCase();
   if (t.startsWith('mcp__') || t.includes('_mcp_')) {
+    if (/snyk|semgrep|security|vuln|secret/.test(t)) return 'security';
+    if (/sentry|datadog|grafana|pagerduty|cloudflare|vercel|netlify|docker|kubernetes|k8s|terraform|aws|gcp|azure|github__actions/.test(t)) return 'devops';
     if (/figma|design|canva/.test(t)) return 'designer';
     if (/playwright|cypress|testing|(^|[_-])qa([_-]|$)/.test(t)) return 'qa';
     if (/browser|chrome|puppeteer|preview/.test(t)) return 'frontend';

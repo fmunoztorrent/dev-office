@@ -180,7 +180,7 @@ Los que no calzan con nada se listan para que les agregues `role:`. Desde ese mo
 
 ### Si tu agente no trae equipo
 
-`join` mira qué roles cubren los subagentes de tu agente, en el proyecto y en tu carpeta de usuario (`~/.claude/agents`, `~/.pi/agent/agents`…). Los que falten los pone el equipo de la oficina, en el proyecto. Si no trae ninguno, recibe los cinco:
+`join` mira qué roles cubren los subagentes de tu agente, en el proyecto y en tu carpeta de usuario (`~/.claude/agents`, `~/.pi/agent/agents`…). Los que falten los pone el equipo de la oficina, en el proyecto. Si no trae ninguno, recibe los siete:
 
 | Subagente | Personaje | Qué hace |
 |---|---|---|
@@ -189,6 +189,10 @@ Los que no calzan con nada se listan para que les agregues `role:`. Desde ese mo
 | `ex-backend` | Diego (Backend) | Implementa con TDD |
 | `ex-frontend` | Lucía (Frontend) | Implementa la interfaz con TDD |
 | `ex-qa` | Andrés (QA) | Tests y escenarios, sin tocar el código |
+| `ex-devops` | Rafa (DevOps/SRE, de visita) | CI/CD, contenedores, infraestructura y despliegues; nunca aplica en ambientes compartidos sin tu OK |
+| `ex-security` | Inés (Seguridad, de visita) | Revisión de seguridad con severidad y evidencia; sólo lee |
+
+Los dos especialistas de visita sólo van a un proyecto cuyo equipo es el de la oficina (uno que ya tenía los cinco los recibe en su próximo `join`). A un proyecto que trae su propio equipo se le completa sin ellos; Rafa e Inés igual suben a la oficina cuando el trabajo del agente es suyo.
 
 Cada uno queda en el formato de tu agente:
 

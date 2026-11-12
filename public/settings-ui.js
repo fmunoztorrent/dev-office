@@ -6,7 +6,7 @@
 //                detected, and a prompt sent from the whiteboard starts THAT pipeline.
 //   Characters   how the characters of the office being watched look.
 
-import { TEAM, DEFAULT_TEAM, APPEARANCE_KEYS, LOOK_PALETTES, SEXES, PERSONALITIES, STYLES, randomLook, lookForSex } from './sim.js';
+import { personOf, defaultLook, VISITORS, APPEARANCE_KEYS, LOOK_PALETTES, SEXES, PERSONALITIES, STYLES, randomLook, lookForSex } from './sim.js';
 import { exportCharacter, parseCharacter, characterFile } from './character.js';
 import { drawSprite } from './sprite.js';
 import { t, LANGUAGES, getLanguage } from './i18n.js';
@@ -14,7 +14,7 @@ import { allZones, zoneInfo, countryName } from './clock.js';
 import { parsePlace } from './sky.js';
 import { MODEL_ROLES, PROFILE_HARNESSES } from './models.js';
 
-const ROLE_ORDER = ['po', 'analyst', 'manager', 'tl', 'qa', 'backend', 'frontend', 'designer'];
+const ROLE_ORDER = ['po', 'analyst', 'manager', 'tl', 'qa', 'backend', 'frontend', 'designer', 'devops', 'security']; // the last two: the visiting specialists
 const HARNESS_NAME = { pi: 'Pi', 'claude-code': 'Claude Code', opencode: 'OpenCode', codex: 'Codex' };
 
 const $ = (id) => document.getElementById(id);
@@ -475,7 +475,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   }
 
   function renderLook() {
-    st.looks ||= Object.fromEntries(ROLE_ORDER.map((r) => [r, Object.fromEntries(APPEARANCE_KEYS.map((k) => [k, TEAM[r][k]]))]));
+    st.looks ||= Object.fromEntries(ROLE_ORDER.map((r) => [r, Object.fromEntries(APPEARANCE_KEYS.map((k) => [k, personOf(r)[k]]))]));
     const panel = document.querySelector('[data-panel="look"]');
     const cards = ROLE_ORDER.map((role) => {
       const look = st.looks[role];
@@ -504,9 +504,9 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         el('div', { class: 'colors' }, colorField(look, 'skin', set), colorField(look, 'hair', set), colorField(look, 'shirt', set), colorField(look, 'pants', set)),
         el('div', { class: 'toggles' }, toggle('long'), toggle('beard'), toggle('glasses')),
         el('div', { class: 'toggles' },
-          el('span', { class: 'hint' }, role === 'po' ? `${LK('role', { role })} · ${LK('you')}` : LK('role', { role })),
+          el('span', { class: 'hint', title: VISITORS[role] ? LK('visitorHint') : undefined }, role === 'po' ? `${LK('role', { role })} · ${LK('you')}` : VISITORS[role] ? `${LK('role', { role })} · ${LK('visitor')}` : LK('role', { role })),
           el('button', { type: 'button', class: 's-mini', title: LK('randomTitle'), onclick: () => { Object.assign(look, randomLook(look.sex)); renderLook(); } }, '🎲'),
-          el('button', { type: 'button', class: 's-mini', title: LK('resetTitle'), onclick: () => { Object.assign(look, DEFAULT_TEAM[role]); renderLook(); } }, '↺')),
+          el('button', { type: 'button', class: 's-mini', title: LK('resetTitle'), onclick: () => { Object.assign(look, defaultLook(role)); renderLook(); } }, '↺')),
       );
     });
     // keep the scroll and the focus where they were (a swatch redraws the panel)
@@ -544,7 +544,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     const appearance = {};
     for (const role of ROLE_ORDER) {
       const look = st.looks[role];
-      const changed = Object.fromEntries(APPEARANCE_KEYS.filter((k) => look[k] !== DEFAULT_TEAM[role][k]).map((k) => [k, look[k]]));
+      const changed = Object.fromEntries(APPEARANCE_KEYS.filter((k) => look[k] !== defaultLook(role)[k]).map((k) => [k, look[k]]));
       appearance[role] = Object.keys(changed).length ? changed : null;
     }
     const r = await api('PUT', '/v1/settings', { appearance, office: here() });
@@ -562,7 +562,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     st.models ||= structuredClone(p.models);
     const m = st.models;
     const M = (k, v) => t(`settings.models.${k}`, v);
-    const roleName = (role) => (role === 'default' ? M('default') : `${TEAM[role]?.name || role} · ${t(`team.titles.${role}`)}`);
+    const roleName = (role) => (role === 'default' ? M('default') : `${personOf(role)?.name || role} · ${t(`team.titles.${role}`)}`);
     const card = ([id, prof]) => el('fieldset', { class: 's-profile' },
       el('legend', {}, `${prof.label} · ${id}`),
       el('label', { class: 'b-field' }, el('span', {}, M('label')),

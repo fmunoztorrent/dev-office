@@ -7,7 +7,7 @@
 // Without an interactive terminal (in the background, `serve`) only the log is written, without colors.
 
 import { spawn } from 'node:child_process';
-import { DEFAULT_TEAM, phaseInfo } from '../public/sim.js';
+import { defaultLook, phaseInfo } from '../public/sim.js';
 import { t, timeOf, LANGUAGES } from '../public/i18n.js';
 import { weatherIcon } from '../public/sky.js';
 import { clean } from './screen.js';
@@ -73,7 +73,7 @@ export function createLog({ server, write, color = true, colorMode = '256' }) {
   const officeName = (id) => offices().find((o) => o.id === id)?.name || id;
   const zone = (id) => offices().find((o) => o.id === (id || 'main'))?.timezone;
   const person = (office, role) => {
-    const look = { ...DEFAULT_TEAM[role], ...(server.store.getAppearance(office)?.[role] || {}) };
+    const look = { ...defaultLook(role), ...(server.store.getAppearance(office)?.[role] || {}) };
     return look.name ? { name: look.name, shirt: look.shirt } : null;
   };
 

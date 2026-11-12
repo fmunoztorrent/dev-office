@@ -14,7 +14,7 @@ import { detectHarness } from '../integrations/common/devteam.mjs';
 import { t, setLanguage, getLanguage } from '../public/i18n.js';
 import { systemZone, countryName, zoneInfo } from '../public/clock.js';
 import { exportCharacter, parseCharacter, changedLook, characterFile } from '../public/character.js';
-import { DEFAULT_TEAM } from '../public/sim.js';
+import { defaultLook } from '../public/sim.js';
 import { normRole } from '../server/roles.js';
 import { compareVersions, installedVersion, officeMode, sameInstall, stopOffice, startOffice } from '../server/lifecycle.js';
 
@@ -346,7 +346,7 @@ async function cmdCharacter() {
     const role = normRole(ref) || fail(t('cli.characterUsage'));
     let c;
     if (live) c = await api(`/v1/characters/${role}?office=${encodeURIComponent(office)}`);
-    else { const store = openStore(); c = exportCharacter(role, { ...DEFAULT_TEAM[role], ...(store.getAppearance(office)[role] || {}) }); store.close(); }
+    else { const store = openStore(); c = exportCharacter(role, { ...defaultLook(role), ...(store.getAppearance(office)[role] || {}) }); store.close(); }
     if (!c?.kind) fail(t('cli.couldNot', { error: c?.error || t('cli.noAnswer') }));
     const json = `${JSON.stringify(c, null, 2)}\n`;
     const out = str(args.out);
@@ -368,7 +368,7 @@ async function cmdCharacter() {
     if (live) out = await api(`/v1/characters/${role}?office=${encodeURIComponent(office)}`, JSON.parse(raw), 'PUT');
     else { const store = openStore(); out = store.setAppearance({ [role]: Object.keys(look).length ? look : null }, office); store.close(); }
     if (!out?.ok) fail(t('cli.couldNot', { error: out?.error || t('cli.noAnswer') }));
-    console.log(t('cli.characterImported', { name: c.look.name || DEFAULT_TEAM[role].name, role, office }));
+    console.log(t('cli.characterImported', { name: c.look.name || defaultLook(role).name, role, office }));
     return;
   }
   fail(t('cli.characterUsage'));

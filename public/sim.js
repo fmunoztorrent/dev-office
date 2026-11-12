@@ -42,6 +42,20 @@ export const TEAM = {
   qa: { name: 'Andrés', title: 'QA', sex: 'm', personality: 'anxious', style: 'normal', shirt: '#8ac926', pants: '#2b3a2e', hair: '#3d2817', skin: '#e0ac7e', glasses: true, seat: { x: 330, y: 418 }, prop: 'qa' },
   tl: { name: 'Tomás', title: 'Tech Lead', sex: 'm', personality: 'calm', style: 'normal', shirt: '#22a68e', pants: '#26313a', hair: '#2b1b12', skin: '#d9a273', beard: true, seat: { x: 560, y: 418 }, prop: 'big' },
 };
+// The visiting specialists (DevOps/SRE and security) have no desk of their own: when the agent's work
+// is theirs (a deploy, a container, a CI pipeline; an audit, a scanner, a key) one of them comes up by
+// the elevator, sits at a hot desk while it lasts and leaves when it is over, like the newcomers. They
+// are people, not extras: always the same one, drawn solid. Like the team, they can be customized in
+// ⚙ › Characters; their title comes from the game's language.
+export const VISITORS = {
+  devops: { name: 'Rafa', title: 'DevOps/SRE', sex: 'm', personality: 'calm', style: 'normal', shirt: '#118ab2', pants: '#26313a', hair: '#3d2817', skin: '#d9a273', long: false, beard: true, glasses: false, prop: 'laptop', icon: '🛠️' },
+  security: { name: 'Inés', title: 'Seguridad', sex: 'f', personality: 'focused', style: 'normal', shirt: '#ffd166', pants: '#2b2d42', hair: '#151515', skin: '#f0c8a8', long: true, beard: false, glasses: true, prop: 'laptop', icon: '🛡️' },
+};
+export const VISITOR_ROLES = Object.keys(VISITORS);
+/** A role's person: the team's character or the visiting specialist (null if neither). */
+export const personOf = (role) => TEAM[role] || VISITORS[role] || null;
+/** A role's default look (before ⚙ › Characters): the team's, or the visiting specialist's. */
+export const defaultLook = (role) => DEFAULT_TEAM[role] || DEFAULT_VISITORS[role];
 export const PRODUCT = ['po', 'analyst', 'designer']; // business NPCs: they talk among themselves and bring the requirements
 export const TECH = ['backend', 'frontend', 'qa'];      // they work and sometimes consult the TL
 
@@ -81,12 +95,14 @@ export const PERSONALITIES = {
   calm: { social: 1.2, coffee: 0.8, doubt: 1.2, dream: 1, breaks: 0.7, chats: false, tv: true },
   dreamer: { social: 1, coffee: 1, doubt: 1, dream: 0.45, breaks: 1, chats: false, tv: true, dreams: ['unicorn', 'rainbow'] },
 };
-export const DEFAULT_TEAM = Object.fromEntries(Object.entries(TEAM).map(([id, c]) => {
+const defaults = (people) => Object.fromEntries(Object.entries(people).map(([id, c]) => {
   const look = Object.fromEntries(APPEARANCE_KEYS.filter((k) => k !== 'title').map((k) => [k, c[k] ?? false]));
   // the title follows the language and, where the language has it, their sex (Diseñadora / Diseñador)
-  Object.defineProperty(look, 'title', { get: () => t(`team.titles.${id}`, { g: TEAM[id]?.sex || c.sex }), enumerable: true });
+  Object.defineProperty(look, 'title', { get: () => t(`team.titles.${id}`, { g: people[id]?.sex || c.sex }), enumerable: true });
   return [id, look];
 }));
+export const DEFAULT_TEAM = defaults(TEAM);
+export const DEFAULT_VISITORS = defaults(VISITORS);
 // Palettes to pick colors without typing hex (the terminal cycles them with ◂ ▸; the web also has a free picker).
 export const LOOK_PALETTES = {
   shirt: ['#e0607e', '#f0a73a', '#3f73f0', '#22a68e', '#8ac926', '#6b5bd6', '#ff7a45', '#c86bfa', '#ef476f', '#118ab2', '#06d6a0', '#ffd166'],
@@ -105,10 +121,10 @@ export const lookForSex = (sex) => (sex === 'f' ? { sex, long: true, beard: fals
 let appearance = {};
 export function applyAppearance(overrides = {}) {
   appearance = overrides || {};
-  for (const [id, cfg] of Object.entries(TEAM)) {
+  for (const [id, cfg] of [...Object.entries(TEAM), ...Object.entries(VISITORS)]) {
     const o = appearance[id] || {};
-    for (const k of APPEARANCE_KEYS) if (k !== 'title') cfg[k] = o[k] ?? DEFAULT_TEAM[id][k];
-    cfg.title = o.title ?? DEFAULT_TEAM[id].title; // after the sex: the default title agrees with it
+    for (const k of APPEARANCE_KEYS) if (k !== 'title') cfg[k] = o[k] ?? defaultLook(id)[k];
+    cfg.title = o.title ?? defaultLook(id).title; // after the sex: the default title agrees with it
   }
 }
 applyAppearance();
@@ -309,6 +325,8 @@ export const PHASES = {
   ux: { icon: '✏️', anim: 'work' },
   ui: { icon: '🎨', anim: 'work' },
   'revision-visual': { icon: '👀', anim: 'visit' },
+  infra: { icon: '🏗️', anim: 'work' },
+  audita: { icon: '🛡️', anim: 'work' },
   bloqueado: { icon: '⛔', anim: 'blocked' },
 };
 for (const [id, ph] of Object.entries(PHASES)) Object.defineProperty(ph, 'label', { get: () => t(`phase.${id}`), enumerable: true });
@@ -408,7 +426,7 @@ function describe(kind, who, extra) {
     case 'standup': case 'deskchat': case 'gossip': case 'bathgossip': case 'idea': case 'feasibility': case 'consult': case 'rounds': case 'coffee': case 'requirement':
     case 'bathroom': case 'lunch': case 'lunchend': case 'fire': case 'repaired': case 'tv': case 'pane': case 'paneDone':
       return t(`sim.journal.${kind}`, vars);
-    case 'newcomer': case 'farewell': return t(`sim.journal.${kind}`, { ...vars, name: extra.name || '', role: TEAM[who]?.title || who });
+    case 'newcomer': case 'farewell': case 'visitor': return t(`sim.journal.${kind}`, { ...vars, name: extra.name || '', role: personOf(who)?.title || who });
     default: return t('sim.journal.other', { ...vars, kind });
   }
 }
@@ -750,7 +768,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
 
   function handle(ev) {
     const ghost = ev.subId ? ghosts.get(ev.subId) : null; // a subagent's events are its newcomer's
-    const a = ghost || agents[ev.role];
+    const a = ghost || agents[ev.role] || specialist(ev); // DevOps and security have no desk: they come up
     const now = simNow;
     if (a) log(a, ev.text);
     switch (ev.kind) {
@@ -821,7 +839,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         }
         break;
       case 'subagent_start': {
-        if (!a) break;
+        if (!a && !VISITORS[ev.role]) break;
         const g = ghost || hire(ev);
         if (g) {
           // a newcomer: Marco brings them the card, and their role's character says hello
@@ -915,10 +933,11 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
       // it, each one tells what their agent did (the real log), and the manager closes with what is
       // waiting for you and what is still open.
       case 'standup': {
-        const lines = (ev.lines || []).filter((l) => agents[l.role] && !agents[l.role].hidden && !agents[l.role].lunch);
-        const members = ['manager', ...new Set(lines.map((l) => l.role).filter((r) => r !== 'manager'))];
+        const lines = (ev.lines || []).filter((l) => (agents[l.role] && !agents[l.role].hidden && !agents[l.role].lunch) || VISITORS[l.role]);
+        const members = ['manager', ...new Set(lines.map((l) => l.role).filter((r) => r !== 'manager' && agents[r]))];
         for (const id of members) interrupt(agents[id]);
-        const say = [['manager', T('sim.standup.open')], ...lines.map((l) => [l.role, l.text])];
+        // the visiting specialists are not at the table: the manager tells what they did
+        const say = [['manager', T('sim.standup.open')], ...lines.map((l) => (agents[l.role] ? [l.role, l.text] : ['manager', T('sim.standup.visitor', { name: VISITORS[l.role].name, role: VISITORS[l.role].title, text: l.text })]))];
         say.push(['manager', ev.waiting?.length ? T('sim.standup.waiting', { n: ev.waiting.length, what: short(ev.waiting[0], 50) }) : ev.open?.length ? T('sim.standup.open2', { n: ev.open.length }) : T('sim.standup.close')]);
         banner = { text: `🗣 ${ev.text}`, tone: 'chat', until: now + 8000 };
         scene('standup', members, say, { spot: SPOT.table, gap: 3600 });
@@ -988,7 +1007,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         a.badges.set(key, ev.text);
         note('pane', a.id, { pane: ev.pane, title: ev.text });
         const busy = () => work(a, T('sim.paneWork', { title: ev.text }), 'working', 7000);
-        if (ev.role !== 'manager') visit(agents.manager, ev.role, T('sim.paneAssign', { name: a.cfg.name, pane: ev.pane, title: short(ev.text, 30) }), { carry: true, after: busy });
+        if (ev.role !== 'manager') visit(agents.manager, a.ghost ? a.cfg.seat : ev.role, T('sim.paneAssign', { name: a.cfg.name, pane: ev.pane, title: short(ev.text, 30) }), { carry: true, after: busy });
         else busy();
         break;
       }
@@ -1194,7 +1213,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     if (e && simNow - e.at < 120_000 && e.text && nameOf(e.role)) out.push(T('sim.live.stuck', { name: nameOf(e.role), action: lower(short(e.text, 36)) }));
     if (memory.lastGreen && simNow - memory.lastGreen.at < 120_000) out.push(T('sim.gossipGreen', { name: TEAM.qa.name }));
     if (agents.manager.handUp) out.push(T('sim.live.waitingYou'));
-    for (const g of ghosts.values()) if (!g.leaving) out.push(T('sim.live.newcomer', { name: g.cfg.name, role: TEAM[g.role].title }));
+    for (const g of ghosts.values()) if (!g.leaving) out.push(T(g.specialist ? 'sim.live.visitor' : 'sim.live.newcomer', { name: g.cfg.name, role: personOf(g.role)?.title || g.role }));
     return out;
   }
 
@@ -1211,24 +1230,65 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   }
   // ---------------------------------------------------------------- the newcomers (subagents)
 
-  /** A subagent starts: a newcomer of its role comes in through the stairs to a hot desk. */
-  function hire(ev) {
-    const look = TEAM[ev.role];
-    if (!look || !ev.subId) return null;
-    const taken = new Set([...ghosts.values()].filter((g) => !g.leaving).map((g) => g.desk));
+  /** A free hot desk (or a seat at the meeting table, when they are all taken). */
+  function seatFor(self = null) {
+    const here = [...ghosts.values()].filter((g) => !g.leaving && g !== self);
+    const taken = new Set(here.map((g) => g.desk));
     const desk = HOT_DESKS.findIndex((_, i) => !taken.has(i));
-    const extra = [...ghosts.values()].filter((g) => !g.leaving && g.desk < 0).length;
-    const [dx, dy] = TABLE_SEATS[extra % TABLE_SEATS.length];
-    const seat = desk >= 0 ? HOT_DESKS[desk] : { x: SPOT.table.x + dx, y: SPOT.table.y + dy };
-    const used = new Set([...ghosts.values()].map((g) => g.cfg.name));
-    const name = P(NEWCOMER_NAMES.filter((n) => !used.has(n))) || `${look.name} 2`;
-    const cfg = { ...look, title: look.title, name, seat, prop: 'laptop', hair: P(LOOK_PALETTES.hair), skin: P(LOOK_PALETTES.skin), long: chance(0.5), beard: chance(0.25), glasses: chance(0.3) };
-    const g = new Agent(`new:${ev.subId}`, cfg, now_, random);
-    Object.assign(g, { ghost: true, role: ev.role, subId: ev.subId, session: ev.session || null, project: ev.project || '', desk, x: ELEVATOR.spot.x, y: ELEVATOR.spot.y, seated: false, born: simNow, fade: 0, leaving: false, gone: false });
+    const [dx, dy] = TABLE_SEATS[here.filter((g) => g.desk < 0).length % TABLE_SEATS.length];
+    return { desk, seat: desk >= 0 ? HOT_DESKS[desk] : { x: SPOT.table.x + dx, y: SPOT.table.y + dy } };
+  }
+
+  /**
+   * A subagent starts: a newcomer of its role comes in by the elevator to a hot desk. The visiting
+   * specialists (DevOps, security) come the same way, under `key` when it is their main session's
+   * work; the first one of their role is the specialist in person (solid, always the same), the rest
+   * are newcomers of that role.
+   */
+  function hire(ev, key = ev.subId) {
+    const look = personOf(ev.role);
+    if (!look || !key) return null;
+    const { desk, seat } = seatFor();
+    const present = [...ghosts.values()].filter((g) => !g.gone);
+    const used = new Set(present.map((g) => g.cfg.name));
+    const specialist = !!VISITORS[ev.role] && !used.has(look.name);
+    const name = specialist ? look.name : P(NEWCOMER_NAMES.filter((n) => !used.has(n))) || `${look.name} 2`;
+    const cfg = specialist ? { ...look, title: look.title, name, seat }
+      : { ...look, title: look.title, name, seat, prop: 'laptop', hair: P(LOOK_PALETTES.hair), skin: P(LOOK_PALETTES.skin), long: chance(0.5), beard: chance(0.25), glasses: chance(0.3) };
+    const g = new Agent(`new:${key}`, cfg, now_, random);
+    Object.assign(g, { ghost: true, specialist, role: ev.role, subId: ev.subId || null, session: ev.session || null, project: ev.project || '', desk, x: ELEVATOR.spot.x, y: ELEVATOR.spot.y, seated: false, born: simNow, fade: 0, leaving: false, gone: false });
     elevator.doorAt = simNow; // it arrives by the elevator
     g.goHome();
-    ghosts.set(ev.subId, g);
+    ghosts.set(key, g);
     return g;
+  }
+
+  // What brings a visiting specialist up (the rest of their events find them already here, or not).
+  const CALLS = new Set(['tool_start', 'thinking', 'phase', 'pane_open', 'pane_state']);
+  /**
+   * The visiting specialist doing this work of their main session (a subagent's comes with its
+   * subagent_start): already here, on their way out (they come back) or called now by the elevator.
+   */
+  function specialist(ev) {
+    if (!VISITORS[ev.role] || ev.subId) return null;
+    const key = `visit:${ev.session || ''}:${ev.role}`;
+    const g = ghosts.get(key);
+    if (g && !g.leaving) return g;
+    if (!CALLS.has(ev.kind)) return null;
+    if (g) {
+      // they were leaving: they come back to a free desk
+      const { desk, seat } = seatFor(g);
+      g.desk = desk; g.cfg.seat = seat;
+      Object.assign(g, { leaving: false, gone: false, queue: [] });
+      if (g.fade <= 0) Object.assign(g, { x: ELEVATOR.spot.x, y: ELEVATOR.spot.y, seated: false });
+      g.goHome();
+      return g;
+    }
+    const v = hire(ev, key);
+    note('visitor', ev.role, { name: v.cfg.name, text: ev.text });
+    agents.manager.say(T('sim.visitor.arrive', { name: v.cfg.name, role: v.cfg.title, icon: VISITORS[ev.role].icon }), 2600);
+    log(v, T(`sim.visitor.hello.${ev.role}`));
+    return v;
   }
 
   /** Its subtask is done: says goodbye, walks to the elevator and fades away (its desk goes with it). */

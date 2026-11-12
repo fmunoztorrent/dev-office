@@ -34,7 +34,7 @@ import { clip, normRole } from './roles.js';
 import { SubPanes } from './subpanes.js';
 import { ServiceHub } from './services.js';
 import { PromptHub } from './prompts.js';
-import { DEFAULT_TEAM } from '../public/sim.js';
+import { defaultLook } from '../public/sim.js';
 import { exportCharacter, parseCharacter, changedLook } from '../public/character.js';
 import { detectHarness, projectRoot, HARNESSES, which } from '../integrations/common/devteam.mjs';
 import { t, setLanguage, getLanguage } from '../public/i18n.js';
@@ -42,7 +42,7 @@ import { zoneInfo, systemZone } from '../public/clock.js';
 import { insideDir as inside } from './paths.js';
 import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.16.0';
+export const VERSION = '0.17.0';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
 const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
@@ -308,7 +308,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     command: [process.execPath, CLI],
     env: () => ({ DEV_TEAM_OFFICE_URL: officeUrl() }),
     enabled: () => prefs().herdr.subagents !== false,
-    who: (id, role) => store.getAppearance(id)?.[role]?.name || DEFAULT_TEAM[role]?.name || '',
+    who: (id, role) => store.getAppearance(id)?.[role]?.name || defaultLook(role)?.name || '',
   }) : null;
   company.on('event', (id, event) => subPanes?.onEvent(id, event));
 
@@ -609,7 +609,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const role = normRole(decodeURIComponent(m[1]));
         if (!role) return json(res, 404, { ok: false, error: t('err.unknownRole', { role: decodeURIComponent(m[1]) }) });
         const id = valid(q('office'));
-        if (req.method === 'GET') return json(res, 200, exportCharacter(role, { ...DEFAULT_TEAM[role], ...(store.getAppearance(id)[role] || {}) }));
+        if (req.method === 'GET') return json(res, 200, exportCharacter(role, { ...defaultLook(role), ...(store.getAppearance(id)[role] || {}) }));
         if (req.method === 'PUT') {
           const c = parseCharacter(await body(req));
           if (!c.ok) return json(res, 400, { ok: false, error: t(`err.character.${c.error}`) });

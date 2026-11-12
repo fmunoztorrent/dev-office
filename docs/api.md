@@ -337,7 +337,7 @@ it received, or the oldest open one) and its work is done by that subagent's cha
 | `done` | End of the task | Celebration at the table |
 | `context` | How full the agent's context is: `context: { used, max }` (tokens). Any event can also carry `context` | The context bar, at the bottom center. It is not logged |
 
-Roles: `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`. Aliases like `architect`, `arquitecto`, `tester` or `ux` are accepted too. The PO is the user: a `role` of `po` sent by an agent is drawn as the analyst.
+Roles: `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`, and the visiting specialists `devops` and `security` (no desk: they come up by the elevator while their work lasts). Aliases like `architect`, `arquitecto`, `tester`, `ux`, `sre` or `appsec` are accepted too. The PO is the user: a `role` of `po` sent by an agent is drawn as the analyst.
 
 ## WebSocket protocol
 

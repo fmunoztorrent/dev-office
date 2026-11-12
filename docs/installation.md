@@ -180,7 +180,7 @@ The ones that match nothing are listed so you can add a `role:`. From then on, e
 
 ### If your agent brings no team
 
-`join` looks at which roles your agent's subagents cover, in the project and in your user folder (`~/.claude/agents`, `~/.pi/agent/agents`…). The missing ones are filled by the office team, in the project. If it brings none, it gets all five:
+`join` looks at which roles your agent's subagents cover, in the project and in your user folder (`~/.claude/agents`, `~/.pi/agent/agents`…). The missing ones are filled by the office team, in the project. If it brings none, it gets all seven:
 
 | Subagent | Character | What it does |
 |---|---|---|
@@ -189,6 +189,10 @@ The ones that match nothing are listed so you can add a `role:`. From then on, e
 | `ex-backend` | Diego (Backend) | Implements with TDD |
 | `ex-frontend` | Lucía (Frontend) | Implements the UI with TDD |
 | `ex-qa` | Andrés (QA) | Tests and scenarios, without touching the code |
+| `ex-devops` | Rafa (DevOps/SRE, visiting) | CI/CD, containers, infrastructure and deploys; never applies to shared environments without your OK |
+| `ex-security` | Inés (Security, visiting) | Security review with severity and evidence; read-only |
+
+The two visiting specialists only go to a project whose team is the office's (a project that already had the five gets them on its next `join`). A project that brings a team of its own is completed without them; Rafa and Inés still come to the office when the agent's work is theirs.
 
 Each one is written in your agent's format:
 

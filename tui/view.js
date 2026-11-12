@@ -1,7 +1,7 @@
 // Draws the simulation (public/sim.js) on the terminal framebuffer.
 // The 960×600 world is scaled to the available pixels; the text goes in cells on top.
 
-import { W, H, LEFT, WORLD_W, BATHROOM, HALL, OFFICE_DOOR, ELEVATOR, TEAM, SPOT, BOARD, PLANTS, STATUS_ICON, PHASE_COLOR, phaseInfo, DREAMS, DREAM_PALETTE, RAINBOW_COLORS, rainbowPixels, CAFE, DINING, DINING_SEATS, PARTITION, RACK, EXTINGUISHER, daylight, GLASS, EASEL, CLOCK, TV, SOFA, ALARM, SIGN, tvChannel, HOT_DESKS, gait, screenLines, screenMode } from '../public/sim.js';
+import { W, H, LEFT, WORLD_W, BATHROOM, HALL, OFFICE_DOOR, ELEVATOR, TEAM, personOf, SPOT, BOARD, PLANTS, STATUS_ICON, PHASE_COLOR, phaseInfo, DREAMS, DREAM_PALETTE, RAINBOW_COLORS, rainbowPixels, CAFE, DINING, DINING_SEATS, PARTITION, RACK, EXTINGUISHER, daylight, GLASS, EASEL, CLOCK, TV, SOFA, ALARM, SIGN, tvChannel, HOT_DESKS, gait, screenLines, screenMode } from '../public/sim.js';
 import { outdoor, lightning, weatherIcon } from '../public/sky.js';
 import { hex, mix, fit, wrap, strWidth } from './screen.js';
 import { AGENT_NAME, TASK_STATUS } from '../public/targets.js';
@@ -65,7 +65,12 @@ export function drawFrame(scr, L, sim, model, now) {
     items.push({ y: a.seated ? s.y : a.y, fn: () => drawPerson(g, a, sim, model, now) });
   }
   // the newcomers' desks: there while their newcomer is
-  for (const a of sim.ghosts) if (a.desk >= 0 && a.fade > 0.2) items.push({ y: HOT_DESKS[a.desk].y + 1, fn: () => drawHotDesk(g, sim, a.desk, now) });
+  for (const a of sim.ghosts) {
+    if (a.desk < 0 || a.fade <= 0.2) continue;
+    // the chair behind whoever sits there, the desk in front (like the team's)
+    items.push({ y: HOT_DESKS[a.desk].y - 1, fn: () => g.rect(HOT_DESKS[a.desk].x - 14, HOT_DESKS[a.desk].y - 36, 28, 30, C.chair) });
+    items.push({ y: HOT_DESKS[a.desk].y + 1, fn: () => drawHotDesk(g, sim, a.desk, now) });
+  }
   items.push({ y: BATHROOM.front - 1, fn: () => drawBathFront(g) });
   for (const a of sim.ghosts) if (a.fade > 0.2) items.push({ y: a.seated ? a.cfg.seat.y : a.y, fn: () => drawPerson(g, ghostly(a), sim, model, now) });
   items.push({ y: CAFE.bistro.y, fn: () => drawBistro(g) });
@@ -443,6 +448,7 @@ const PALE = hex('#dce9f5');
 const LIPS = hex('#c45a6a');
 const washed = (c) => `#${mix(hex(c), PALE, 0.55).toString(16).padStart(6, '0')}`;
 function ghostly(a) {
+  if (a.specialist) return a; // a visiting specialist is a person, not an extra
   const p = Object.create(a);
   p.cfg = { ...a.cfg, shirt: washed(a.cfg.shirt), pants: washed(a.cfg.pants), hair: washed(a.cfg.hair), skin: washed(a.cfg.skin) };
   return p;
@@ -452,7 +458,6 @@ function drawHotDesk(g, sim, i, now) {
   const { rect, X, Y, scr } = g;
   const s = HOT_DESKS[i];
   const a = sim.ghosts.find((x) => x.desk === i);
-  rect(s.x - 14, s.y - 36, 28, 30, C.chair);
   rect(s.x - 36, s.y - 14, 72, 14, C.wood);
   rect(s.x - 36, s.y - 2, 72, 22, C.woodFront);
   rect(s.x - 36, s.y - 2, 72, 2, C.woodEdge);
@@ -827,7 +832,7 @@ function drawPanel(scr, L, sim, model) {
   const flow = s?.flow || [];
   if (flow.length && r < maxR - 10) {
     heading(t('tui.flow'));
-    const parts = flow.map((f) => ({ text: `${TEAM[f.role]?.name || f.role}·${phaseInfo(f.phase).label}`, color: hex(TEAM[f.role]?.shirt || '#888888') }));
+    const parts = flow.map((f) => ({ text: `${personOf(f.role)?.name || f.role}·${phaseInfo(f.phase).label}`, color: hex(personOf(f.role)?.shirt || '#888888') }));
     // from back to front, whatever fits in 2 lines
     const lines = [[]];
     let used = 0;
@@ -945,7 +950,7 @@ function drawPanel(scr, L, sim, model) {
   heading(t('tui.log'));
   for (const ev of model.log) {
     if (r > maxR) break;
-    const cfg = TEAM[ev.role];
+    const cfg = personOf(ev.role);
     const time = timeOf(ev.ts, sim.zone);
     scr.text(x + 1, r, time, C.muted, C.panelBg);
     const who = ev.kind === 'chat' || ev.kind === 'poke' || (ev.kind === 'btw' && ev.phase === 'ask') ? ev.from : cfg?.name || t('events.office');

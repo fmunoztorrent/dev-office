@@ -336,7 +336,7 @@ suyos: no cambian la sesión del padre. Una `phase` suya cambia la fase del suba
 | `done` | Fin de la tarea | Celebración en la mesa |
 | `context` | Qué tan lleno está el contexto del agente: `context: { used, max }` (tokens). Cualquier evento puede traer también `context` | La barra de contexto, abajo al centro. No va a la bitácora |
 
-Roles: `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`. También se aceptan alias como `arquitecto`, `tester` o `ux`. La PO es el usuario: un `role` `po` que mande un agente se dibuja como la analista.
+Roles: `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`, y los especialistas de visita `devops` y `security` (sin escritorio: suben por el ascensor mientras dura su trabajo). También se aceptan alias como `arquitecto`, `tester`, `ux`, `sre` o `appsec`. La PO es el usuario: un `role` `po` que mande un agente se dibuja como la analista.
 
 ## Protocolo WebSocket
 

@@ -11,7 +11,7 @@
 import { clip } from './roles.js';
 import { quote } from './herdr.js';
 
-export const ROLE_ICON = { designer: '🎨', po: '📝', analyst: '📊', manager: '📋', frontend: '🖥️', backend: '⚙️', qa: '🧪', tl: '🧭' };
+export const ROLE_ICON = { designer: '🎨', po: '📝', analyst: '📊', manager: '📋', frontend: '🖥️', backend: '⚙️', qa: '🧪', tl: '🧭', devops: '🛠️', security: '🛡️' };
 
 export class SubPanes {
   /**

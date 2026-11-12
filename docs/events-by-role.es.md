@@ -20,7 +20,7 @@ Las dos comparten la sesión a través de `DEV_TEAM_OFFICE_SESSION`: la define l
 {
   "session": "pi-1234",
   "kind": "phase",
-  "role": "qa",            // analyst | manager | tl | qa | backend | frontend | designer (+ alias: arquitecto, tester, ux…)
+  "role": "qa",            // analyst | manager | tl | qa | backend | frontend | designer | devops | security (+ alias: arquitecto, tester, ux, sre, appsec…)
   "phase": "red",          // ver catálogo; acepta alias en inglés (implement, approve, architecture…)
   "text": "2 tests fallan: orders.cancel.test.ts",
   "from": "tl"             // opcional; por defecto, el rol que tenía el turno
@@ -82,6 +82,8 @@ Qué hace el servidor con una fase:
 | `designer` | `ux` | Flujos y wireframes | Trabaja ✏️ |
 | `designer` | `ui` | UI visual y tokens | Trabaja 🎨 |
 | `designer` | `revision-visual` | Revisa lo implementado | Va al escritorio de frontend 👀 |
+| `devops` | `infra` (`infraestructura`, `ci`) | CI/CD, contenedores, infraestructura | Rafa sube por el ascensor y trabaja 🏗️ en un escritorio libre |
+| `security` | `audita` (`audit`, `security-review`, `threat-model`, `hardening`) | Revisa la seguridad | Inés sube por el ascensor y trabaja 🛡️ en un escritorio libre |
 | cualquiera | `bloqueado` | No puede avanzar | ⛔ y el manager se acerca |
 
 Una fase desconocida no se descarta: se muestra como trabajo genérico con su nombre en mayúsculas.

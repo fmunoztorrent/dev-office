@@ -57,7 +57,7 @@ Para agregar algo:
 ## Eventos y roles
 
 - Todo lo que entra a la oficina se traduce al **formato genérico** ([`api.es.md`](api.es.md#formato-genérico-de-un-evento)).
-- **Ocho roles:** `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`. La PO es el usuario: lo que un agente declara como `po` se dibuja como la analista (`agentRole`).
+- **Diez roles:** `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`, y los especialistas de visita `devops` y `security` (`VISITOR_ROLES`), que no tienen escritorio: en el juego son `sim.ghosts` con `specialist: true`, llamados por su trabajo (`specialist()` en `public/sim.js`); `personOf(role)` da el aspecto de cualquiera. La PO es el usuario: lo que un agente declara como `po` se dibuja como la analista (`agentRole`).
 - Un subagente declara el suyo con `role:` en su archivo. Si no lo declara, se deduce de su nombre y después de su descripción ([`connect-a-harness.es.md`](connect-a-harness.es.md)).
 - Un rol declarado que no existe **no** se reemplaza en silencio: queda fuera y se reporta.
 - **Lo que hace un subagente lleva su `subId`.**

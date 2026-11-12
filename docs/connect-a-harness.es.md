@@ -8,7 +8,7 @@ Para que la representación sea correcta —que el subagente de backend se sient
 
 ## El desacople, en una frase
 
-**La oficina conoce sólo sus 8 roles; el harness declara a qué rol corresponde cada uno de sus agentes.** El nombre del harness nunca entra al código de la oficina: no hay una tabla que diga «tal-agente es backend» en el servidor. Esa correspondencia la pone cada harness, en el frontmatter de sus propios archivos de agente, y viaja a la oficina como un dato.
+**La oficina conoce sólo sus 10 roles; el harness declara a qué rol corresponde cada uno de sus agentes.** El nombre del harness nunca entra al código de la oficina: no hay una tabla que diga «tal-agente es backend» en el servidor. Esa correspondencia la pone cada harness, en el frontmatter de sus propios archivos de agente, y viaja a la oficina como un dato.
 
 Esto tiene una consecuencia práctica: agregar un harness no se hace editando la oficina. Se hace declarando el mapeo del lado del harness.
 
@@ -28,15 +28,15 @@ Eres el agente que... (system prompt)
 ```
 
 - Campo exacto: `role:`
-- Valores aceptados (los 8 roles del juego): `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`.
+- Valores aceptados (los 10 roles del juego): `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`, `devops`, `security`. Los dos últimos son los especialistas de visita: no tienen escritorio y suben a la oficina mientras dura su trabajo.
 - **La PO es el usuario** (da las órdenes), así que un subagente nunca la juega: `role: po` se dibuja como `analyst`.
 - Si el campo falta o trae un valor desconocido, no se rompe nada: la oficina cae en su heurística (más abajo).
 
-Este documento es la **fuente canónica** del contrato: la lista de los 8 roles, los alias que acepta cada uno, la regla de precedencia y qué pasa con una declaración vacía o rota. El skill **Dev Team Office: conectar un harness** (`dev-team-office-config`, instalado con `dev-team-office install`) ejecuta el procedimiento paso a paso y apunta acá para el contrato completo. Si el contrato cambia, se actualiza acá y el skill sólo lo referencia: así no pueden derivar uno del otro.
+Este documento es la **fuente canónica** del contrato: la lista de los 10 roles, los alias que acepta cada uno, la regla de precedencia y qué pasa con una declaración vacía o rota. El skill **Dev Team Office: conectar un harness** (`dev-team-office-config`, instalado con `dev-team-office install`) ejecuta el procedimiento paso a paso y apunta acá para el contrato completo. Si el contrato cambia, se actualiza acá y el skill sólo lo referencia: así no pueden derivar uno del otro.
 
 ### Alias que acepta `normRole`
 
-Además de los 8 valores, se aceptan alias en inglés y en español. El harness puede escribir cualquiera de estos y el valor se normaliza al rol:
+Además de los 10 valores, se aceptan alias en inglés y en español. El harness puede escribir cualquiera de estos y el valor se normaliza al rol:
 
 | Rol | Alias aceptados |
 |---|---|
@@ -48,6 +48,8 @@ Además de los 8 valores, se aceptan alias en inglés y en español. El harness 
 | `backend` | `be`, `back` |
 | `frontend` | `fe`, `front` |
 | `designer` | `diseñador`, `diseñadora`, `disenador`, `disenadora`, `design`, `ux` |
+| `devops` | `sre`, `ops`, `infra`, `infrastructure`, `infraestructura`, `platform`, `plataforma`, `site-reliability`, `cicd`, `ci-cd` |
+| `security` | `seguridad`, `sec`, `secops`, `appsec`, `infosec`, `ciberseguridad`, `cybersecurity`, `security-engineer` |
 
 ### Precedencia: lo declarado gana siempre
 

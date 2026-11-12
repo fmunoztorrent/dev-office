@@ -57,6 +57,7 @@ In both views (and in the terminal game):
 
 - **The bubbles say what each one is doing in words** ("Running the tests", "Reading cart.js"), never the command line. The `follow` viewer of a subagent shows the command too, dimmed, under the words.
 - **Each subagent is a newcomer:** a translucent extra of its role (another name, the same shirt) who arrives by the elevator at the end of the hallway, gets a desk of their own in the front row (it appears with them and goes with them; past seven, at the meeting table), does the subagent's work and leaves when it ends. Their desk's plate says who they are and which project they came for.
+- **The visiting specialists, Rafa (DevOps/SRE) and Inés (security),** have no desk either: when the agent's work is theirs (a deploy, a container, a CI workflow; an audit, a scanner, a key) they come up by the elevator the same way, solid and always the same person, and leave when the turn ends.
 - **The whiteboard with tickets** expands when clicked: the tasks as post-its in three columns. In the terminal, `t` or Enter there opens a new brief.
 - **The context bar** (browser, small, next to the weather): how much context the focused session's agent has left, or the latest one that reports it.
 

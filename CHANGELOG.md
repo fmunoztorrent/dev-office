@@ -4,6 +4,24 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-12
+
+### Added
+
+- **Two visiting specialists: DevOps/SRE (Rafa) and security (Inés).** They have no desk of their own: when the agent's work is theirs they come up by the elevator, sit at a hot desk while it lasts and leave when the turn ends (if more of their work comes while they are leaving, they come back). They are people, not extras: always the same one, drawn solid, and customizable in ⚙ › Characters.
+  - **DevOps:** CI/CD (`.github/workflows/`, `.gitlab-ci.yml`, `gh run`), containers (`Dockerfile`, compose files, `docker`), clusters and infrastructure as code (`k8s/`, `helm`, `terraform`, `*.tf`), clouds and deploys (`aws`, `gcloud`, `vercel`, `npm publish`, `deploy`) and the Sentry, Datadog and cloud MCPs.
+  - **Security:** scanners (`npm audit`, `snyk`, `trivy`, `semgrep`, `gitleaks`, `pip-audit`…), `SECURITY.md`, `security/`, keys and certificates, `dependabot.yml`, secret scanning, and subagents that review security (OWASP, vulnerabilities, threat models).
+  - New roles `devops` and `security` (with aliases: `sre`, `infra`, `platform`; `appsec`, `secops`, `seguridad`) for agents, pipeline stages, the MCP and model profiles; their phases are `infra` and `audit`. A subagent of their role is the specialist in person; a second one at the same time is a newcomer of that role. In the daily, Marco tells what they did.
+  - The office's team gets `ex-devops` (CI/CD, containers, infrastructure and deploys; it never applies to shared environments without your OK) and `ex-security` (a read-only review with severity and evidence). `join` gives them to a project whose team is the office's; one that brings its own is completed without them.
+
+### Changed
+
+- Deploys are DevOps's now (they were the manager's), and Dockerfiles and CI workflows too (they were the Tech Lead's).
+
+### Fixed
+
+- In the terminal, the hot desks' chair no longer hides whoever sits there.
+
 ## [0.16.0] - 2026-11-11
 
 ### Added
@@ -224,7 +242,8 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.13.0...v0.14.0

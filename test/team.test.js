@@ -28,9 +28,9 @@ const { detectHarness, parseAgentFile, parseAgentToml } = await import('../integ
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'teams', 'example', 'agents');
 
-// The generic pack's 5 files, sorted: used to compare against readdirSync without depending on
-// the order the filesystem returns.
-const FILES = ['ex-architect.md', 'ex-backend.md', 'ex-explorer.md', 'ex-frontend.md', 'ex-qa.md'];
+// The generic pack's 7 files (the team and the two visiting specialists), sorted: used to compare
+// against readdirSync without depending on the order the filesystem returns.
+const FILES = ['ex-architect.md', 'ex-backend.md', 'ex-devops.md', 'ex-explorer.md', 'ex-frontend.md', 'ex-qa.md', 'ex-security.md'];
 
 const USER_DEST = path.join(HOME, '.pi', 'agent', 'agents');
 const PROJECTS = []; // project-scope temp dirs
@@ -43,22 +43,24 @@ after(() => {
   for (const dir of PACK_ROOTS) fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('listTeams(): incluye el pack example con sus 5 roles mapeados a los agentes del pack', () => {
+test('listTeams(): incluye el pack example con sus 7 roles mapeados a los agentes del pack (también los especialistas de visita)', () => {
   const teams = listTeams();
   const example = teams.find((t) => String(t.name).toLowerCase() === 'example team');
   assert.ok(example, `example no está en listTeams(): ${JSON.stringify(teams)}`);
   assert.deepEqual(
     Object.keys(example.roles).sort(),
-    ['analyst', 'backend', 'frontend', 'qa', 'tl'],
+    ['analyst', 'backend', 'devops', 'frontend', 'qa', 'security', 'tl'],
   );
   assert.equal(example.roles.tl.agent, 'ex-architect');
   assert.equal(example.roles.backend.agent, 'ex-backend');
   assert.equal(example.roles.frontend.agent, 'ex-frontend');
   assert.equal(example.roles.qa.agent, 'ex-qa');
   assert.equal(example.roles.analyst.agent, 'ex-explorer');
+  assert.equal(example.roles.devops.agent, 'ex-devops');
+  assert.equal(example.roles.security.agent, 'ex-security');
 });
 
-test('installTeam(user scope): copia los 5 agentes a ~/.pi/agent/agents', () => {
+test('installTeam(user scope): copia los 7 agentes a ~/.pi/agent/agents', () => {
   fs.rmSync(USER_DEST, { recursive: true, force: true }); // clean state, independent of the order
   const res = installTeam({ team: 'example', harness: 'pi' });
   assert.equal(res.ok, true, JSON.stringify(res));
@@ -68,7 +70,7 @@ test('installTeam(user scope): copia los 5 agentes a ~/.pi/agent/agents', () => 
   assert.ok(res.lines.every((l) => path.isAbsolute(l.split(' -> ')[1])), res.lines.join('\n'));
 });
 
-test('installTeam(project scope): copia los 5 agentes a <project>/.pi/agents', () => {
+test('installTeam(project scope): copia los 7 agentes a <project>/.pi/agents', () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), 'dto-team-proj-'));
   PROJECTS.push(project);
   const dest = path.join(project, '.pi', 'agents');
@@ -96,7 +98,7 @@ test('installTeam(): escribe byte-idéntico al pack y conserva el frontmatter es
 });
 
 // The same pack, in each harness's format: the office reads it back with team.json's role
-const ROLES = { 'ex-architect': 'tl', 'ex-backend': 'backend', 'ex-frontend': 'frontend', 'ex-qa': 'qa', 'ex-explorer': 'analyst' };
+const ROLES = { 'ex-architect': 'tl', 'ex-backend': 'backend', 'ex-frontend': 'frontend', 'ex-qa': 'qa', 'ex-explorer': 'analyst', 'ex-devops': 'devops', 'ex-security': 'security' };
 const newProject = () => { const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dto-team-proj-'))); PROJECTS.push(dir); return dir; };
 const rolesOf = (dir, harness) => Object.fromEntries(detectHarness(dir).subagents.filter((x) => x.harness === harness).map((x) => [x.name, [x.role, x.how]]));
 const declared = Object.fromEntries(Object.entries(ROLES).map(([n, r]) => [n, [r, 'declared']]));
@@ -105,7 +107,7 @@ test('installTeam(claude): .claude/agents con las herramientas de Claude Code, e
   const project = newProject();
   const res = installTeam({ team: 'example', harness: 'claude', project });
   assert.equal(res.ok, true, JSON.stringify(res));
-  assert.equal(res.files.length, 5);
+  assert.equal(res.files.length, 7);
   const read = (n) => fs.readFileSync(path.join(project, '.claude', 'agents', `${n}.md`), 'utf8');
   // read, grep, find, ls → Read, Grep, Glob (no repeats); the description in quotes (it contains «:»)
   assert.match(read('ex-architect'), /^---\nname: ex-architect\ndescription: "Plans the work before implementing: [^"\n]+"\nrole: tl\ntools: Read, Grep, Glob\neffort: high\n---\n/);
@@ -113,6 +115,9 @@ test('installTeam(claude): .claude/agents con las herramientas de Claude Code, e
   assert.match(read('ex-explorer'), /^effort: low$/m);
   assert.ok(!/^(thinking|mode):/m.test(read('ex-qa')), 'lo que es sólo de Pi no viaja');
   assert.ok(read('ex-qa').includes('You guarantee quality through **TDD**'), 'el system prompt va entero');
+  // the visiting specialists: DevOps changes things; security only reads (and runs its scanners)
+  assert.match(read('ex-devops'), /^role: devops\ntools: Read, Write, Edit, Bash, Grep, Glob$/m);
+  assert.match(read('ex-security'), /^role: security\ntools: Read, Bash, Grep, Glob$/m);
   assert.deepEqual(rolesOf(project, 'claude-code'), declared);
 });
 
@@ -124,6 +129,7 @@ test('installTeam(opencode): subagentes con mode: subagent y lo de sólo lectura
   assert.match(read('ex-qa'), /permission:\n  edit: deny\n---/, 'QA corre los tests pero no edita');
   assert.ok(!/permission:/.test(read('ex-backend')), 'backend escribe y corre comandos');
   assert.ok(!/^name:/m.test(read('ex-qa')), 'en OpenCode el nombre es el del archivo');
+  assert.match(read('ex-security'), /permission:\n  edit: deny\n---/, 'seguridad revisa, no edita');
   assert.deepEqual(rolesOf(project, 'opencode'), declared);
 });
 
@@ -145,7 +151,7 @@ test('installTeam(overwrite: false): no pisa un agente que ya existe con otro co
   fs.writeFileSync(mine, '---\nname: ex-qa\ndescription: el mío\n---\nmío\n');
   const res = installTeam({ team: 'example', harness: 'claude', project, overwrite: false });
   assert.deepEqual(res.kept, [mine]);
-  assert.equal(res.files.length, 4);
+  assert.equal(res.files.length, 6);
   assert.match(fs.readFileSync(mine, 'utf8'), /el mío/);
 });
 
@@ -159,11 +165,31 @@ test('provisionTeam: un agente sin subagentes con rol recibe el equipo de la ofi
   assert.equal(first.dir, path.join(project, '.claude', 'agents'));
   assert.deepEqual(rolesOf(project, 'claude-code'), declared);
   // again: it already has a team
-  assert.deepEqual(provisionTeam({ dir: project, harness: 'claude' }), { installed: false, reason: 'has-team', have: 5 });
+  assert.deepEqual(provisionTeam({ dir: project, harness: 'claude' }), { installed: false, reason: 'has-team', have: 7 });
   // the team is per harness: Pi does not have its own yet (without the one another test left in ~/.pi)
   fs.rmSync(USER_DEST, { recursive: true, force: true });
   assert.equal(provisionTeam({ dir: project, harness: 'pi' }).installed, true);
-  assert.equal(fs.readdirSync(path.join(project, '.pi', 'agents')).length, 5);
+  assert.equal(fs.readdirSync(path.join(project, '.pi', 'agents')).length, 7);
+});
+
+test('provisionTeam: los especialistas de visita llegan a quien ya tenía el equipo de la oficina, no a quien trae el suyo', () => {
+  // a project that got the office team before (the five of then): the next join adds the two specialists
+  const project = newProject();
+  const dir = path.join(project, '.claude', 'agents');
+  assert.equal(installTeam({ team: 'example', harness: 'claude', project, roles: ['tl', 'backend', 'frontend', 'qa', 'analyst'] }).ok, true);
+  const out = provisionTeam({ dir: project, harness: 'claude' });
+  assert.equal(out.installed, true, JSON.stringify(out));
+  assert.deepEqual(out.agents.map((x) => x.role).sort(), ['devops', 'security']);
+  assert.deepEqual(rolesOf(project, 'claude-code'), declared);
+  // a project with a team of its own (a reviewer of its own): it is completed, but without the specialists
+  const other = newProject();
+  const mine = path.join(other, '.claude', 'agents');
+  fs.mkdirSync(mine, { recursive: true });
+  fs.writeFileSync(path.join(mine, 'reviewer.md'), '---\nname: reviewer\ndescription: Reviews every pull request\n---\nhola\n');
+  const res = provisionTeam({ dir: other, harness: 'claude' });
+  assert.deepEqual(res.agents.map((x) => x.role).sort(), ['analyst', 'backend', 'frontend', 'qa']);
+  assert.ok(!fs.existsSync(path.join(mine, 'ex-devops.md')) && !fs.existsSync(path.join(mine, 'ex-security.md')));
+  assert.ok(fs.existsSync(dir));
 });
 
 test('provisionTeam: completa sólo los roles que le faltan (cuentan los del proyecto y los del usuario)', () => {

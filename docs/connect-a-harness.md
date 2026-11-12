@@ -8,7 +8,7 @@ For the representation to be right —for the backend subagent to sit at the bac
 
 ## The decoupling, in one sentence
 
-**The office knows only its 8 roles; the harness declares which role each of its agents maps to.** The harness's name never enters the office's code: there is no table on the server saying "such-agent is backend". Each harness sets that mapping, in the frontmatter of its own agent files, and it travels to the office as data.
+**The office knows only its 10 roles; the harness declares which role each of its agents maps to.** The harness's name never enters the office's code: there is no table on the server saying "such-agent is backend". Each harness sets that mapping, in the frontmatter of its own agent files, and it travels to the office as data.
 
 This has a practical consequence: adding a harness is not done by editing the office. It is done by declaring the mapping on the harness's side.
 
@@ -28,16 +28,16 @@ You are the agent that... (system prompt)
 ```
 
 - Exact field: `role:`
-- Accepted values (the game's 8 roles): `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`.
+- Accepted values (the game's 10 roles): `po`, `analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`, `devops`, `security`. The last two are the visiting specialists: they have no desk and come up to the office while their work lasts.
 - **The PO is the user** (they give the orders), so a subagent never plays it: `role: po` is drawn as `analyst`.
 - If the field is missing or has an unknown value, nothing breaks: the office falls back to its heuristic (below).
 - Codex agents are TOML: `role = "backend"`, or a `# role: backend` comment if your Codex version rejects unknown keys.
 
-This document is the **canonical source** of the contract: the list of the 8 roles, the aliases each one accepts, the precedence rule and what happens with an empty or broken declaration. The **Dev Team Office: connect a harness** skill (`dev-team-office-config`, installed by `setup`) runs the procedure step by step and points here for the full contract.
+This document is the **canonical source** of the contract: the list of the 10 roles, the aliases each one accepts, the precedence rule and what happens with an empty or broken declaration. The **Dev Team Office: connect a harness** skill (`dev-team-office-config`, installed by `setup`) runs the procedure step by step and points here for the full contract.
 
 ### Aliases `normRole` accepts
 
-Besides the 8 values, English and Spanish aliases are accepted. The harness can write any of these and the value is normalized to the role:
+Besides the 10 values, English and Spanish aliases are accepted. The harness can write any of these and the value is normalized to the role:
 
 | Role | Accepted aliases |
 |---|---|
@@ -49,6 +49,8 @@ Besides the 8 values, English and Spanish aliases are accepted. The harness can 
 | `backend` | `be`, `back` |
 | `frontend` | `fe`, `front` |
 | `designer` | `diseñador`, `diseñadora`, `disenador`, `disenadora`, `design`, `ux` |
+| `devops` | `sre`, `ops`, `infra`, `infrastructure`, `infraestructura`, `platform`, `plataforma`, `site-reliability`, `cicd`, `ci-cd` |
+| `security` | `seguridad`, `sec`, `secops`, `appsec`, `infosec`, `ciberseguridad`, `cybersecurity`, `security-engineer` |
 
 ### Precedence: what is declared always wins
 

@@ -3,7 +3,7 @@
 // It hooks into the office and shows only that subagent's activity: who it is and its task, each
 // tool (with its commands' output), its phases and, at the end, its report.
 
-import { DEFAULT_TEAM, phaseInfo } from '../public/sim.js';
+import { defaultLook, phaseInfo } from '../public/sim.js';
 import { t, timeOf } from '../public/i18n.js';
 import { fit } from './screen.js';
 import { ROLE_ICON } from '../server/subpanes.js';
@@ -36,7 +36,7 @@ export function createFollow({ session, sub, color = true, colorMode = '256', wi
   }
 
   function header(ev) {
-    const look = { ...DEFAULT_TEAM[ev.role], ...(st.appearance?.[ev.role] || {}) };
+    const look = { ...defaultLook(ev.role), ...(st.appearance?.[ev.role] || {}) };
     const who = [look.name, look.title].filter(Boolean).join(' · ');
     const out = [`${paint(look.shirt)}${c(BOLD)}${ROLE_ICON[ev.role] || '🤖'} ${who || ev.role}${c(RESET)}${ev.agentType ? `  ${c(DIM)}${ev.agentType}${c(RESET)}` : ''}`];
     if (ev.text) out.push(`${c(BOLD)}${fit(ev.text, cols())}${c(RESET)}`);

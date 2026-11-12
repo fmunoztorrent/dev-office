@@ -58,6 +58,7 @@ En las dos vistas (y en el juego de la terminal):
 
 - **Las burbujas dicen qué hace cada uno en palabras** («Corriendo los tests», «Leyendo cart.js»), nunca el comando. El visor `follow` de un subagente muestra además el comando, atenuado, debajo de las palabras.
 - **Cada subagente es alguien nuevo:** un extra translúcido de su rol (otro nombre, la misma camisa) que llega en el ascensor, al final del pasillo, recibe un escritorio propio en la fila de adelante (aparece con él y se va con él; pasados siete, en la mesa de reuniones), hace el trabajo del subagente y se va al terminar. La placa de su escritorio dice quién es y para qué proyecto vino.
+- **Los especialistas de visita, Rafa (DevOps/SRE) e Inés (seguridad),** tampoco tienen escritorio: cuando el trabajo del agente es suyo (un despliegue, un contenedor, un workflow de CI; una auditoría, un escáner, una llave) suben igual por el ascensor, sólidos y siempre la misma persona, y se van al terminar el turno.
 - **La pizarra con tickets** se expande al hacerle clic: las tareas como post-its en tres columnas. En la terminal, `t` o Enter ahí abre un encargo nuevo.
 - **La barra de contexto** (navegador, pequeña, junto al clima): cuánto contexto le queda al agente de la sesión enfocada, o al último que lo informa.
 

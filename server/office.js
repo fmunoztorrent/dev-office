@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { adapt } from './adapters.js';
-import { ROLE_IDS, roleForTool, roleForText, describe, clip, normRole, agentRole, normPhase } from './roles.js';
+import { ALL_ROLE_IDS, roleForTool, roleForText, describe, clip, normRole, agentRole, normPhase } from './roles.js';
 import { t } from '../public/i18n.js';
 import { realDir, insideDir } from './paths.js';
 import { unguided } from './guides.js';
@@ -58,7 +58,7 @@ export class Office extends EventEmitter {
   reset() {
     this.seq = 0;
     this.sessions = new Map();
-    this.roles = Object.fromEntries(ROLE_IDS.map((id) => [id, { id, status: 'idle', text: '', ts: 0, actions: 0 }]));
+    this.roles = Object.fromEntries(ALL_ROLE_IDS.map((id) => [id, { id, status: 'idle', text: '', ts: 0, actions: 0 }]));
     this.log = [];
     this.emit('reset');
   }

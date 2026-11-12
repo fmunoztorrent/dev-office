@@ -4,7 +4,7 @@
 // that do not set a model of their own (each one, its role's). Shared by the server, the web and the
 // terminal.
 
-export const MODEL_ROLES = ['default', 'manager', 'tl', 'analyst', 'backend', 'frontend', 'qa', 'designer'];
+export const MODEL_ROLES = ['default', 'manager', 'tl', 'analyst', 'backend', 'frontend', 'qa', 'designer', 'devops', 'security'];
 export const PROFILE_HARNESSES = ['claude-code', 'pi', 'opencode', 'codex'];
 
 export const DEFAULT_PROFILES = {

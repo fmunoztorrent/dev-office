@@ -17,7 +17,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { HARNESSES, harnessId, parseAgentFile, detectHarness } from '../integrations/common/devteam.mjs';
+import { HARNESSES, harnessId, parseAgentFile, detectHarness, VISITOR_ROLES } from '../integrations/common/devteam.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TEAMS = path.join(ROOT, 'teams');
@@ -166,7 +166,9 @@ export function installTeam({ team, harness, project, from, overwrite = true, ro
 /**
  * Completes an agent's team with the office's: the pack roles that no subagent of that harness
  * covers (neither in `dir`, its project, nor in its user folder) are installed in the project.
- * If it brings none, it gets the whole pack.
+ * If it brings none, it gets the whole pack. The visiting specialists (DevOps, security) only go to a
+ * project whose team is the office's: one that brings its own team is not given two more agents (the
+ * specialists still come to the office when the work is theirs).
  * Returns { installed: true, team, dir, files, agents, whole, fresh } (whole: it had none;
  * fresh: the agents folder did not exist) or { installed: false, reason, have? } with reason
  * 'has-team' (it already covers every role of the pack) | 'unknown harness' | the pack's error.
@@ -179,7 +181,9 @@ export function provisionTeam({ dir, harness, team = DEFAULT_PACK, from } = {}) 
   if (!pack) return { installed: false, reason: 'unknown team' };
   const have = detectHarness(dir).subagents.filter((x) => x.harness === id && x.role);
   const covered = new Set(have.map((x) => x.role));
-  const missing = Object.keys(pack.roles || {}).filter((r) => !covered.has(r));
+  const ours = new Set(Object.values(pack.roles || {}).map((r) => r.agent));
+  const own = have.some((x) => !ours.has(x.name)); // it brings a team of its own
+  const missing = Object.keys(pack.roles || {}).filter((r) => !covered.has(r) && !(own && VISITOR_ROLES.includes(r)));
   if (!missing.length) return { installed: false, reason: 'has-team', have: have.length };
   const [agentsDir] = HARNESSES[id].dirs(dir).find(([, scope]) => scope === 'project');
   const fresh = !fs.existsSync(agentsDir);

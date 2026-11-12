@@ -6,7 +6,7 @@
 //   { "kind": "dev-team-office/character", "version": 1, "role": "qa", "name": "Andrés",
 //     "sex": "m", "personality": "anxious", "style": "teacher", "shirt": "#8ac926", … }
 
-import { APPEARANCE_KEYS, DEFAULT_TEAM, PERSONALITIES, SEXES, STYLES } from './sim.js';
+import { APPEARANCE_KEYS, defaultLook, PERSONALITIES, SEXES, STYLES } from './sim.js';
 
 export const CHARACTER_KIND = 'dev-team-office/character';
 const COLORS = new Set(['shirt', 'pants', 'hair', 'skin']);
@@ -16,8 +16,8 @@ const FLAGS = new Set(['long', 'beard', 'glasses']);
 export function exportCharacter(role, look = {}) {
   const out = { kind: CHARACTER_KIND, version: 1, role };
   for (const k of APPEARANCE_KEYS) {
-    const v = look[k] ?? DEFAULT_TEAM[role]?.[k];
-    if (k === 'title' && (!v || v === DEFAULT_TEAM[role]?.title)) continue;
+    const v = look[k] ?? defaultLook(role)?.[k];
+    if (k === 'title' && (!v || v === defaultLook(role)?.title)) continue;
     if (v !== undefined) out[k] = v;
   }
   return out;
@@ -43,12 +43,12 @@ export function parseCharacter(input) {
     else if (k === 'style') { if (STYLES.includes(v)) look[k] = v; }
     else if (typeof v === 'string' && v.trim()) look[k] = v.trim().slice(0, k === 'name' ? 20 : 30);
   }
-  return { ok: true, role: Object.hasOwn(DEFAULT_TEAM, c.role) ? c.role : null, look };
+  return { ok: true, role: defaultLook(c.role) ? c.role : null, look };
 }
 
 /** What of `look` differs from the role's original (what is saved as its appearance). */
 export function changedLook(role, look) {
-  return Object.fromEntries(APPEARANCE_KEYS.filter((k) => look[k] !== undefined && look[k] !== DEFAULT_TEAM[role]?.[k]).map((k) => [k, look[k]]));
+  return Object.fromEntries(APPEARANCE_KEYS.filter((k) => look[k] !== undefined && look[k] !== defaultLook(role)?.[k]).map((k) => [k, look[k]]));
 }
 
 /** A file name for a character: "andres-qa.json". */

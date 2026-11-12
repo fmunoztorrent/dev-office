@@ -7,7 +7,7 @@
 //
 // It works with the office in the same process (localFeed) or watching one that is already running (remoteFeed).
 
-import { DEFAULT_TEAM, phaseInfo } from '../public/sim.js';
+import { defaultLook, phaseInfo } from '../public/sim.js';
 import { t, timeOf, setLanguage } from '../public/i18n.js';
 import { AGENT_NAME } from '../public/targets.js';
 import { fit, strWidth } from './screen.js';
@@ -43,7 +43,7 @@ export function createMonitor() {
     directives: [],  // the executive floor's latest directives (server/directives.js)
     archive: null,   // the archive's counts (server/archive.js)
   };
-  const person = (role) => ({ ...DEFAULT_TEAM[role], ...(m.appearance?.[role] || {}) });
+  const person = (role) => ({ ...defaultLook(role), ...(m.appearance?.[role] || {}) });
 
   function remember(ev) {
     if (!ev?.session || ev.session === 'office') return;

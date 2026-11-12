@@ -21,7 +21,7 @@ import { clip } from './roles.js';
 import { MAIN_OFFICE } from './store.js';
 import { realDir } from './paths.js';
 import { childEnv } from './tasks.js';
-import { DEFAULT_TEAM } from '../public/sim.js';
+import { defaultLook } from '../public/sim.js';
 import { guideFor, guideText } from './guides.js';
 import { contextBlock } from './rag.js';
 
@@ -86,10 +86,10 @@ export class AskDesk extends EventEmitter {
   /** The character asked, with the office's names and their way of being: "Diego (Backend, focused)". */
   #who(officeId, role) {
     const look = this.store.getAppearance?.(officeId)?.[role] || {};
-    const g = look.sex || DEFAULT_TEAM[role]?.sex;
-    const way = look.personality || DEFAULT_TEAM[role]?.personality;
+    const g = look.sex || defaultLook(role)?.sex;
+    const way = look.personality || defaultLook(role)?.personality;
     const title = look.title || t(`team.titles.${role}`, { g });
-    return `${look.name || DEFAULT_TEAM[role]?.name || role} (${[title, way && t(`settings.look.traits.${way}`, { g })].filter(Boolean).join(', ')})`;
+    return `${look.name || defaultLook(role)?.name || role} (${[title, way && t(`settings.look.traits.${way}`, { g })].filter(Boolean).join(', ')})`;
   }
 
   /**
@@ -126,7 +126,7 @@ export class AskDesk extends EventEmitter {
 
   /** How the character asked answers (⚙ › Characters › Style): normal, concise, explanatory, teacher or formal. */
   #style(officeId, role) {
-    const style = (role && (this.store.getAppearance?.(officeId)?.[role]?.style || DEFAULT_TEAM[role]?.style)) || 'normal';
+    const style = (role && (this.store.getAppearance?.(officeId)?.[role]?.style || defaultLook(role)?.style)) || 'normal';
     return style === 'normal' ? 'promptRules' : `rules.${style}`;
   }
 
@@ -156,7 +156,7 @@ export class AskDesk extends EventEmitter {
     if (!question) return { ok: false, error: t('btw.empty') };
     const officeId = this.company.has(office) ? office : MAIN_OFFICE;
     if (this.running.has(officeId)) return { ok: false, error: t('btw.busy') };
-    const asked = DEFAULT_TEAM[role] && role !== 'po' ? role : null; // you are the PO: you do not ask yourself
+    const asked = defaultLook(role) && role !== 'po' ? role : null; // you are the PO: you do not ask yourself
     const duty = this.onDuty(officeId, { session: typeof session === 'string' ? session : undefined, role: asked });
     if (!duty) return { ok: false, error: t('btw.noAgent') };
     const prompt = (forked) => this.#prompt(clip(question, 600), officeId, duty, asked, forked);

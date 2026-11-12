@@ -14,7 +14,7 @@ import http from 'node:http';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { detectHarness, harnessId, projectRoot, HARNESS_IDS, AGENT_ROLE_IDS, ROLE_NAME } from '../integrations/common/devteam.mjs';
-import { DEFAULT_TEAM } from '../public/sim.js';
+import { defaultLook } from '../public/sim.js';
 import { realDir } from './paths.js';
 import { guideFor, guideText } from './guides.js';
 import { spawnOffice } from './lifecycle.js';
@@ -434,7 +434,7 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
       }
       // who is who: the names of that office's team (with their appearance, if the office is running)
       const look = h ? (await api(`/v1/settings?office=${encodeURIComponent(officeId || 'main')}`))?.office?.appearance || {} : {};
-      const who = (role) => ({ ...DEFAULT_TEAM[role], ...(look[role] || {}) }).name || role;
+      const who = (role) => ({ ...defaultLook(role), ...(look[role] || {}) }).name || role;
       const mine = (d.subagents || []).filter((x) => x.scope === 'project');
       const global = (d.subagents || []).filter((x) => x.scope !== 'project' && x.harness === reg.data.harness);
       const team = [...mine, ...global].map((x) => ({ name: x.name, harness: x.harness, scope: x.scope, role: x.role, character: x.role ? who(x.role) : null, how: x.how }));

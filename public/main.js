@@ -1,4 +1,4 @@
-import { createGame, TEAM, phaseInfo } from './game.js';
+import { createGame, TEAM, personOf, phaseInfo } from './game.js';
 import { applyAppearance, DREAMS, teamNames } from './sim.js';
 import { AGENT_NAME, TASK_STATUS } from './targets.js';
 import { briefOptions, briefProblem, briefMessage, defaultTarget, targetLabel } from './brief.js';
@@ -139,7 +139,7 @@ const send = (obj) => ws?.readyState === 1 && ws.send(JSON.stringify(obj));
 
 // ---------------------------------------------------------------- the services in the background
 
-const servicesUi = createServices({ getServices: () => services, getHerdr: () => herdr, who: (role) => TEAM[role]?.name || '', hhmm: (ts) => hhmm(ts) });
+const servicesUi = createServices({ getServices: () => services, getHerdr: () => herdr, who: (role) => personOf(role)?.name || '', hhmm: (ts) => hhmm(ts) });
 
 function onServices(list) {
   services = list || [];
@@ -601,7 +601,7 @@ function addLog(ev, opts) {
   if (ev.kind === 'context') return; // it only moves the context bar
   const li = document.createElement('li');
   li.dataset.ev = '1';
-  const cfg = TEAM[ev.role];
+  const cfg = personOf(ev.role);
   const who = ev.kind === 'chat' || ev.kind === 'poke' ? ev.from : cfg?.name || t('events.office');
   let text = ev.text || ev.kind;
   if (ev.kind === 'phase') {
@@ -713,7 +713,7 @@ function onAsk(a) {
   card.classList.toggle('asking', a.status === 'asking');
   card.classList.toggle('failed', a.status === 'failed');
   $('btw-q').textContent = a.question;
-  const who = TEAM[a.role]?.name || '';
+  const who = personOf(a.role)?.name || '';
   $('btw-who').textContent = [who, a.agent].filter(Boolean).join(' · ');
   $('btw-a').textContent = a.status === 'asking' ? t('ui.btwThinking') : a.status === 'answered' ? a.answer : t('ui.btwFailed', { error: a.error || '' });
   if (a.status !== 'asking') btwTimer = setTimeout(() => { if (!card.matches(':hover')) card.hidden = true; }, a.status === 'answered' ? 60_000 : 15_000);
@@ -787,7 +787,7 @@ function renderFlow(s) {
   ol.hidden = !flow.length;
   ol.innerHTML = '';
   flow.slice(-12).forEach((step, i, arr) => {
-    const cfg = TEAM[step.role];
+    const cfg = personOf(step.role);
     const ph = phaseInfo(step.phase);
     const li = el('li', i === arr.length - 1 && s.turn ? 'now' : '', `${cfg?.name || step.role} · ${ph.label}`);
     li.style.setProperty('--c', cfg?.shirt || '#888');
@@ -863,7 +863,7 @@ function renderSheet(full) {
     drawSprite($('sheet-portrait'), cfg, { P: 4, bg: a.ghost ? '#c7d6e6' : '#c9b48a' });
     $('sheet-name').textContent = cfg.name;
     $('sheet-name').style.color = cfg.shirt;
-    const role = a.ghost ? t('ui.newcomerOf', { role: TEAM[a.role]?.title || a.role, project: a.project || '' }).replace(/ · $/, '') : cfg.title;
+    const role = a.ghost ? t(a.specialist ? 'ui.visitorOf' : 'ui.newcomerOf', { role: personOf(a.role)?.title || a.role, project: a.project || '' }).replace(/ · $/, '') : cfg.title;
     $('sheet-role').textContent = `${role}${a.badges.size ? ` · ${t('ui.subagents', { n: a.badges.size })}` : ''}`;
   }
   $('sheet-mood').textContent = `${moodOf(a)}${a.text && ['working', 'thinking', 'red'].includes(a.state) ? `: ${a.text}` : ''}`;
@@ -928,7 +928,7 @@ function renderPanes() {
   ul.innerHTML = '';
   for (const p of (herdr?.panes || []).filter((x) => !x.main && (x.office || 'main') === (office?.id || 'main')).slice(-6)) {
     const li = document.createElement('li');
-    const who = TEAM[p.role];
+    const who = personOf(p.role);
     const tag = el('span', '', `🪟 ${p.pane}`);
     tag.style.color = who?.shirt || '';
     li.append(tag, el('span', '', ` ${who?.name || p.role} · ${p.title}`), el('span', 'st-running', p.status || ''));
@@ -962,8 +962,8 @@ function onRuns(list) {
     li.append(head, el('div', 'sub', t('ui.runBy', { agent: AGENT_NAME[r.agent] || r.agent, task: r.task })));
     const stages = el('div', 'r-stages');
     for (const st of r.stages) {
-      const chip = el('span', `r-stage ${st.status}`, `${STAGE_ICON[st.status] || '·'} ${TEAM[st.role]?.name || st.role} · ${phaseInfo(st.phase).label}${st.attempts > 1 ? ` ×${st.attempts}` : ''}`);
-      chip.style.setProperty('--c', TEAM[st.role]?.shirt || '#888');
+      const chip = el('span', `r-stage ${st.status}`, `${STAGE_ICON[st.status] || '·'} ${personOf(st.role)?.name || st.role} · ${phaseInfo(st.phase).label}${st.attempts > 1 ? ` ×${st.attempts}` : ''}`);
+      chip.style.setProperty('--c', personOf(st.role)?.shirt || '#888');
       chip.title = [st.name, st.agent, st.model, st.detail].filter(Boolean).join(' · ');
       stages.append(chip);
     }
@@ -1035,8 +1035,8 @@ function renderBrief() {
     box.append(el('h3', '', t('brief.stages', { who: t(o.entry.devteam ? 'brief.bySession' : 'brief.byHarness') })));
     o.stages.forEach((st, i) => {
       const card = el('div', 'b-stage');
-      card.style.setProperty('--c', TEAM[st.role]?.shirt || '#888');
-      card.append(el('span', 'n', String(i + 1)), el('span', 'who', `${TEAM[st.role]?.name || st.role} · ${phaseInfo(st.phase).label} — ${st.name}`));
+      card.style.setProperty('--c', personOf(st.role)?.shirt || '#888');
+      card.append(el('span', 'n', String(i + 1)), el('span', 'who', `${personOf(st.role)?.name || st.role} · ${phaseInfo(st.phase).label} — ${st.name}`));
       const how = [st.agent, st.model].filter(Boolean).join(' · ');
       if (how || st.needs?.length) card.append(el('span', 'how', `${how}${st.needs?.length ? `  ← ${st.needs.join(', ')}` : ''}`));
       if (st.check) card.append(el('span', 'gate', t('brief.gate', { run: st.check.run, expect: t(st.check.expect === 'pass' ? 'brief.pass' : 'brief.fail'), loop: '' })));

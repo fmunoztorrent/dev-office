@@ -20,7 +20,7 @@ import { outdoor, lightning, colorHex, weatherIcon } from './sky.js';
 import { isoCamera, apply, unapply, scaled, BACK, WALL_H } from './iso.js';
 import { t } from './i18n.js';
 import { createFloors, drawFloor, floorHit } from './floors.js';
-export { TEAM, PHASES, phaseInfo } from './sim.js';
+export { TEAM, personOf, PHASES, phaseInfo } from './sim.js';
 
 const P = 3; // size of a sprite "pixel"
 /** A darker shade of a #rrggbb color (the eyebrows, from the hair). */
@@ -832,7 +832,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     ctx.font = `${fpx(13)}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = g ? g.cfg.shirt : '#8d99ae';
     // who sits there and for which project (an office can hold several)
-    ctx.fillText(fit(g ? `${g.cfg.name} · ${g.project || TEAM[g.role]?.title || ''}` : '', 62), s.x, s.y + 12);
+    ctx.fillText(fit(g ? `${g.cfg.name} · ${g.project || g.cfg.title || ''}` : '', 62), s.x, s.y + 12);
   }
   function drawLaptop(i, now) {
     const s = HOT_DESKS[i], g = atDesk(i);
@@ -841,10 +841,12 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     R(s.x - 2, s.y - 15, 36, 3, '#adb5bd');
     if (g?.badges.size) { R(s.x - 30, s.y - 24, 16, 11, '#ffb703'); R(s.x - 30, s.y - 26, 7, 3, '#fb8500'); }
   }
-  /** A newcomer: their role's look, translucent and with a soft glow, like a ghost. */
+  /** A newcomer: their role's look, translucent and with a soft glow, like a ghost. A visiting
+   *  specialist (DevOps, security) is a person: solid, only fading in and out by the elevator. */
   function drawGhost(g, now) {
     if (!g.fade) return;
     ctx.save();
+    if (g.specialist) { ctx.globalAlpha = g.fade; drawPerson(g, now); ctx.restore(); return; }
     ctx.globalAlpha = 0.55 * g.fade;
     ctx.shadowColor = 'rgba(170, 215, 255, 0.95)';
     ctx.shadowBlur = 6 * scale;

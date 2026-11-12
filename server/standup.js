@@ -15,7 +15,7 @@ import { zoned } from '../public/clock.js';
 const DAY = 24 * 3600_000;
 const AT = 9 * 60 + 30; // 9:30, the office's time
 const WORK = new Set(['tool_start', 'phase', 'subagent_start', 'done', 'turn_end']);
-const ORDER = ['analyst', 'designer', 'tl', 'backend', 'frontend', 'qa', 'manager'];
+const ORDER = ['analyst', 'designer', 'tl', 'backend', 'frontend', 'qa', 'devops', 'security', 'manager']; // the visiting specialists tell theirs too
 
 export class Standup extends EventEmitter {
   /**

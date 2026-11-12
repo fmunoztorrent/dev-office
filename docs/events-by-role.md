@@ -20,7 +20,7 @@ Both share the session through `DEV_TEAM_OFFICE_SESSION`: the extension sets it 
 {
   "session": "pi-1234",
   "kind": "phase",
-  "role": "qa",            // analyst | manager | tl | qa | backend | frontend | designer (+ aliases: architect, tester, ux…)
+  "role": "qa",            // analyst | manager | tl | qa | backend | frontend | designer | devops | security (+ aliases: architect, tester, ux, sre, appsec…)
   "phase": "red",          // see the catalog; English aliases are accepted (implement, approve, architecture…)
   "text": "2 tests fail: orders.cancel.test.ts",
   "from": "tl"             // optional; by default, the role that held the turn
@@ -84,6 +84,8 @@ The phase is sent with its English alias or its canonical id (the office stores 
 | `designer` | `ux` | Flows and wireframes | Works ✏️ |
 | `designer` | `ui` | Visual UI and tokens | Works 🎨 |
 | `designer` | `visual-review` · `revision-visual` | Reviews what was implemented | Goes to frontend's desk 👀 |
+| `devops` | `infra` (`infrastructure`, `ci`) | CI/CD, containers, infrastructure | Rafa comes up by the elevator and works 🏗️ at a hot desk |
+| `security` | `audit` · `audita` (`security-review`, `threat-model`, `hardening`) | Reviews the security | Inés comes up by the elevator and works 🛡️ at a hot desk |
 | any | `blocked` · `bloqueado` | Cannot move forward | ⛔ and the manager comes over |
 
 An unknown phase is not dropped: it shows as generic work with its name in capitals.
