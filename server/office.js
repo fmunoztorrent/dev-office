@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { adapt } from './adapters.js';
-import { ALL_ROLE_IDS, roleForTool, roleForText, describe, clip, normRole, agentRole, normPhase } from './roles.js';
+import { ALL_ROLE_IDS, roleForTool, roleForText, describe, clip, normRole, agentRole, normPhase, filePathOf } from './roles.js';
 import { t } from '../public/i18n.js';
 import { realDir, insideDir } from './paths.js';
 import { unguided } from './guides.js';
@@ -182,13 +182,15 @@ export class Office extends EventEmitter {
         return { ...ev, kind: 'todos', role: 'manager', text: t('events.moveCard') };
       }
       if (OFFICE_CLI.test(String(input.command || ''))) return null;
-      // If the agent declared who is on duty, that role does the work; otherwise it is inferred from the tool.
+      // If the agent declared who is on duty, that role does the work; otherwise it is inferred from the tool
+      // (and, for code no rule claims, from the kind of artifact it is in: server/systems.js)
+      const kind = this.kindFor?.(s.cwd || r.cwd, filePathOf(input)) || null;
       if (sub) {
-        ev.role = agentRole(r.role) || sub.role || roleForTool(tool, input);
+        ev.role = agentRole(r.role) || sub.role || roleForTool(tool, input, kind);
         if (sub.phase && ev.role === sub.role) ev.phase = sub.phase;
       } else {
         const mine = myToolOf(tool, input); // one of your own tools: the character you chose for it
-        ev.role = agentRole(r.role) || (mine && normRole(this.myToolRole?.(mine))) || s.turn || roleForTool(tool, input);
+        ev.role = agentRole(r.role) || (mine && normRole(this.myToolRole?.(mine))) || s.turn || roleForTool(tool, input, kind);
         if (s.turn && ev.role === s.turn) ev.phase = s.phase;
       }
       ev.text = clip(r.text && start ? r.text : describe(tool, input), 90);

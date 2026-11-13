@@ -5,7 +5,7 @@ import { W, H, LEFT, WORLD_W, BATHROOM, HALL, OFFICE_DOOR, ELEVATOR, TEAM, perso
 import { outdoor, lightning, weatherIcon } from '../public/sky.js';
 import { hex, mix, fit, wrap, strWidth } from './screen.js';
 import { AGENT_NAME, TASK_STATUS } from '../public/targets.js';
-import { briefOptions, briefProblem, targetLabel } from '../public/brief.js';
+import { briefOptions, briefProblem, targetLabel, briefTargetList } from '../public/brief.js';
 import { t, timeOf } from '../public/i18n.js';
 
 const C = Object.fromEntries(Object.entries({
@@ -1085,7 +1085,7 @@ const CB = Object.fromEntries(Object.entries({
 /** The whiteboard dialog: a cork board with a pinned sheet, as in the web view. */
 function drawBrief(scr, L, model) {
   const b = model.brief;
-  const opts = briefOptions({ targets: model.targets || [], models: model.prefs?.models }, b.sel);
+  const opts = briefOptions({ targets: briefTargetList(model.targets || [], model.systems || []), models: model.prefs?.models }, b.sel);
   const w = Math.min(L.cols - 2, 88);
   const iw = w - 8; // usable width inside the sheet
   const labelW = 10;

@@ -86,8 +86,27 @@ export function createDirectivesUi({ getDirectives = () => [], getOffices = () =
     $('dv-offices').hidden = !any;
     $('dv-none').hidden = any;
     st.chosen = scopePicker($('dv-offices'), groups, { checked: () => groups.length === 1 });
+    renderSystems();
     forget();
     $('dv-text').focus();
+  }
+
+  /** The systems (a product and its artifacts): choosing one checks its artifacts' repos; they go in its order. */
+  async function renderSystems() {
+    const box = $('dv-systems');
+    const out = await api('/v1/systems');
+    const list = (out.systems || []).filter((s) => s.parts.some((p) => p.target));
+    box.hidden = !list.length;
+    box.replaceChildren(...(list.length ? [el('span', { class: 'fl-label' }, t('exec.ui.systems')), ...list.map((s) => {
+      const box2 = el('input', { type: 'checkbox' });
+      box2.onchange = () => {
+        for (const p of s.parts) {
+          const k = p.target && $('dv-offices').querySelector(`.fl-projects input[value="${CSS.escape(p.target)}"]`);
+          if (k && k.checked !== box2.checked) { k.checked = box2.checked; k.dispatchEvent(new Event('change')); }
+        }
+      };
+      return el('label', { class: 'fl-system', title: s.parts.map((p) => `${p.name}: ${p.repo}`).join('\n') }, box2, el('b', {}, `🧩 ${s.name}`), el('span', { class: 'fl-dim' }, ` · ${s.order.join(' → ')}`));
+    })] : []));
   }
 
   // ------------------------------------------------ the impact map: what the order touches, before it goes
@@ -113,7 +132,7 @@ export function createDirectivesUi({ getDirectives = () => [], getOffices = () =
         const p = byId.get(a.id);
         if (!p?.impacted) return null;
         const comps = p.components.filter((c) => c.impacted);
-        return el('span', { class: 'dv-why' }, ` ${t(`impact.why.${p.why}`)}`, ...comps.map((c) => el('span', { class: 'dv-comp', title: c.path || '' }, `🧩 ${c.name}`)));
+        return el('span', { class: 'dv-why' }, ` ${t(`impact.why.${p.why}`, { via: p.via || '' })}`, ...comps.map((c) => el('span', { class: 'dv-comp', title: c.path || '' }, `🧩 ${c.name}`)));
       },
     });
     $('dv-offices').hidden = false;
@@ -204,7 +223,7 @@ export function createDirectivesUi({ getDirectives = () => [], getOffices = () =
           el('span', { class: 'fl-dim' }, `${t('exec.ui.progress', { done: d.done, total: d.total })} · ${hhmm(d.createdAt)}`),
           d.status === 'running' ? el('button', { type: 'button', class: 'fl-mini', onclick: async () => { const out = await api(`/v1/directives/${encodeURIComponent(d.id)}/cancel`, {}); if (!out.ok) $('dv-msg').textContent = out.error; } }, t('exec.ui.stop')) : null),
         el('ul', { class: 'dv-parts' }, d.parts.map((p) => el('li', { class: p.status, title: p.detail || '' },
-          el('span', { class: 'dot' }), `${p.name}`, el('span', { class: 'fl-dim' }, ` · ${(getOffices().find((o) => o.id === p.office)?.name) || p.office} · ${t(`taskStatus.${p.status}`)}${p.detail ? ` — ${p.detail}` : ''}`))))));
+          el('span', { class: 'dot' }), `${p.name}`, p.handoff ? el('span', { title: t('exec.ui.handoffLeft') }, ' 🤝') : null, el('span', { class: 'fl-dim' }, ` · ${(getOffices().find((o) => o.id === p.office)?.name) || p.office} · ${t(`taskStatus.${p.status}`)}${p.detail ? ` — ${p.detail}` : ''}`))))));
     }
     renderCompany();
   }

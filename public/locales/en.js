@@ -248,6 +248,11 @@ export default {
     panes: 'Arranging the panes', office: 'Talking to the office', agent: 'Asking {agent} for something', other: 'Using {prog}', shell: 'Working in the terminal',
     cd: 'Going into {dir}', background: '{what} (in the background)', mcp: 'Using {server}: {what}', toolUse: 'Using {tool}',
   },
+  // the systems (server/systems.js): a product or business project and its artifacts
+  system: {
+    artifact: 'Artifact {name} ({kind}) of the system {system}', uses: 'uses {list}', usedBy: 'used by {list}',
+    kinds: { frontend: 'frontend', mobile: 'mobile app', bff: 'BFF', backend: 'backend / core', worker: 'worker', library: 'library', data: 'data', infra: 'infrastructure', other: 'other' },
+  },
   // the badge over each character: what they are doing, as small as it gets (server/humanize.js)
   badge: { read: 'read', edit: 'edit', search: 'search', plan: 'plan', ask: '❓ you', team: 'team', think: '💭 thinks' },
   events: {
@@ -264,6 +269,7 @@ export default {
   },
   task: {
     scope: 'Work only inside {dir}: do not read or change files outside that folder. Do exactly what is asked (or the agreed plan step), without going off on tangents or adding ideas nobody asked for.',
+    scopeReads: 'Work only inside {dir}: do not change files outside that folder. You may read, without changing anything, {reads}: what this artifact uses (its contract). Do exactly what is asked (or the agreed plan step), without going off on tangents or adding ideas nobody asked for.',
     queuedClaude: 'delivered when Claude finishes its turn', runningIn: '{exe} in {dir}', finished: 'finished', killed: 'killed ({signal})',
     exitCode: 'exited with code {code}{last}', disconnected: 'the agent disconnected', sentTo: 'sent to {agent}', accepted: 'the agent is on it',
     failedDefault: 'the agent could not do the task', failedEvent: '{agent} could not do the task: {detail}', claudeTook: 'Claude took it when its turn ended',
@@ -280,11 +286,11 @@ export default {
   // the analyst reviews a brief before it goes to work (server/clarify.js)
   ingest: { tooBig: 'too big (more than {mb} MB)', convert: 'to read {name} the office needs {tool} installed (or ask an agent to convert it: ✨ Ask an agent)', format: 'the archive does not read .{ext} files (Markdown, text, CSV, JSON, HTML, PDF or Word)', empty: '{name} has no text', url: 'that is not an http(s) address', fetch: 'could not download it: {error}' },
   // the settings as a JSON file (server/settings-io.js): what could not be imported
-  settingsIo: { skill: 'Skill {name}', tool: 'Tool {name}', department: 'Department {name}', characters: 'Characters of {name}', pref: 'Setting {key}', project: 'Project {name}', component: 'Component {name} of {project}', instructions: 'Instructions of {path}' },
+  settingsIo: { skill: 'Skill {name}', tool: 'Tool {name}', system: 'System {name}', systemParts: 'Artifacts of {name} without their repo here: {parts}', department: 'Department {name}', characters: 'Characters of {name}', pref: 'Setting {key}', project: 'Project {name}', component: 'Component {name} of {project}', instructions: 'Instructions of {path}' },
   // a directive's impact map (server/components.js)
   impact: {
     ask: 'Does "{what}" exist? In which project and folder, or must it be created?', none: 'I could not tell which departments or projects it touches: choose them or name them.', unknownHead: 'It names things that are not on the map:',
-    why: { named: 'it names it', chosen: 'you chose it', part: 'it names one of its components', department: 'it names its department' },
+    why: { named: 'it names it', chosen: 'you chose it', part: 'it names one of its components', department: 'it names its department', system: 'it is part of the system {via}', uses: 'it uses {via}, which changes' },
     newDesc: 'new (a directive asked for it)', needAnswers: 'Before it goes, tell me what {what} is: whether it exists and where, whether it must be created, or whether it is a new department.', badAnswer: 'What is "{what}"? Answer: it exists, create it, a new department, or not a component.', deptEmpty: '{names} was created, but it has no projects yet: add one (⚙ › Departments) and send the directive again.',
   },
   // the daily standup (server/standup.js)
@@ -312,7 +318,7 @@ export default {
   // the instructions on top of a brief (server/guides.js)
   guide: {
     company: 'The company’s standards (the CTO’s):', 
-    department: 'Instructions of the department «{name}»:', project: 'Instructions of the project «{name}»:',
+    department: 'Instructions of the department «{name}»:', project: 'Instructions of the project «{name}»:', system: 'Instructions of the system «{name}»:',
     autonomous: 'Autonomous mode: work on it to the end on your own (plan, implement, test and check it; use subagents if it helps). Ask only what only the PO can answer, with your question tool; otherwise make reasonable assumptions and note them.',
   },
 
@@ -368,12 +374,15 @@ export default {
   exec: {
     from: 'Executive floor',
     waitTurn: 'the department has {n} brief(s) open',
+    waitFor: 'waits for {names} (it uses it)', depFailed: 'it did not go: {name} did not finish', handoffFrom: 'What {name} left (you use it):', noHandoff: 'it left no handoff: check its recent changes in {path} (you may read it).',
+    leaveHandoff: '{list} use it and work after you: when you finish, leave the handoff with the MCP tool handoff (what changed in what you expose: endpoints, types, events, and how to try it).',
     brief: '🏛 Directive from the executive floor: "{title}". Also working on it: {others}. Do this project\'s part.',
     components: 'Components of this project it touches: {list}.', newComponent: 'New component "{name}"{path}: create it as part of this directive.',
     interrupted: 'the office restarted before it ended',
     minuteTitle: 'Minutes: {title}', minuteAsked: 'Asked by: {who}', minuteParts: 'How it ended in each project:',
     log: { created: '🏛 Directive "{title}" to {n} project(s): {offices}', department: '🏛 New department: {name}', ended: '🏛 Directive "{title}": {status} ({done}/{total})' },
     ui: {
+      systems: 'Systems (their artifacts go in order):', handoffLeft: 'It left its handoff for the ones that use it',
       company: 'The company · last 7 days',
       health: { ok: 'healthy', warn: 'watch it', bad: 'needs you' },
       co: {
@@ -439,7 +448,7 @@ export default {
     pathMissing: 'the path is missing', pathRelative: '{path}: use the full path (e.g. ~/Workspace/my-project)', pathNotFound: '{path}: that folder does not exist',
     harness: 'choose the agent for that path: claude-code, opencode or pi', args: '{name}: args must be a list of strings',
     agentExists: 'that agent is already registered for that path', saveFailed: 'could not save: {error}', agentsMax: 'at most {n} agents',
-    unknownAgent: 'unknown agent', unknownGap: 'unknown gap', componentName: 'the component needs a name', componentPath: 'the component\'s folder goes inside the project (relative, without ..)', unknownComponent: 'unknown component', mineKind: 'it is a skill or a tool (kind: skill | tool)', mineName: 'the name goes in lowercase, with dashes, 2 to 40 characters (starting with a letter)', mineTitle: 'what it does and when to use it is missing', mineScript: 'the tool needs its program', unknownMine: 'no such skill or tool of yours', mineExists: 'you already have one called “{name}”', mineMax: 'you can have up to {n}', mineRun: 'it runs with one of: {runs}', mineParams: 'up to 8 parameters', mineParam: 'the parameter “{name}” goes in lowercase (letters, digits and _) and only once', mineTimeout: 'the limit is 1 to 600 seconds', settingsFile: { json: 'that file is not JSON', kind: 'those are not Dev Team Office settings (its "kind" must be "dev-team-office/settings")', version: 'those settings come from a newer Dev Team Office: update it first (dev-team-office update)' }, character: { json: 'that file is not JSON', kind: 'that is not a Dev Team Office character (its "kind" must be "dev-team-office/character")' }, unknownRole: 'unknown role: {role}', oneOf: '{role}: "{key}" must be one of: {values}', notEditable: '{role}: "{key}" cannot be changed',
+    unknownAgent: 'unknown agent', unknownGap: 'unknown gap', componentName: 'the component needs a name', componentPath: 'the component\'s folder goes inside the project (relative, without ..)', unknownComponent: 'unknown component', systemName: 'the system needs a name', unknownSystem: 'unknown system: {system}', systemExists: 'there is already a system called “{name}”', systemParts: 'a system has up to {n} artifacts', systemPartName: 'each artifact needs a name', systemPartTwice: 'two artifacts with the same name', systemKind: 'an artifact’s kind is one of: {kinds}', systemUses: '“{name}” uses “{uses}”, which is not in the system', systemCycle: 'what they use goes in a circle: {names}', handoffEmpty: 'the handoff is empty', noHandoff: 'there is no system brief running in this folder', mineKind: 'it is a skill or a tool (kind: skill | tool)', mineName: 'the name goes in lowercase, with dashes, 2 to 40 characters (starting with a letter)', mineTitle: 'what it does and when to use it is missing', mineScript: 'the tool needs its program', unknownMine: 'no such skill or tool of yours', mineExists: 'you already have one called “{name}”', mineMax: 'you can have up to {n}', mineRun: 'it runs with one of: {runs}', mineParams: 'up to 8 parameters', mineParam: 'the parameter “{name}” goes in lowercase (letters, digits and _) and only once', mineTimeout: 'the limit is 1 to 600 seconds', settingsFile: { json: 'that file is not JSON', kind: 'those are not Dev Team Office settings (its "kind" must be "dev-team-office/settings")', version: 'those settings come from a newer Dev Team Office: update it first (dev-team-office update)' }, character: { json: 'that file is not JSON', kind: 'that is not a Dev Team Office character (its "kind" must be "dev-team-office/character")' }, unknownRole: 'unknown role: {role}', oneOf: '{role}: "{key}" must be one of: {values}', notEditable: '{role}: "{key}" cannot be changed',
     color: '{role}.{key}: use a color like #3f73f0', empty: '{role}.{key} cannot be empty',
     unknownOffice: 'unknown department (office): {office}', officeName: 'give the department a name', officeExists: 'there is already a department with that name', autonomy: 'autonomy must be one of: {levels} (or empty: the company’s)',
     officesMax: 'at most {n} offices', mainOffice: 'the main office cannot be deleted', timezone: 'unknown time zone: {tz}',
@@ -518,6 +527,7 @@ export default {
     more: '… and {n} more', gate: '⚙ {run} must {expect}{loop}', pass: 'pass', fail: 'fail', loop: ' · otherwise back to {goto} (×{max})',
     keyField: 'field', keyCycle: 'change', go: '▶ Get to work!', cancel: 'cancel', send: '⌘↵ to send', cancelBtn: 'Cancel',
     newSession: 'New {agent} session in {dir}', open: '● open', unregistered: '(unregistered)',
+    systems: 'Systems', systemEntry: 'To its artifacts, in order', systemDesc: 'Each artifact gets its part, in order ({order}): one goes when the ones it uses are done, with their handoff.', systemSession: 'One session per artifact ({n}), in order',
     pRegister: 'Register an agent in ⚙ › Agents (its full path), or open one with its integration', pWrite: 'Write the prompt',
     pNoPath: '{path} does not exist', pIssues: 'The pipeline has errors: {issue}', pNeedsSession: '“{label}” runs in an open session: open {agent} in {path}',
     pNotInstalled: 'Cannot find {agent} installed (its CLI is not in the PATH)', failed: 'Could not: {error}',
@@ -542,7 +552,7 @@ export default {
     keys: { field: 'field', change: 'change', action: 'action', save: 'save', close: 'close', tabs: '◂ ▸ switch tab' },
     yes: 'yes', no: 'no',
     general: {
-      io: 'Your settings (a JSON file)', ioHint: 'Exports what is yours: the general settings, the departments (with their instructions, autonomy and characters) the registered projects with their instructions and components, and what is yours (your skills and tools). Not the log, the briefs, the directives or the archive. Importing replaces what the file brings and leaves the rest; a project whose folder is not on this machine is skipped.', ioExport: '⬇ Export settings', ioImport: '⬆ Import settings', ioDone: 'Settings imported: {prefs} settings, {departments} departments, {characters} characters, {projects} projects, {components} components, {skills} skills, {tools} tools.',
+      io: 'Your settings (a JSON file)', ioHint: 'Exports what is yours: the general settings, the departments (with their instructions, autonomy and characters) the registered projects with their instructions and components, and what is yours (your skills and tools). Not the log, the briefs, the directives or the archive. Importing replaces what the file brings and leaves the rest; a project whose folder is not on this machine is skipped.', ioExport: '⬇ Export settings', ioImport: '⬆ Import settings', ioDone: 'Settings imported: {prefs} settings, {departments} departments, {characters} characters, {projects} projects, {components} components, {systems} systems, {skills} skills, {tools} tools.',
       archive: 'Archive (the agents’ knowledge)', archivePush: 'What the archive knows goes on top of every brief and question (the glossary terms and the most relevant passages)', embeddings: 'Semantic search', embed_off: 'Off: by words only (offline)', embed_ollama: 'Ollama, on this machine', embed_openai: 'An OpenAI-compatible API (OpenAI, Voyage…)', embedModel: 'Embedding model', embedUrl: 'Address', embedOllamaHint: 'Install Ollama and run: ollama pull nomic-embed-text. Nothing leaves this machine.', embedKeyHint: 'Its key goes in the DEV_TEAM_OFFICE_EMBED_KEY environment variable (never in the database). The archive’s text is sent to that API to be embedded.', indexStatus: '🧠 {chunks} chunk(s) indexed · {embedded} with embedding', reindex: '↻ Index it again',
       compact: 'The agents’ context', compactAuto: 'Compact it by itself past the limit', compactAt: 'Limit', compact_tokens: 'tokens', compact_pct: '% of its window', compactHint: 'Past the limit, the office asks the agent to compact its context when its turn ends: Pi and OpenCode do it themselves; inside herdr, /compact is typed in its pane; the Claude Code sessions the office opens compact by themselves at that limit. Otherwise the log tells you.',
       autonomy: 'Autonomy', clarify: 'Before a brief goes to work, the analyst checks it has everything (and asks you only what is missing)', autonomous: 'The agents work on their own to the end (they ask only what only you can answer)',
@@ -554,8 +564,22 @@ export default {
       herdrOn: 'Inside herdr (pane {pane}): agents open in a new pane and can open more from there.', herdrOff: 'Not inside herdr: agents run in the background.',
       life: 'Office life in the log',
     },
+    // the systems (server/systems.js): a product or business project and its artifacts
+    systems: {
+      title: 'Systems (products or business projects)', none: 'No systems yet.',
+      hint: 'A system groups a product’s artifacts: its core, its BFF, its front… Each artifact is a registered repo (or a component of one), with its kind and what it uses. A brief to the system is split in that order (first what others use) and each one gets the handoff of the one before. A repo has one owner department (its people work it), but it can be an artifact of other departments’ systems.',
+      hasInstructions: '📋 instructions', shared: 'shared', sharedHint: 'Its repo is another department’s: its team works it', noRepo: 'its repo is no longer registered',
+      brief: 'Brief', edit: 'Edit', delete: 'Delete', confirmDelete: 'Delete the system “{name}”? Its repos are not touched.', deleted: 'System deleted.',
+      newTitle: 'New system', editTitle: 'Edit “{name}”', name: 'Name', namePh: 'E.g.: Payments',
+      team: 'Team', ownTeam: '＋ A team of its own (a new department)', moveRepos: 'Move its repos to that team (the ones that are not in another department’s system)',
+      teamHint: 'The department that answers for it: its people do its repos’ work. If each project has its own team, give it one of its own.',
+      instructions: 'The system’s instructions', instructionsPh: 'On top of every brief of its artifacts. E.g.: amounts in cents; the core’s contract is in openapi.yaml',
+      parts: 'Artifacts', partName: 'name', repo: 'repo', pickRepo: 'pick its repo', component: 'component', wholeRepo: '(the whole repo)', kind: 'kind', uses: 'uses:', removePart: 'Remove the artifact',
+      addPart: '＋ Artifact', suggest: '↻ Propose kinds and dependencies', suggestHint: 'Detects each one’s kind from its folder and proposes what each one uses (the BFF uses the backends; the front, the BFF)', order: 'Order: {order}',
+      save: 'Save changes', create: 'Create the system', cancel: 'Cancel', saved: 'System “{name}” saved.', createdTeam: 'System “{name}” created, with its team “{team}”.',
+    },
     offices: {
-      hint: 'Each department is an office of the company (a floor of the building): its projects (repositories, with their agents), its people (the characters), its instructions (how to work there: they go with every brief, directive and question to its projects), its time zone and its weather. Pick which one to view at the top left.',
+      hint: 'Each department is a team of the company, and the game draws it as an office (a floor of the building): its projects (repositories, with their agents), its people (the characters), its instructions (how to work there: they go with every brief, directive and question to its projects) and the systems it answers for. Its time zone and its city are optional: without them, the company’s. Pick which one to view at the top left.',
       companyTitle: 'The company', departments: 'Departments', saveCompany: 'Save',
       standards: 'The company’s standards (the CTO’s)', standardsPh: 'What every project of every department follows: conventions, security, how to document… They go on top of every brief, before the department’s and the project’s instructions.',
       capacity: 'Capacity', capacityHint: 'How many briefs a department takes at once from a directive (counting the ones it already has open). Operations does not overload anyone: the rest wait their turn and go as soon as one ends.',

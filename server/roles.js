@@ -3,6 +3,7 @@
 import { t } from '../public/i18n.js';
 import { humanizeCommand, humanizeTool, myToolOf } from './humanize.js';
 import { TEXT_RULES, VISITOR_ROLES } from '../integrations/common/devteam.mjs';
+import { KIND_ROLE } from './systems.js';
 
 export const ROLE_IDS = ['po', 'analyst', 'manager', 'tl', 'qa', 'backend', 'frontend', 'designer'];
 // The visiting specialists (DevOps/SRE and security): they have no desk of their own. When the work
@@ -66,16 +67,17 @@ const PATH_RULES = [
   ['analyst', /\.(md|mdx|txt|rst|docx?|csv)$|(^|\/)docs?\/|readme|requirements|stor(y|ies)|(^|\/)adr\//i],
 ];
 
-export function roleForPath(p = '') {
+/** A file's character: by its rules; otherwise, by the kind of artifact it is in (server/systems.js), or the backend. */
+export function roleForPath(p = '', kind = null) {
   for (const [role, rx] of PATH_RULES) if (rx.test(p)) return role;
-  return 'backend';
+  return KIND_ROLE[kind] || 'backend';
 }
 
 // What only the visiting specialists run: security scanners; containers, clusters, clouds and deploys.
 const SECURITY_CMD = /\b(npm|pnpm|yarn|bun) audit\b|\b(snyk|trivy|grype|semgrep|gitleaks|trufflehog|bandit|pip-audit|cargo[ -]audit|osv-scanner|govulncheck|brakeman|nuclei|nmap|checkov|tfsec|kube-bench|dependency-check)\b/i;
 const DEVOPS_CMD = /\b(docker|docker-compose|podman|kubectl|helm|minikube|terraform|tofu|terragrunt|pulumi|ansible|ansible-playbook|vagrant|packer|gcloud|doctl|flyctl|vercel|netlify|heroku|railway|wrangler|systemctl|journalctl|nginx|caddy|certbot|eksctl|skaffold|argocd)\b|\baws [a-z]|\baz (login|group|vm|aks|webapp|account|storage)\b|\bfly (deploy|launch|ssh|logs|status)\b|\b(npm|pnpm|yarn) publish\b|\bdeploy\b/i;
 
-export function roleForCommand(c = '') {
+export function roleForCommand(c = '', kind = null) {
   if (/^\s*gh (workflow|run)\b/.test(c)) return 'devops';
   if (/^\s*(git|gh)\b/.test(c)) return 'tl';
   if (SECURITY_CMD.test(c)) return 'security';
@@ -84,7 +86,7 @@ export function roleForCommand(c = '') {
   if (DEVOPS_CMD.test(c)) return 'devops';
   if (/\b(vite|next|nuxt|storybook|tailwind|webpack|astro|npm run (dev|preview))\b/i.test(c)) return 'frontend';
   if (/\b(svgo|magick|imagemagick|sharp|ffmpeg)\b/i.test(c)) return 'designer';
-  return 'backend';
+  return KIND_ROLE[kind] || 'backend';
 }
 
 const AGENT_TYPES = {
@@ -118,7 +120,8 @@ export function filePathOf(input = {}) {
   return input.file_path || input.filePath || input.path || input.notebook_path || '';
 }
 
-export function roleForTool(tool = '', input = {}) {
+/** `kind`: the kind of artifact it works in (a frontend repo's code is the frontend's). */
+export function roleForTool(tool = '', input = {}, kind = null) {
   const t = tool.toLowerCase();
   if (t.startsWith('mcp__') || t.includes('_mcp_')) {
     if (/snyk|semgrep|security|vuln|secret/.test(t)) return 'security';
@@ -136,7 +139,7 @@ export function roleForTool(tool = '', input = {}) {
     case 'websearch': case 'webfetch': return 'analyst';
     case 'askuserquestion': case 'question': case 'ask_user_choice': case 'ask_user_question': case 'ask_user': return 'manager'; // the agent brings the question to you (the PO)
     case 'enterplanmode': case 'exitplanmode': case 'lsp': return 'tl';
-    case 'bash': case 'shell': case 'exec': return roleForCommand(input.command || input.cmd || '');
+    case 'bash': case 'shell': case 'exec': return roleForCommand(input.command || input.cmd || '', kind);
     case 'skill': return roleForText(`${input.skill || ''} ${input.args || ''}`);
     case 'grep': case 'glob': case 'list': case 'ls': case 'find': {
       // Searching the code is the TL's exploration, unless it clearly points at an area.
@@ -146,7 +149,7 @@ export function roleForTool(tool = '', input = {}) {
     }
     default: {
       const p = filePathOf(input);
-      return p ? roleForPath(p) : 'tl';
+      return p ? roleForPath(p, kind) : 'tl';
     }
   }
 }

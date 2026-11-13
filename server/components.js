@@ -6,12 +6,14 @@
 // The impact of an order (mapImpact) is read from its words, without asking any model: the departments,
 // projects and components it names (and the projects you chose), and what it seems to name that is not
 // on the map ("the notifications service", `billing-api`): those are asked before it goes (does it exist,
-// and where? is it a new component? a new department?).
+// and where? is it a new component? a new department?). The systems (server/systems.js) count too: naming
+// one takes all its artifacts, and a change to an artifact reaches whoever uses it (core → bff → web).
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { t } from '../public/i18n.js';
-import { realDir } from './paths.js';
+import { realDir, insideDir } from './paths.js';
+import { consumersOf, detectKind } from './systems.js';
 
 const CACHE_MS = 60_000;
 const COMPONENTS_MAX = 60;
@@ -63,7 +65,7 @@ export function detectComponents(dir, { now = Date.now() } = {}) {
     if (!isDir(abs) || found.size >= COMPONENTS_MAX) return;
     const pkg = readJson(path.join(abs, 'package.json'));
     const name = String(pkg?.name || path.basename(rel)).replace(/^@[^/]+\//, '');
-    if (!found.has(rel)) found.set(rel, { name, path: rel });
+    if (!found.has(rel)) found.set(rel, { name, path: rel, kind: detectKind(abs) });
   };
   const expand = (pattern) => {
     const clean = pattern.replace(/\/\*\*$/, '/*').replace(/\/$/, '');
@@ -86,13 +88,16 @@ export function detectComponents(dir, { now = Date.now() } = {}) {
 export function companyMap(store, { name = (o) => o.name } = {}) {
   const agents = store.listAgents();
   const declared = store.listComponents();
+  const systems = store.listSystems?.() || [];
   return store.listOffices().map((o) => ({
     id: o.id, name: name(o),
     projects: agents.filter((a) => a.office === o.id).map((a) => {
       const own = declared.filter((c) => c.project === realDir(a.path)).map((c) => ({ id: c.id, name: c.name, path: c.path, description: c.description, declared: true }));
       const auto = detectComponents(a.path).filter((c) => !own.some((x) => x.path && x.path === c.path) && !own.some((x) => words(x.name) === words(c.name)));
-      return { id: a.id, name: a.name, path: a.path, harness: a.harness, components: [...own, ...auto.map((c) => ({ ...c, declared: false }))] };
+      return { id: a.id, name: a.name, path: a.path, harness: a.harness, kind: detectKind(a.path), components: [...own, ...auto.map((c) => ({ ...c, declared: false }))] };
     }),
+    // the systems this department answers for (their artifacts may be repos of other departments: shared)
+    systems: systems.filter((s) => s.office === o.id).map((s) => ({ id: s.id, name: s.name, instructions: s.instructions, parts: s.parts })),
   }));
 }
 
@@ -186,9 +191,38 @@ export function mapImpact(map, text, { targets = [] } = {}) {
     const impacted = projects.some((p) => p.impacted) || deptNamed;
     return { id: o.id, name: o.name, impacted, why: deptNamed ? 'named' : impacted ? 'part' : null, projects };
   });
+  // the systems: naming one takes all its artifacts; an artifact touched reaches whoever uses it
+  const all = departments.flatMap((o) => o.projects);
+  const repo = (folder) => all.find((p) => insideDir(folder, p.path) && insideDir(p.path, folder));
+  const systems = map.flatMap((o) => (o.systems || []).map((s) => {
+    const sysNamed = says(flat, s.name);
+    for (const p of parts) if (knows(p.key, s.name)) known.add(p.key);
+    const touched = new Set();
+    for (const part of s.parts) {
+      let named = sysNamed || says(flat, part.name);
+      for (const p of parts) if (knows(p.key, part.name)) { known.add(p.key); named = true; }
+      const r = repo(part.project);
+      // its repo is in for another reason: the artifact is touched (in a repo with several, only the one whose component it names)
+      const many = s.parts.filter((x) => x.project === part.project).length > 1;
+      const inRepo = r?.impacted && (!many || !part.component || r.components.some((c) => c.impacted && words(c.name) === words(part.component)));
+      if (named || inRepo) touched.add(part.name);
+    }
+    const reached = new Map(); // consumer → the touched artifacts it uses
+    for (const n of touched) for (const c of consumersOf(s.parts, n)) if (!touched.has(c)) reached.set(c, [...(reached.get(c) || []), n]);
+    for (const [n, via] of reached) {
+      const r = repo(s.parts.find((x) => x.name === n).project);
+      if (r && !r.impacted) Object.assign(r, { impacted: true, why: 'uses', via: via.join(', ') });
+    }
+    for (const n of touched) {
+      const r = repo(s.parts.find((x) => x.name === n).project);
+      if (r && !r.impacted) Object.assign(r, { impacted: true, why: sysNamed ? 'system' : 'part', via: s.name });
+    }
+    return { id: s.id, name: s.name, office: o.id, impacted: touched.size > 0, parts: s.parts.map((p) => ({ ...p, impacted: touched.has(p.name) ? 'touched' : reached.has(p.name) ? 'uses' : null })) };
+  }));
+  for (const o of departments) if (!o.impacted && o.projects.some((p) => p.impacted)) Object.assign(o, { impacted: true, why: 'part' });
   const unknown = parts.filter((p) => !known.has(p.key)).map((p) => ({ ...p, question: t('impact.ask', { what: p.phrase }) }));
   const ids = departments.flatMap((o) => o.projects.filter((p) => p.impacted).map((p) => p.id));
-  return { departments, unknown, targets: ids, matched: ids.length > 0 };
+  return { departments, systems, unknown, targets: ids, matched: ids.length > 0 };
 }
 
 /** The impact in words (for the MCP and the terminal). */
@@ -198,9 +232,10 @@ export function impactText(m) {
     out.push(`🏢 ${o.name}`);
     for (const p of o.projects.filter((x) => x.impacted)) {
       const comps = p.components.filter((c) => c.impacted).map((c) => `${c.name}${c.path ? ` (${c.path})` : ''}`);
-      out.push(`  📁 ${p.name} — ${t(`impact.why.${p.why}`)}${comps.length ? `: ${comps.join(', ')}` : ''}`);
+      out.push(`  📁 ${p.name} — ${t(`impact.why.${p.why}`, { via: p.via || '' })}${comps.length ? `: ${comps.join(', ')}` : ''}`);
     }
   }
+  for (const s of (m.systems || []).filter((x) => x.impacted)) out.push(`🧩 ${s.name}: ${s.parts.map((p) => `${p.name}${p.impacted === 'touched' ? ' ✱' : p.impacted === 'uses' ? ' ↺' : ''}`).join(' · ')}`);
   if (!out.length) out.push(t('impact.none'));
   if (m.unknown.length) out.push('', t('impact.unknownHead'), ...m.unknown.map((u) => `  ? ${u.question}`));
   return out.join('\n');

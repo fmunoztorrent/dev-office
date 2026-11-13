@@ -23,7 +23,7 @@ test('los componentes de un proyecto salen de su carpeta: sus workspaces, o las 
   write(mono, 'package.json', { name: 'acme', workspaces: ['apps/*', 'packages/ui'] });
   write(mono, 'apps/web/package.json', { name: '@acme/web' });
   mkdirs(mono, 'apps/admin', 'apps/node_modules', 'packages/ui', 'packages/other');
-  assert.deepEqual(detectComponents(mono, { now: 1 }), [{ name: 'admin', path: 'apps/admin' }, { name: 'web', path: 'apps/web' }, { name: 'ui', path: 'packages/ui' }]);
+  assert.deepEqual(detectComponents(mono, { now: 1 }).map(({ name, path: p }) => ({ name, path: p })), [{ name: 'admin', path: 'apps/admin' }, { name: 'web', path: 'apps/web' }, { name: 'ui', path: 'packages/ui' }]);
   const pnpm = tmp();
   write(pnpm, 'pnpm-workspace.yaml', "packages:\n  - 'services/*'\n  - '!services/legacy'\n");
   mkdirs(pnpm, 'services/billing', 'services/notificaciones');

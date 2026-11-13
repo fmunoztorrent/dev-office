@@ -229,7 +229,7 @@ One office instance is a **company**: you can keep adding **departments** — ea
 - **its instructions**: how to work there (conventions, what is never done, who to ask). They go on top of every brief, pipeline, directive and question to its projects, like a ChatGPT or Claude project's;
 - **its autonomy**: guided (the analyst reviews each brief and the agent asks you when in doubt), balanced (it reviews, then the agent works to the end) or autonomous (no review); otherwise the company's (⚙ › General › Autonomy);
 - **its people**: its characters (their own names, titles, personalities, styles and colors);
-- **its time zone** (otherwise the company's; otherwise the system's), and with it its time, its lunch, its day and night, its season and **its weather**;
+- **its time zone** (optional: otherwise the company's; otherwise the system's), and with it its time, its lunch, its day and night, its season and **its weather**. A department is a team; the game draws it as an office, but it does not need a place of its own;
 - **its activity**: each agent event goes to its office — the one the agent itself states (the office passes it when opening it), its session's, its herdr pane's, or the one of the registered agent whose path contains its folder; otherwise, the main one.
 
 **The company has its standards** (the CTO's, at the top of ⚙ › Departments): what every project of every department follows (conventions, security, how to document). They go first, before the department's and the project's instructions.
@@ -249,6 +249,18 @@ Add pagination to the orders list
 ```
 
 The interfaces show **one office at a time**: the one you pick in the selector at the **top left** (web and terminal; also with `o`). The choice is saved. The terminal log shows the activity of all of them.
+
+### Systems: a product and its artifacts
+
+A company does not work in repos, it works in products: "Payments" is its **core**, its **BFF** and its **Next.js front**, maybe three repos. In **⚙ › Departments › Systems** each product is a **system**:
+
+- **its artifacts:** each one a registered repo, or one component of one (a monorepo's `apps/web`), with **its kind** (frontend, mobile app, BFF, backend/core, worker, library, data, infrastructure: detected from its folder, or the one you say) and **what it uses** (the BFF uses the core; the front, the BFF). **↻ Propose** fills both;
+- **its team:** the department that answers for it, or **a team of its own** (a new department, and its repos move to it): if each project has its own squad, each one gets its floor and its people. A repo has one owner department (its people do its work), but it can be an artifact of other departments' systems: a **shared** core;
+- **its instructions**, on top of every brief of its artifacts, under a line that says what the artifact is: `🧩 Artifact bff (BFF) of the system Payments · uses core · used by web`.
+
+**A brief to a system** (🧩 in the whiteboard's list, ✉ Brief on its card, `POST /v1/systems/<id>/brief`, or choosing it on the executive floor) **goes in order**: first what others use (core → bff → web). Each artifact goes when the ones it uses are done, carries **their handoff** (what they left with the MCP tool `handoff`: what changed in what they expose; or the end of their answer) and may read their folders without changing them. If one of them fails, the ones that use it do not go.
+
+**The impact of a directive follows the dependencies:** changing the core brings in the BFF and the front that use it ("it uses core, which changes"), and naming the system brings in all its artifacts. And **the kind decides who does the code no rule claims:** a frontend repo's `src/lib/money.ts` is the frontend's, an infrastructure repo's, DevOps's.
 
 ## Two more floors: the executive one and the archive
 

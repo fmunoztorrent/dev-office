@@ -40,7 +40,7 @@ test('exportar: lo tuyo (ajustes, departamentos con sus personajes, proyectos co
     assert.deepEqual([p.name, p.timezone, p.instructions, p.autonomy], ['Pagos', 'Europe/Madrid', 'Todo en euros.', 'guided']);
     assert.deepEqual(p.characters, { backend: { name: 'Bruno', shirt: '#123456' }, devops: { name: 'Rafa B' } });
     assert.deepEqual(x.projects, [{ name: 'Tienda', path: dir, harness: 'claude-code', department: 'pagos', instructions: 'pnpm, no npm.' }]);
-    assert.deepEqual(Object.keys(x).sort(), ['app', 'departments', 'exportedAt', 'instructions', 'kind', 'mine', 'prefs', 'projects', 'version'], 'ni la bitácora, ni encargos, ni directivas, ni el archivo');
+    assert.deepEqual(Object.keys(x).sort(), ['app', 'departments', 'exportedAt', 'instructions', 'kind', 'mine', 'prefs', 'projects', 'systems', 'version'], 'ni la bitácora, ni encargos, ni directivas, ni el archivo');
     assert.ok(!JSON.stringify(x).includes('algo'), 'nada de la bitácora');
   } finally { await server.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -119,7 +119,7 @@ test('la CLI: settings export a un archivo y settings import en otra máquina (s
     assert.match(r.stdout, /Ajustes exportados a/);
     r = cli(homes[1], 'settings', 'import', file);
     assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stdout, /Ajustes importados: \d+ ajustes, 2 departamentos, 0 personajes, 1 proyectos, 0 componentes, 0 skills, 0 herramientas\./);
+    assert.match(r.stdout, /Ajustes importados: \d+ ajustes, 2 departamentos, 0 personajes, 1 proyectos, 0 componentes, 0 sistemas, 0 skills, 0 herramientas\./);
     r = cli(homes[1], 'settings', 'export');
     const x = JSON.parse(r.stdout);
     assert.deepEqual(x.prefs.view, { mode: 'iso' });

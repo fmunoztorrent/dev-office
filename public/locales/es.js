@@ -248,6 +248,11 @@ export default {
     panes: 'Ordenando los paneles', office: 'Hablando con la oficina', agent: 'Pidiéndole algo a {agent}', other: 'Usando {prog}', shell: 'Trabajando en la terminal',
     cd: 'Entrando a {dir}', background: '{what} (en segundo plano)', mcp: 'Usando {server}: {what}', toolUse: 'Usando {tool}',
   },
+  // the systems (server/systems.js): a product or business project and its artifacts
+  system: {
+    artifact: 'Artefacto {name} ({kind}) del sistema {system}', uses: 'usa {list}', usedBy: 'lo usan {list}',
+    kinds: { frontend: 'frontend', mobile: 'app móvil', bff: 'BFF', backend: 'backend / core', worker: 'worker', library: 'librería', data: 'datos', infra: 'infraestructura', other: 'otro' },
+  },
   // the badge over each character: what they are doing, as small as it gets (server/humanize.js)
   badge: { read: 'leer', edit: 'editar', search: 'buscar', plan: 'plan', ask: '❓ a ti', team: 'equipo', think: '💭 piensa' },
   events: {
@@ -264,6 +269,7 @@ export default {
   },
   task: {
     scope: 'Trabaja sólo dentro de {dir}: no leas ni cambies archivos fuera de esa carpeta. Haz exactamente lo que se pide (o el paso del plan acordado), sin irte por la tangente ni agregar ideas que nadie pidió.',
+    scopeReads: 'Trabaja sólo dentro de {dir}: no cambies archivos fuera de esa carpeta. Puedes leer, sin cambiar nada, {reads}: lo que usa este artefacto (su contrato). Haz exactamente lo que se pide (o el paso del plan acordado), sin irte por la tangente ni agregar ideas que nadie pidió.',
     queuedClaude: 'se entrega cuando Claude termine su turno', runningIn: '{exe} en {dir}', finished: 'terminada', killed: 'cortada ({signal})',
     exitCode: 'salió con código {code}{last}', disconnected: 'el agente se desconectó', sentTo: 'enviada a {agent}', accepted: 'el agente la está haciendo',
     failedDefault: 'el agente no pudo con la tarea', failedEvent: '{agent} no pudo con la tarea: {detail}', claudeTook: 'Claude la tomó al terminar su turno',
@@ -280,11 +286,11 @@ export default {
   // la analista revisa un encargo antes de que pase a trabajo (server/clarify.js)
   ingest: { tooBig: 'demasiado grande (más de {mb} MB)', convert: 'para leer {name} la oficina necesita {tool} instalado (o pídele a un agente que lo convierta: ✨ Pedírselo a un agente)', format: 'el archivo no lee archivos .{ext} (Markdown, texto, CSV, JSON, HTML, PDF o Word)', empty: '{name} no tiene texto', url: 'eso no es una dirección http(s)', fetch: 'no se pudo bajar: {error}' },
   // los ajustes como archivo JSON (server/settings-io.js): qué no se pudo importar
-  settingsIo: { skill: 'Skill {name}', tool: 'Herramienta {name}', department: 'Departamento {name}', characters: 'Personajes de {name}', pref: 'Ajuste {key}', project: 'Proyecto {name}', component: 'Componente {name} de {project}', instructions: 'Indicaciones de {path}' },
+  settingsIo: { skill: 'Skill {name}', tool: 'Herramienta {name}', system: 'Sistema {name}', systemParts: 'Artefactos de {name} sin su repo aquí: {parts}', department: 'Departamento {name}', characters: 'Personajes de {name}', pref: 'Ajuste {key}', project: 'Proyecto {name}', component: 'Componente {name} de {project}', instructions: 'Indicaciones de {path}' },
   // el mapa de impacto de una directiva (server/components.js)
   impact: {
     ask: '¿Existe «{what}»? ¿En qué proyecto y carpeta está, o hay que crearlo?', none: 'No identifiqué qué departamentos ni proyectos toca: elígelos o nómbralos.', unknownHead: 'Nombra cosas que no están en el mapa:',
-    why: { named: 'lo nombra', chosen: 'lo elegiste', part: 'nombra un componente suyo', department: 'nombra su departamento' },
+    why: { named: 'lo nombra', chosen: 'lo elegiste', part: 'nombra un componente suyo', department: 'nombra su departamento', system: 'es parte del sistema {via}', uses: 'usa {via}, que cambia' },
     newDesc: 'nuevo (lo pidió una directiva)', needAnswers: 'Antes de enviarla, dime qué es {what}: si existe y dónde, si hay que crearlo o si es un departamento nuevo.', badAnswer: '¿Qué es «{what}»? Contesta: existe, crearlo, departamento nuevo o no es un componente.', deptEmpty: 'Se creó {names}, pero todavía no tiene proyectos: súmale uno (⚙ › Departamentos) y vuelve a enviar la directiva.',
   },
   // la daily (server/standup.js)
@@ -312,7 +318,7 @@ export default {
   // las indicaciones arriba de un encargo (server/guides.js)
   guide: {
     company: 'Estándares de la empresa (los del CTO):', 
-    department: 'Indicaciones del departamento «{name}»:', project: 'Indicaciones del proyecto «{name}»:',
+    department: 'Indicaciones del departamento «{name}»:', project: 'Indicaciones del proyecto «{name}»:', system: 'Indicaciones del sistema «{name}»:',
     autonomous: 'Modo autónomo: trabájalo hasta terminar por tu cuenta (planifica, implementa, prueba y verifica; usa subagentes si conviene). Pregunta sólo lo que únicamente la PO puede responder, con tu herramienta de preguntas; si no, toma supuestos razonables y anótalos.',
   },
 
@@ -368,12 +374,15 @@ export default {
   exec: {
     from: 'Dirección',
     waitTurn: 'el departamento tiene {n} encargo(s) abiertos',
+    waitFor: 'espera a {names} (lo usa)', depFailed: 'no partió: {name} no terminó', handoffFrom: 'Lo que dejó {name} (lo usas):', noHandoff: 'no dejó traspaso: revisa sus cambios recientes en {path} (puedes leerlo).',
+    leaveHandoff: 'Lo usan {list}, que trabajan después de ti: al terminar, deja el traspaso con la herramienta MCP handoff (qué cambió en lo que exponen: endpoints, tipos, eventos, y cómo probarlo).',
     brief: '🏛 Directiva de la dirección: «{title}». También la trabajan: {others}. Haz la parte de este proyecto.',
     components: 'Componentes de este proyecto que toca: {list}.', newComponent: 'Componente nuevo «{name}»{path}: hay que crearlo como parte de esta directiva.',
     interrupted: 'la oficina se reinició antes de que terminara',
     minuteTitle: 'Acta: {title}', minuteAsked: 'Pedido por: {who}', minuteParts: 'Cómo terminó en cada proyecto:',
     log: { created: '🏛 Directiva «{title}» a {n} proyecto(s): {offices}', department: '🏛 Nuevo departamento: {name}', ended: '🏛 Directiva «{title}»: {status} ({done}/{total})' },
     ui: {
+      systems: 'Sistemas (sus artefactos van en orden):', handoffLeft: 'Dejó su traspaso para los que lo usan',
       company: 'La empresa · últimos 7 días',
       health: { ok: 'sana', warn: 'atenta', bad: 'te necesita' },
       co: {
@@ -439,7 +448,7 @@ export default {
     pathMissing: 'falta la ruta', pathRelative: '{path}: usa la ruta completa (p. ej. ~/Workspace/mi-proyecto)', pathNotFound: '{path}: no existe esa carpeta',
     harness: 'elige el agente que atiende esa ruta: claude-code, opencode o pi', args: '{name}: args debe ser una lista de textos',
     agentExists: 'ese agente ya está registrado en esa ruta', saveFailed: 'no se pudo guardar: {error}', agentsMax: 'como máximo {n} agentes',
-    unknownAgent: 'agente desconocido', unknownGap: 'vacío desconocido', componentName: 'el componente necesita un nombre', componentPath: 'la carpeta del componente va dentro del proyecto (relativa, sin ..)', unknownComponent: 'componente desconocido', mineKind: 'es una skill o una herramienta (kind: skill | tool)', mineName: 'el nombre va en minúsculas, con guiones, de 2 a 40 caracteres (empieza con una letra)', mineTitle: 'falta qué hace y cuándo usarla', mineScript: 'la herramienta necesita su programa', unknownMine: 'no existe esa skill o herramienta tuya', mineExists: 'ya tienes una que se llama «{name}»', mineMax: 'puedes tener hasta {n}', mineRun: 'se corre con uno de: {runs}', mineParams: 'hasta 8 parámetros', mineParam: 'el parámetro «{name}» va en minúsculas (letras, números y _) y sin repetirse', mineTimeout: 'el tope es de 1 a 600 segundos', settingsFile: { json: 'ese archivo no es JSON', kind: 'eso no son ajustes de Dev Team Office (su "kind" debe ser "dev-team-office/settings")', version: 'esos ajustes son de una versión más nueva de Dev Team Office: actualízala primero (dev-team-office update)' }, character: { json: 'ese archivo no es JSON', kind: 'eso no es un personaje de Dev Team Office (su "kind" debe ser "dev-team-office/character")' }, unknownRole: 'rol desconocido: {role}', oneOf: '{role}: «{key}» debe ser uno de: {values}', notEditable: '{role}: no se puede cambiar "{key}"',
+    unknownAgent: 'agente desconocido', unknownGap: 'vacío desconocido', componentName: 'el componente necesita un nombre', componentPath: 'la carpeta del componente va dentro del proyecto (relativa, sin ..)', unknownComponent: 'componente desconocido', systemName: 'el sistema necesita un nombre', unknownSystem: 'sistema desconocido: {system}', systemExists: 'ya hay un sistema que se llama «{name}»', systemParts: 'un sistema tiene hasta {n} artefactos', systemPartName: 'cada artefacto necesita un nombre', systemPartTwice: 'dos artefactos con el mismo nombre', systemKind: 'el tipo de un artefacto es uno de: {kinds}', systemUses: '«{name}» usa «{uses}», que no está en el sistema', systemCycle: 'lo que usan forma un círculo: {names}', handoffEmpty: 'el traspaso está vacío', noHandoff: 'no hay un encargo de sistema en curso en esta carpeta', mineKind: 'es una skill o una herramienta (kind: skill | tool)', mineName: 'el nombre va en minúsculas, con guiones, de 2 a 40 caracteres (empieza con una letra)', mineTitle: 'falta qué hace y cuándo usarla', mineScript: 'la herramienta necesita su programa', unknownMine: 'no existe esa skill o herramienta tuya', mineExists: 'ya tienes una que se llama «{name}»', mineMax: 'puedes tener hasta {n}', mineRun: 'se corre con uno de: {runs}', mineParams: 'hasta 8 parámetros', mineParam: 'el parámetro «{name}» va en minúsculas (letras, números y _) y sin repetirse', mineTimeout: 'el tope es de 1 a 600 segundos', settingsFile: { json: 'ese archivo no es JSON', kind: 'eso no son ajustes de Dev Team Office (su "kind" debe ser "dev-team-office/settings")', version: 'esos ajustes son de una versión más nueva de Dev Team Office: actualízala primero (dev-team-office update)' }, character: { json: 'ese archivo no es JSON', kind: 'eso no es un personaje de Dev Team Office (su "kind" debe ser "dev-team-office/character")' }, unknownRole: 'rol desconocido: {role}', oneOf: '{role}: «{key}» debe ser uno de: {values}', notEditable: '{role}: no se puede cambiar "{key}"',
     color: '{role}.{key}: usa un color como #3f73f0', empty: '{role}.{key} no puede quedar vacío',
     unknownOffice: 'departamento (oficina) desconocido: {office}', officeName: 'ponle un nombre al departamento', officeExists: 'ya hay un departamento con ese nombre', autonomy: 'la autonomía debe ser una de: {levels} (o vacía: la de la empresa)',
     officesMax: 'como máximo {n} oficinas', mainOffice: 'la oficina principal no se puede eliminar', timezone: 'zona horaria desconocida: {tz}',
@@ -518,6 +527,7 @@ export default {
     more: '… y {n} más', gate: '⚙ {run} debe {expect}{loop}', pass: 'pasar', fail: 'fallar', loop: ' · si no, vuelve a {goto} (×{max})',
     keyField: 'campo', keyCycle: 'cambia', go: '▶ ¡A trabajar!', cancel: 'cancelar', send: '⌘↵ para enviar', cancelBtn: 'Cancelar',
     newSession: 'Sesión nueva de {agent} en {dir}', open: '● abierta', unregistered: '(sin registrar)',
+    systems: 'Sistemas', systemEntry: 'A sus artefactos, en orden', systemDesc: 'Cada artefacto recibe su parte, en orden ({order}): uno parte cuando terminan los que usa, con el traspaso de ellos.', systemSession: 'Una sesión por artefacto ({n}), en orden',
     pRegister: 'Registra un agente en ⚙ › Agentes (su ruta completa), o abre uno con su integración', pWrite: 'Escribe el prompt',
     pNoPath: 'No existe {path}', pIssues: 'El pipeline tiene errores: {issue}', pNeedsSession: '«{label}» lo corre una sesión abierta: abre {agent} en {path}',
     pNotInstalled: 'No encuentro {agent} instalado (su CLI no está en el PATH)', failed: 'No se pudo: {error}',
@@ -542,7 +552,7 @@ export default {
     keys: { field: 'campo', change: 'cambia', action: 'acción', save: 'guardar', close: 'cerrar', tabs: '◂ ▸ cambia de pestaña' },
     yes: 'sí', no: 'no',
     general: {
-      io: 'Tus ajustes (archivo JSON)', ioHint: 'Exporta lo que es tuyo: los ajustes generales, los departamentos (con sus indicaciones, su autonomía y sus personajes) los proyectos registrados con sus indicaciones y sus componentes, y lo tuyo (tus skills y tus herramientas). No van la bitácora, los encargos, las directivas ni el archivo. Importar reemplaza lo que trae el archivo y deja lo demás; un proyecto cuya carpeta no está en esta máquina se salta.', ioExport: '⬇ Exportar ajustes', ioImport: '⬆ Importar ajustes', ioDone: 'Ajustes importados: {prefs} ajustes, {departments} departamentos, {characters} personajes, {projects} proyectos, {components} componentes, {skills} skills, {tools} herramientas.',
+      io: 'Tus ajustes (archivo JSON)', ioHint: 'Exporta lo que es tuyo: los ajustes generales, los departamentos (con sus indicaciones, su autonomía y sus personajes) los proyectos registrados con sus indicaciones y sus componentes, y lo tuyo (tus skills y tus herramientas). No van la bitácora, los encargos, las directivas ni el archivo. Importar reemplaza lo que trae el archivo y deja lo demás; un proyecto cuya carpeta no está en esta máquina se salta.', ioExport: '⬇ Exportar ajustes', ioImport: '⬆ Importar ajustes', ioDone: 'Ajustes importados: {prefs} ajustes, {departments} departamentos, {characters} personajes, {projects} proyectos, {components} componentes, {systems} sistemas, {skills} skills, {tools} herramientas.',
       archive: 'Archivo (lo que saben los agentes)', archivePush: 'Lo que sabe el archivo va arriba de cada encargo y pregunta (los términos del glosario y los fragmentos más relevantes)', embeddings: 'Búsqueda semántica', embed_off: 'Apagada: sólo por palabras (sin internet)', embed_ollama: 'Ollama, en esta máquina', embed_openai: 'Una API compatible con OpenAI (OpenAI, Voyage…)', embedModel: 'Modelo de embeddings', embedUrl: 'Dirección', embedOllamaHint: 'Instala Ollama y corre: ollama pull nomic-embed-text. Nada sale de esta máquina.', embedKeyHint: 'Su clave va en la variable de entorno DEV_TEAM_OFFICE_EMBED_KEY (nunca en la base). El texto del archivo se manda a esa API para sacar sus embeddings.', indexStatus: '🧠 {chunks} fragmento(s) indexado(s) · {embedded} con embedding', reindex: '↻ Indexarlo de nuevo',
       compact: 'Contexto de los agentes', compactAuto: 'Compactarlo solo al pasar el tope', compactAt: 'Tope', compact_tokens: 'tokens', compact_pct: '% de su ventana', compactHint: 'Pasado el tope, la oficina le pide al agente que compacte su contexto cuando termina su turno: Pi y OpenCode lo hacen solos; en herdr, se escribe /compact en su pane; los Claude Code que abre la oficina compactan solos en ese tope. Si no, la bitácora te avisa.',
       autonomy: 'Autonomía', clarify: 'Antes de que un encargo pase a trabajo, la analista revisa que tenga todo (y te pregunta sólo lo que falta)', autonomous: 'Los agentes trabajan solos hasta terminar (preguntan sólo lo que únicamente tú puedes responder)',
@@ -554,8 +564,22 @@ export default {
       herdrOn: 'Dentro de herdr (pane {pane}): los agentes se abren en un pane nuevo y desde ahí pueden abrir más.', herdrOff: 'No estás dentro de herdr: los agentes se lanzan en segundo plano.',
       life: 'Vida de la oficina en la bitácora',
     },
+    // the systems (server/systems.js): a product or business project and its artifacts
+    systems: {
+      title: 'Sistemas (productos o proyectos de negocio)', none: 'Todavía no hay sistemas.',
+      hint: 'Un sistema agrupa los artefactos de un producto: su core, su BFF, su front… Cada artefacto es un repo registrado (o un componente de uno), con su tipo y lo que usa. Un encargo al sistema se reparte en ese orden (primero lo que otros usan) y cada uno recibe el traspaso del anterior. Un repo tiene un departamento dueño (su gente lo trabaja), pero puede ser artefacto de sistemas de otros departamentos.',
+      hasInstructions: '📋 indicaciones', shared: 'compartido', sharedHint: 'Su repo es de otro departamento: lo trabaja su equipo', noRepo: 'su repo ya no está registrado',
+      brief: 'Encargo', edit: 'Editar', delete: 'Borrar', confirmDelete: '¿Borrar el sistema «{name}»? Sus repos no se tocan.', deleted: 'Sistema borrado.',
+      newTitle: 'Nuevo sistema', editTitle: 'Editar «{name}»', name: 'Nombre', namePh: 'Ej.: Pagos',
+      team: 'Equipo', ownTeam: '＋ Un equipo propio (departamento nuevo)', moveRepos: 'Llevar sus repos a ese equipo (los que no son de otro sistema de otro departamento)',
+      teamHint: 'El departamento que responde por él: su gente hace el trabajo de sus repos. Si cada proyecto tiene su equipo, dale uno propio.',
+      instructions: 'Indicaciones del sistema', instructionsPh: 'Van arriba de cada encargo de sus artefactos. Ej.: los montos en centavos; el contrato del core está en openapi.yaml',
+      parts: 'Artefactos', partName: 'nombre', repo: 'repo', pickRepo: 'elige su repo', component: 'componente', wholeRepo: '(todo el repo)', kind: 'tipo', uses: 'usa:', removePart: 'Quitar el artefacto',
+      addPart: '＋ Artefacto', suggest: '↻ Proponer tipos y dependencias', suggestHint: 'Detecta el tipo de cada uno por su carpeta y propone qué usa cada uno (el BFF usa los backends; el front, el BFF)', order: 'Orden: {order}',
+      save: 'Guardar cambios', create: 'Crear el sistema', cancel: 'Cancelar', saved: 'Sistema «{name}» guardado.', createdTeam: 'Sistema «{name}» creado, con su equipo «{team}».',
+    },
     offices: {
-      hint: 'Cada departamento es una oficina de la empresa (un piso del edificio): sus proyectos (repositorios, con sus agentes), su personal (los personajes), sus indicaciones (cómo trabajar ahí: van con cada encargo, directiva y pregunta a sus proyectos), su zona horaria y su clima. Arriba a la izquierda eliges cuál ver.',
+      hint: 'Cada departamento es un equipo de la empresa, y el juego lo dibuja como una oficina (un piso del edificio): sus proyectos (repositorios, con sus agentes), su personal (los personajes), sus indicaciones (cómo trabajar ahí: van con cada encargo, directiva y pregunta a sus proyectos) y los sistemas por los que responde. Su zona horaria y su ciudad son opcionales: sin ellas, las de la empresa. Arriba a la izquierda eliges cuál ver.',
       companyTitle: 'La empresa', departments: 'Departamentos', saveCompany: 'Guardar',
       standards: 'Estándares de la empresa (los del CTO)', standardsPh: 'Lo que siguen todos los proyectos de todos los departamentos: convenciones, seguridad, cómo documentar… Van arriba de cada encargo, antes de las indicaciones del departamento y del proyecto.',
       capacity: 'Capacidad', capacityHint: 'Cuántos encargos toma un departamento a la vez de una directiva (contando los que ya tiene abiertos). Operaciones no satura a nadie: el resto espera turno y sale en cuanto termina uno.',

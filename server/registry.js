@@ -113,7 +113,7 @@ export class AgentRegistry extends EventEmitter {
     return profilesFor(models, harness).find(([pid]) => pid === id)?.[1] || null;
   }
 
-  run({ target, entry = 'prompt', text, session, from, profile, title: label } = {}) {
+  run({ target, entry = 'prompt', text, session, from, profile, title: label, reads } = {}) {
     text = String(text ?? '').trim();
     if (!text) return { ok: false, error: tr('err.promptEmpty') };
     const t = this.targets().find((x) => x.id === target);
@@ -133,13 +133,13 @@ export class AgentRegistry extends EventEmitter {
     const inv = invocation(e, text);
     const title = clip(label || `${e.id === 'prompt' ? '' : `${e.label}: `}${text}`, 300);
     const meta = { agentId: t.registered ? t.id : null, entry: e.id };
-    if (s) return this.hub.submit({ text: inv.text, title, agent: s.agent, session: s.session, command: inv.command, args: inv.args, from, meta, office: t.office });
+    if (s) return this.hub.submit({ text: inv.text, title, agent: s.agent, session: s.session, command: inv.command, args: inv.args, from, meta, office: t.office, reads });
     if (!t.registered) return { ok: false, error: tr('err.sessionGone') };
     if (!t.exists) return { ok: false, error: tr('err.noPath', { path: t.path }) };
     const a = this.#agents().find((x) => x.id === t.id);
     // a new session starts with the profile's model (an open one keeps its own)
     const model = profileModel(this.profileFor(profile, t.harness), 'default');
-    return this.hub.submit({ text: inv.text, title, agent: t.harness, mode: 'launch', cwd: t.path, command: inv.command, args: inv.args, launch: { bin: a?.bin, args: a?.args }, model, from, meta, office: t.office });
+    return this.hub.submit({ text: inv.text, title, agent: t.harness, mode: 'launch', cwd: t.path, command: inv.command, args: inv.args, launch: { bin: a?.bin, args: a?.args }, model, from, meta, office: t.office, reads });
   }
 
   /** Forgets what was detected in a folder (what it brings changed: its team, its commands). */

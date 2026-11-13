@@ -3,7 +3,8 @@
 // by the web view and the terminal.
 //
 // The office is the frontend: the agents are the ones registered in ⚙ › Agents (a full path) plus
-// the open sessions, and what each one offers comes from its own harness.
+// the open sessions, and what each one offers comes from its own harness. A system (🧩, server/systems.js)
+// is a target too: its artifacts get the brief in the order of what each one uses (core → bff → web).
 
 import { AGENT_NAME } from './targets.js';
 import { t } from './i18n.js';
@@ -13,6 +14,18 @@ const tr = t; // targetLabel uses `t` for the agent
 
 const base = (p) => (p ? String(p).split('/').filter(Boolean).pop() || p : '');
 const tilde = (p) => String(p || '').replace(/^\/Users\/[^/]+/, '~');
+
+/** The systems as the brief's targets (after the agents): `system:<id>`, with the order its artifacts go in. */
+export function systemTargets(systems = []) {
+  return systems.filter((s) => s.parts?.length).map((s) => ({
+    id: `system:${s.id}`, system: true, name: s.name, harness: 'system', path: '', registered: true, exists: true, available: true,
+    order: s.order || s.parts.map((p) => p.name), sessions: [], kinds: [],
+    entries: [{ id: 'prompt', label: t('brief.systemEntry'), description: t('brief.systemDesc', { order: (s.order || []).join(' → ') }) }],
+  }));
+}
+
+/** Everything a brief can go to: the agents, then the systems. */
+export const briefTargetList = (targets = [], systems = []) => [...targets, ...systemTargets(systems)];
 
 /** Default agent: the one from the most recent session, otherwise the first registered one. */
 export function defaultTarget(targets, sessions) {
@@ -29,7 +42,7 @@ export function briefOptions({ targets = [], models = null }, sel) {
   const target = targets[sel.target] || null;
   const entries = target?.entries || [];
   const entry = entries[sel.entry] || entries[0] || null;
-  const sessions = [
+  const sessions = target?.system ? [{ session: null, live: false, label: t('brief.systemSession', { n: target.order.length }) }] : [
     ...(target?.sessions || []),
     ...(target?.registered ? [{ session: null, live: false, label: t('brief.newSession', { agent: AGENT_NAME[target.harness] || target.harness, dir: base(target.path) }) }] : []),
   ];
@@ -65,7 +78,7 @@ export function briefMessage(opts, text, from) {
   return { type: 'run', target: opts.target.id, entry: opts.entry?.id || 'prompt', session: opts.session?.session ?? null, text: String(text).trim(), from, profile: opts.profile?.id || 'none' };
 }
 
-export const targetLabel = (t) => (t
+export const targetLabel = (t) => (t?.system ? `🧩 ${t.name} · ${t.order.join(' → ')}` : t
   ? `${t.name} · ${AGENT_NAME[t.harness] || t.harness}${t.kinds?.length ? ` · ${t.kinds.join(' + ')}` : ''}${t.sessions?.some((s) => s.live) ? ` · ${tr('brief.open')}` : ''}${t.registered ? '' : ` ${tr('brief.unregistered')}`} — ${tilde(t.path)}`
   : '');
 

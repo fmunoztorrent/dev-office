@@ -9,6 +9,7 @@
 //   projects     the registered agents (folder, harness, executable, arguments, department) with their
 //                instructions and the components you declared (the map the directives use); and the
 //                instructions of folders that are not registered
+//   systems      the products or business projects (server/systems.js): their team, instructions and artifacts
 //   mine         what is yours (⚙ › Mine): your private skills and your own tools (server/mine.js)
 //
 // What is not: what belongs to the game (the default team, the map, the phases, which character does
@@ -57,7 +58,8 @@ export function exportSettings(store, { app = '' } = {}) {
   const registered = new Set(agents.map((a) => a.path));
   const instructions = (store.listProjectInstructions?.() || []).filter((x) => !registered.has(x.path));
   const mine = (kind) => (store.listMine?.(kind) || []).map((e) => ({ name: e.name, title: e.title, body: e.body, enabled: e.enabled, ...(e.config ? { config: e.config } : {}) }));
-  return { kind: SETTINGS_KIND, version: SETTINGS_VERSION, app, exportedAt: new Date().toISOString(), prefs, departments, projects, instructions, mine: { skills: mine('skill'), tools: mine('tool') } };
+  const systems = (store.listSystems?.() || []).map((s) => ({ name: s.name, department: s.office, instructions: s.instructions, parts: s.parts.map(({ name, project, component, path: sub, kind, uses }) => ({ name, project, ...(component ? { component } : {}), ...(sub ? { path: sub } : {}), kind, uses })) }));
+  return { kind: SETTINGS_KIND, version: SETTINGS_VERSION, app, exportedAt: new Date().toISOString(), prefs, departments, projects, instructions, systems, mine: { skills: mine('skill'), tools: mine('tool') } };
 }
 
 /** Is it a settings file? Returns { ok, data } or { ok: false, error } (said in the game's language). */
@@ -79,7 +81,7 @@ export function importSettings(store, raw, { mine: yours = new Mine({ store }) }
   const parsed = parseSettings(raw);
   if (!parsed.ok) return parsed;
   const d = parsed.data;
-  const applied = { prefs: 0, departments: 0, characters: 0, projects: 0, components: 0, instructions: 0, skills: 0, tools: 0 };
+  const applied = { prefs: 0, departments: 0, characters: 0, projects: 0, components: 0, instructions: 0, systems: 0, skills: 0, tools: 0 };
   const skipped = [];
   const skip = (what, error) => skipped.push({ what, error: String(error || '') });
 
@@ -139,6 +141,25 @@ export function importSettings(store, raw, { mine: yours = new Mine({ store }) }
     if (!isObj(x) || !x.path) continue;
     const out = store.setProjectInstructions(x.path, x.instructions ?? '');
     if (out.ok) applied.instructions++; else skip(t('settingsIo.instructions', { path: x.path }), out.error);
+  }
+  // the systems: with the artifacts whose repo is registered here (what they used of the others is dropped)
+  const here = store.listAgents();
+  for (const s of Array.isArray(d.systems) ? d.systems : []) {
+    if (!isObj(s) || !s.name) continue;
+    const kept = [], lost = [];
+    for (const p of Array.isArray(s.parts) ? s.parts : []) {
+      if (!isObj(p)) continue;
+      const dir = String(p.project || '').replace(/^~(?=$|\/)/, os.homedir());
+      const a = here.find((x) => x.path === realDir(dir));
+      if (a) kept.push({ ...p, project: a.path }); else lost.push(p.name || p.project);
+    }
+    const names = new Set(kept.map((p) => p.name));
+    const parts = kept.map((p) => ({ ...p, uses: (Array.isArray(p.uses) ? p.uses : []).filter((u) => names.has(u)) }));
+    const office = ids.get(s.department) || (store.getOffice(s.department) ? s.department : MAIN_OFFICE);
+    const out = store.saveSystem({ name: s.name, office, instructions: s.instructions ?? '', parts });
+    if (!out.ok) { skip(t('settingsIo.system', { name: s.name }), out.error); continue; }
+    applied.systems++;
+    if (lost.length) skip(t('settingsIo.systemParts', { name: s.name, parts: lost.join(', ') }), t('err.pathNotFound', { path: lost.join(', ') }));
   }
   // what is yours: your skills (installed in your personal folders) and your tools, by name
   if (isObj(d.mine)) {

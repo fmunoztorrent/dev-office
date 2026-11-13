@@ -24,7 +24,8 @@ import { Compactor, claudeCompactEnv } from './compact.js';
 import { Mine } from './mine.js';
 import { Standup } from './standup.js';
 import { exportSettings, importSettings } from './settings-io.js';
-import { companyMap } from './components.js';
+import { companyMap, detectComponents } from './components.js';
+import { detectKind, suggestUses, orderParts, ARTIFACT_KINDS } from './systems.js';
 import { autonomyOf } from './guides.js';
 import { search as ragSearch, createEmbedder, createIndexer } from './rag.js';
 import { fromFile, fromUrl } from './ingest.js';
@@ -43,10 +44,10 @@ import { exportCharacter, parseCharacter, changedLook } from '../public/characte
 import { detectHarness, projectRoot, HARNESSES, which } from '../integrations/common/devteam.mjs';
 import { t, setLanguage, getLanguage } from '../public/i18n.js';
 import { zoneInfo, systemZone } from '../public/clock.js';
-import { insideDir as inside } from './paths.js';
+import { insideDir as inside, insideDir } from './paths.js';
 import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.19.0';
+export const VERSION = '0.20.0';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
 const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
@@ -138,7 +139,64 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   // what is yours: your private skills (in your personal folders) and your own tools (offered by the MCP)
   const mine = new Mine({ store, ...mineOpt });
   company.myToolRole = (name) => store.findMine('tool', name)?.config?.role || null;
+  // the kind of artifact a file is in: the one you declared in a system (its deepest folder) or, otherwise,
+  // the one detected in its component's folder or its repo (server/systems.js)
+  let systemsSeen = { at: 0, list: [] };
+  const systemsNow = () => { if (Date.now() - systemsSeen.at > 3000) systemsSeen = { at: Date.now(), list: store.listSystems() }; return systemsSeen.list; };
+  company.kindFor = (cwd, file) => {
+    const abs = file ? path.resolve(cwd || '/', String(file)) : cwd;
+    if (!abs) return null;
+    let best = null;
+    for (const s of systemsNow()) for (const p of s.parts) {
+      const f = p.path ? path.join(p.project, p.path) : p.project;
+      if (insideDir(abs, f) && (!best || f.length > best.f.length)) best = { f, kind: p.kind };
+    }
+    if (best && best.kind !== 'other') return best.kind;
+    const reg = store.listAgents().filter((a) => insideDir(abs, a.path)).sort((a, b) => b.path.length - a.path.length)[0];
+    const root = reg?.path || (cwd && fs.existsSync(cwd) ? projectRoot(cwd) : null);
+    if (!root) return null;
+    const comp = detectComponents(root).find((c) => insideDir(abs, path.join(root, c.path)));
+    const kind = comp?.kind && comp.kind !== 'other' ? comp.kind : detectKind(root);
+    return kind === 'other' ? null : kind;
+  };
   const directives = new DirectiveDesk({ store, registry, hub, pipelines, archive, company });
+  // the systems (server/systems.js), as the viewers see them: their order, their team and each artifact's repo
+  const systemsPublic = () => {
+    const agents = store.listAgents();
+    return store.listSystems().map((s) => {
+      const order = orderParts(s.parts);
+      return {
+        ...s, officeName: company.info(s.office)?.name || '', order: order.ok ? order.order : s.parts.map((p) => p.name),
+        parts: s.parts.map((p) => { const a = agents.find((x) => x.path === p.project); return { ...p, target: a?.id || null, repo: a?.name || path.basename(p.project), owner: a?.office || null, shared: !!a && a.office !== s.office }; }),
+      };
+    });
+  };
+  const systemsChanged = () => { systemsSeen = { at: 0, list: [] }; bus.emit('systems'); };
+  /** A system saved from the settings: { id?, name, office | team: 'new', instructions, parts, move? }. */
+  const saveSystem = (b = {}) => {
+    let office = b.office;
+    let created = null;
+    // a team of its own: a new department with the system's name (its repos move to it, if you say so)
+    if (b.team === 'new') {
+      const o = store.createOffice({ name: String(b.name || '').trim() });
+      if (!o.ok) return o;
+      created = o.office;
+      office = o.office.id;
+    }
+    const out = store.saveSystem({ ...b, office });
+    if (!out.ok) { if (created) store.deleteOffice(created.id); return out; }
+    if (created && b.move !== false) {
+      // only the repos that are not artifacts of another department's systems
+      const others = store.listSystems().filter((s) => s.id !== out.system.id);
+      for (const p of out.system.parts) {
+        const a = store.listAgents().find((x) => x.path === p.project);
+        if (a && !others.some((s) => s.parts.some((q) => q.project === p.project))) store.updateAgent(a.id, { office: created.id });
+      }
+    }
+    if (created) officesChanged();
+    systemsChanged();
+    return { ...out, office: created };
+  };
   const startedAt = Date.now();
   const bus = new EventEmitter(); // changes the interfaces see: settings, appearance, weather, offices, log
   const prefs = () => store.getPrefs();
@@ -185,7 +243,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       appearance: store.getAppearance(id), weather: weatherOf(id)?.current || null,
       office: company.info(id), offices: company.list(), prefs: prefs(), herdr: herdr ? herdr.status() : { available: false, panes: [] },
       asks: asks.list(id, 10), clarifications: clarify.list(id), services: services.list(id), prompts: promptsOf(id),
-      directives: directives.list(), archive: archive.snapshot(), overview: overview(),
+      directives: directives.list(), archive: archive.snapshot(), overview: overview(), systems: systemsPublic(),
     };
   };
 
@@ -458,6 +516,11 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         return hub.cancel(msg.id);
       // A prompt for an agent, through an entry of its harness (what the whiteboard sends).
       case 'run':
+        // a brief to a system (🧩 in the whiteboard's list): a directive to its artifacts, in order
+        if (String(msg.target || '').startsWith('system:')) {
+          const out = directives.create({ text: msg.text, systems: [String(msg.target).slice(7)], exact: true, ask: false, from: msg.from });
+          return out.ok ? { ok: true, directive: out.directive } : out;
+        }
         return clarify.review(msg);
       // your answers to the analyst's questions about a brief (or skip: the team decides)
       case 'clarify_answer':
@@ -468,7 +531,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         return msg.all ? standup.runAll({ from: t('events.you') }) : standup.run(here, { from: t('events.you') });
       // the executive floor: one order for several offices or projects, and cancelling it
       case 'directive': {
-        const out = directives.create({ text: msg.text, title: msg.title, offices: msg.offices, targets: msg.targets, answers: msg.answers, ask: msg.ask !== false, from: msg.from });
+        const out = directives.create({ text: msg.text, title: msg.title, offices: msg.offices, targets: msg.targets, systems: msg.systems, answers: msg.answers, ask: msg.ask !== false, exact: !!msg.exact, from: msg.from });
         if (out.created?.length) officesChanged();
         return out;
       }
@@ -781,7 +844,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
           else {
             const task = hub.takeForClaude(session);
             // with the instructions of its project and department on top (Claude already works in its folder)
-            if (task) out.task = { id: task.id, text: task.command ? task.text : hub.brief(task.text, company.session(session)?.cwd, { office: task.office, scope: false }), ...(task.command ? { command: task.command, args: task.args } : {}) };
+            if (task) out.task = { id: task.id, text: task.command ? task.text : hub.brief(task.text, company.session(session)?.cwd, { office: task.office, scope: !!task.reads?.length, reads: task.reads }), ...(task.command ? { command: task.command, args: task.args } : {}) };
           }
         }
         const cancel = session ? pipelines.cancelsFor(session) : [];
@@ -815,6 +878,42 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       }
       // What is yours (⚙ › Mine): your private skills and your own tools (server/mine.js)
       if (req.method === 'GET' && p === '/v1/mine') return json(res, 200, { ok: true, ...mine.list() });
+      // The systems (a product or business project) and their artifacts (server/systems.js)
+      if (req.method === 'GET' && p === '/v1/systems') return json(res, 200, { ok: true, systems: systemsPublic(), kinds: ARTIFACT_KINDS });
+      // what each artifact seems to be, what it would use and the order: a proposal for the form
+      if (req.method === 'POST' && p === '/v1/systems/suggest') {
+        const b = await body(req);
+        const agents = store.listAgents();
+        const parts = (Array.isArray(b.parts) ? b.parts : []).map((x) => {
+          const a = agents.find((y) => y.id === x.project || y.path === x.project);
+          const dir = a ? (x.path ? path.join(a.path, x.path) : a.path) : null;
+          return { ...x, kind: x.kind || (dir ? detectKind(dir) : 'other'), uses: Array.isArray(x.uses) ? x.uses : [] };
+        });
+        const proposed = suggestUses(parts.map((x) => (b.redo ? { ...x, uses: [] } : x)));
+        const order = orderParts(proposed);
+        return json(res, 200, { ok: true, parts: proposed, order: order.ok ? order.order : null, error: order.ok ? undefined : order.error });
+      }
+      if ((req.method === 'POST' && p === '/v1/systems') || (req.method === 'PUT' && (m = p.match(/^\/v1\/systems\/([^/]+)$/)))) {
+        const out = saveSystem({ ...(await body(req)), ...(m ? { id: decodeURIComponent(m[1]) } : {}) });
+        return json(res, out.ok ? (out.created ? 201 : 200) : 400, out);
+      }
+      if (req.method === 'DELETE' && (m = p.match(/^\/v1\/systems\/([^/]+)$/))) {
+        const out = store.deleteSystem(decodeURIComponent(m[1]));
+        if (out.ok) systemsChanged();
+        return json(res, out.ok ? 200 : out.status || 400, out);
+      }
+      // a brief to a system: a directive to its artifacts, in the order of what each one uses
+      if (req.method === 'POST' && (m = p.match(/^\/v1\/systems\/([^/]+)\/brief$/))) {
+        const b = await body(req);
+        const out = directives.create({ text: b.text, title: b.title, systems: [decodeURIComponent(m[1])], exact: true, ask: false, from: b.from });
+        return json(res, out.ok ? 201 : 400, out);
+      }
+      // what an artifact leaves for the ones that use it (the MCP tool `handoff`)
+      if (req.method === 'POST' && p === '/v1/handoff') {
+        const b = await body(req);
+        const out = directives.handoff({ cwd: b.cwd, text: b.text });
+        return json(res, out.ok ? 200 : out.status || 400, out);
+      }
       // the MCP server (in each agent) offers your tools that are on: whole, with their scripts
       if (req.method === 'GET' && p === '/v1/mine/tools') return json(res, 200, { ok: true, tools: store.listMine('tool').filter((x) => x.enabled) });
       if ((req.method === 'POST' && p === '/v1/mine') || (req.method === 'PUT' && (m = p.match(/^\/v1\/mine\/([^/]+)$/)))) {
@@ -828,13 +927,13 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       // the impact before it goes: the departments, projects and components it touches, and what is not on the map
       if (req.method === 'POST' && p === '/v1/directives/plan') {
         const b = await body(req);
-        const out = directives.plan({ text: b.text, offices: b.offices, targets: b.targets ?? b.projects });
+        const out = directives.plan({ text: b.text, offices: b.offices, targets: b.targets ?? b.projects, systems: b.systems });
         if (out.ok) floor('exec', 'impact', { text: clip(b.text, 80), total: out.map.targets.length, unknown: out.map.unknown.length });
         return json(res, out.ok ? 200 : 400, out);
       }
       if (req.method === 'POST' && p === '/v1/directives') {
         const b = await body(req);
-        const out = directives.create({ text: b.text, title: b.title, offices: b.offices, targets: b.targets ?? b.projects, answers: b.answers, ask: b.ask !== false, exact: !!b.exact, from: b.from });
+        const out = directives.create({ text: b.text, title: b.title, offices: b.offices, targets: b.targets ?? b.projects, systems: b.systems, answers: b.answers, ask: b.ask !== false, exact: !!b.exact, from: b.from });
         if (out.created?.length) { officesChanged(); for (const o of out.created) floor('exec', 'department', { text: o.name }); }
         return json(res, out.ok ? 201 : out.needsAnswers ? 409 : 400, out);
       }
@@ -961,6 +1060,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   clarify.on('change', (c) => toOffice(c.office, { type: 'clarify', clarify: c }));
   // the two floors every office shares: the directives, the archive and what happens on them
   directives.on('change', (list) => broadcast({ type: 'directives', directives: list }));
+  bus.on('systems', () => broadcast({ type: 'systems', systems: systemsPublic() }));
   archive.on('change', () => broadcast({ type: 'archive', archive: archive.snapshot() }));
   bus.on('floor', (ev) => broadcast({ type: 'floor', event: ev }));
   // how each office is doing (the executive floor's wall): at most once a second
@@ -1056,6 +1156,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     services,
     prompts,
     promptsOf,
+    systemsPublic,
     answerPrompt,
     appearance: (id = view()) => store.getAppearance(id),
     weatherOf,

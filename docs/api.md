@@ -238,6 +238,25 @@ When an agent's context goes past `prefs.compact` (400k tokens by default), the 
 
 Each request leaves an `autocompact` event in the log (`via`: `agent`, `pane`, `manual`, or `failed` when the agent could not and says why). It is asked again after 10 minutes if the context is still past the limit; a compaction (`compact`) resets it. Until its next answer, the context bar shows the session as just compacted (`context.compacted`).
 
+## Systems: a product and its artifacts
+
+A system is a product or business project ("Payments"): its artifacts (a registered repo, or one component of one), each with its kind and what it uses, and the team (department) that answers for it.
+
+| Method | Path | Body |
+|---|---|---|
+| `GET` | `/v1/systems` | `{ systems: [{ id, name, office, officeName, instructions, order: [names], parts: [{ name, project, component, path, kind, uses, target, repo, owner, shared }] }], kinds }` (`order`: the order a change goes in; `shared`: its repo is another department's) |
+| `POST` | `/v1/systems/suggest` | `{ parts: [{ name, project, path?, kind?, uses? }], redo? }`: each one's kind detected from its folder (when it has none) and what each one uses (when it says nothing; `redo`: propose it again), with the `order` |
+| `POST` | `/v1/systems` | `{ name, office \| team: "new", instructions?, parts: [{ name, project (id or folder of a registered project), component?, path?, kind, uses? }], move? }`: creates it (or updates the one with that name). `team: "new"` creates a department with its name and, unless `move: false`, moves its repos to it (the ones that are not in another department's system). `400` on a cycle, an unknown repo or kind |
+| `PUT` · `DELETE` | `/v1/systems/<id>` | Changes it · deletes it (its repos are not touched) |
+| `POST` | `/v1/systems/<id>/brief` | `{ text, title?, from? }`: a directive to its artifacts, in order (see below) |
+| `POST` | `/v1/handoff` | `{ cwd, text }`: an artifact's handoff for the ones that use it (the MCP tool `handoff`): it goes to the running directive part working in that folder. `404` if there is none |
+
+- **Kinds:** `frontend`, `mobile`, `bff`, `backend`, `worker`, `library`, `data`, `infra`, `other`. Detected from the folder: Next, Vue, Svelte, Angular… a frontend; react-native or Expo, mobile; Express, Fastify, NestJS, Go, Java… a backend (a `bff` if its name says so); a queue consumer, a worker; Terraform or Helm, infra; dbt or Airflow, data; a package with no server nor screen, a library.
+- **Order:** a directive whose projects are artifacts of a system waits: each part goes after the parts it uses (`after`, with `status: "waiting"` and the reason in `detail`), carries their handoff (`📦 What X left (you use it):`) and the folders it may read (`reads`: the 📁 line says it may read them without changing anything). If one of them fails or is cancelled, the ones that use it are cancelled (`it did not go: X did not finish`). A part with users is asked to leave its handoff (`🤝 … use it and work after you`). Parts carry `after: [names]` and `handoff: bool`.
+- **Impact:** `POST /v1/directives/plan` and `POST /v1/directives` take `systems: [id | name]` (all their artifacts); the map's `systems` say which artifacts are touched (`touched`) and which are reached because they use one (`uses`). A project reached that way has `why: "uses"` and `via` (what it uses that changes); one brought in by naming its system, `why: "system"`.
+- **Briefs:** every brief to an artifact's folder carries, under the 📁 line, `🧩 Artifact <name> (<kind>) of the system <system> · uses … · used by …` and the system's instructions.
+- **The character:** code no rule claims (by its path or its command) is done by the kind's character: frontend and mobile, the frontend; infra, DevOps; the rest, the backend.
+
 ## Yours: private skills and your own tools
 
 What is yours, not the company's (⚙ › Mine). It does not go to the archive, the briefs or any repo, and it travels in your settings file.

@@ -49,9 +49,12 @@ const OUTPUT_LINES = 40;
 // A brief starts with its scope: the agent works only inside its project's folder, and only on what
 // is asked (the stay-focused skill). The 📁 line is the office's: it is taken out of the board's title.
 export const SCOPE_MARK = '📁 ';
-export const scoped = (text, dir, guide = '') => {
-  // then, the instructions of its department and its project (server/guides.js)
-  const head = [dir ? `${SCOPE_MARK}${tr('task.scope', { dir: String(dir).replace(os.homedir(), '~') })}` : '', guide].filter(Boolean).join('\n');
+export const scoped = (text, dir, guide = '', reads = []) => {
+  // (reads: the folders it may read without changing anything: what its artifact uses, server/systems.js)
+  const home = (p) => String(p).replace(os.homedir(), '~');
+  const scope = dir ? `${SCOPE_MARK}${reads.length ? tr('task.scopeReads', { dir: home(dir), reads: reads.map(home).join(', ') }) : tr('task.scope', { dir: home(dir) })}` : '';
+  // then, the instructions of its department, its systems and its project (server/guides.js)
+  const head = [scope, guide].filter(Boolean).join('\n');
   return head ? `${head}\n\n${text}` : text;
 };
 /** OpenCode also gets the rule for real: reading or changing files outside the folder is denied. */
@@ -142,14 +145,14 @@ export class TaskHub extends EventEmitter {
    * A brief as its agent gets it: the 📁 scope (scope: false, without it) and the instructions of
    * the project in `dir` and of its department, on top of the text.
    */
-  brief(text, dir, { office = null, scope = true, autonomous = true } = {}) {
+  brief(text, dir, { office = null, scope = true, autonomous = true, reads = [] } = {}) {
     // autonomous: it works to the end on its own, and asks only what only you can answer (a pipeline
     // already is: its stages and gates say how far it goes)
     const g = guideFor(this.store, dir, office);
     const auto = autonomous && autonomyOf(this.store, g.office).autonomous ? `${GUIDE_MARK}${tr('guide.autonomous')}` : '';
     // and what the archive knows about it (the glossary terms it mentions, the most relevant chunks)
     const archive = this.store?.listKnowledge ? contextBlock(this.store, text, { office: g.department?.id || office, project: g.project?.path || dir || null }) : '';
-    return scoped(text, scope ? dir : null, [auto, guideText(g), archive].filter(Boolean).join('\n'));
+    return scoped(text, scope ? dir : null, [auto, guideText(g), archive].filter(Boolean).join('\n'), reads);
   }
 
   // ---------------------------------------------------------------- tareas
@@ -160,8 +163,9 @@ export class TaskHub extends EventEmitter {
    *                as a command (OpenCode) or expands it (Pi, Claude); `text` is "/command args"
    * @param launch  { bin, args } of the registered agent, for a new session (mode: 'launch')
    * @param meta    { agentId, entry } for the history: which registered agent and through which entry
+   * @param reads   folders it may read without changing them (the artifacts its artifact uses)
    */
-  submit({ text, title, agent, session, mode, cwd, from, command, args, launch, meta, office, model } = {}) {
+  submit({ text, title, agent, session, mode, cwd, from, command, args, launch, meta, office, model, reads } = {}) {
     text = String(text ?? '').trim();
     if (!text) return { ok: false, error: tr('err.taskEmpty') };
     if (text.length > TEXT_MAX) return { ok: false, error: tr('err.taskTooLong', { n: TEXT_MAX }) };
@@ -176,6 +180,7 @@ export class TaskHub extends EventEmitter {
       cwd: null, status: 'new', detail: '', output: [], from: clip(from || tr('events.office'), 30), createdAt: Date.now(), updatedAt: Date.now(),
       agentId: meta?.agentId || null, entry: meta?.entry || null,
       office: office || (session && this.office.officeOfSession?.(session)) || MAIN_OFFICE, pane: null,
+      reads: (Array.isArray(reads) ? reads : []).map((x) => clip(String(x), 300)).slice(0, 10),
     };
 
     if (task.mode === 'launch') {
@@ -183,7 +188,7 @@ export class TaskHub extends EventEmitter {
       task.cwd = path.resolve(String(cwd || this.defaultCwd).replace(/^~(?=$|\/)/, os.homedir()));
       if (!fs.statSync(task.cwd, { throwIfNoEntry: false })?.isDirectory()) return { ok: false, error: tr('err.noDir', { dir: task.cwd }) };
       // the agent works in its project's folder, and only on what is asked (a harness command goes as is)
-      task.prompt = task.command ? text : this.brief(text, task.cwd, { office: task.office });
+      task.prompt = task.command ? text : this.brief(text, task.cwd, { office: task.office, reads: task.reads });
       task.model = model ? clip(model, 80) : null; // the model profile's (null: the agent's own)
       const cmd = agentCommand(agent, { text: task.prompt, command: task.command, args: task.args, model: task.model }, launch || {});
       if (cmd.error) return { ok: false, error: cmd.code === 'missing' ? tr('err.notInstalled', { bin: cmd.bin }) : tr('err.cantLaunch', { agent }) };
@@ -320,7 +325,7 @@ export class TaskHub extends EventEmitter {
     task.connId = conn.id;
     task.session ||= conn.session;
     this.#set(task, 'sent', tr('task.sentTo', { agent: AGENT_LABEL[conn.agent] || conn.agent }));
-    conn.send({ type: 'task', id: task.id, text: task.command ? task.text : this.brief(task.text, conn.cwd, { office: task.office }), session: task.session, ...(task.command ? { command: task.command, args: task.args } : {}) });
+    conn.send({ type: 'task', id: task.id, text: task.command ? task.text : this.brief(task.text, conn.cwd, { office: task.office, reads: task.reads }), session: task.session, ...(task.command ? { command: task.command, args: task.args } : {}) });
   }
 
   /** The agent's answer: accepted | done | failed | rejected. */

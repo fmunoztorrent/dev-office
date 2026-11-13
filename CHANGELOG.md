@@ -4,6 +4,30 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-11-13
+
+### Added
+
+- **Systems: a product and its artifacts**, the way a company organizes its code. "Payments" is its core, its BFF and its front (one repo each, or components of a monorepo): ⚙ › Departments › Systems.
+  - **Each artifact** has its kind (frontend, mobile app, BFF, backend/core, worker, library, data, infrastructure), detected from its folder or the one you say, and what it uses. **↻ Propose** fills both (the BFF uses the core; the front, the BFF).
+  - **Its team** is a department, or a team of its own: a new department, and its repos move to it, so each product has its floor and its people.
+  - **A shared repo:** a repo keeps one owner department (its people do its work) but can be an artifact of other departments' systems.
+  - **Its instructions** go on top of every brief of its artifacts, under a line that says what the artifact is (`🧩 Artifact bff (BFF) of the system Payments · uses core · used by web`).
+  - The settings file carries the systems. `GET|POST /v1/systems`, `PUT|DELETE /v1/systems/<id>`, `POST /v1/systems/suggest`; MCP `list_systems`.
+- **A brief that crosses repos goes in order.** A brief to a system (🧩 in the whiteboard's list, ✉ Brief on its card, `POST /v1/systems/<id>/brief`), or a directive whose projects are artifacts of one, goes first to what others use (core → bff → web):
+  - each artifact goes when the ones it uses are done;
+  - it carries **their handoff**: what they left with the new MCP tool `handoff`, or the end of their answer;
+  - it may read their folders without changing them;
+  - if one fails, the ones that use it do not go.
+  - The executive floor shows who waits for whom, and 🤝 when a part left its handoff.
+- **The impact follows the dependencies.** Changing the core brings in the BFF and the front that use it ("it uses core, which changes"), and naming a system brings in all its artifacts. The directive dialog lets you pick systems too.
+
+### Changed
+
+- **The kind of artifact decides who does the code no rule claims:** a frontend repo's `src/lib/money.ts` is the frontend's, an infrastructure repo's is DevOps's. Before, it was always the backend's.
+- **Detected components carry their kind** (`GET /v1/map`), and so do projects.
+- **A department is presented as a team** (the game draws it as an office); its time zone and its city are optional and default to the company's.
+
 ## [0.19.0] - 2026-11-12
 
 ### Added
@@ -285,7 +309,8 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.18.1...v0.19.0
 [0.18.1]: https://github.com/fmunoztorrent/dev-office/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.16.0...v0.18.0

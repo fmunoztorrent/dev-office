@@ -12,12 +12,19 @@
 // Operations does not overload a department: it takes at most `prefs.capacity` open briefs at once
 // (3 by default, counting what it already had); the rest of its parts wait their turn and go as
 // soon as one of its briefs ends.
+//
+// When its projects are artifacts of a system (server/systems.js), the order follows what each one uses:
+// a part waits until the parts it uses are done (core → bff → web), and its brief carries their handoff
+// (what they left with the MCP tool `handoff`, or the end of their output) and may read their folders.
+// If one of them fails or is cancelled, the parts that use it do not go. A brief to a system is a
+// directive to its artifacts (`systems`).
 
 import { EventEmitter } from 'node:events';
 import { clip } from './roles.js';
 import { t as tr } from '../public/i18n.js';
 import { MAIN_OFFICE } from './store.js';
 import { companyMap, mapImpact, impactText } from './components.js';
+import { insideDir } from './paths.js';
 
 const TEXT_MAX = 4000;
 const PARTS_MAX = 20;
@@ -64,10 +71,15 @@ export class DirectiveDesk extends EventEmitter {
     pipelines?.on('change', () => this.#follow());
   }
 
-  /** The projects a directive goes to: the ones chosen plus every registered one in the offices chosen. */
-  #targets({ offices = [], targets = [] }) {
+  /** The projects a directive goes to: the ones chosen, every registered one in the offices chosen and the artifacts of the systems chosen. */
+  #targets({ offices = [], targets = [], systems = [] }) {
     const agents = this.store.listAgents();
     const want = new Set();
+    for (const ref of [].concat(systems || [])) {
+      const s = this.store.findSystem?.(ref);
+      if (!s) return { error: tr('err.unknownSystem', { system: ref }) };
+      for (const p of s.parts) { const a = agents.find((x) => x.path === p.project || (insideDir(x.path, p.project) && insideDir(p.project, x.path))); if (a) want.add(a.id); }
+    }
     for (const ref of [].concat(offices || [])) {
       const o = ref === 'all' ? null : this.store.findOffice(ref);
       if (ref !== 'all' && !o) return { error: tr('err.unknownOffice', { office: ref }) };
@@ -88,10 +100,10 @@ export class DirectiveDesk extends EventEmitter {
    * The impact of an order before it goes: { ok, map: { departments, unknown, targets, matched }, text }.
    * { text, offices?, targets? }: the departments and projects chosen by hand count too.
    */
-  plan({ text, offices, targets } = {}) {
+  plan({ text, offices, targets, systems } = {}) {
     text = String(text ?? '').trim();
     if (!text) return { ok: false, error: tr('err.taskEmpty') };
-    const pick = this.#targets({ offices, targets });
+    const pick = this.#targets({ offices, targets, systems });
     if (pick.error) return { ok: false, error: pick.error };
     const map = mapImpact(this.#map(), text, { targets: pick.agents.map((a) => a.id) });
     return { ok: true, map, text: impactText(map) };
@@ -135,18 +147,18 @@ export class DirectiveDesk extends EventEmitter {
    * not on the map and there is no answer for it, it does not go: { ok: false, needsAnswers, map } (ask: false skips that).
    * Returns { ok, directive, created } (also when some part could not be sent: it shows why).
    */
-  create({ text, title, offices, targets, answers = [], ask = true, exact = false, from } = {}) {
+  create({ text, title, offices, targets, systems, answers = [], ask = true, exact = false, from } = {}) {
     text = String(text ?? '').trim();
     if (!text) return { ok: false, error: tr('err.taskEmpty') };
     if (text.length > TEXT_MAX) return { ok: false, error: tr('err.taskTooLong', { n: TEXT_MAX }) };
-    const first = this.plan({ text, offices, targets });
+    const first = this.plan({ text, offices, targets, systems });
     if (!first.ok) return first;
     const missing = first.map.unknown.filter((u) => !(answers || []).some((x) => x && (x.key === u.key || x.phrase === u.phrase || x.name === u.phrase || x.name === u.name)));
     if (ask && missing.length) return { ok: false, needsAnswers: true, error: tr('impact.needAnswers', { what: missing.map((u) => `«${u.phrase}»`).join(', ') }), map: first.map, text: first.text };
     const answered = this.#answer(first.map.unknown, answers || []);
     if (answered.error) return { ok: false, error: answered.error };
     // the map again: what was answered is on it now
-    const chosen = this.#targets({ offices, targets }).agents.map((a) => a.id);
+    const chosen = this.#targets({ offices, targets, systems }).agents.map((a) => a.id);
     const map = mapImpact(this.#map(), text, { targets: [...new Set([...chosen, ...answered.targets])] });
     const agents = this.store.listAgents();
     const going = exact ? new Set([...chosen, ...answered.targets]) : new Set(map.targets);
@@ -160,6 +172,8 @@ export class DirectiveDesk extends EventEmitter {
       source: clip(from || tr('events.you'), 60), parts: [], createdAt: Date.now(), updatedAt: Date.now(),
     };
     const names = pick.agents.map((a) => a.name);
+    // what each project uses among the others (its artifacts' systems): it goes after them
+    const after = this.#order(pick.agents);
     this.#sending = true;
     try {
       for (const a of pick.agents) {
@@ -171,13 +185,19 @@ export class DirectiveDesk extends EventEmitter {
           comps.length ? `🧩 ${tr('exec.components', { list: comps.map((c) => `${c.name}${c.path ? ` (${c.path})` : ''}`).join(', ') })}` : '',
           ...fresh.map((f) => `🆕 ${tr('exec.newComponent', { name: f.name, path: f.path ? ` (${f.path})` : '' })}`),
         ].filter(Boolean);
+        const needs = [...(after.get(a.id) || [])];
+        const users = pick.agents.filter((x) => after.get(x.id)?.has(a.id)).map((x) => x.name);
+        if (users.length) lines.push(`🤝 ${tr('exec.leaveHandoff', { list: users.join(', ') })}`);
         const part = {
           target: a.id, name: a.name, harness: a.harness, office: a.office || MAIN_OFFICE, kind: null, ref: null, status: 'running', detail: '',
-          components: comps.map((c) => c.name), fresh: fresh.map((f) => f.name),
+          components: comps.map((c) => c.name), fresh: fresh.map((f) => f.name), after: needs, handoff: '', output: '',
           brief: tr('exec.brief', { title: d.title, others: others.length ? others.join(', ') : '—' }) + (lines.length ? `\n${lines.join('\n')}` : '') + `\n\n${text}`,
         };
         d.parts.push(part);
-        // a department with its hands full: this part waits its turn
+      }
+      for (const part of d.parts) {
+        // after the ones it uses; and a department with its hands full: this part waits its turn
+        if (part.after.length) { Object.assign(part, { status: 'waiting', detail: tr('exec.waitFor', { names: this.#names(d, part.after) }) }); continue; }
         const busy = this.#busy(part.office);
         if (busy >= this.#capacity()) Object.assign(part, { status: 'waiting', detail: tr('exec.waitTurn', { n: busy }) });
         else this.#send(d, part);
@@ -194,6 +214,48 @@ export class DirectiveDesk extends EventEmitter {
   }
 
   #sending = false;
+
+  /**
+   * What each project uses among these (by the systems their artifacts are in): Map(project id → Set of
+   * the ids it goes after). A loop between systems is not followed (those go without waiting).
+   */
+  #order(agents) {
+    const after = new Map(agents.map((a) => [a.id, new Set()]));
+    const repoOf = (folder) => agents.find((a) => insideDir(folder, a.path) && insideDir(a.path, folder))?.id;
+    for (const s of this.store.listSystems?.() || []) {
+      for (const p of s.parts) {
+        const me = repoOf(p.project);
+        if (!me) continue;
+        for (const u of p.uses || []) {
+          const dep = s.parts.find((x) => x.name === u);
+          const it = dep && repoOf(dep.project);
+          if (it && it !== me) after.get(me).add(it);
+        }
+      }
+    }
+    // a loop (two systems saying opposite things): its projects go without waiting each other
+    const reaches = (from, to, seen = new Set()) => {
+      for (const x of after.get(from) || []) {
+        if (x === to) return true;
+        if (!seen.has(x)) { seen.add(x); if (reaches(x, to, seen)) return true; }
+      }
+      return false;
+    };
+    for (const id of [...after.keys()].filter((x) => reaches(x, x))) after.set(id, new Set());
+    return after;
+  }
+
+  #names(d, ids) { return ids.map((id) => d.parts.find((p) => p.target === id)?.name || id).join(', '); }
+
+  /** A part's brief as it goes: with the handoff of each part it waited for, and the folders it may read. */
+  #briefOf(d, part) {
+    const from = (part.after || []).map((id) => d.parts.find((p) => p.target === id)).filter(Boolean);
+    if (!from.length) return { text: part.brief, reads: [] };
+    const agents = this.store.listAgents();
+    const pathOf = (p) => agents.find((a) => a.id === p.target)?.path;
+    const handoffs = from.map((p) => `📦 ${tr('exec.handoffFrom', { name: p.name })}\n${p.handoff || p.output || tr('exec.noHandoff', { path: pathOf(p) || p.name })}`);
+    return { text: `${handoffs.join('\n\n')}\n\n${part.brief}`, reads: from.map(pathOf).filter(Boolean) };
+  }
   #capacity() { return Math.max(1, Number(this.store.getPrefs?.().capacity) || 3); }
 
   /** The briefs a department has open now (its tasks and pipeline runs that did not end). */
@@ -205,7 +267,8 @@ export class DirectiveDesk extends EventEmitter {
   /** Sends a part to its project's agent. */
   #send(d, part) {
     let out;
-    try { out = this.registry.run({ target: part.target, entry: 'prompt', text: part.brief, title: `🏛 ${d.title}`, from: tr('exec.from') }); } catch (err) { out = { ok: false, error: err.message }; }
+    const { text, reads } = this.#briefOf(d, part);
+    try { out = this.registry.run({ target: part.target, entry: 'prompt', text, title: `🏛 ${d.title}`, from: tr('exec.from'), reads }); } catch (err) { out = { ok: false, error: err.message }; }
     if (out.ok && out.task) Object.assign(part, { kind: 'task', ref: out.task.id, status: ENDED.has(out.task.status) ? out.task.status : 'running', detail: out.task.detail || '' });
     else if (out.ok && out.run) Object.assign(part, { kind: 'run', ref: out.run.id, status: 'running', detail: out.run.detail || '' });
     else Object.assign(part, { status: 'failed', detail: out.error || tr('task.failedDefault') });
@@ -228,6 +291,26 @@ export class DirectiveDesk extends EventEmitter {
     return { ok: true, directive: this.#public(d) };
   }
 
+  /**
+   * The handoff an agent leaves for the artifacts that use its own (the MCP tool `handoff`): what they
+   * need to know (endpoints, types, events, how to try it). It goes to the most recent part of a running
+   * directive that works in that folder. Returns { ok, directive, part, for: [names] } or { ok: false, error }.
+   */
+  handoff({ cwd, text } = {}) {
+    text = String(text ?? '').trim();
+    if (!text) return { ok: false, error: tr('err.handoffEmpty') };
+    const agents = this.store.listAgents();
+    for (const d of [...this.items.values()].reverse()) {
+      if (d.status !== 'running') continue;
+      const part = d.parts.find((p) => { const a = agents.find((x) => x.id === p.target); return a && cwd && insideDir(cwd, a.path) && !['failed', 'cancelled'].includes(p.status); });
+      if (!part) continue;
+      part.handoff = text.slice(0, 3000);
+      this.#update(d);
+      return { ok: true, directive: d.id, part: part.name, for: d.parts.filter((p) => p.after?.includes(part.target)).map((p) => p.name) };
+    }
+    return { ok: false, status: 404, error: tr('err.noHandoff') };
+  }
+
   get(id) { const d = this.items.get(String(id)); return d ? this.#public(d) : null; }
   list(limit = 12) { return [...this.items.values()].slice(-limit).reverse().map((d) => this.#public(d)); }
 
@@ -237,20 +320,36 @@ export class DirectiveDesk extends EventEmitter {
     for (const d of this.items.values()) {
       if (d.status !== 'running') continue;
       let moved = false;
+      // first how each part that went is doing; then the ones waiting (again, while something moves:
+      // a part that did not go leaves the ones that use it without going too)
       for (const p of d.parts) {
-        if (p.status === 'waiting') {
-          if (this.#busy(p.office) >= this.#capacity()) continue;
-          this.#sending = true;
-          try { this.#send(d, p); } finally { this.#sending = false; }
-          moved = true;
-          continue;
-        }
-        if (ENDED.has(p.status) || !p.ref) continue;
+        if (p.status === 'waiting' || ENDED.has(p.status) || !p.ref) continue;
         const x = p.kind === 'task' ? this.hub?.tasks?.get(p.ref) : this.pipelines?.runs?.get(p.ref);
         if (!x) continue;
         const status = ENDED.has(x.status) ? x.status : 'running';
         const detail = clip(x.detail || '', 200);
+        // what it answered (a session launched in the background): the handoff when it left none
+        if (status === 'done' && !p.output && Array.isArray(x.output) && x.output.length) p.output = x.output.slice(-15).join('\n').slice(-2000);
         if (status !== p.status || detail !== p.detail) { p.status = status; p.detail = detail; moved = true; }
+      }
+      for (let again = true; again;) {
+        again = false;
+        for (const p of d.parts) {
+          if (p.status !== 'waiting') continue;
+          // first the parts it uses: done, it goes; one of them did not make it, it does not go
+          const deps = (p.after || []).map((id) => d.parts.find((x) => x.target === id)).filter(Boolean);
+          const broken = deps.find((x) => x.status === 'failed' || x.status === 'cancelled');
+          if (broken) { Object.assign(p, { status: 'cancelled', detail: tr('exec.depFailed', { name: broken.name }) }); moved = again = true; continue; }
+          if (deps.some((x) => x.status !== 'done')) continue;
+          if (this.#busy(p.office) >= this.#capacity()) {
+            const detail = tr('exec.waitTurn', { n: this.#busy(p.office) });
+            if (p.detail !== detail) { p.detail = detail; moved = true; }
+            continue;
+          }
+          this.#sending = true;
+          try { this.#send(d, p); } finally { this.#sending = false; }
+          moved = again = true;
+        }
       }
       if (moved) this.#update(d);
     }
@@ -284,7 +383,7 @@ export class DirectiveDesk extends EventEmitter {
     const done = d.parts.filter((p) => p.status === 'done').length;
     return {
       id: d.id, title: d.title, text: d.text, status: d.status, source: d.source, createdAt: d.createdAt, updatedAt: d.updatedAt, done, total: d.parts.length,
-      parts: d.parts.map(({ target, name, harness, office, kind, ref, status, detail, components = [], fresh = [] }) => ({ target, name, harness, office, kind, ref, status, detail, components, fresh })),
+      parts: d.parts.map(({ target, name, harness, office, kind, ref, status, detail, components = [], fresh = [], after = [], handoff = '' }) => ({ target, name, harness, office, kind, ref, status, detail, components, fresh, after: after.map((id) => d.parts.find((p) => p.target === id)?.name || id), handoff: !!handoff })),
     };
   }
 }

@@ -3,7 +3,7 @@
 import { createSim, TEAM, applyAppearance } from '../public/sim.js';
 import { Screen, detectColorMode } from './screen.js';
 import { computeLayout, drawFrame, agentAtCell, boardAtCell, officeAtCell, rackAtCell } from './view.js';
-import { briefOptions, briefFields, briefCycle, briefProblem, briefMessage, defaultTarget } from '../public/brief.js';
+import { briefOptions, briefFields, briefCycle, briefProblem, briefMessage, defaultTarget, briefTargetList } from '../public/brief.js';
 import { createSettings } from './settings.js';
 import { t, setLanguage } from '../public/i18n.js';
 
@@ -29,6 +29,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       tasks: { tasks: [], agents: [], launchers: [], defaultCwd: '' },
       pipelines: [],
       targets: [], // registered agents (⚙ › Agents) and open sessions, with what their harness brings
+      systems: [], // the systems (a product and its artifacts): also a brief's targets
       brief: null, // the whiteboard dialog while it is open
       settings: null, // ⚙ Settings while open
       panel: true, // the team's activity on the right (>_ or the a key hide it: the office in full screen)
@@ -67,6 +68,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       onTasks(snap) { model.tasks = snap; },
       onPipelines(runs) { model.pipelines = runs || []; },
       onTargets(targets) { model.targets = targets || []; },
+      onSystems(list) { model.systems = list || []; },
       onAppearance(a) { applyAppearance(a); },
       onWeather(w) { sim.setWeather(w); },
       onPrefs(p) { if (p?.lang) setLanguage(p.lang); model.prefs = p; },
@@ -109,7 +111,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
     // ---- "New brief" dialog (t, or click on the whiteboard) ----
     /** @param agentId opens the dialog with that agent chosen (from ⚙ › Agents) */
     function openBrief(agentId) {
-      const i = agentId ? model.targets.findIndex((t) => t.id === agentId) : -1;
+      const i = agentId ? briefTargetList(model.targets, model.systems).findIndex((t) => t.id === agentId) : -1;
       model.brief = { field: 'task', sel: { target: i >= 0 ? i : defaultTarget(model.targets, sessions.values()), entry: 0, session: -1 }, text: '', error: '' };
     }
 
@@ -167,7 +169,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
 
     function briefKey(k) {
       const b = model.brief;
-      const opts = briefOptions({ targets: model.targets, models: model.prefs?.models }, b.sel);
+      const opts = briefOptions({ targets: briefTargetList(model.targets, model.systems), models: model.prefs?.models }, b.sel);
       const fields = briefFields(opts);
       const i = Math.max(0, fields.indexOf(b.field));
       if (!fields.includes(b.field)) b.field = 'task';
@@ -175,7 +177,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       if (k === '\t' || k === 'down') { b.field = fields[(i + 1) % fields.length]; return; }
       if (k === 'shift-tab' || k === 'up') { b.field = fields[(i - 1 + fields.length) % fields.length]; return; }
       if (k === 'left' || k === 'right') {
-        if (b.field !== 'task') b.sel = briefCycle(b.sel, b.field, k === 'right' ? 1 : -1, { targets: model.targets, opts });
+        if (b.field !== 'task') b.sel = briefCycle(b.sel, b.field, k === 'right' ? 1 : -1, { targets: briefTargetList(model.targets, model.systems), opts });
         b.error = '';
         return;
       }

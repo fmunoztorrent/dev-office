@@ -29,6 +29,7 @@ const INSTRUCTIONS = `Dev Team Office is a live pixel-art office that shows what
 To add yourself and this project to the office in one step, call join_office (or the user runs the \`join\` prompt): it starts the office if needed, registers the project and returns which character plays each subagent.
 Use these tools to: register the current project (register_project) so the office can send it work; see what a project's harness brings (detect_project); tell the office which role and phase you are in while you work (report_activity: task → phase … → done); send a prompt to another registered agent (send_task); and open herdr panes for side activities (open_pane).
 The company has two shared floors. The archive keeps what the company knows: before starting a task, search it (search_knowledge, then get_knowledge for the whole entry) for decisions, docs, skills and connectors that apply; when you settle something worth keeping (a decision, a convention, how something works), save it (save_knowledge). The executive floor gives orders that cover several offices or projects at once (send_directive, list_directives); when a brief starts with 🏛 it is your part of one: do only this project's part.
+A company groups its repos in systems (a product: "Payments" = its core, its bff and its web; list_systems): a brief whose header says other artifacts use yours goes before theirs, so when you finish, call handoff with what they need to know (what changed in what you expose). A brief that carries "What X left" is the handoff of an artifact you use: build on it.
 The user may have their own tools (small programs they defined in the office): they show up as my_<name> tools; list_my_tools lists them and run_my_tool runs one by name. Use them when they fit what you are doing: they are what the user wants used for that.
 If the office is not running, office_start opens it; office_status gives its URL. Reporting is best effort: never stop or retry your real work because the office is offline.`;
 
@@ -285,6 +286,7 @@ const TOOLS = [
         title: { type: 'string', description: 'Short title (defaults to the first line)' },
         offices: { type: 'array', items: { type: 'string' }, description: 'Offices (ids or names) whose registered projects all get it, or ["all"]' },
         projects: { type: 'array', items: { type: 'string' }, description: 'Registered project ids or full paths' },
+        systems: { type: 'array', items: { type: 'string' }, description: 'Systems (ids or names, see list_systems): all their artifacts get it, in the order of what each one uses (core → bff → web), each with the handoff of the ones it uses' },
         answers: {
           type: 'array',
           description: 'What the user said about each thing the order names that is not on the map (one per question)',
@@ -317,11 +319,26 @@ const TOOLS = [
         text: { type: 'string', description: 'The order' },
         offices: { type: 'array', items: { type: 'string' } },
         projects: { type: 'array', items: { type: 'string' } },
+        systems: { type: 'array', items: { type: 'string' } },
       },
       required: ['text'],
       additionalProperties: false,
     },
     annotations: { readOnlyHint: true, openWorldHint: false },
+  },
+  {
+    name: 'list_systems',
+    title: 'List the systems',
+    description: 'The systems (a product or business project: "Payments") and their artifacts: which repo (or component of one) each is, its kind (frontend, bff, backend…), what it uses, the order a change goes in (core → bff → web) and the team that answers for it. A repo has one owner department but can be an artifact of other departments\' systems (shared).',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  },
+  {
+    name: 'handoff',
+    title: 'Leave the handoff for the artifacts that use yours',
+    description: 'When your brief is part of a system (its header says "used by …"), call this as you finish: what the artifacts that use yours need to know to do their part (what changed in what you expose: endpoints, request/response shapes, types, events, flags, how to try it). Their briefs carry it; they go after yours.',
+    inputSchema: { type: 'object', properties: { text: { type: 'string', description: 'The handoff, short and concrete' } }, required: ['text'], additionalProperties: false },
+    annotations: { readOnlyHint: false, openWorldHint: false },
   },
   {
     name: 'list_directives',
@@ -705,7 +722,7 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
       return { text: `Opened pane ${out.pane}${reported ? ` (office ${reported.office}, ${reported.role})` : ' (the office is offline: it will not show in the game)'}`, data: { pane: out.pane, office: reported?.office || null, role: reported?.role || null } };
     },
 
-    async send_directive({ text, title, offices = [], projects = [], answers = [] } = {}) {
+    async send_directive({ text, title, offices = [], projects = [], systems = [], answers = [] } = {}) {
       need(String(text || '').trim(), 'text is required');
       need(await running(), 'the office is not running: start it with office_start');
       // a department that does not exist yet: say how to create it (operations cannot split an order to nobody)
@@ -721,25 +738,44 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
       });
       const project = (ref) => (ref && /[/~]/.test(ref) ? all.find((a) => realDir(a.path) === where(ref))?.id || ref : ref);
       const said = answers.map((x) => ({ ...x, project: project(x.project) }));
-      const out = await api('/v1/directives', { text, ...(title ? { title } : {}), offices, targets, answers: said, from: `MCP · ${client.name || 'agent'}` });
+      const out = await api('/v1/directives', { text, ...(title ? { title } : {}), offices, targets, systems, answers: said, from: `MCP · ${client.name || 'agent'}` });
       // it names things that are not on the map: the user has to say what they are
       if (out?.needsAnswers) {
         const asks = out.map.unknown.map((u) => `  - "${u.phrase}": ${u.question}`).join('\n');
         throw new ToolError(`Not sent yet. ${out.text}\n\nAsk the user about each of these, then call send_directive again with answers [{ name, action: exists|create|department|ignore, project?, path?, department? }]:\n${asks}`);
       }
       const d = okOr(out).directive;
-      const line = (p) => `  ${p.name} (${p.office}): ${p.status}${p.detail ? ` — ${p.detail}` : ''}${p.components?.length ? ` · components: ${p.components.join(', ')}` : ''}${p.fresh?.length ? ` · new: ${p.fresh.join(', ')}` : ''}`;
+      const line = (p) => `  ${p.name} (${p.office}): ${p.status}${p.detail ? ` — ${p.detail}` : ''}${p.after?.length ? ` · after: ${p.after.join(', ')}` : ''}${p.components?.length ? ` · components: ${p.components.join(', ')}` : ''}${p.fresh?.length ? ` · new: ${p.fresh.join(', ')}` : ''}`;
       const created = out.created?.length ? `\nNew department(s): ${out.created.map((o) => o.name).join(', ')} (give them projects with register_project)` : '';
       return { text: `🏛 Directive ${d.id} "${d.title}" sent to ${d.total} project(s):\n${d.parts.map(line).join('\n')}${created}`, data: d };
     },
 
-    async map_impact({ text, offices = [], projects = [] } = {}) {
+    async map_impact({ text, offices = [], projects = [], systems = [] } = {}) {
       need(String(text || '').trim(), 'text is required');
       need(await running(), 'the office is not running: start it with office_start');
       const all = await listAgents();
       const targets = projects.map((ref) => (/[/~]/.test(ref) ? need(all.find((a) => realDir(a.path) === where(ref)), `no registered project at ${where(ref)}`).id : ref));
-      const out = okOr(await api('/v1/directives/plan', { text, offices, targets }));
+      const out = okOr(await api('/v1/directives/plan', { text, offices, targets, systems }));
       return { text: out.text, data: out.map };
+    },
+
+    async list_systems() {
+      let systems;
+      if (await running()) systems = okOr(await api('/v1/systems')).systems || [];
+      else {
+        const { orderParts } = await import('./systems.js');
+        systems = local().listSystems().map((s) => { const o = orderParts(s.parts); return { ...s, order: o.ok ? o.order : s.parts.map((p) => p.name) }; });
+      }
+      const line = (s) => `${s.name}${s.officeName ? ` (team: ${s.officeName})` : ''}: ${s.order.join(' → ')}\n${s.parts.map((p) => `  ${p.name} [${p.kind}] ${p.repo || p.project}${p.path ? `/${p.path}` : ''}${p.uses?.length ? ` · uses ${p.uses.join(', ')}` : ''}${p.shared ? ' · shared' : ''}`).join('\n')}`;
+      return { text: systems.length ? systems.map(line).join('\n') : 'No systems yet (⚙ › Departments › Systems).', data: { systems } };
+    },
+
+    async handoff({ text } = {}) {
+      need(String(text || '').trim(), 'text is required');
+      need(await running(), 'the office is not running');
+      const out = await api('/v1/handoff', { cwd: where(), text });
+      if (!out?.ok) throw new ToolError(out?.status === 404 || /no hay|there is no/.test(out?.error || '') ? 'There is no system brief running in this folder: nobody is waiting for a handoff from it.' : out?.error || 'no answer from the office');
+      return { text: `🤝 Handoff left for ${out.for?.length ? out.for.join(', ') : 'the artifacts that use yours'} (directive ${out.directive}).`, data: out };
     },
 
     async list_directives() {

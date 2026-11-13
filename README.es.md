@@ -229,7 +229,7 @@ Una instancia de la oficina es una **empresa**: le puedes ir agregando **departa
 - **sus indicaciones**: cómo se trabaja ahí (convenciones, lo que nunca se hace, a quién preguntar). Van arriba de cada encargo, pipeline, directiva y pregunta a sus proyectos, como las de un proyecto de ChatGPT o Claude;
 - **su autonomía**: guiada (la analista revisa cada encargo y el agente te pregunta cuando tiene dudas), equilibrada (revisa y después el agente trabaja hasta terminar) o autónoma (sin revisión); si no, la de la empresa (⚙ › General › Autonomía);
 - **su personal**: sus personajes (nombres, cargos, personalidades, estilos y colores propios);
-- **su zona horaria** (si no, la de la empresa; si no, la del sistema), y con ella su hora, su almuerzo, su día y su noche, su estación y **su clima**;
+- **su zona horaria** (opcional: si no, la de la empresa; si no, la del sistema operativo), y con ella su hora, su almuerzo, su día y su noche, su estación y **su clima**. Un departamento es un equipo; el juego lo dibuja como una oficina, pero no necesita un lugar propio;
 - **su actividad**: cada evento de un agente va a su oficina — la que dice el propio agente (la oficina se la pasa al abrirlo), la de su sesión, la de su pane de herdr o la del agente registrado cuya ruta contiene su carpeta; si no, a la principal.
 
 **La empresa tiene sus estándares** (los del CTO, arriba en ⚙ › Departamentos): lo que siguen todos los proyectos de todos los departamentos (convenciones, seguridad, cómo documentar). Van primero, antes de las indicaciones del departamento y del proyecto.
@@ -249,6 +249,18 @@ Agrega paginación a la lista de pedidos
 ```
 
 Las interfaces muestran **una oficina a la vez**: la que eliges en el selector de **arriba a la izquierda** (la web y la terminal; también con `o`). La elección queda guardada. La bitácora de la terminal muestra la actividad de todas.
+
+### Sistemas: un producto y sus artefactos
+
+Una empresa no trabaja en repos, trabaja en productos: «Pagos» es su **core**, su **BFF** y su **front en Next.js**, quizás tres repos. En **⚙ › Departamentos › Sistemas** cada producto es un **sistema**:
+
+- **sus artefactos:** cada uno es un repo registrado, o un componente de uno (el `apps/web` de un monorepo), con **su tipo** (frontend, app móvil, BFF, backend/core, worker, librería, datos, infraestructura: se detecta de su carpeta, o el que digas) y **lo que usa** (el BFF usa el core; el front, el BFF). **↻ Proponer** llena las dos cosas;
+- **su equipo:** el departamento que responde por él, o **un equipo propio** (un departamento nuevo, y sus repos se van a él): si cada proyecto tiene su squad, cada uno tiene su piso y su gente. Un repo tiene un departamento dueño (su gente hace su trabajo), pero puede ser artefacto de sistemas de otros departamentos: un core **compartido**;
+- **sus indicaciones**, arriba de cada encargo de sus artefactos, bajo una línea que dice qué es el artefacto: `🧩 Artefacto bff (BFF) del sistema Pagos · usa core · lo usan web`.
+
+**Un encargo a un sistema** (🧩 en la lista de la pizarra, ✉ Encargo en su tarjeta, `POST /v1/systems/<id>/brief`, o eligiéndolo en la dirección) **va en orden**: primero lo que otros usan (core → bff → web). Cada artefacto parte cuando terminan los que usa, lleva **su traspaso** (lo que dejaron con la herramienta MCP `handoff`: qué cambió en lo que exponen; o el final de su respuesta) y puede leer sus carpetas sin cambiarlas. Si uno de ellos falla, los que lo usan no parten.
+
+**El impacto de una directiva sigue las dependencias:** cambiar el core trae al BFF y al front que lo usan («usa core, que cambia»), y nombrar el sistema trae a todos sus artefactos. Y **el tipo decide quién hace el código que ninguna regla reclama:** el `src/lib/money.ts` de un repo frontend es del frontend; el de uno de infraestructura, de DevOps.
 
 ## Dos pisos más: la dirección y el archivo
 

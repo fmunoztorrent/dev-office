@@ -22,6 +22,7 @@ import path from 'node:path';
 import { insideDir, realDir } from './paths.js';
 import { t } from '../public/i18n.js';
 import { AUTONOMY_LEVELS } from './store.js';
+import { artifactLine } from './systems.js';
 
 export const GUIDE_MARK = '📋 ';
 export const GUIDE_LINE = '│';
@@ -40,11 +41,14 @@ export function guideFor(store, dir, office = null) {
   const own = folder ? store.getProjectInstructions(folder) : '';
   const dept = store.getOffice?.(registered?.office || office || '') || null;
   const standards = store.getPrefs?.().standards || '';
+  // the systems it is an artifact of (server/systems.js): their instructions, and what the artifact is in each
+  const systems = folder ? (store.systemsOf?.(dir || folder) || []).map(({ system, parts }) => ({ id: system.id, name: system.name, text: system.instructions || '', lines: parts.map((p) => artifactLine(system, p)) })) : [];
   return {
     company: standards ? { text: standards } : null,
     office: dept?.id || registered?.office || office || null,
     project: own ? { name: registered?.name || path.basename(folder), path: folder, text: own } : null,
     department: dept?.instructions ? { id: dept.id, name: dept.name || t('offices.main'), text: dept.instructions } : null,
+    systems,
   };
 }
 
@@ -54,6 +58,7 @@ export function guideText(g) {
   return [
     ...(g?.company ? block(t('guide.company'), g.company.text) : []),
     ...(g?.department ? block(t('guide.department', { name: g.department.name }), g.department.text) : []),
+    ...(g?.systems || []).flatMap((s) => [...s.lines, ...(s.text ? block(t('guide.system', { name: s.name }), s.text) : [])]),
     ...(g?.project ? block(t('guide.project', { name: g.project.name }), g.project.text) : []),
   ].join('\n');
 }
@@ -73,4 +78,4 @@ export function autonomyOf(store, officeId) {
 }
 
 /** Takes the office's header (the 📁 scope, the 📋 instructions, the 📚 archive) out of a brief: what is left is the task. */
-export const unguided = (text) => (/^(📁 |📋 |📚 )/.test(text) ? text.replace(/^(?:(?:📁 |📋 |📚 |│)[^\n]*\n)+\n*/, '') : text);
+export const unguided = (text) => (/^(📁 |📋 |📚 |🧩 )/.test(text) ? text.replace(/^(?:(?:📁 |📋 |📚 |🧩 |│)[^\n]*\n)+\n*/, '') : text);

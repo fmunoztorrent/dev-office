@@ -413,6 +413,8 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       companyBox,
       el('h3', {}, O('departments')),
       el('div', { class: 's-agents' }, cards),
+      // the systems: a product or business project and its artifacts (repos, or components of one)
+      systemsBox(projects),
       el('h3', {}, editing ? O('editTitle', { name: editing.name }) : O('newTitle')),
       el('div', { class: 's-form', id: 's-office-form' },
         el('label', { class: 'b-field' }, el('span', {}, O('name')), el('input', { type: 'text', value: f.name, maxlength: 40, oninput: (e) => { f.name = e.target.value; } })),
@@ -438,11 +440,14 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
 
   /** Every department's projects (the page only has the watched office's). */
   async function loadProjects() {
-    const [r, map] = await Promise.all([api('GET', '/v1/agents'), api('GET', '/v1/map')]);
+    const [r, map, sys] = await Promise.all([api('GET', '/v1/agents'), api('GET', '/v1/map'), api('GET', '/v1/systems')]);
     if (!r.ok) return;
     st.projects = (r.agents || []).filter((a) => a.registered);
     // each project's components (detected from its folder, and the ones declared): the map the directives use
     st.components = map.ok ? Object.fromEntries(map.departments.flatMap((o) => o.projects).map((p) => [p.id, p.components])) : {};
+    st.kinds = map.ok ? Object.fromEntries(map.departments.flatMap((o) => o.projects).map((p) => [p.id, p.kind])) : {};
+    st.systems = sys.ok ? sys.systems : [];
+    st.kindList = sys.ok ? sys.kinds : ['frontend', 'mobile', 'bff', 'backend', 'worker', 'library', 'data', 'infra', 'other'];
     if (st.tab === 'offices' && $('settings').open) renderOffices();
   }
 
@@ -466,6 +471,98 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         `🧩 ${c.name}`,
         c.declared ? el('button', { type: 'button', class: 's-x', 'aria-label': O('compRemove', { name: c.name }), onclick: async () => { const r = await api('DELETE', `/v1/components/${encodeURIComponent(c.id)}`); if (!r.ok) return msg(r.error); loadProjects(); } }, '✕') : null)) : el('span', { class: 'hint' }, O('compNone')),
       el('span', { class: 's-comp-add' }, name, where, el('button', { type: 'button', class: 's-mini', onclick: add }, O('compAdd'))));
+  }
+
+  // ------------------------------------------------------------ Systems (server/systems.js)
+
+  const S = (k, v) => t(`settings.systems.${k}`, v);
+  const KIND = (k) => t(`system.kinds.${k}`);
+  const emptySystem = () => ({ id: null, name: '', office: here(), team: '', move: true, instructions: '', parts: [] });
+
+  /** The systems: a card each (its team, the order a change goes in and its artifacts), and the form. */
+  function systemsBox(projects) {
+    const list = st.systems || [];
+    const cards = list.map((s) => el('div', { class: 's-agent s-system' },
+      el('div', { class: 's-agent-head' },
+        el('b', {}, `🧩 ${s.name}`), el('span', { class: 's-tag kind' }, `👥 ${s.officeName || s.office}`),
+        s.instructions ? el('span', { class: 's-tag kind', title: s.instructions }, S('hasInstructions')) : null),
+      el('div', { class: 's-sys-order' }, s.order.join('  →  ')),
+      el('ul', { class: 's-sys-parts' }, s.parts.map((p) => el('li', {},
+        el('b', {}, p.name), ` · ${KIND(p.kind)} · `, el('span', { class: 'hint' }, `${p.repo}${p.path ? `/${p.path}` : ''}`),
+        p.uses?.length ? ` · ${t('system.uses', { list: p.uses.join(', ') })}` : '',
+        p.shared ? el('span', { class: 's-tag', title: S('sharedHint') }, S('shared')) : null,
+        p.target ? null : el('span', { class: 's-tag danger' }, S('noRepo'))))),
+      el('div', { class: 's-row' },
+        el('button', { type: 'button', class: 's-mini', onclick: () => { onPrompt?.(`system:${s.id}`); } }, `✉ ${S('brief')}`),
+        el('button', { type: 'button', class: 's-mini', onclick: () => { st.system = { id: s.id, name: s.name, office: s.office, team: '', move: true, instructions: s.instructions || '', parts: s.parts.map((p) => ({ name: p.name, project: p.target || p.project, component: p.component || '', path: p.path || '', kind: p.kind, uses: [...(p.uses || [])] })) }; renderOffices(); $('s-system-form')?.scrollIntoView({ block: 'nearest' }); } }, S('edit')),
+        el('button', { type: 'button', class: 's-mini danger', onclick: async () => {
+          if (!confirm(S('confirmDelete', { name: s.name }))) return;
+          const r = await api('DELETE', `/v1/systems/${encodeURIComponent(s.id)}`);
+          if (!r.ok) return msg(r.error);
+          msg(S('deleted'), true);
+          loadProjects();
+        } }, S('delete')))));
+    return [
+      el('h3', {}, S('title')),
+      el('p', { class: 'hint' }, S('hint')),
+      list.length ? el('div', { class: 's-agents' }, cards) : el('p', { class: 'hint' }, S('none')),
+      systemForm(projects),
+    ];
+  }
+
+  function systemForm(projects) {
+    const f = st.system ||= emptySystem();
+    const kinds = st.kindList || ['other'];
+    const rerender = () => { renderOffices(); $('s-system-form')?.scrollIntoView({ block: 'nearest' }); };
+    const compsOf = (id) => (st.components?.[id] || []);
+    const partRow = (p, i) => {
+      const others = f.parts.filter((x, j) => j !== i && x.name);
+      return el('div', { class: 's-sys-part' },
+        el('input', { type: 'text', value: p.name, maxlength: 60, placeholder: S('partName'), 'aria-label': S('partName'), oninput: (e) => { const was = p.name; p.name = e.target.value; for (const x of f.parts) x.uses = x.uses.map((u) => (u === was ? p.name : u)); } }),
+        el('select', { 'aria-label': S('repo'), onchange: (e) => { p.project = e.target.value; p.component = ''; p.path = ''; const a = projects.find((x) => x.id === p.project); if (!p.name && a) p.name = a.name; p.kind = st.kinds?.[p.project] || p.kind; rerender(); } },
+          option('', S('pickRepo'), !p.project), projects.map((a) => option(a.id, `${a.name} · ${HARNESS_NAME[a.harness] || a.harness}`, a.id === p.project))),
+        compsOf(p.project).length ? el('select', { 'aria-label': S('component'), onchange: (e) => { const c = compsOf(p.project).find((x) => x.name === e.target.value); p.component = c?.name || ''; p.path = c?.path || ''; if (c?.kind && c.kind !== 'other') p.kind = c.kind; rerender(); } },
+          option('', S('wholeRepo'), !p.component), compsOf(p.project).map((c) => option(c.name, `🧩 ${c.name}`, c.name === p.component))) : null,
+        el('select', { 'aria-label': S('kind'), onchange: (e) => { p.kind = e.target.value; } }, kinds.map((k) => option(k, KIND(k), k === p.kind))),
+        others.length ? el('span', { class: 's-sys-uses' }, el('span', { class: 'hint' }, S('uses')),
+          others.map((x) => el('label', { class: 'b-check' }, el('input', { type: 'checkbox', checked: p.uses.includes(x.name) ? true : undefined, onchange: (e) => { p.uses = e.target.checked ? [...p.uses, x.name] : p.uses.filter((u) => u !== x.name); } }), x.name))) : null,
+        el('button', { type: 'button', class: 's-x', 'aria-label': S('removePart'), onclick: () => { f.parts.splice(i, 1); for (const x of f.parts) x.uses = x.uses.filter((u) => u !== p.name); rerender(); } }, '✕'));
+    };
+    return el('div', { class: 's-form', id: 's-system-form' },
+      el('h3', {}, f.id ? S('editTitle', { name: f.name }) : S('newTitle')),
+      el('label', { class: 'b-field' }, el('span', {}, S('name')), el('input', { type: 'text', value: f.name, maxlength: 60, placeholder: S('namePh'), oninput: (e) => { f.name = e.target.value; } })),
+      el('label', { class: 'b-field' }, el('span', {}, S('team')),
+        el('select', { onchange: (e) => { if (e.target.value === '@new') { f.team = 'new'; } else { f.team = ''; f.office = e.target.value; } rerender(); } },
+          getOffices().map((o) => option(o.id, o.name, !f.team && o.id === f.office)), option('@new', S('ownTeam'), f.team === 'new'))),
+      f.team === 'new' ? el('label', { class: 'b-check' }, el('input', { type: 'checkbox', checked: f.move ? true : undefined, onchange: (e) => { f.move = e.target.checked; } }), S('moveRepos')) : null,
+      el('p', { class: 'hint' }, S('teamHint')),
+      el('label', { class: 'note' }, el('span', {}, S('instructions')),
+        el('textarea', { rows: 3, maxlength: 4000, placeholder: S('instructionsPh'), oninput: (e) => { f.instructions = e.target.value; } }, f.instructions || '')),
+      el('div', { class: 's-dept-k' }, `${S('parts')} (${f.parts.length})`),
+      el('div', { class: 's-sys-form-parts' }, f.parts.map(partRow)),
+      el('div', { class: 's-row' },
+        el('button', { type: 'button', class: 's-mini', onclick: () => { f.parts.push({ name: '', project: '', component: '', path: '', kind: 'other', uses: [] }); rerender(); } }, S('addPart')),
+        f.parts.length > 1 ? el('button', { type: 'button', class: 's-mini', title: S('suggestHint'), onclick: async () => {
+          const r = await api('POST', '/v1/systems/suggest', { parts: f.parts.filter((p) => p.project), redo: true });
+          if (!r.ok) return msg(r.error);
+          f.parts = r.parts.map((p) => ({ ...p, uses: p.uses || [] }));
+          msg(r.order ? S('order', { order: r.order.join(' → ') }) : r.error, !!r.order);
+          rerender();
+        } }, S('suggest')) : null),
+      el('div', { class: 's-row' },
+        el('button', { type: 'button', class: 'btn', onclick: saveSystem }, f.id ? S('save') : S('create')),
+        f.id || f.parts.length || f.name ? el('button', { type: 'button', class: 'btn ghost', onclick: () => { st.system = emptySystem(); rerender(); } }, S('cancel')) : null));
+  }
+
+  async function saveSystem() {
+    const f = st.system;
+    const body = { name: f.name, office: f.office, instructions: f.instructions, parts: f.parts.filter((p) => p.project).map(({ name, project, component, path: sub, kind, uses }) => ({ name: name || project, project, component, path: sub, kind, uses })), ...(f.team === 'new' ? { team: 'new', move: f.move } : {}) };
+    const r = f.id ? await api('PUT', `/v1/systems/${encodeURIComponent(f.id)}`, body) : await api('POST', '/v1/systems', body);
+    if (!r.ok) return msg(r.error);
+    msg(r.office ? S('createdTeam', { name: r.system.name, team: r.office.name }) : S('saved', { name: r.system.name }), true);
+    st.system = emptySystem();
+    if (r.office) { await load(); onSaved?.(); }
+    loadProjects();
   }
 
   async function saveOffice() {

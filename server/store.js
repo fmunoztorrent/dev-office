@@ -23,6 +23,7 @@ import { validZone } from '../public/clock.js';
 import { DEFAULT_MODELS, normalizeModels } from '../public/models.js';
 import { SEXES, PERSONALITIES, STYLES } from '../public/sim.js';
 import { realDir, insideDir } from './paths.js';
+import { ARTIFACT_KINDS, PARTS_MAX, orderParts } from './systems.js';
 import { chunkText } from './chunks.js';
 
 const HARNESS_IDS = ['claude-code', 'opencode', 'pi', 'codex'];
@@ -243,6 +244,16 @@ const MIGRATIONS = [
      updated_at INTEGER NOT NULL,
      UNIQUE (kind, name)
    );`,
+  // 9 → 10: the systems (a product or business project) and their artifacts (server/systems.js)
+  `CREATE TABLE systems (
+     id           TEXT PRIMARY KEY,
+     name         TEXT NOT NULL UNIQUE COLLATE NOCASE,
+     office_id    TEXT NOT NULL DEFAULT 'main',   -- the team that answers for it
+     instructions TEXT NOT NULL DEFAULT '',
+     parts        TEXT NOT NULL DEFAULT '[]',     -- JSON: [{ name, project (a registered folder), component, kind, uses: [names] }]
+     created_at   INTEGER NOT NULL,
+     updated_at   INTEGER NOT NULL
+   );`,
 ];
 
 // what is yours (⚙ › Mine): how many, how long, and how your tools run
@@ -371,6 +382,7 @@ export class Store {
     this.db.exec('BEGIN');
     try {
       this.db.prepare('UPDATE agents SET office_id = ? WHERE office_id = ?').run(MAIN_OFFICE, String(id));
+      this.db.prepare('UPDATE systems SET office_id = ? WHERE office_id = ?').run(MAIN_OFFICE, String(id));
       this.db.prepare('DELETE FROM settings WHERE key = ?').run(`appearance:${id}`);
       this.db.prepare('DELETE FROM offices WHERE id = ?').run(String(id));
       this.db.exec('COMMIT');
@@ -545,6 +557,88 @@ export class Store {
     if (!e) return { ok: false, status: 404, error: t('err.unknownMine') };
     this.db.prepare('DELETE FROM mine WHERE id = ?').run(e.id);
     return { ok: true, entry: e };
+  }
+
+  // ---------------------------------------------------------------- the systems (server/systems.js)
+
+  #system(r) {
+    return r ? { id: r.id, name: r.name, office: r.office_id, instructions: r.instructions || '', parts: json(r.parts, []) || [], createdAt: r.created_at, updatedAt: r.updated_at } : null;
+  }
+  /** The systems (of one department, with `office`). */
+  listSystems(office = null) {
+    const rows = office ? this.db.prepare('SELECT * FROM systems WHERE office_id = ? ORDER BY name').all(String(office)) : this.db.prepare('SELECT * FROM systems ORDER BY name').all();
+    return rows.map((r) => this.#system(r));
+  }
+  getSystem(id) { return this.#system(this.db.prepare('SELECT * FROM systems WHERE id = ?').get(String(id))); }
+  /** A system by its id or its name. */
+  findSystem(ref) { return this.getSystem(ref) || this.#system(this.db.prepare('SELECT * FROM systems WHERE name = ? COLLATE NOCASE').get(String(ref ?? '').trim())); }
+
+  /**
+   * Saves a system: { id?, name, office, instructions, parts: [{ name, project (id or folder of a registered
+   * project), component?, kind, uses? }] }. Without `id`, one with that name is updated. Returns { ok, system, created }.
+   */
+  saveSystem(input = {}) {
+    return this.#write(() => {
+      const name = String(input.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
+      if (!name) fail(t('err.systemName'));
+      const current = input.id ? this.getSystem(input.id) : this.findSystem(name);
+      if (input.id && !current) fail(t('err.unknownSystem', { system: input.id }));
+      const clash = this.findSystem(name);
+      if (clash && clash.id !== current?.id) fail(t('err.systemExists', { name }));
+      const office = input.office ?? current?.office ?? MAIN_OFFICE;
+      if (!this.getOffice(office)) fail(t('err.unknownOffice', { office }));
+      const instructions = String(input.instructions ?? current?.instructions ?? '').trim().slice(0, INSTRUCTIONS_MAX);
+      const raw = Array.isArray(input.parts) ? input.parts : current?.parts || [];
+      if (raw.length > PARTS_MAX) fail(t('err.systemParts', { n: PARTS_MAX }));
+      const agents = this.listAgents();
+      const parts = raw.map((p) => {
+        const pname = String(p?.name ?? '').trim().slice(0, 60);
+        if (!pname) fail(t('err.systemPartName'));
+        const a = agents.find((x) => x.id === p.project || x.path === p.project || realDir(x.path) === realDir(String(p.project || '')));
+        if (!a) fail(t('err.unknownProject', { project: p?.project || '?' }));
+        const kind = p.kind || 'other';
+        if (!ARTIFACT_KINDS.includes(kind)) fail(t('err.systemKind', { kinds: ARTIFACT_KINDS.join(', ') }));
+        const uses = [...new Set((Array.isArray(p.uses) ? p.uses : []).map((u) => String(u).trim()).filter(Boolean))];
+        // a monorepo's component: its folder inside the repo
+        const sub = String(p.path ?? '').trim().replace(/^\.?\/+|\/+$/g, '').slice(0, 200);
+        if (sub.split('/').includes('..') || path.isAbsolute(sub)) fail(t('err.componentPath'));
+        return { name: pname, project: realDir(a.path), component: String(p.component ?? '').trim().slice(0, 60), path: sub, kind, uses };
+      });
+      if (new Set(parts.map((p) => p.name.toLowerCase())).size !== parts.length) fail(t('err.systemPartTwice'));
+      const order = orderParts(parts);
+      if (!order.ok) fail(order.error);
+      const now = Date.now();
+      if (current) {
+        this.db.prepare('UPDATE systems SET name = ?, office_id = ?, instructions = ?, parts = ?, updated_at = ? WHERE id = ?').run(name, office, instructions, JSON.stringify(parts), now, current.id);
+        return { ok: true, system: this.getSystem(current.id), created: false };
+      }
+      const id = `s${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+      this.db.prepare('INSERT INTO systems (id, name, office_id, instructions, parts, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, name, office, instructions, JSON.stringify(parts), now, now);
+      return { ok: true, system: this.getSystem(id), created: true };
+    });
+  }
+
+  deleteSystem(id) {
+    const r = this.db.prepare('DELETE FROM systems WHERE id = ?').run(String(id));
+    return r.changes ? { ok: true } : { ok: false, status: 404, error: t('err.unknownSystem', { system: id }) };
+  }
+
+  /**
+   * The systems a folder is an artifact of: [{ system, part, parts }]. `part`: the deepest artifact folder
+   * that contains it (a monorepo's component, inside its repo); `parts`: that one, or, at the root of a
+   * repo with several artifacts, all of them.
+   */
+  systemsOf(dir) {
+    if (!dir) return [];
+    const out = [];
+    const folder = (p) => (p.path ? path.join(p.project, p.path) : p.project);
+    const root = realDir(dir);
+    for (const s of this.listSystems()) {
+      const mine = s.parts.filter((p) => insideDir(dir, folder(p))).sort((a, b) => folder(b).length - folder(a).length);
+      const parts = mine.length ? [mine[0]] : s.parts.filter((p) => p.project === root);
+      if (parts.length) out.push({ system: s, part: parts[0], parts });
+    }
+    return out;
   }
 
   /** Every folder with instructions: [{ path, instructions }]. */

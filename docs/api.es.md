@@ -238,6 +238,25 @@ Cuando el contexto de un agente pasa `prefs.compact` (400k tokens por defecto), 
 
 Cada pedido deja un evento `autocompact` en la bitácora (`via`: `agent`, `pane`, `manual`, o `failed` cuando el agente no pudo y dice por qué). Se vuelve a pedir a los 10 minutos si el contexto sigue sobre el tope; una compactación (`compact`) lo reinicia. Hasta su próxima respuesta, la barra de contexto muestra la sesión como recién compactada (`context.compacted`).
 
+## Sistemas: un producto y sus artefactos
+
+Un sistema es un producto o proyecto de negocio («Pagos»): sus artefactos (un repo registrado, o un componente de uno), cada uno con su tipo y lo que usa, y el equipo (departamento) que responde por él.
+
+| Método | Ruta | Cuerpo |
+|---|---|---|
+| `GET` | `/v1/systems` | `{ systems: [{ id, name, office, officeName, instructions, order: [nombres], parts: [{ name, project, component, path, kind, uses, target, repo, owner, shared }] }], kinds }` (`order`: el orden en que va un cambio; `shared`: su repo es de otro departamento) |
+| `POST` | `/v1/systems/suggest` | `{ parts: [{ name, project, path?, kind?, uses? }], redo? }`: el tipo de cada uno detectado de su carpeta (si no tiene) y lo que usa cada uno (si no dice nada; `redo`: proponerlo de nuevo), con el `order` |
+| `POST` | `/v1/systems` | `{ name, office \| team: "new", instructions?, parts: [{ name, project (id o carpeta de un proyecto registrado), component?, path?, kind, uses? }], move? }`: lo crea (o actualiza el de ese nombre). `team: "new"` crea un departamento con su nombre y, salvo `move: false`, lleva ahí sus repos (los que no están en un sistema de otro departamento). `400` con un círculo, un repo o un tipo desconocido |
+| `PUT` · `DELETE` | `/v1/systems/<id>` | Lo cambia · lo borra (sus repos no se tocan) |
+| `POST` | `/v1/systems/<id>/brief` | `{ text, title?, from? }`: una directiva a sus artefactos, en orden (ver abajo) |
+| `POST` | `/v1/handoff` | `{ cwd, text }`: el traspaso de un artefacto para los que lo usan (la herramienta MCP `handoff`): va a la parte en curso de una directiva que trabaja en esa carpeta. `404` si no hay ninguna |
+
+- **Tipos:** `frontend`, `mobile`, `bff`, `backend`, `worker`, `library`, `data`, `infra`, `other`. Se detectan de la carpeta: Next, Vue, Svelte, Angular… un frontend; react-native o Expo, móvil; Express, Fastify, NestJS, Go, Java… un backend (un `bff` si su nombre lo dice); un consumidor de colas, un worker; Terraform o Helm, infra; dbt o Airflow, datos; un paquete sin servidor ni pantalla, una librería.
+- **Orden:** una directiva cuyos proyectos son artefactos de un sistema espera: cada parte va después de las que usa (`after`, con `status: "waiting"` y el motivo en `detail`), lleva su traspaso (`📦 Lo que dejó X (lo usas):`) y las carpetas que puede leer (`reads`: la línea 📁 dice que puede leerlas sin cambiar nada). Si una de ellas falla o se cancela, las que la usan se cancelan («no partió: X no terminó»). A una parte que otros usan se le pide dejar su traspaso (`🤝 Lo usan …, que trabajan después de ti`). Las partes traen `after: [nombres]` y `handoff: bool`.
+- **Impacto:** `POST /v1/directives/plan` y `POST /v1/directives` aceptan `systems: [id | nombre]` (todos sus artefactos); los `systems` del mapa dicen qué artefactos toca (`touched`) y a cuáles alcanza porque usan uno (`uses`). Un proyecto alcanzado así tiene `why: "uses"` y `via` (lo que usa que cambia); uno que entra porque se nombra su sistema, `why: "system"`.
+- **Encargos:** todo encargo a la carpeta de un artefacto lleva, bajo la línea 📁, `🧩 Artefacto <nombre> (<tipo>) del sistema <sistema> · usa … · lo usan …` y las indicaciones del sistema.
+- **El personaje:** el código que ninguna regla reclama (por su ruta o su comando) lo hace el personaje de su tipo: frontend y móvil, el frontend; infra, DevOps; el resto, el backend.
+
 ## Lo tuyo: skills privadas y tus herramientas
 
 Lo que es tuyo, no de la empresa (⚙ › Mío). No va al archivo, a los encargos ni a ningún repo, y viaja en tu archivo de ajustes.

@@ -1,7 +1,7 @@
 import { createGame, TEAM, personOf, phaseInfo } from './game.js';
 import { applyAppearance, DREAMS, teamNames } from './sim.js';
 import { AGENT_NAME, TASK_STATUS } from './targets.js';
-import { briefOptions, briefProblem, briefMessage, defaultTarget, targetLabel } from './brief.js';
+import { briefOptions, briefProblem, briefMessage, defaultTarget, targetLabel, systemTargets } from './brief.js';
 import { createSettings } from './settings-ui.js';
 import { createServices } from './services-ui.js';
 import { createBoardView } from './board-ui.js';
@@ -23,6 +23,7 @@ let ws;
 let tasks = { tasks: [], agents: [], launchers: [], defaultCwd: '' };
 let runs = [];
 let targets = []; // registered agents (⚙ › Agents) and open sessions, with what their harness brings
+let systems = []; // the systems (a product and its artifacts: server/systems.js), also a brief's targets
 let offices = []; // the company's offices (the selector, top left)
 let office = null; // the one being watched: { id, name, timezone, country, city, … }
 let prefs = null;  // the general settings (language, zone, weather, herdr, log)
@@ -107,6 +108,7 @@ function connect() {
       onSnapshot(st);
       if (st.tasks) onTasks(st);
       onRuns(st.pipelines || []);
+      systems = st.systems || [];
       onTargets(st.targets);
       onServices(st.services || []);
       onPrompts(st.prompts || []);
@@ -123,6 +125,7 @@ function connect() {
     if (msg.type === 'herdr') onHerdr(msg.herdr);
     if (msg.type === 'pipelines') onRuns(msg.runs);
     if (msg.type === 'targets') onTargets(msg.targets);
+    if (msg.type === 'systems') { systems = msg.systems || []; if ($('brief').open) renderBrief(); }
     if (msg.type === 'services' && msg.office === office?.id) onServices(msg.services);
     if (msg.type === 'prompts' && msg.office === office?.id) onPrompts(msg.prompts);
     if (msg.type === 'clarify' && msg.clarify?.office === office?.id) onClarify(msg.clarify);
@@ -1041,10 +1044,14 @@ function onTargets(list) {
 }
 
 /** @param agentId opens the dialog with that agent chosen (from ⚙ › Agents) */
+// what a brief can go to: the agents, and the systems (🧩: their artifacts, in order)
+const briefTargets = () => [...targets, ...systemTargets(systems)];
+
 function openBrief(agentId) {
   const dlg = $('brief');
   if (!dlg.open) dlg.showModal();
-  const i = agentId ? targets.findIndex((x) => x.id === agentId) : -1;
+  const all = briefTargets();
+  const i = agentId ? all.findIndex((x) => x.id === agentId) : -1;
   brief.sel = { target: i >= 0 ? i : defaultTarget(targets, sessions.values()), entry: 0, session: -1 };
   renderBrief();
   $('b-text').focus();
@@ -1055,13 +1062,13 @@ function fillByProject(select, items, index) {
   select.innerHTML = '';
   const groups = new Map();
   items.forEach((x, i) => {
-    const project = String(x.path || '').split('/').filter(Boolean).pop() || x.name;
+    const project = x.system ? `🧩 ${t('brief.systems')}` : String(x.path || '').split('/').filter(Boolean).pop() || x.name;
     if (!groups.has(project)) groups.set(project, []);
     groups.get(project).push([x, i]);
   });
   for (const [project, list] of groups) {
     const g = document.createElement('optgroup');
-    g.label = `📁 ${project}`;
+    g.label = project.startsWith('🧩') ? project : `📁 ${project}`;
     for (const [x, i] of list) g.append(new Option(targetLabel(x), String(i)));
     select.append(g);
   }
@@ -1075,10 +1082,11 @@ function fillSelect(select, items, index, label = (x) => x.label) {
 }
 
 function renderBrief() {
-  const o = brief.opts = briefOptions({ targets, models: prefs?.models }, brief.sel);
-  if (targets.length) fillByProject($('b-agent'), targets, brief.sel.target);
+  const all = briefTargets();
+  const o = brief.opts = briefOptions({ targets: all, models: prefs?.models }, brief.sel);
+  if (all.length) fillByProject($('b-agent'), all, brief.sel.target);
   else fillSelect($('b-agent'), [{ label: t('brief.noAgentWeb') }], 0);
-  $('b-agent').disabled = !targets.length;
+  $('b-agent').disabled = !all.length;
   fillSelect($('b-pipeline'), o.entries.length ? o.entries : [{ label: '—' }], Math.max(0, o.entries.indexOf(o.entry)));
   $('b-desc').textContent = o.entry ? [o.entry.description, o.entry.source && o.entry.source !== 'agente' ? `(${o.entry.source})` : ''].filter(Boolean).join(' ')
     : t('brief.registerHintWeb');
