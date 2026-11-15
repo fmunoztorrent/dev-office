@@ -99,6 +99,10 @@ Impórtalo desde `public/main.js` (como `public/renderers/plan.js`) y abre el ju
 
 **`public/renderers/plan.js`** es el de referencia: un plano simple de la oficina, visto desde arriba, dibujado sólo con la escena — las salas, puertas y muebles de `world`, cada persona como un punto del color de su camisa con su nombre, lo que dice y su badge, la tarea de la pizarra y la hora del día. Abre el juego con `?renderer=plan`. Un renderer nuevo puede partir de ahí.
 
+## Los temas
+
+Cómo se ve la gente es un tema (`prefs.theme`, public/themes.js): el de pixel art, o el anime, cuyos actores las vistas frontal y cenital dibujan con trazos vectoriales (`public/anime.js`, `drawAnime(ctx, actor, now, { x, y })`, de unos `ANIME_HEIGHT` de alto). Un tema no cambia nada de la escena salvo quiénes son sus actores (su `cfg`: el elenco anime, todas mujeres) y cómo los dibuja un renderer: uno en 3D puede leer el mismo `cfg` y `animeStyle(rol, cfg)` (peinado, ropa, ojos) para vestir a sus modelos.
+
 ## Lo que queda fuera
 
 - Los dos pisos compartidos (la dirección y el archivo, `public/floors.js`) todavía se dibujan desde su propio modelo: aún no están en la escena.

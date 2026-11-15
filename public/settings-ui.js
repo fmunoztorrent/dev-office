@@ -7,7 +7,8 @@
 //   Characters   how the characters of the office being watched look.
 //   Mine         what is yours, not the company's: your private skills and your own tools (server/mine.js).
 
-import { personOf, defaultLook, VISITORS, APPEARANCE_KEYS, LOOK_PALETTES, SEXES, PERSONALITIES, STYLES, randomLook, lookForSex, DEFAULT_EXPERT } from './sim.js';
+import { personOf, defaultLook, VISITORS, APPEARANCE_KEYS, LOOK_PALETTES, SEXES, PERSONALITIES, STYLES, randomLook, lookForSex, DEFAULT_EXPERT, currentTheme } from './sim.js';
+import { ANIME_EXPERT } from './themes.js';
 import { exportCharacter, parseCharacter, characterFile } from './character.js';
 import { drawSprite } from './sprite.js';
 import { t, LANGUAGES, getLanguage } from './i18n.js';
@@ -248,6 +249,10 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       }) : null,
       el('label', { class: 'b-field' }, el('span', {}, G('viewMode')),
         el('select', { 'aria-label': G('viewMode'), onchange: (e) => setPref({ view: { mode: e.target.value } }) }, ['flat', 'iso'].map((m) => option(m, G(`view_${m}`), m === (p.view?.mode || 'flat'))))),
+      // the graphic theme: how the people look (public/themes.js)
+      el('label', { class: 'b-field' }, el('span', {}, G('theme')),
+        el('select', { 'aria-label': G('theme'), onchange: (e) => setPref({ theme: e.target.value }) }, ['pixel', 'anime'].map((m) => option(m, G(`theme_${m}`), m === (p.theme || 'pixel'))))),
+      el('p', { class: 'hint' }, G(p.theme === 'anime' ? 'themeAnimeHint' : 'themeHint')),
       el('h3', {}, G('herdr')),
       el('p', { class: 'hint' }, herdr.available ? G('herdrOn', { pane: herdr.pane || '?' }) : G('herdrOff')),
       check(p.herdr.launch, G('herdrLaunch'), (e) => setPref({ herdr: { launch: e.target.checked } })),
@@ -814,7 +819,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     const cards = ROLE_ORDER.map((role) => {
       const look = st.looks[role];
       const canvas = el('canvas', { 'aria-label': LK('preview', { name: look.name }) });
-      const redraw = () => drawSprite(canvas, look);
+      const redraw = () => drawSprite(canvas, look, { id: role });
       // a click on a swatch redraws the card (to mark it); the free picker only the preview while dragging
       const set = (k, v, again = true) => { look[k] = v; if (again) renderLook(); else redraw(); };
       const toggle = (k) => el('label', {}, el('input', { type: 'checkbox', checked: look[k] ? true : undefined, onchange: (e) => set(k, e.target.checked, false) }), LK(k));
@@ -828,7 +833,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
           el('input', { type: 'text', value: look.name, maxlength: 20, 'aria-label': LK('name'), oninput: (e) => { look.name = e.target.value; } }),
           el('input', { type: 'text', value: look.title, maxlength: 30, 'aria-label': LK('title'), oninput: (e) => { look.title = e.target.value; } })),
         el('div', { class: 'pair' },
-          select('sex', SEXES, (v) => LK(`sexes.${v}`)),
+          currentTheme() === 'anime' ? null : select('sex', SEXES, (v) => LK(`sexes.${v}`)),
           select('personality', Object.keys(PERSONALITIES), (v) => LK(`personalities.${v}`))),
         el('div', { class: 'pair' },
           select('style', STYLES, (v) => LK(`styles.${v}`)),
@@ -836,7 +841,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
             el('button', { type: 'button', class: 's-mini', title: LK('exportTitle', { name: look.name }), onclick: () => download(role, look) }, LK('export')),
             el('button', { type: 'button', class: 's-mini', title: LK('importTitle'), onclick: () => upload(role) }, LK('import')))),
         el('div', { class: 'colors' }, colorField(look, 'skin', set), colorField(look, 'hair', set), colorField(look, 'shirt', set), colorField(look, 'pants', set)),
-        el('div', { class: 'toggles' }, toggle('long'), toggle('beard'), toggle('glasses')),
+        el('div', { class: 'toggles' }, toggle('long'), currentTheme() === 'anime' ? null : toggle('beard'), toggle('glasses')),
         el('div', { class: 'toggles' },
           el('span', { class: 'hint', title: VISITORS[role] ? LK('visitorHint') : undefined }, role === 'po' ? `${LK('role', { role })} · ${LK('you')}` : VISITORS[role] ? `${LK('role', { role })} · ${LK('visitor')}` : LK('role', { role })),
           el('button', { type: 'button', class: 's-mini', title: LK('randomTitle'), onclick: () => { Object.assign(look, randomLook(look.sex)); renderLook(); } }, '🎲'),
@@ -878,7 +883,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     const card = (x, i) => {
       const look = x.look;
       const canvas = el('canvas', { 'aria-label': LK('preview', { name: look.name || '?' }) });
-      const redraw = () => drawSprite(canvas, { ...DEFAULT_EXPERT, ...look });
+      const redraw = () => drawSprite(canvas, { ...DEFAULT_EXPERT, ...(currentTheme() === 'anime' ? ANIME_EXPERT : {}), ...look, ...(currentTheme() === 'anime' ? { sex: 'f', beard: false } : {}) }, { id: x.id || 'sme' });
       const set = (k, v, again = true) => { look[k] = v; x.dirty = true; if (again) renderLook(); else redraw(); };
       const toggle = (k) => el('label', {}, el('input', { type: 'checkbox', checked: look[k] ? true : undefined, onchange: (e) => set(k, e.target.checked, false) }), LK(k));
       const select = (k, values, label) => el('label', { class: 's-pick' }, el('span', {}, LK(k)),
@@ -911,10 +916,10 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         el('label', { class: 's-pick s-skill' }, el('span', {}, XK('topic')),
           el('input', { type: 'text', value: x.topic, maxlength: 120, placeholder: XK('topicPh'), 'aria-label': XK('topic'), oninput: (e) => { x.topic = e.target.value; x.dirty = true; } })),
         el('div', { class: 'pair' },
-          select('sex', SEXES, (v) => LK(`sexes.${v}`)),
+          currentTheme() === 'anime' ? null : select('sex', SEXES, (v) => LK(`sexes.${v}`)),
           select('personality', Object.keys(PERSONALITIES), (v) => LK(`personalities.${v}`))),
         el('div', { class: 'colors' }, colorField(look, 'skin', set), colorField(look, 'hair', set), colorField(look, 'shirt', set), colorField(look, 'pants', set)),
-        el('div', { class: 'toggles' }, toggle('long'), toggle('beard'), toggle('glasses')),
+        el('div', { class: 'toggles' }, toggle('long'), currentTheme() === 'anime' ? null : toggle('beard'), toggle('glasses')),
         el('div', { class: 'toggles' },
           el('span', { class: 'hint' }, x.id ? XK('role', { skill: x.skill }) : XK('new')),
           el('button', { type: 'button', class: 's-mini', title: LK('randomTitle'), onclick: () => { Object.assign(look, randomLook(look.sex)); x.dirty = true; renderLook(); } }, '🎲'),

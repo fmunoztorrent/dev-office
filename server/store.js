@@ -31,6 +31,7 @@ import { realDir, insideDir } from './paths.js';
 import { ARTIFACT_KINDS, PARTS_MAX, orderParts } from './systems.js';
 import { chunkText } from './chunks.js';
 import { RESOURCE_KINDS, RESOURCE_LINKS } from '../public/impact.js';
+import { THEMES } from '../public/themes.js';
 
 const HARNESS_IDS = ['claude-code', 'opencode', 'pi', 'codex'];
 const ASKS_KEEP = 500;
@@ -58,6 +59,7 @@ export const FLOORS = ['exec', 'office', 'archive'];
 /** The general settings and their defaults. */
 export const DEFAULT_PREFS = {
   lang: DEFAULT_LANGUAGE,       // the game's language: en | es
+  theme: 'pixel',               // the graphic theme (public/themes.js): pixel art, or anime (its own cast, all women)
   timezone: null,               // the company's time zone (null: the system's); each office may have its own
   city: null,                   // the company's city, in that zone's country (null: the zone's city): weather, sun and moon
   weather: true,                // query the real weather (Open-Meteo); otherwise it is simulated by season
@@ -451,7 +453,7 @@ export class Store {
     try {
       this.db.prepare('UPDATE agents SET office_id = ? WHERE office_id = ?').run(MAIN_OFFICE, String(id));
       this.db.prepare('UPDATE systems SET office_id = ? WHERE office_id = ?').run(MAIN_OFFICE, String(id));
-      this.db.prepare('DELETE FROM settings WHERE key = ?').run(`appearance:${id}`);
+      this.db.prepare("DELETE FROM settings WHERE key = ? OR key LIKE ?").run(`appearance:${id}`, `appearance:${id}@%`);
       this.db.prepare('DELETE FROM offices WHERE id = ?').run(String(id));
       this.db.exec('COMMIT');
     } catch (err) { this.db.exec('ROLLBACK'); return { ok: false, error: t('err.saveFailed', { error: err.message }) }; }
@@ -897,6 +899,7 @@ export class Store {
             next.city = String(v ?? '').trim().slice(0, 80) || null;
             break;
           case 'weather': next.weather = bool(k, v); break;
+          case 'theme': if (!THEMES.includes(v)) fail(t('err.prefValue', { key: k })); next.theme = v; break;
           case 'standards':
             if (v !== null && typeof v !== 'string') fail(t('err.prefValue', { key: k }));
             next.standards = String(v ?? '').trim().slice(0, INSTRUCTIONS_MAX);
@@ -1013,8 +1016,14 @@ export class Store {
 
   // ---------------------------------------------------------------- appearance (per office)
 
-  #appearanceKey(office) { return !office || office === MAIN_OFFICE ? 'appearance' : `appearance:${office}`; }
-  getAppearance(office = MAIN_OFFICE) { return this.#get(this.#appearanceKey(office), {}) || {}; }
+  // each graphic theme keeps its own cast's customizations: the pixel one where they always were, the
+  // others under `@<theme>` (the anime team is not the pixel one renamed)
+  #appearanceKey(office, theme = this.getPrefs().theme) {
+    const key = !office || office === MAIN_OFFICE ? 'appearance' : `appearance:${office}`;
+    return theme && theme !== 'pixel' ? `${key}@${theme}` : key;
+  }
+  /** An office's customized characters, in the theme in use (or the one given). */
+  getAppearance(office = MAIN_OFFICE, theme) { return this.#get(this.#appearanceKey(office, theme), {}) || {}; }
 
   /** patch: { role: { name, title, sex, personality, style, shirt, pants, hair, skin, long, beard, glasses } | null } (null = the original) */
   setAppearance(patch = {}, office = MAIN_OFFICE) {

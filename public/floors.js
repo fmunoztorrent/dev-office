@@ -13,6 +13,7 @@
 import { W, H, LEFT, ELEVATOR, rand, pick } from './sim.js';
 import { BACK, unapply } from './iso.js';
 import { t, ta } from './i18n.js';
+import { ANIME_FLOORS } from './themes.js';
 
 export const FLOOR_IDS = ['exec', 'office', 'archive'];
 const SPEED = 110;
@@ -211,10 +212,21 @@ export function createFloors({ clock = () => performance.now() } = {}) {
   /** You preside the executive floor: with your look as the PO (the offices' one). */
   function setYou(look = {}) {
     const c = exec.people.ceo.cfg;
-    for (const k of ['name', 'shirt', 'pants', 'hair', 'skin', 'long', 'beard', 'glasses']) if (look[k] !== undefined) c[k] = look[k];
+    for (const k of ['name', 'sex', 'shirt', 'pants', 'hair', 'skin', 'long', 'beard', 'glasses']) if (look[k] !== undefined) c[k] = look[k];
   }
 
-  return { exec, archive, handle, setData, setYou, step(dt, now) { exec.step(dt, now); archive.step(dt, now); } };
+  /** The graphic theme's cast for the floors' people (public/themes.js): the anime one is all women. */
+  function setTheme(theme) {
+    for (const [kind, f] of [['exec', exec], ['archive', archive]]) {
+      for (const [id, p] of Object.entries(f.people)) {
+        if (p.cfg.you) continue;
+        const look = theme === 'anime' && ANIME_FLOORS[id] ? ANIME_FLOORS[id] : { sex: undefined, beard: false, glasses: false, long: false, ...PEOPLE[kind][id] };
+        for (const k of ['name', 'sex', 'shirt', 'pants', 'hair', 'skin', 'long', 'beard', 'glasses']) p.cfg[k] = look[k];
+      }
+    }
+  }
+
+  return { exec, archive, handle, setData, setYou, setTheme, step(dt, now) { exec.step(dt, now); archive.step(dt, now); } };
 }
 
 // ---------------------------------------------------------------- what each click means

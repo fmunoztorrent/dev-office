@@ -421,7 +421,7 @@ The office's gear (top right, on the web and in the terminal; also with `c`):
 
 | Tab | What is there |
 |---|---|
-| General | **Your settings as a JSON file:** ⬇ Export / ⬆ Import what is yours (the general settings, the departments with their instructions, autonomy and characters, the projects with their instructions and components, your skills and tools, the experts), to keep them or take them to another machine; not the history or the archive (also `dev-team-office settings export|import`). **Language** (English by default, or Spanish: it changes everything live, on the web, in the terminal and in the log), the company's **time zone** (search by typing the city, the region or the country) and its **city** (among the cities of that zone's country), real or simulated weather, office life in the log, the **office view** (front or isometric top-down), herdr: agents in panes, each subagent in its pane, which way the pane opens and which agent opens at start, and **🧠 Intelligence**: the model that sizes an order's impact (none, one of your agents, the Claude API, an OpenAI-compatible API or Ollama), with 🧪 to try it |
+| General | **Your settings as a JSON file:** ⬇ Export / ⬆ Import what is yours (the general settings, the departments with their instructions, autonomy and characters, the projects with their instructions and components, your skills and tools, the experts), to keep them or take them to another machine; not the history or the archive (also `dev-team-office settings export|import`). **Style** (pixel art, or anime: a team of women), **Language** (English by default, or Spanish: it changes everything live, on the web, in the terminal and in the log), the company's **time zone** (search by typing the city, the region or the country) and its **city** (among the cities of that zone's country), real or simulated weather, office life in the log, the **office view** (front or isometric top-down), herdr: agents in panes, each subagent in its pane, which way the pane opens and which agent opens at start, and **🧠 Intelligence**: the model that sizes an order's impact (none, one of your agents, the Claude API, an OpenAI-compatible API or Ollama), with 🧪 to try it |
 | Departments | The departments maintainer: each department (an office) with its **instructions**, its **projects** (＋ a new one, or bring an existing one into it), its **people** (👥 edit its characters), its time zone and its city for the weather; view, edit and delete (its projects move to the main one). Also the **systems** and the **🗄 infrastructure**: queues, topics, databases, third-party APIs, schedulers… with what they run on, where they live and which project uses them (and what each repo's folder says it uses) |
 | Agents | The maintainer: add (full path + CLI + department; it detects its harness as you type it), the **project's instructions**, edit, delete and ✉ send it a prompt. Also the open sessions that are not registered |
 | Mine | **What is yours, not the company's.** **My skills:** private skills (what it does and when to use it, and its instructions), installed in your personal folder of each agent (`~/.claude/skills`, `~/.agents/skills`), never in a repo; turning one off takes it out. **My tools:** small programs of yours for concrete jobs (a script in sh, bash, node or python3, with its parameters, a time limit and who uses it in the game): your agents see each one as the MCP tool `my_<name>` and run it in the folder they work in. Neither goes to the archive or the briefs, and both travel in your settings file. Agents cannot create them: only you |
@@ -447,6 +447,10 @@ Databases from earlier versions migrate by themselves (the main office is added)
 If a `~/.dev-team-office/config.json` from earlier versions existed, it is imported the first time.
 
 Everything is validated before writing, applied live, and a foreign website cannot change anything.
+
+### Styles: pixel art or anime
+
+⚙ › General › **Style** changes how the office's people look. **Pixel art** is the usual team. **Anime** is another cast: a team of adult women drawn in the style of Japanese anime, with vector strokes instead of pixels (big eyes, long legs), each one with her own name, hair style and outfit (short skirts, crop tops, bare shoulders, thigh-highs), the visiting specialists, the experts, the newcomers and the people of the executive floor and the archive too. There are no men in it: a look customized as a man is drawn and named as a woman there. Each style keeps its own customizations in ⚙ › Characters. The terminal keeps drawing in pixel art, with the style's cast.
 
 ### The scene: the layer between the game and what draws it
 
@@ -549,6 +553,8 @@ public/settings-ui.js   ⚙ Settings on the web
 public/sprite.js        a character's portrait (sheet and settings)
 public/game.js          the office on canvas, for the browser (glass, lights, night, effects), in front or top-down view
 public/scene.js         the scene: what is on screen each frame, as plain data (the layer between the game and its renderers)
+public/themes.js        the graphic themes: the anime cast (all women), its hair styles and outfits
+public/anime.js         the anime theme's people, drawn with vector strokes (the game's views and the portraits)
 public/renderers.js     the renderers' registry (another one, a 3D one, draws the same scene); renderers/plan.js, the reference
 public/loops-ui.js      the loops' dialog
 public/impact.js        an order's impact as pictures, without the DOM: the tree of its repos and the graph of everything it touches, laid out

@@ -4,6 +4,12 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-11-15
+
+### Added
+
+- **Styles: pixel art or anime** (⚙ › General › Style, `prefs.theme`). The anime one is another cast: a team of adult women in the style of Japanese anime, drawn with vector strokes instead of pixels (big eyes, long legs), each with her own name, hair style (long, hime, ponytail, twin tails, bob, short, bun, side, braid, wavy) and outfit (blazer and pantyhose, blouse and pleated skirt, vest and boots, off-shoulder sweater, crop top, turtleneck and shorts, open jacket, sweater dress). The visiting specialists, the experts, the newcomers and the people of the executive floor and the archive are women too: there are no men in it. In both views, the character's sheet and ⚙ › Characters, where each style keeps its own customizations. The terminal keeps pixel art, with the style's cast.
+
 ## [0.22.0] - 2026-11-15
 
 ### Added
@@ -332,7 +338,8 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.19.0...v0.20.0

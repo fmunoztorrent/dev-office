@@ -217,6 +217,7 @@ Format and protocol with the agents: [pipelines.md](pipelines.md).
 | `models` | the model profiles: `{ active, profiles: { <id>: { label, harnesses, roles: { default, tl, qa… } } } }`. `active` is the one a brief uses (`null`: each agent's own model). `{ models: { active } }` only picks one. A new session starts with the profile's `default`; a pipeline's stages without a model take their role's |
 | `weather` | `true` / `false` (real or simulated weather) |
 | `view` | `{ office: <id>, mode: "flat" \| "iso" }`: the office being watched and how it looks in the browser (front, the default, or isometric top-down) |
+| `theme` | `"pixel"` (the default) or `"anime"`: how the people look and who they are (public/themes.js). The anime one is its own cast, all women. Each theme keeps its own characters: `appearance` (in `GET\|PUT /v1/settings`, `/v1/characters/<role>`, the settings file) is always the theme in use's; changing the theme sends every office's `{ type: "appearance" }` |
 | `herdr` | `{ launch: bool, subagents: bool, direction: "right" \| "down", startAgent: "auto" \| "none" \| <agent id> }` (`subagents`: one pane per subagent) |
 | `log` | `{ life: bool }` (the office's life in the log) |
 | `archive` | `{ push: bool, embeddings: "off" \| "ollama" \| "openai", model, url }`: what the archive knows goes on top of every brief and question; the embedding provider for the semantic search (its key in `$DEV_TEAM_OFFICE_EMBED_KEY`) |

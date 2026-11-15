@@ -1,6 +1,12 @@
 // A character's sprite, standing still (the same as in the office, game.js), for portraits:
-// the selected character's sheet and ⚙ Settings › Characters.
-export function drawSprite(canvas, c, { P = 4, bg = '#c9b48a' } = {}) {
+// the selected character's sheet and ⚙ Settings › Characters. In the anime theme, their anime portrait
+// (public/anime.js); `id`: whose (a role, or an expert's id), for their hair style and outfit.
+import { currentTheme } from './sim.js';
+import { drawAnimePortrait } from './anime.js';
+
+export function drawSprite(canvas, c, { P = 4, bg = '#c9b48a', id = '' } = {}) {
+  if (currentTheme() === 'anime') return drawAnimePortrait(canvas, c, { id, bg, width: 16 * P, height: 25 * P });
+  canvas.style.imageRendering = '';
   const ctx = canvas.getContext('2d');
   canvas.width = 16 * P; canvas.height = 25 * P;
   ctx.fillStyle = bg; ctx.fillRect(0, 0, canvas.width, canvas.height);

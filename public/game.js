@@ -24,6 +24,7 @@ import { t } from './i18n.js';
 import { createFloors, drawFloor, floorHit } from './floors.js';
 import { buildScene, personIn } from './scene.js';
 import { getRenderer } from './renderers.js';
+import { drawAnime, ANIME_HEIGHT } from './anime.js';
 export { TEAM, personOf, PHASES, phaseInfo } from './sim.js';
 
 const P = 3; // size of a sprite "pixel"
@@ -60,6 +61,10 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   let floor = 'office';
   const floors = createFloors();
   let floorHover = null, floorSel = null;
+  // the graphic theme (public/themes.js): how the people are drawn (pixel art, or anime)
+  let theme = 'pixel';
+  /** How tall a person is drawn (name tags, bubbles and the plumbob go over it). */
+  const tall = () => (theme === 'anime' ? ANIME_HEIGHT : 21 * P);
   let last = performance.now();
   let scale = 1;
 
@@ -611,69 +616,76 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     const g = gait(a);
     const fem = c.sex === 'f';
 
-    // sombra
-    if (!sitting(a)) { ctx.fillStyle = '#00000030'; ctx.beginPath(); ctx.ellipse(x, y, 14, 4, 0, 0, Math.PI * 2); ctx.fill(); }
-    // legs: the thigh stays under the hip and the shin steps (forward, back, in the air), with its shoe
-    if (!sitting(a)) {
-      const dance = a.dance && !walking && Math.floor(now / 160) % 2;
-      const toe = g && a.sideways !== false ? (a.face || 1) : 0;
-      [-3, 1].forEach((hip, i) => {
-        const reach = g ? g.reach[i] : 0;
-        const up = g ? g.lift[i] : a.dance && (i ? !dance : dance) ? 1 : 0;
-        px(hip, -6, 2, 3, c.pants);
-        px(hip + reach, -3 - up, 2, 2, c.pants);
-        if (reach && !up) px(hip + reach / 2, -4, 2, 1, c.pants); // the knee, between thigh and shin
-        px(hip + reach + Math.min(0, toe), -1 - up, toe ? 3 : 2, 1, '#222');
-      });
-      if (g?.bob) y -= 2; // while passing, the body rises a little
+    // the body: in pixel art, or (the anime theme, public/anime.js) drawn with vector strokes
+    if (theme === 'anime') {
+      drawAnime(ctx, a, now, { x, y });
+      if (a.back) return;
+    } else {
+      // sombra
+      if (!sitting(a)) { ctx.fillStyle = '#00000030'; ctx.beginPath(); ctx.ellipse(x, y, 14, 4, 0, 0, Math.PI * 2); ctx.fill(); }
+      // legs: the thigh stays under the hip and the shin steps (forward, back, in the air), with its shoe
+      if (!sitting(a)) {
+        const dance = a.dance && !walking && Math.floor(now / 160) % 2;
+        const toe = g && a.sideways !== false ? (a.face || 1) : 0;
+        [-3, 1].forEach((hip, i) => {
+          const reach = g ? g.reach[i] : 0;
+          const up = g ? g.lift[i] : a.dance && (i ? !dance : dance) ? 1 : 0;
+          px(hip, -6, 2, 3, c.pants);
+          px(hip + reach, -3 - up, 2, 2, c.pants);
+          if (reach && !up) px(hip + reach / 2, -4, 2, 1, c.pants); // the knee, between thigh and shin
+          px(hip + reach + Math.min(0, toe), -1 - up, toe ? 3 : 2, 1, '#222');
+        });
+        if (g?.bob) y -= 2; // while passing, the body rises a little
+      }
+      // torso
+      px(-4, -13, 8, 7, c.shirt);
+      px(-4, -7, 8, 1, '#00000030');
+      // brazos
+      const working = a.seated && a.state === 'working';
+      const typing = working && Math.floor(now / 140) % 2;
+      const typing2 = working && !typing;
+      const eating = a.perch && a.food && Math.floor(now / 600) % 3 === 0;
+      const swing = g ? g.swing : 0;
+      if (a.handUp) { px(-6, -19, 2, 7, c.shirt); px(-6, -20, 2, 2, c.skin); }
+      else px(-6, -13 + (typing ? 1 : 0) - swing, 2, 6, c.shirt), px(-6, -7 + (typing ? 1 : 0) - swing, 2, 1, c.skin);
+      if (eating) { px(4, -15, 2, 5, c.shirt); px(4, -16, 2, 1, c.skin); }
+      else { px(4, -13 + (typing2 ? 1 : 0) + swing, 2, 6, c.shirt); px(4, -7 + (typing2 ? 1 : 0) + swing, 2, 1, c.skin); }
+      if (a.carry === 'ext') {
+        px(5, -12, 3, 8, '#d62828'); px(5, -13, 3, 1, '#2b2d42'); px(6, -12, 1, 6, '#ff6b6b');
+        px(8, -13, 2, 1, '#2b2d42'); px(9, -12, 1, 2, '#2b2d42');
+      } else if (a.carry) { px(5, -10, 4, 5, '#fff'); px(6, -9, 2, 1, '#adb5bd'); px(6, -7, 2, 1, '#adb5bd'); }
+      // head (from behind, on the sofa: only the hair)
+      if (a.back) {
+        px(-3, -21, 6, 7, c.hair); px(-4, -20, 1, 4, c.hair); px(3, -20, 1, 4, c.hair);
+        if (c.long) px(-4, -16, 8, 3, c.hair); else px(-2, -14, 4, 1, c.skin);
+        return;
+      }
+      px(-1, -14, 2, 1, c.skin);
+      px(-3, -20, 6, 6, c.skin);
+      px(-3, -21, 6, 2, c.hair); px(-4, -20, 1, 3, c.hair); px(3, -20, 1, 3, c.hair);
+      if (c.long) { px(-4, -18, 1, 5, c.hair); px(3, -18, 1, 5, c.hair); }
+      if (c.beard) px(-3, -15, 6, 1, c.hair);
+      const blink = Math.floor(now / 100) % 40 === 0;
+      const look = walking ? (a.face || 1) : 0;
+      if (c.glasses) px(-3, -18, 6, 1, '#cfe8ff');
+      if (!blink) { px(-2 + (look > 0 ? 1 : 0), -18, 1, 1, '#1a1a1a'); px(1 + (look > 0 ? 1 : 0) - (look < 0 ? 1 : 0), -18, 1, 1, '#1a1a1a'); }
+      if (c.glasses) px(-3, -19, 6, 1, '#2b2b2b');
+      if (!blink && !c.glasses) {
+        // the face's sex: her lashes at the outer corners; his brows over the eyes
+        if (fem) { px(-3 + (look > 0 ? 1 : 0), -19, 1, 1, '#1a1a1a'); px(2 + (look > 0 ? 1 : 0) - (look < 0 ? 1 : 0), -19, 1, 1, '#1a1a1a'); }
+        else { px(-2 + (look > 0 ? 1 : 0), -19, 1, 1, shade(c.hair)); px(1 + (look > 0 ? 1 : 0) - (look < 0 ? 1 : 0), -19, 1, 1, shade(c.hair)); }
+      }
+      if (a.state === 'done' || now < a.jumpUntil || eating) px(-1, -16, 2, 1, '#7a2e2e');
+      else if (a.state === 'blocked' || a.state === 'alarm' || a.dance) px(-1, -16, 2, 1, '#333');
+      else if (fem) px(-1, -16, 2, 1, '#c45a6a');
+
     }
-    // torso
-    px(-4, -13, 8, 7, c.shirt);
-    px(-4, -7, 8, 1, '#00000030');
-    // brazos
-    const working = a.seated && a.state === 'working';
-    const typing = working && Math.floor(now / 140) % 2;
-    const typing2 = working && !typing;
-    const eating = a.perch && a.food && Math.floor(now / 600) % 3 === 0;
-    const swing = g ? g.swing : 0;
-    if (a.handUp) { px(-6, -19, 2, 7, c.shirt); px(-6, -20, 2, 2, c.skin); }
-    else px(-6, -13 + (typing ? 1 : 0) - swing, 2, 6, c.shirt), px(-6, -7 + (typing ? 1 : 0) - swing, 2, 1, c.skin);
-    if (eating) { px(4, -15, 2, 5, c.shirt); px(4, -16, 2, 1, c.skin); }
-    else { px(4, -13 + (typing2 ? 1 : 0) + swing, 2, 6, c.shirt); px(4, -7 + (typing2 ? 1 : 0) + swing, 2, 1, c.skin); }
-    if (a.carry === 'ext') {
-      px(5, -12, 3, 8, '#d62828'); px(5, -13, 3, 1, '#2b2d42'); px(6, -12, 1, 6, '#ff6b6b');
-      px(8, -13, 2, 1, '#2b2d42'); px(9, -12, 1, 2, '#2b2d42');
-    } else if (a.carry) { px(5, -10, 4, 5, '#fff'); px(6, -9, 2, 1, '#adb5bd'); px(6, -7, 2, 1, '#adb5bd'); }
-    // head (from behind, on the sofa: only the hair)
-    if (a.back) {
-      px(-3, -21, 6, 7, c.hair); px(-4, -20, 1, 4, c.hair); px(3, -20, 1, 4, c.hair);
-      if (c.long) px(-4, -16, 8, 3, c.hair); else px(-2, -14, 4, 1, c.skin);
-      return;
-    }
-    px(-1, -14, 2, 1, c.skin);
-    px(-3, -20, 6, 6, c.skin);
-    px(-3, -21, 6, 2, c.hair); px(-4, -20, 1, 3, c.hair); px(3, -20, 1, 3, c.hair);
-    if (c.long) { px(-4, -18, 1, 5, c.hair); px(3, -18, 1, 5, c.hair); }
-    if (c.beard) px(-3, -15, 6, 1, c.hair);
-    const blink = Math.floor(now / 100) % 40 === 0;
-    const look = walking ? (a.face || 1) : 0;
-    if (c.glasses) px(-3, -18, 6, 1, '#cfe8ff');
-    if (!blink) { px(-2 + (look > 0 ? 1 : 0), -18, 1, 1, '#1a1a1a'); px(1 + (look > 0 ? 1 : 0) - (look < 0 ? 1 : 0), -18, 1, 1, '#1a1a1a'); }
-    if (c.glasses) px(-3, -19, 6, 1, '#2b2b2b');
-    if (!blink && !c.glasses) {
-      // the face's sex: her lashes at the outer corners; his brows over the eyes
-      if (fem) { px(-3 + (look > 0 ? 1 : 0), -19, 1, 1, '#1a1a1a'); px(2 + (look > 0 ? 1 : 0) - (look < 0 ? 1 : 0), -19, 1, 1, '#1a1a1a'); }
-      else { px(-2 + (look > 0 ? 1 : 0), -19, 1, 1, shade(c.hair)); px(1 + (look > 0 ? 1 : 0) - (look < 0 ? 1 : 0), -19, 1, 1, shade(c.hair)); }
-    }
-    if (a.state === 'done' || now < a.jumpUntil || eating) px(-1, -16, 2, 1, '#7a2e2e');
-    else if (a.state === 'blocked' || a.state === 'alarm' || a.dance) px(-1, -16, 2, 1, '#333');
-    else if (fem) px(-1, -16, 2, 1, '#c45a6a');
 
     // name if walking, status icon
     if (!sitting(a)) {
       ctx.font = `${fpx(14)}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-      ctx.fillStyle = '#00000080'; ctx.fillText(c.name, x + 1, y - 21 * P - 1);
-      ctx.fillStyle = '#fff'; ctx.fillText(c.name, x, y - 21 * P - 2);
+      ctx.fillStyle = '#00000080'; ctx.fillText(c.name, x + 1, y - tall() - 1);
+      ctx.fillStyle = '#fff'; ctx.fillText(c.name, x, y - tall() - 2);
     }
     const icon = STATUS_ICON[a.state] || (a.subagents ? '🤖' : '');
     if (icon) {
@@ -705,7 +717,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   function drawPlumbob(a, now) {
     if (!a || a.hidden) return;
     const x = a.x + (a.dance ? Math.sin(now / 55) * 2 : 0);
-    const y = feetY(a) - 21 * P - 26 + Math.sin(now / 320) * 3;
+    const y = feetY(a) - tall() - 26 + Math.sin(now / 320) * 3;
     const w = 7 * Math.abs(Math.cos(now / 700)) + 2;
     ctx.save();
     ctx.shadowColor = 'rgba(93,255,138,.55)'; ctx.shadowBlur = 6 * scale;
@@ -1060,7 +1072,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     if (!d || now > d.until || a.hidden) return;
     const info = DREAMS[d.kind];
     const x = a.x;
-    const head = feetY(a) - 21 * P;
+    const head = feetY(a) - tall();
     const k = Math.min(1, (now - d.start) / 350, (d.until - now) / 400); // fades in and out
     if (k <= 0) return;
     const cx = Math.max(LEFT + 52, Math.min(W - 52, x + 62)), cy = Math.max(46, head - 34 + Math.sin(now / 400) * 3);
@@ -1105,7 +1117,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   function drawTag(a, now) {
     const text = a.badge;
     if (!text || (a.ghost && a.fade < 0.5)) return;
-    const head = feetY(a) - 21 * P - (sitting(a) ? 0 : fpx(14)) - 5 + Math.sin(now / 420 + a.x) * 1;
+    const head = feetY(a) - tall() - (sitting(a) ? 0 : fpx(14)) - 5 + Math.sin(now / 420 + a.x) * 1;
     ctx.font = `${fpx(13)}px ${FONT}, ${EMOJI}`;
     const w = Math.ceil(ctx.measureText(text).width) + 10, h = fpx(13) + 4;
     const bx = Math.round(iso ? a.x - w / 2 : Math.max(LEFT + 2, Math.min(W - w - 2, a.x - w / 2))), by = Math.round(head - h);
@@ -1955,6 +1967,9 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     /** 'flat' (the front view, the default) or 'iso' (the isometric top-down one): the office view. */
     get view() { return iso ? 'iso' : 'flat'; },
     setView(v) { iso = v !== 'flat'; },
+    /** The graphic theme: the people's drawing, and the shared floors' cast. */
+    setTheme(id) { theme = id === 'anime' ? 'anime' : 'pixel'; floors.setTheme?.(theme); },
+    get theme() { return theme; },
     /** The services left running in the background (server/services.js): the rack shows them. */
     setServices(list) { services = Array.isArray(list) ? list : []; },
     /** Where the whiteboard is on the canvas, as fractions of it ({ x, y, w, h }), in either view. */

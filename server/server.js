@@ -43,7 +43,7 @@ import { clip, normRole } from './roles.js';
 import { SubPanes } from './subpanes.js';
 import { ServiceHub } from './services.js';
 import { PromptHub } from './prompts.js';
-import { defaultLook } from '../public/sim.js';
+import { defaultLook, setTheme } from '../public/sim.js';
 import { exportCharacter, parseCharacter, changedLook } from '../public/character.js';
 import { detectHarness, projectRoot, HARNESSES, which } from '../integrations/common/devteam.mjs';
 import { t, setLanguage, getLanguage } from '../public/i18n.js';
@@ -51,7 +51,7 @@ import { zoneInfo, systemZone } from '../public/clock.js';
 import { insideDir as inside, insideDir } from './paths.js';
 import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.22.0';
+export const VERSION = '0.23.0';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
 const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
@@ -91,6 +91,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   const ownStore = !db || typeof db === 'string';
   const store = ownStore ? openStore(db || dbFile()) : db; // oficinas, agentes, ajustes e historial
   setLanguage(store.getPrefs().lang);
+  // the graphic theme decides the cast's defaults (their names in the log and the texts, too)
+  setTheme(store.getPrefs().theme);
   const company = new Company({ store });
   // Each session learns which subagent is which character from what its project's folder brings (the
   // project's subagents with their `role:`, their name or their description), even if its agent does not say.
@@ -485,6 +487,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     if (patch.lang) setLanguage(out.prefs.lang);
     if ('timezone' in patch || 'city' in patch || 'weather' in patch) refreshWeather();
     bus.emit('prefs', out.prefs);
+    // another theme: another cast (and its own customizations) in every office
+    if (patch.theme && setTheme(out.prefs.theme)) for (const o of company.list()) bus.emit('appearance', o.id, store.getAppearance(o.id));
     if (patch.lang || 'timezone' in patch || 'city' in patch) bus.emit('offices', company.list());
     return out;
   }
@@ -492,6 +496,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   /** After importing settings: everything they touch is applied and the interfaces are told. */
   function settingsImported(out) {
     if (out.lang) setLanguage(out.lang);
+    setTheme(store.getPrefs().theme);
     officesChanged();
     bus.emit('prefs', prefs());
     for (const o of company.list()) bus.emit('appearance', o.id, store.getAppearance(o.id));

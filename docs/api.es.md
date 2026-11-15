@@ -217,6 +217,7 @@ Formato y protocolo con los agentes: [pipelines.es.md](pipelines.es.md).
 | `models` | los perfiles de modelos: `{ active, profiles: { <id>: { label, harnesses, roles: { default, tl, qa… } } } }`. `active` es el que usa un encargo (`null`: el modelo de cada agente). `{ models: { active } }` sólo elige uno. Una sesión nueva arranca con el `default` del perfil; las etapas de un pipeline sin modelo toman el de su rol |
 | `weather` | `true` / `false` (clima real o simulado) |
 | `view` | `{ office: <id>, mode: "flat" \| "iso" }`: la oficina que se mira y cómo se ve en el navegador (frontal, por defecto, o cenital isométrica) |
+| `theme` | `"pixel"` (por defecto) o `"anime"`: cómo se ve la gente y quiénes son (public/themes.js). El anime es su propio elenco, todas mujeres. Cada tema guarda sus propios personajes: `appearance` (en `GET\|PUT /v1/settings`, `/v1/characters/<rol>`, el archivo de ajustes) es siempre la del tema en uso; cambiar de tema manda el `{ type: "appearance" }` de cada oficina |
 | `herdr` | `{ launch: bool, subagents: bool, direction: "right" \| "down", startAgent: "auto" \| "none" \| <id de agente> }` (`subagents`: un pane por subagente) |
 | `log` | `{ life: bool }` (la vida de la oficina en la bitácora) |
 | `archive` | `{ push: bool, embeddings: "off" \| "ollama" \| "openai", model, url }`: lo que sabe el archivo va arriba de cada encargo y pregunta; el proveedor de embeddings para la búsqueda por significado (su clave en `$DEV_TEAM_OFFICE_EMBED_KEY`) |

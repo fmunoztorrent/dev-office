@@ -99,6 +99,10 @@ Import it from `public/main.js` (as `public/renderers/plan.js` is) and open the 
 
 **`public/renderers/plan.js`** is the reference: a plain top-down plan of the office drawn only from the scene — the rooms, doors and furniture of `world`, each person as a dot of their shirt's color with their name, what they say and their badge, the whiteboard's task and the time of day. Open the game with `?renderer=plan`. A new renderer can start from it.
 
+## Themes
+
+How the people look is a theme (`prefs.theme`, public/themes.js): the pixel art one, or the anime one, whose actors the front and top-down views draw with vector strokes (`public/anime.js`, `drawAnime(ctx, actor, now, { x, y })`, about `ANIME_HEIGHT` tall). A theme changes nothing in the scene but who its actors are (their `cfg`: the anime cast, all women) and how a renderer draws them: a 3D renderer can read the same `cfg` and `animeStyle(role, cfg)` (hair style, outfit, eyes) to dress its models.
+
 ## What is left out
 
 - The two shared floors (the executive one and the archive, `public/floors.js`) still draw from their own model: they are not in the scene yet.

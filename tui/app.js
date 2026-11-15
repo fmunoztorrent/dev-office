@@ -1,6 +1,6 @@
 // The office in the terminal: draw loop, keyboard, mouse and the side panel's model.
 
-import { createSim, TEAM, applyAppearance, setExperts } from '../public/sim.js';
+import { createSim, TEAM, applyAppearance, setExperts, setTheme } from '../public/sim.js';
 import { Screen, detectColorMode } from './screen.js';
 import { computeLayout, drawFrame, agentAtCell, boardAtCell, officeAtCell, rackAtCell } from './view.js';
 import { buildScene } from '../public/scene.js';
@@ -74,7 +74,8 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       onAppearance(a) { applyAppearance(a); },
       onExperts(list) { setExperts(list); },
       onWeather(w) { sim.setWeather(w); },
-      onPrefs(p) { if (p?.lang) setLanguage(p.lang); model.prefs = p; },
+      // the graphic theme's cast (the anime one: all women); the terminal draws it in pixel art
+      onPrefs(p) { if (p?.lang) setLanguage(p.lang); if (p) setTheme(p.theme); model.prefs = p; },
       onOffices(list, office) {
         model.offices = list || [];
         const cur = office || model.offices.find((o) => o.id === model.office?.id);

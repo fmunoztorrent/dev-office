@@ -22,6 +22,7 @@
 import { daylight, simulatedWeather, strikeStart, WEATHER, WET } from './sky.js';
 import { t, ta, listOf, onLanguage } from './i18n.js';
 import { zoned, zoneInfo, systemZone, validZone } from './clock.js';
+import { THEMES, ANIME_TEAM, ANIME_VISITORS, ANIME_EXPERT } from './themes.js';
 export { daylight } from './sky.js';
 
 // The office is x 0..W; to its left, the hallway (with the elevator) and the bathroom; below the
@@ -66,13 +67,14 @@ export function expertPerson(ref) {
   const x = EXPERTS.get(ref?.id ?? ref) || (ref && typeof ref === 'object' ? { id: ref.id, skill: ref.skill, look: { name: ref.name, title: ref.title, shirt: ref.shirt || undefined } } : null);
   if (!x) return null;
   const look = Object.fromEntries(Object.entries(x.look || {}).filter(([, v]) => v !== undefined && v !== null && v !== ''));
-  const base = { ...DEFAULT_EXPERT, ...lookForSex(look.sex || DEFAULT_EXPERT.sex), ...look };
+  const dflt = theme === 'anime' ? { ...DEFAULT_EXPERT, ...ANIME_EXPERT } : DEFAULT_EXPERT;
+  const base = themed({ ...dflt, ...lookForSex(look.sex || dflt.sex), ...look });
   return { ...base, title: look.title || x.topic || t('team.titles.sme', { skill: x.skill, g: base.sex }), expert: x.id, skill: x.skill };
 }
 /** A role's person: the team's character or the visiting specialist (null if neither). */
 export const personOf = (role) => TEAM[role] || VISITORS[role] || null;
 /** A role's default look (before ⚙ › Characters): the team's, or the visiting specialist's. */
-export const defaultLook = (role) => DEFAULT_TEAM[role] || DEFAULT_VISITORS[role];
+export const defaultLook = (role) => (theme === 'anime' ? ANIME_DEFAULTS[role] : null) || DEFAULT_TEAM[role] || DEFAULT_VISITORS[role];
 export const PRODUCT = ['po', 'analyst', 'designer']; // business NPCs: they talk among themselves and bring the requirements
 export const TECH = ['backend', 'frontend', 'qa'];      // they work and sometimes consult the TL
 
@@ -120,6 +122,24 @@ const defaults = (people) => Object.fromEntries(Object.entries(people).map(([id,
 }));
 export const DEFAULT_TEAM = defaults(TEAM);
 export const DEFAULT_VISITORS = defaults(VISITORS);
+// the anime theme's cast (public/themes.js): its own names and looks, all of them women
+const ANIME_DEFAULTS = { ...defaults(ANIME_TEAM), ...defaults(ANIME_VISITORS) };
+
+// ------------------------------------------------------------------------------------ the theme
+// The graphic theme (⚙ › General › Style): pixel art (the default) or anime. It decides the default
+// cast, and in the anime one there are no men: every look is a woman's (her face, her titles).
+let theme = 'pixel';
+export const currentTheme = () => theme;
+/** Changes the theme: the cast's defaults change, and the customizations are applied again over them. */
+export function setTheme(id) {
+  const next = THEMES.includes(id) ? id : 'pixel';
+  if (next === theme) return false;
+  theme = next;
+  applyAppearance(appearance);
+  return true;
+}
+/** What the theme forces on any look (in the anime one: a woman, without a beard). */
+const themed = (look) => (theme === 'anime' ? { ...look, sex: 'f', beard: false } : look);
 // Palettes to pick colors without typing hex (the terminal cycles them with ◂ ▸; the web also has a free picker).
 export const LOOK_PALETTES = {
   shirt: ['#e0607e', '#f0a73a', '#3f73f0', '#22a68e', '#8ac926', '#6b5bd6', '#ff7a45', '#c86bfa', '#ef476f', '#118ab2', '#06d6a0', '#ffd166'],
@@ -141,7 +161,9 @@ export function applyAppearance(overrides = {}) {
   for (const [id, cfg] of [...Object.entries(TEAM), ...Object.entries(VISITORS)]) {
     const o = appearance[id] || {};
     for (const k of APPEARANCE_KEYS) if (k !== 'title') cfg[k] = o[k] ?? defaultLook(id)[k];
-    cfg.title = o.title ?? defaultLook(id).title; // after the sex: the default title agrees with it
+    Object.assign(cfg, themed({}));
+    // after the sex: the default title agrees with it (in the anime theme, always hers)
+    cfg.title = o.title ?? (theme === 'anime' ? t(`team.titles.${id}`, { g: 'f' }) : defaultLook(id).title);
   }
 }
 applyAppearance();
@@ -224,6 +246,8 @@ export const OFFICE_DOOR = { y0: 430, y1: 494 };      // the gap in the office's
 export const ELEVATOR = { x: -112, w: 96, spot: { x: HALL.spine, y: 134 } };
 const DOOR_IN = { x: 14, y: CORRIDOR_LOW }, DOOR_OUT = { x: HALL.spine, y: CORRIDOR_LOW };
 const NEWCOMER_NAMES = ['Nico', 'Sam', 'Alex', 'Robin', 'Fran', 'Dani', 'Cami', 'Juli', 'Ale', 'Gabi', 'Santi', 'Vale', 'Noa', 'Eli'];
+// in the anime theme the newcomers are women too
+const ANIME_NEWCOMER_NAMES = ['Yui', 'Aoi', 'Miyu', 'Riko', 'Saki', 'Nao', 'Kana', 'Shiori', 'Chika', 'Eri', 'Mana', 'Tomoe', 'Ayaka', 'Fumi'];
 const FADE_MS = 900;
 // how long the badge of what their agent does stays without news (the end of the turn takes it away first)
 export const TAG_MS = 120_000;
@@ -1289,9 +1313,9 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     const present = [...ghosts.values()].filter((g) => !g.gone);
     const used = new Set(present.map((g) => g.cfg.name));
     const specialist = solid && !used.has(look.name);
-    const name = specialist ? look.name : P(NEWCOMER_NAMES.filter((n) => !used.has(n))) || `${look.name} 2`;
-    const cfg = specialist ? { ...look, title: look.title, name, seat }
-      : { ...look, title: look.title, name, seat, prop: 'laptop', hair: P(LOOK_PALETTES.hair), skin: P(LOOK_PALETTES.skin), long: chance(0.5), beard: chance(0.25), glasses: chance(0.3) };
+    const name = specialist ? look.name : P((theme === 'anime' ? ANIME_NEWCOMER_NAMES : NEWCOMER_NAMES).filter((n) => !used.has(n))) || `${look.name} 2`;
+    const cfg = themed(specialist ? { ...look, title: look.title, name, seat }
+      : { ...look, title: look.title, name, seat, prop: 'laptop', hair: P(LOOK_PALETTES.hair), skin: P(LOOK_PALETTES.skin), long: chance(0.5), beard: chance(0.25), glasses: chance(0.3) });
     const g = new Agent(`new:${key}`, cfg, now_, random);
     Object.assign(g, { ghost: true, specialist, role: ev.role, subId: ev.subId || null, session: ev.session || null, project: ev.project || '', desk, x: ELEVATOR.spot.x, y: ELEVATOR.spot.y, seated: false, born: simNow, fade: 0, leaving: false, gone: false });
     elevator.doorAt = simNow; // it arrives by the elevator

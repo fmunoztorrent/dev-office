@@ -1,5 +1,5 @@
 import { createGame, TEAM, personOf, phaseInfo } from './game.js';
-import { applyAppearance, DREAMS, teamNames, setExperts, expertPerson } from './sim.js';
+import { applyAppearance, DREAMS, teamNames, setExperts, expertPerson, setTheme } from './sim.js';
 import { AGENT_NAME, TASK_STATUS } from './targets.js';
 import { briefOptions, briefProblem, briefMessage, defaultTarget, targetLabel, systemTargets } from './brief.js';
 import { createSettings } from './settings-ui.js';
@@ -415,6 +415,13 @@ $('ask-chip').onclick = () => promptsUi.open();
 
 function onPrefs(p) {
   prefs = p;
+  // the graphic theme: another cast (all women in the anime one) and another drawing of the people
+  if (setTheme(p.theme) || game.theme !== (p.theme || 'pixel')) {
+    game.setTheme(p.theme);
+    game.floors.setYou(TEAM.po);
+    renderTeam(); renderSheet(true);
+    settings?.appearanceChanged?.();
+  }
   feed.life = !!p.log?.life;
   $('feed-life').checked = feed.life;
   // the office view: front (the usual one) or isometric top-down, as saved in the settings
@@ -955,10 +962,10 @@ function renderSheet(full) {
   if (!a) { box.hidden = true; if (selected) select(null); return; }
   const cfg = a.cfg;
   box.hidden = false;
-  const look = `${selected}:${cfg.shirt}${cfg.hair}${cfg.skin}${cfg.pants}${cfg.long}${cfg.beard}${cfg.glasses}${cfg.sex}`;
+  const look = `${selected}:${cfg.shirt}${cfg.hair}${cfg.skin}${cfg.pants}${cfg.long}${cfg.beard}${cfg.glasses}${cfg.sex}${game.theme}`;
   if (full || portraitOf !== look) {
     portraitOf = look;
-    drawSprite($('sheet-portrait'), cfg, { P: 4, bg: a.ghost ? '#c7d6e6' : '#c9b48a' });
+    drawSprite($('sheet-portrait'), cfg, { P: 4, bg: a.ghost ? '#c7d6e6' : '#c9b48a', id: a.expert || a.role || a.id });
     $('sheet-name').textContent = cfg.name;
     $('sheet-name').style.color = cfg.shirt;
     const role = a.ghost ? t(a.specialist ? 'ui.visitorOf' : 'ui.newcomerOf', { role: (a.expert && cfg.title) || personOf(a.role)?.title || a.role, project: a.project || '' }).replace(/ · $/, '') : cfg.title;
