@@ -1,8 +1,9 @@
 // The office in the terminal: draw loop, keyboard, mouse and the side panel's model.
 
-import { createSim, TEAM, applyAppearance } from '../public/sim.js';
+import { createSim, TEAM, applyAppearance, setExperts } from '../public/sim.js';
 import { Screen, detectColorMode } from './screen.js';
 import { computeLayout, drawFrame, agentAtCell, boardAtCell, officeAtCell, rackAtCell } from './view.js';
+import { buildScene } from '../public/scene.js';
 import { briefOptions, briefFields, briefCycle, briefProblem, briefMessage, defaultTarget, briefTargetList } from '../public/brief.js';
 import { createSettings } from './settings.js';
 import { t, setLanguage } from '../public/i18n.js';
@@ -20,6 +21,7 @@ const FPS = 20;
 export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), notice, stdin = process.stdin, stdout = process.stdout, quitKey = 'quit' }) {
   return new Promise((resolve) => {
     const sim = createSim();
+    let lastScene = null; // the last frame's scene: what is on screen (clicks pick from it)
     const scr = new Screen({ colorMode });
     const sessions = new Map();
     const model = {
@@ -70,6 +72,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       onTargets(targets) { model.targets = targets || []; },
       onSystems(list) { model.systems = list || []; },
       onAppearance(a) { applyAppearance(a); },
+      onExperts(list) { setExperts(list); },
       onWeather(w) { sim.setWeather(w); },
       onPrefs(p) { if (p?.lang) setLanguage(p.lang); model.prefs = p; },
       onOffices(list, office) {
@@ -261,7 +264,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
           else if (press && btn === 0 && !L.tooSmall && at(L.gearCell, 3)) openSettings();
           else if (press && btn === 0 && !L.tooSmall && !model.brief && !model.settings && at(L.termCell, 4)) { model.panel = !model.panel; resize(); }
           else if (press && btn === 0 && !model.brief && !model.settings && !model.svc) {
-            const who = agentAtCell(L, sim, col, row);
+            const who = agentAtCell(L, lastScene, col, row);
             // with tickets the whiteboard expands (its tasks as post-its); without them, a new brief
             if (!who && boardAtCell(L, col, row)) { if (sim.board.todos.length) model.boardView = true; else openBrief(); }
             else if (!who && rackAtCell(L, col, row)) openServices();
@@ -321,7 +324,9 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       last = now;
       try {
         sim.step(dt, now);
-        drawFrame(scr, L, sim, model, now);
+        // the simulation says what happens; its scene (public/scene.js) is what gets drawn
+        lastScene = buildScene(sim, { now, selected: model.selected || null });
+        drawFrame(scr, L, lastScene, model, now);
         const out = scr.flush();
         if (out) stdout.write(out);
       } catch (err) {

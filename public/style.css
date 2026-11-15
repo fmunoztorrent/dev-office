@@ -541,6 +541,11 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
 .s-more input[type="color"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
 .s-pick { display: grid; gap: 2px; font-size: 12px; color: #6c757d; }
 .s-pick select { min-width: 0; }
+.s-experts { display: grid; gap: 8px; margin-top: 14px; padding-top: 10px; border-top: 3px dashed #2b2d4233; }
+.s-experts h3 { margin: 0; }
+.s-expert { background: #fbf8ff; }
+.s-expert canvas { background: #d9cff2; }
+.s-skill input { min-width: 0; font: 13px "Space Grotesk", sans-serif; }
 .s-dept-text { margin: 4px 0; padding: 6px 8px; font-size: 12.5px; white-space: pre-wrap; max-height: 6.5em; overflow: auto; background: #f6f3e9; box-shadow: inset 3px 0 0 #e9c46a; }
 .s-dept-k { margin-top: 6px; font-size: 12px; font-weight: 600; color: #6c757d; }
 .s-share { display: flex; gap: 6px; align-items: flex-end; justify-content: flex-end; }
@@ -640,6 +645,65 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
   .ar-panes { grid-template-columns: 1fr; overflow-y: auto; }
   .ar-list { max-height: 34vh; }
   .ar-card .brief-head { flex-wrap: wrap; }
+}
+
+/* a project's loops (loops-ui.js): its steps, which one is going and how each criterion is */
+.loops-dlg { width: min(980px, calc(100vw - 32px)); }
+.lp-card { background: var(--paper); box-shadow: 0 0 0 3px var(--ink), 4px 4px 0 3px #00000040; display: flex; flex-direction: column; max-height: calc(100vh - 56px); min-height: min(560px, calc(100vh - 56px)); }
+.lp-panes { display: grid; grid-template-columns: minmax(200px, 1fr) 3fr; gap: 12px; padding: 4px 16px 12px; min-height: 0; flex: 1; overflow: hidden; }
+.lp-list { list-style: none; margin: 0; padding: 2px; display: grid; align-content: start; gap: 6px; overflow-y: auto; }
+.lp-pick { width: 100%; display: grid; gap: 2px; text-align: left; background: #fff; color: var(--ink); border: 0; box-shadow: 0 0 0 2px var(--ink); padding: 6px 8px; cursor: pointer; font: 13.5px "Space Grotesk", sans-serif; }
+.lp-pick[aria-pressed="true"] { background: #ffe08a; }
+.lp-pick small { color: #6c757d; }
+.lp-pick.blocked small { color: #c1121f; } .lp-pick.done small { color: #2a7d5f; }
+.lp-pick:focus-visible { outline: 3px solid #f4a261; outline-offset: 2px; }
+.lp-detail { overflow-y: auto; display: grid; align-content: start; gap: 8px; padding: 2px; min-width: 0; }
+.lp-view, .lp-form { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.lp-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.lp-head h3, .lp-form h3 { margin: 0; flex: 1 1 160px; font: 24px/1 "VT323", monospace; overflow-wrap: anywhere; }
+.lp-status { font: 16px/1 "VT323", monospace; padding: 3px 8px 2px; background: #ffd166; box-shadow: 0 0 0 2px var(--ink); }
+.lp-status.running { background: #7dffb0; } .lp-status.blocked { background: #ffb3c1; } .lp-status.done { background: #cfe8ff; } .lp-status.paused { background: #e9ecef; }
+.lp-act { font-size: 13px; color: #495057; }
+.lp-meta { margin: 0; font-size: 13px; color: #495057; }
+.lp-detail-msg { margin: 0; font-size: 13px; padding: 6px 8px; background: #fff7d6; box-shadow: 0 0 0 2px var(--ink); }
+.lp-detail-msg.blocked { background: #ffe3e8; }
+.lp-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.lp-btns .btn { font-size: 17px; padding: 4px 10px; }
+.lp-gcrit { margin: 0; padding-left: 20px; font-size: 13px; display: grid; gap: 2px; }
+.lp-gcrit code, .lp-ctext code { margin-left: 6px; font: 12px ui-monospace, "SF Mono", Menlo, monospace; background: #1b1f33; color: #7dffb0; padding: 0 4px; }
+.lp-add { display: flex; gap: 6px; }
+.lp-add input { flex: 1; min-width: 0; font: 13px "Space Grotesk", sans-serif; color: var(--ink); background: #fff; border: 0; box-shadow: 0 0 0 2px var(--ink); padding: 5px 8px; }
+.lp-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.lp-step { background: #fff; box-shadow: 0 0 0 2px var(--ink); padding: 6px 8px; display: grid; gap: 6px; }
+.lp-step.current { box-shadow: 0 0 0 3px var(--ink), 3px 3px 0 3px #ffd166; }
+.lp-step.done, .lp-step.skipped { opacity: .72; }
+.lp-step.blocked { background: #fff0f3; }
+.lp-srow { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+.lp-stext { flex: 1; min-width: 0; font-size: 13.5px; overflow-wrap: anywhere; }
+.lp-tries { color: #6c757d; white-space: nowrap; }
+.lp-sdetail { color: #c1121f; }
+.lp-crits { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.lp-crit { display: flex; gap: 6px; align-items: baseline; font-size: 13px; }
+.lp-crit.met .lp-ctext { color: #2a7d5f; } .lp-crit.unmet .lp-ctext { color: #c1121f; }
+.lp-ctext { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.lp-ctext small { color: #6c757d; } .lp-you { font-style: italic; }
+.lp-cbtns { display: flex; gap: 4px; }
+.lp-cbtns .s-mini { padding: 2px 7px; }
+.lp-form textarea { width: 100%; box-sizing: border-box; font: 13px/1.4 "Space Grotesk", sans-serif; color: var(--ink); background: #fff; border: 0; box-shadow: 0 0 0 2px var(--ink); padding: 6px 8px; resize: vertical; }
+.lp-form input[type="text"], .lp-form input[type="number"], .lp-form select { font: 14px "Space Grotesk", sans-serif; color: var(--ink); background: #fff; border: 0; box-shadow: 0 0 0 2px var(--ink); padding: 5px 8px; min-width: 0; }
+.lp-nums { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.lp-nums .b-field { grid-template-columns: auto 80px; }
+.lp-fsteps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.lp-fstep { display: grid; gap: 4px; padding: 6px 8px; background: #fffdf2; box-shadow: 0 0 0 2px #2b2d4233; }
+.lp-fhead { display: flex; gap: 6px; align-items: center; }
+.lp-fhead b { font: 18px/1 "VT323", monospace; } .lp-fhead small { color: #6c757d; flex: 1; }
+.lp-flabel { font-size: 12px; color: #6c757d; }
+.loops-dlg .brief-foot .b-problem { margin-right: auto; }
+.loop-chip.blocked { color: #ffb3c1; text-shadow: 0 0 6px #ff4d6d88; }
+@media (max-width: 720px) {
+  .lp-panes { grid-template-columns: 1fr; overflow-y: auto; }
+  .lp-list { max-height: 26vh; }
+  .lp-nums { grid-template-columns: 1fr; }
 }
 
 /* the archive, to read: its text as a document, its index underneath */

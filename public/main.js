@@ -1,5 +1,5 @@
 import { createGame, TEAM, personOf, phaseInfo } from './game.js';
-import { applyAppearance, DREAMS, teamNames } from './sim.js';
+import { applyAppearance, DREAMS, teamNames, setExperts, expertPerson } from './sim.js';
 import { AGENT_NAME, TASK_STATUS } from './targets.js';
 import { briefOptions, briefProblem, briefMessage, defaultTarget, targetLabel, systemTargets } from './brief.js';
 import { createSettings } from './settings-ui.js';
@@ -7,6 +7,8 @@ import { createServices } from './services-ui.js';
 import { createBoardView } from './board-ui.js';
 import { createPrompts } from './prompts-ui.js';
 import { createDirectivesUi, createArchiveUi } from './floors-ui.js';
+import { createLoops } from './loops-ui.js';
+import './renderers/plan.js'; // the reference renderer (public/scene.js): ?renderer=plan
 import { drawSprite } from './sprite.js';
 import { season, isSouth, daylight, weatherIcon } from './sky.js';
 import { t, ta, setLanguage, onLanguage, getLanguage, timeOf } from './i18n.js';
@@ -34,10 +36,13 @@ let clarifications = []; // the analyst's reviews of your briefs (server/clarify
 // the two shared floors: the executive one (directives, how each office is doing) and the archive
 let directives = [];
 let overview = [];
+let loops = []; // the projects' loops (server/loops.js): the 🔁 chip and its dialog
 
 // the whiteboard: with tickets it expands to show them as post-its; without them, a new brief
 // the PO is you: with a question pending, clicking it (or the manager, hand up) opens the questions
 const game = createGame($('office'), {
+  // another renderer of the scene (public/renderers.js), from the address: ?renderer=plan (the canvas's own by default)
+  renderer: new URLSearchParams(location.search).get('renderer'),
   onSelect: (id) => ((id === 'po' || id === 'manager') && asking.length ? promptsUi.open() : select(id)),
   onBoardClick: () => (boardView.hasTickets() ? boardView.open() : openBrief()),
   onRackClick: () => servicesUi.open(),
@@ -110,6 +115,8 @@ function connect() {
       onRuns(st.pipelines || []);
       systems = st.systems || [];
       onTargets(st.targets);
+      onLoops(st.loops || []);
+      setExperts(st.experts || []);
       onServices(st.services || []);
       onPrompts(st.prompts || []);
       clarifications = st.clarifications || [];
@@ -126,6 +133,8 @@ function connect() {
     if (msg.type === 'pipelines') onRuns(msg.runs);
     if (msg.type === 'targets') onTargets(msg.targets);
     if (msg.type === 'systems') { systems = msg.systems || []; if ($('brief').open) renderBrief(); }
+    if (msg.type === 'loops') onLoops(msg.loops);
+    if (msg.type === 'experts') { setExperts(msg.experts); settings?.expertsChanged?.(msg.experts); }
     if (msg.type === 'services' && msg.office === office?.id) onServices(msg.services);
     if (msg.type === 'prompts' && msg.office === office?.id) onPrompts(msg.prompts);
     if (msg.type === 'clarify' && msg.clarify?.office === office?.id) onClarify(msg.clarify);
@@ -163,6 +172,34 @@ function renderServicesChip() {
   chip.setAttribute('aria-label', chip.title);
 }
 $('svc-chip').onclick = () => servicesUi.open();
+
+// ---------------------------------------------------------------- the projects' loops
+
+const loopsUi = createLoops({
+  getLoops: () => loops,
+  getProjects: () => targets.filter((x) => x.registered).map((x) => ({ id: x.id, name: x.name })),
+  office: () => office?.id || 'main',
+});
+function onLoops(list) {
+  loops = Array.isArray(list) ? list : [];
+  renderLoopChip();
+  loopsUi.refresh();
+}
+/** The 🔁 chip in the HUD: the office's loops that are going (it shows up with the first one); red if one waits for you. */
+function renderLoopChip() {
+  const mine = loopsUi.mine();
+  const going = mine.filter((l) => l.status === 'running').length;
+  const blocked = mine.filter((l) => l.status === 'blocked').length;
+  const chip = $('loop-chip');
+  chip.hidden = !mine.length;
+  chip.textContent = `🔁 ${going}${blocked ? ` ✋${blocked}` : ''}`;
+  chip.classList.toggle('idle', !going && !blocked);
+  chip.classList.toggle('blocked', !!blocked);
+  chip.title = t('loop.ui.chip', { n: going, blocked });
+  chip.setAttribute('aria-label', chip.title);
+}
+$('loop-chip').onclick = () => loopsUi.open();
+$('open-loops').onclick = () => { $('work').close(); loopsUi.open(); };
 
 // ---------------------------------------------------------------- what the agents ask you
 
@@ -661,7 +698,7 @@ function addLog(ev, opts) {
   if (ev.kind === 'context') return; // it only moves the context bar
   const li = document.createElement('li');
   li.dataset.ev = '1';
-  const cfg = personOf(ev.role);
+  const cfg = personOf(ev.role) || (ev.expert ? expertPerson(ev.expert) : null);
   const who = ev.kind === 'chat' || ev.kind === 'poke' ? ev.from : cfg?.name || t('events.office');
   let text = ev.text || ev.kind;
   if (ev.kind === 'phase') {
@@ -923,7 +960,7 @@ function renderSheet(full) {
     drawSprite($('sheet-portrait'), cfg, { P: 4, bg: a.ghost ? '#c7d6e6' : '#c9b48a' });
     $('sheet-name').textContent = cfg.name;
     $('sheet-name').style.color = cfg.shirt;
-    const role = a.ghost ? t(a.specialist ? 'ui.visitorOf' : 'ui.newcomerOf', { role: personOf(a.role)?.title || a.role, project: a.project || '' }).replace(/ · $/, '') : cfg.title;
+    const role = a.ghost ? t(a.specialist ? 'ui.visitorOf' : 'ui.newcomerOf', { role: (a.expert && cfg.title) || personOf(a.role)?.title || a.role, project: a.project || '' }).replace(/ · $/, '') : cfg.title;
     $('sheet-role').textContent = `${role}${a.badges.size ? ` · ${t('ui.subagents', { n: a.badges.size })}` : ''}`;
   }
   $('sheet-mood').textContent = `${moodOf(a)}${a.text && ['working', 'thinking', 'red'].includes(a.state) ? `: ${a.text}` : ''}`;
@@ -1206,6 +1243,7 @@ document.addEventListener('keydown', (e) => {
   else if (k === 'v') { e.preventDefault(); toggleView(); }
   else if (k === 'o') { e.preventDefault(); nextOffice(); }
   else if (k === 'l') { e.preventDefault(); servicesUi.open(); }
+  else if (k === 'i') { e.preventDefault(); loopsUi.open(); }
   else if (k === 'r') { if (promptsUi.open()) e.preventDefault(); }
 });
 

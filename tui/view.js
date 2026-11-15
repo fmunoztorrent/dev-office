@@ -1,8 +1,10 @@
-// Draws the simulation (public/sim.js) on the terminal framebuffer.
+// Draws the scene (public/scene.js: what the simulation, public/sim.js, says is on screen) on the terminal
+// framebuffer: the terminal is one more renderer of the same scene as the browser's canvas.
 // The 960×600 world is scaled to the available pixels; the text goes in cells on top.
 
-import { W, H, LEFT, WORLD_W, BATHROOM, HALL, OFFICE_DOOR, ELEVATOR, TEAM, personOf, SPOT, BOARD, PLANTS, STATUS_ICON, PHASE_COLOR, phaseInfo, DREAMS, DREAM_PALETTE, RAINBOW_COLORS, rainbowPixels, CAFE, DINING, DINING_SEATS, PARTITION, RACK, EXTINGUISHER, daylight, GLASS, EASEL, CLOCK, TV, SOFA, ALARM, SIGN, tvChannel, HOT_DESKS, gait, screenLines, screenMode } from '../public/sim.js';
+import { W, H, LEFT, WORLD_W, BATHROOM, HALL, OFFICE_DOOR, ELEVATOR, TEAM, personOf, SPOT, BOARD, PLANTS, STATUS_ICON, PHASE_COLOR, phaseInfo, DREAMS, DREAM_PALETTE, RAINBOW_COLORS, rainbowPixels, CAFE, DINING, DINING_SEATS, PARTITION, RACK, EXTINGUISHER, daylight, GLASS, EASEL, CLOCK, TV, SOFA, ALARM, SIGN, tvChannel, HOT_DESKS, gait, screenLines, screenMode, expertPerson } from '../public/sim.js';
 import { outdoor, lightning, weatherIcon } from '../public/sky.js';
+import { buildScene } from '../public/scene.js';
 import { hex, mix, fit, wrap, strWidth } from './screen.js';
 import { AGENT_NAME, TASK_STATUS } from '../public/targets.js';
 import { briefOptions, briefProblem, targetLabel, briefTargetList } from '../public/brief.js';
@@ -45,7 +47,9 @@ export function computeLayout(cols, rows, { panel = true } = {}) {
   return { cols, rows, panelW, panelX: cols - panelW, sceneCols, sceneRows, s, pw, ph, ox, oy, gearCell, termCell, officeCell, panel: !!panelW, tooSmall: cols < 60 || rows < 18 };
 }
 
-export function drawFrame(scr, L, sim, model, now) {
+/** @param scene the frame's scene (public/scene.js); the simulation itself also works (its scene is built here) */
+export function drawFrame(scr, L, sceneOrSim, model, now) {
+  const scene = sceneOrSim?.world ? sceneOrSim : buildScene(sceneOrSim, { now, selected: model.selected || null });
   scr.clear(C.appBg);
   if (L.tooSmall) {
     const msg = t('scene.resize');
@@ -53,52 +57,52 @@ export function drawFrame(scr, L, sim, model, now) {
     return;
   }
   const g = geometry(scr, L);
-  const date = model.clock?.() || sim.date();
-  const light = daylight(date, sim.weather);
-  drawRoom(g, sim, now, light, date);
-  drawBoard(g, sim, date);
+  const date = model.clock?.() || scene.date;
+  const light = model.clock ? daylight(date, scene.weather) : scene.light;
+  drawRoom(g, scene, now, light, date);
+  drawBoard(g, scene, date);
   const items = [];
-  for (const a of Object.values(sim.agents)) {
+  for (const a of Object.values(scene.team)) {
     const s = a.cfg.seat;
     items.push({ y: s.y - 1, fn: () => drawChair(g, a) });
     items.push({ y: s.y + 1, fn: () => drawDesk(g, a, now) });
-    items.push({ y: a.seated ? s.y : a.y, fn: () => drawPerson(g, a, sim, model, now) });
+    items.push({ y: a.seated ? s.y : a.y, fn: () => drawPerson(g, a, scene, model, now) });
   }
   // the newcomers' desks: there while their newcomer is
-  for (const a of sim.ghosts) {
+  for (const a of scene.visitors) {
     if (a.desk < 0 || a.fade <= 0.2) continue;
     // the chair behind whoever sits there, the desk in front (like the team's)
     items.push({ y: HOT_DESKS[a.desk].y - 1, fn: () => g.rect(HOT_DESKS[a.desk].x - 14, HOT_DESKS[a.desk].y - 36, 28, 30, C.chair) });
-    items.push({ y: HOT_DESKS[a.desk].y + 1, fn: () => drawHotDesk(g, sim, a.desk, now) });
+    items.push({ y: HOT_DESKS[a.desk].y + 1, fn: () => drawHotDesk(g, scene, a.desk, now) });
   }
   items.push({ y: BATHROOM.front - 1, fn: () => drawBathFront(g) });
-  for (const a of sim.ghosts) if (a.fade > 0.2) items.push({ y: a.seated ? a.cfg.seat.y : a.y, fn: () => drawPerson(g, ghostly(a), sim, model, now) });
+  for (const a of scene.visitors) if (a.fade > 0.2) items.push({ y: a.seated ? a.cfg.seat.y : a.y, fn: () => drawPerson(g, ghostly(a), scene, model, now) });
   items.push({ y: CAFE.bistro.y, fn: () => drawBistro(g) });
   items.push({ y: DINING.top + 13, fn: () => drawDiningWall(g) });
   items.push({ y: DINING.table.y - 1, fn: () => drawDiningBackChairs(g) });
-  items.push({ y: DINING.table.y + 1, fn: () => drawDiningTable(g, sim) });
+  items.push({ y: DINING.table.y + 1, fn: () => drawDiningTable(g, scene) });
   for (const s of DINING_SEATS.front) items.push({ y: s.y + 1, fn: () => drawDiningFrontChair(g, s) });
-  items.push({ y: 242, fn: () => drawProps(g, sim, now, model) });
-  items.push({ y: TV.feet, fn: () => drawTV(g, sim, now) });
+  items.push({ y: 242, fn: () => drawProps(g, scene, now, model) });
+  items.push({ y: TV.feet, fn: () => drawTV(g, scene, now) });
   items.push({ y: SOFA.y + 8, fn: () => drawSofa(g) });
   items.sort((p, q) => p.y - q.y).forEach((i) => i.fn());
-  drawParticles(g, sim);
-  drawLights(g, sim, now, light);
-  for (const a of Object.values(sim.agents)) drawDream(g, a, now);
-  if (model.selected) drawPlumbob(g, sim.agents[model.selected], now);
+  drawParticles(g, scene);
+  drawLights(g, scene, now, light);
+  for (const a of Object.values(scene.team)) drawDream(g, a, now);
+  if (model.selected) drawPlumbob(g, scene.team[model.selected], now);
   // Bubbles: the newest are placed first; if they collide with another, they move up.
   const placed = [];
-  const withBubble = [...Object.values(sim.agents), ...sim.ghosts.filter((a) => a.fade > 0.5)].filter((a) => a.bubble).sort((a, b) => b.bubble.until - a.bubble.until);
+  const withBubble = [...Object.values(scene.team), ...scene.visitors.filter((a) => a.fade > 0.5)].filter((a) => a.bubble).sort((a, b) => b.bubble.until - a.bubble.until);
   for (const a of withBubble) drawBubble(g, a, placed);
-  drawBanner(g, sim, now);
+  drawBanner(g, scene, now);
   drawWaiting(g, model, now);
   drawSceneIcons(scr, L, model);
-  drawHeader(scr, L, model, sim, light);
+  drawHeader(scr, L, model, scene, light);
   drawFooter(scr, L, model);
-  if (L.panelW) drawPanel(scr, L, sim, model);
+  if (L.panelW) drawPanel(scr, L, scene, model);
   if (model.brief) drawBrief(scr, L, model);
   if (model.svc) drawServices(scr, L, model);
-  if (model.boardView) drawBoardView(scr, L, sim);
+  if (model.boardView) drawBoardView(scr, L, scene);
   if (model.settings) model.settings.draw(scr, L);
 }
 
@@ -149,10 +153,10 @@ function geometry(scr, L) {
   };
 }
 
-function drawRoom(g, sim, now, light, date) {
+function drawRoom(g, scene, now, light, date) {
   const { rect, scr, X, Y } = g;
   // the glass wall: the landscape with the time, the season and the weather (sky.js), and its glass
-  const { shapes } = outdoor({ date, weather: sim.weather, light, now, ...GLASS, lod: 'low' });
+  const { shapes } = outdoor({ date, weather: scene.weather, light, now, ...GLASS, lod: 'low' });
   for (const [x, y, w, h, c, a, keep] of shapes) {
     if (a >= 0.99) rect(x, y, w, h, c);
     else g.blend(x, y, w, h, c, a, keep);
@@ -163,7 +167,7 @@ function drawRoom(g, sim, now, light, date) {
   rect(GLASS.x1, 0, CAFE.x - GLASS.x1, 122, C.wall);
   rect(GLASS.x1 + 14, 34, 40, 52, C.frame); rect(GLASS.x1 + 17, 37, 34, 46, C.paper); rect(GLASS.x1 + 22, 44, 24, 18, C.blue);
   rect(0, 116, CAFE.x, 6, C.baseboard);
-  drawLeftSide(g, sim, now);
+  drawLeftSide(g, scene, now);
   // the sign, in vinyl on the glass
   rect(SIGN.x - 39, SIGN.y, 78, 44, C.frame);
   const r = g.row(SIGN.y + 22);
@@ -171,7 +175,7 @@ function drawRoom(g, sim, now, light, date) {
   g.centered(SIGN.x, r - (g.s > 0.12 ? 1 : 0), 'DEV TEAM', [C.accent, C.ok, C.blue, C.err][hue], C.frame);
   if (g.s > 0.12) g.centered(SIGN.x, r, 'OFFICE', C.accent, C.frame);
   // the rack's alarm, hanging from the beam
-  const alarm = sim.fire && ['burning', 'fighting'].includes(sim.fire.phase);
+  const alarm = scene.fire && ['burning', 'fighting'].includes(scene.fire.phase);
   rect(ALARM.x, ALARM.y + 3, 10, 8, alarm && Math.floor(now / 150) % 2 ? hex('#ff3b3b') : hex('#7a1f2b'));
   // the café: tiles, neon, shelf, fridge, counter and espresso machine
   rect(CAFE.x, 0, W - CAFE.x, 122, C.tile);
@@ -221,25 +225,25 @@ function drawRoom(g, sim, now, light, date) {
 
 // Left of the office: the bathroom (tiles, two stalls, the sink and its mirror), the hallway with
 // the elevator at its end, their floors and their low walls, with the doors and their signs.
-function drawLeftSide(g, sim, now) {
+function drawLeftSide(g, scene, now) {
   const { rect } = g, B = BATHROOM;
   rect(B.x0, 0, B.x1 - B.x0, 122, hex('#d3e3e9'));
   B.stalls.forEach((st, i) => {
-    const x0 = st.x - st.w / 2, open = now - sim.bath.doorAt[i] < 650;
+    const x0 = st.x - st.w / 2, open = now - scene.bath.doorAt[i] < 650;
     rect(x0 - 2, 32, st.w + 4, 90, hex('#8d99ae'));
     rect(x0, 36, st.w, 82, open ? C.doorDark : hex('#eef1f4'));
-    rect(st.x - 5, 22, 10, 7, sim.bath.stalls[i] ? C.err : C.ok);
+    rect(st.x - 5, 22, 10, 7, scene.bath.stalls[i] ? C.err : C.ok);
   });
   const sk = B.sink;
   rect(sk.x - sk.w / 2 + 3, 36, sk.w - 6, 50, hex('#cfeaf2')); rect(sk.x - sk.w / 2, 96, sk.w, 26, hex('#adb5bd'));
   rect(B.x1, 0, HALL.x0 - B.x1, 122, C.baseboard);
   rect(HALL.x0, 0, HALL.x1 - HALL.x0, 122, hex('#3b4262'));
-  const e = ELEVATOR, dt = now - sim.elevator.doorAt, open = dt >= 0 && dt < 2800;
+  const e = ELEVATOR, dt = now - scene.elevator.doorAt, open = dt >= 0 && dt < 2800;
   rect(e.x, 24, e.w, 98, hex('#9aa3ae'));
   rect(e.x + 8, 34, e.w - 16, 88, open ? hex('#ffe8a3') : hex('#c3cad3'));
   if (!open) rect(e.x + e.w / 2, 34, 1, 88, hex('#868e96'));
   rect(e.x + e.w / 2 - 18, 8, 36, 13, C.frame);
-  if (g.s > 0.12) g.centered(e.x + e.w / 2, g.row(14), `▲ ${sim.elevator.floor}`, C.err, C.frame);
+  if (g.s > 0.12) g.centered(e.x + e.w / 2, g.row(14), `▲ ${scene.elevator.floor}`, C.err, C.frame);
   rect(HALL.x1, 0, -HALL.x1, 122, C.baseboard);
   rect(LEFT, 116, -LEFT, 6, C.baseboard);
   // floors: the hallway's carpet (and the lobby) and the bathroom's small tiles
@@ -291,13 +295,13 @@ function drawDiningBackChairs(g) {
   const colors = [C.accent, C.ok, C.err, hex('#118ab2')];
   DINING_SEATS.back.forEach((s, i) => g.rect(s.x - 11, s.y - 36, 22, 24, colors[i % 4]));
 }
-function drawDiningTable(g, sim) {
+function drawDiningTable(g, scene) {
   const { x, y, w } = DINING.table;
   g.rect(x - w / 2 + 8, y + 18, 3, 22, C.woodEdge); g.rect(x + w / 2 - 11, y + 18, 3, 22, C.woodEdge);
   g.rect(x - w / 2, y - 14, w, 28, hex('#f4f1ea'));
   g.rect(x - w / 2, y + 14, w, 7, hex('#e1d9c9'));
   if (g.s < 0.14) return;
-  for (const a of Object.values(sim.agents)) {
+  for (const a of Object.values(scene.team)) {
     if (!a.perch || !a.food || a.diningSeat?.row !== 'back') continue;
     const col = g.X(a.x) - 1;
     g.scr.text(col, g.row(y - 6), a.food, C.white, -1, g.L.ox + g.L.pw - col);
@@ -309,9 +313,9 @@ function drawDiningFrontChair(g, s) {
 }
 
 // The whiteboard on its easel, with the red digital clock on top.
-function drawBoard(g, sim, date) {
+function drawBoard(g, scene, date) {
   const { rect, scr, X } = g;
-  const board = sim.board;
+  const board = scene.board;
   const wood = C.wood, woodDark = C.woodEdge;
   const [[lt, lf], [rt, rf]] = EASEL.legs;
   rect(lt - 3, EASEL.top + 4, rt - lt + 6, 4, wood);
@@ -370,15 +374,15 @@ function drawSofa(g) {
 }
 const TV_BG = { breaking: '#9d0208', sports: '#2f8f46', news: '#1d3557' };
 const SKY_BG = { clear: '#4a92d8', partly: '#5a95cc', cloudy: '#6f7a8a', fog: '#8d96a3', drizzle: '#55657a', rain: '#4a5568', snow: '#8fa6bf', storm: '#2d3340' };
-function drawTV(g, sim, now) {
+function drawTV(g, scene, now) {
   const { x, feet, w, h } = TV;
   const top = feet - 18 - h;
   const dark = hex('#1b1d27');
   g.rect(x - 2, top + h - 2, 4, 8, dark);
   for (let k = 0; k <= 6; k++) { const yy = top + h + 6 + k * 2; g.rect(x - 4 - k * 3.4, yy, 3, 3, dark); g.rect(x + 1 + k * 3.4, yy, 3, 3, dark); }
   g.rect(x - w / 2, top, w, h, hex('#111219'));
-  const ch = tvChannel(sim, now);
-  const wth = sim.weather;
+  const ch = tvChannel(scene, now);
+  const wth = scene.weather;
   const bg = hex(ch === 'weather' ? SKY_BG[wth.kind] : TV_BG[ch]);
   g.rect(x - w / 2 + 3, top + 3, w - 6, h - 9, bg);
   if (ch === 'sports') g.rect(x, top + 3, 1, h - 9, C.white);
@@ -437,7 +441,7 @@ function drawDesk(g, a, now) {
   }
   scr.rect(X(s.x + 33), my + mh + 1, 1, Math.max(1, Y(s.y - 14) - (my + mh + 1)), C.monitor); // monitor stand
   // carpetas = subagentes asignados
-  for (let i = 0; i < Math.min(3, a.badges.size); i++) rect(s.x - 46 + i * 6, s.y - 30 - i * 4, 18, 12, C.folder);
+  for (let i = 0; i < Math.min(3, a.subagents); i++) rect(s.x - 46 + i * 6, s.y - 30 - i * 4, 18, 12, C.folder);
   // name plate
   g.centered(s.x, g.row(s.y + 10), a.id === 'po' ? ` ${a.cfg.name} · ${t('team.you')} ` : ` ${a.cfg.name} `, hex(c.shirt), C.frame); // the PO is you
 }
@@ -454,26 +458,26 @@ function ghostly(a) {
   return p;
 }
 
-function drawHotDesk(g, sim, i, now) {
+function drawHotDesk(g, scene, i, now) {
   const { rect, X, Y, scr } = g;
   const s = HOT_DESKS[i];
-  const a = sim.ghosts.find((x) => x.desk === i);
+  const a = scene.visitors.find((x) => x.desk === i);
   rect(s.x - 36, s.y - 14, 72, 14, C.wood);
   rect(s.x - 36, s.y - 2, 72, 22, C.woodFront);
   rect(s.x - 36, s.y - 2, 72, 2, C.woodEdge);
   const mx = X(s.x + 4), my = Y(s.y - 32), mw = Math.max(2, X(s.x + 28) - mx), mh = Math.max(1, Y(s.y - 18) - my);
   screenPixels(g, mx, my, mw, mh, screenMode(a, now), hex(a?.cfg.shirt || '#8d99ae'), now, a?.id || `hot${i}`);
-  if (a?.badges.size) rect(s.x - 30, s.y - 24, 16, 11, C.folder);
+  if (a?.subagents) rect(s.x - 30, s.y - 24, 16, 11, C.folder);
   if (a) g.centered(s.x, g.row(s.y + 9), ` ${a.cfg.name} `, hex(washed(a.cfg.shirt)), C.frame);
 }
 
-function drawProps(g, sim, now, model = {}) {
+function drawProps(g, scene, now, model = {}) {
   const { rect, X, Y, scr } = g;
   // server rack: blinks with the backend; on fire, red; when repaired it boots little by little
-  const f = sim.fire, burning = f && ['burning', 'fighting'].includes(f.phase);
+  const f = scene.fire, burning = f && ['burning', 'fighting'].includes(f.phase);
   rect(RACK.x, RACK.y, RACK.w, RACK.h, C.frame);
   rect(RACK.x + 2, RACK.y + 2, RACK.w - 4, RACK.h - 4, burning ? hex('#3a2324') : C.rack);
-  const be = sim.agents.backend.state === 'working';
+  const be = scene.team.backend.state === 'working';
   const x0 = X(578), rows = Math.max(2, Math.floor((Y(236) - Y(156)) / 2));
   const booted = f?.phase === 'repair' ? Math.floor(((now - f.at) / 7500) * rows) : rows;
   for (let i = 0; i < rows; i++) {
@@ -498,7 +502,7 @@ function drawProps(g, sim, now, model = {}) {
     }
   }
   // the extinguisher, next to the rack (if nobody is holding it)
-  if (sim.extinguisher === 'floor') { rect(EXTINGUISHER.x - 5, EXTINGUISHER.y - 24, 10, 24, C.ext); rect(EXTINGUISHER.x - 3, EXTINGUISHER.y - 28, 6, 4, C.ink); }
+  if (scene.extinguisher === 'floor') { rect(EXTINGUISHER.x - 5, EXTINGUISHER.y - 24, 10, 24, C.ext); rect(EXTINGUISHER.x - 3, EXTINGUISHER.y - 28, 6, 4, C.ink); }
   // plants and table
   for (const [x, y] of PLANTS) {
     rect(x - 10, y - 14, 20, 16, C.pot);
@@ -509,7 +513,7 @@ function drawProps(g, sim, now, model = {}) {
 }
 
 // Sprites at terminal scale: 5×10 (large) or 3×6 (small), anchored at the feet.
-function drawPerson(g, a, sim, model, now) {
+function drawPerson(g, a, scene, model, now) {
   if (a.hidden) return; // in the bathroom
   const { scr, X, Y, L } = g;
   const c = a.cfg;
@@ -586,13 +590,13 @@ function drawPerson(g, a, sim, model, now) {
   // what their agent is doing, as small as it gets (✏️ cart.js, 🧪 tests), over the head (or the name)
   if (a.badge && !a.bubble && big) g.centered(a.x, headRow - (sitting ? 1 : 2), ` ${a.badge} `, hex(c.shirt), C.frame);
   if (a.seated && a.food && big) scr.text(X(c.seat.x - 30), g.row(c.seat.y - 18), a.food, C.white, -1, L.ox + L.pw - X(c.seat.x - 30));
-  const icon = STATUS_ICON[a.state] || (a.badges.size ? '🤖' : '');
+  const icon = STATUS_ICON[a.state] || (a.subagents ? '🤖' : '');
   if (icon) scr.text(x0 + sw + 1, headRow, icon, C.white, -1, L.ox + L.pw - (x0 + sw + 1));
-  if (sim.turn === a.id && sim.turnPhase) {
-    const label = `▶${phaseInfo(sim.turnPhase).label}`;
+  if (scene.turn.role === a.id && scene.turn.phase) {
+    const label = `▶${phaseInfo(scene.turn.phase).label}`;
     const w = strWidth(label) + 2;
     const col = Math.max(L.ox, x0 - 1 - w);
-    const bg = PHASE_COLOR[sim.turnPhase] ? hex(PHASE_COLOR[sim.turnPhase]) : hex(c.shirt);
+    const bg = PHASE_COLOR[scene.turn.phase] ? hex(PHASE_COLOR[scene.turn.phase]) : hex(c.shirt);
     scr.text(col, headRow, ` ${label} `, C.frame, bg);
   }
 }
@@ -628,7 +632,7 @@ function drawDream(g, a, now) {
 
 /** Light: at night the color barely cools down (the lights stay on) and the neon, the monitors,
  *  the bathroom and the fire glow faintly. */
-function drawLights(g, sim, now, light) {
+function drawLights(g, scene, now, light) {
   const { scr, L } = g;
   const [sr, sg, sb] = light.shade;
   if (sr + sg + sb < 2.995) {
@@ -639,18 +643,18 @@ function drawLights(g, sim, now, light) {
   }
   const n = light.night;
   g.tint(840, 30, 56, C.neon, 0.1 + n * 0.1);
-  BATHROOM.stalls.forEach((st, i) => g.tint(st.x, 25, 10, sim.bath.stalls[i] ? C.err : C.ok, 0.2));
+  BATHROOM.stalls.forEach((st, i) => g.tint(st.x, 25, 10, scene.bath.stalls[i] ? C.err : C.ok, 0.2));
   for (const y of [220, 420, 620]) if (n > 0.3) g.tint(HALL.spine, y, 60, C.accent, n * 0.08);
-  for (const a of Object.values(sim.agents)) {
+  for (const a of Object.values(scene.team)) {
     const busy = ['working', 'thinking', 'red'].includes(a.state);
     if (busy || n > 0.3) g.tint(a.cfg.seat.x + 34, a.cfg.seat.y - 34, 32, a.state === 'red' ? C.err : C.blue, (busy ? 0.06 : 0.02) + n * 0.06);
   }
   for (const lx of [DINING.table.x - 34, DINING.table.x + 34]) if (n > 0.3) g.tint(lx, DINING.table.y - 52, 64, C.accent, n * 0.1);
   g.tint(CLOCK.x + CLOCK.w / 2, CLOCK.y + CLOCK.h / 2, 40, hex('#ff3b30'), 0.04 + n * 0.05);
-  const f = sim.fire;
+  const f = scene.fire;
   if (f?.level > 0) g.tint(RACK.x + RACK.w / 2, RACK.y + 10, 70 + 120 * f.level, C.fire2, (0.25 + 0.05 * Math.sin(now / 70)) * f.level);
   // lightning lights up the office for an instant
-  const bolt = lightning(now, sim.weather);
+  const bolt = lightning(now, scene.weather);
   if (bolt.flash > 0) g.blend(LEFT, 0, WORLD_W, H, C.white, 0.08 * bolt.flash);
 }
 
@@ -689,9 +693,9 @@ function drawBubble(g, a, placed) {
   scr.text(Math.max(col, Math.min(col + w - 1, x)), row0 + lines.length, '▾', bg, -1);
 }
 
-function drawParticles(g, sim) {
+function drawParticles(g, scene) {
   const { scr, X, Y, L } = g;
-  for (const p of sim.particles) {
+  for (const p of scene.particles) {
     if (p.x < LEFT || p.x >= W || p.y < 0 || p.y >= H) continue;
     const x = X(p.x), y = Y(p.y);
     if (p.kind === 'code') scr.text(x, Math.floor(y / 2), p.ch, hex(p.color), -1, L.ox + L.pw - x);
@@ -705,8 +709,8 @@ function drawParticles(g, sim) {
   }
 }
 
-function drawBanner(g, sim, now) {
-  const banner = sim.banner;
+function drawBanner(g, scene, now) {
+  const banner = scene.banner;
   if (!banner) return;
   const { scr, L } = g;
   const tone = { warn: [C.warn, C.ink], done: [hex('#2a9d8f'), C.white], chat: [hex('#3f73f0'), C.white], fire: [hex('#e85d04'), C.white] }[banner.tone] || [C.ink, C.white];
@@ -734,7 +738,7 @@ function drawWaiting(g, model, now) {
 
 // ------------------------------------------------------------------ header, footer and panel
 
-function drawHeader(scr, L, model, sim, light) {
+function drawHeader(scr, L, model, scene, light) {
   scr.fill(0, 0, L.cols, C.headerBg);
   let c = 0;
   // top left, the office selector (only if the company has more than one)
@@ -749,8 +753,8 @@ function drawHeader(scr, L, model, sim, light) {
   const conn = model.connection;
   c += scr.text(c, 0, ` ● ${conn.key ? t(conn.key, conn.vars) : conn.label} `, conn.ok ? C.ok : C.err, C.headerBg);
   // on the right: the weather outside (the one seen through the glass) and the office's time
-  const clock = timeOf(Date.now(), sim.zone, { seconds: true });
-  const w = sim.weather;
+  const clock = timeOf(Date.now(), scene.zone, { seconds: true });
+  const w = scene.weather;
   const wx = `${weatherIcon(w, light.night)} ${Number.isFinite(w.temp) ? `${Math.round(w.temp)}°` : ''}${w.place ? ` ${w.place}` : ''}  `;
   const right = L.cols - clock.length - 1 - strWidth(wx);
   const api = ` API ${model.endpoints.join(' · ')} `;
@@ -795,7 +799,7 @@ function drawFooter(scr, L, model) {
   }
 }
 
-function drawPanel(scr, L, sim, model) {
+function drawPanel(scr, L, scene, model) {
   const x = L.panelX, w = L.panelW, inner = w - 2;
   for (let r = 1; r < L.rows - 1; r++) scr.fill(x, r, w, C.panelBg);
   let r = 2;
@@ -918,7 +922,7 @@ function drawPanel(scr, L, sim, model) {
   const compact = maxR - r < 26;
   for (const [id, cfg] of Object.entries(TEAM)) {
     if (r > maxR) break;
-    const a = sim.agents[id];
+    const a = scene.team[id];
     const sel = model.selected === id;
     const bg = sel ? C.headerBg : C.panelBg;
     scr.fill(x, r, w, bg);
@@ -937,12 +941,12 @@ function drawPanel(scr, L, sim, model) {
 
   // DETAIL of the selected one, or the LOG
   if (model.selected) {
-    const a = sim.agents[model.selected], cfg = TEAM[model.selected];
+    const a = scene.team[model.selected], cfg = TEAM[model.selected];
     heading(t('tui.detail', { name: cfg.name }), cfg.title);
     if (!a.history.length) { T(t('tui.nothingYet'), C.muted); r++; }
     for (const h of a.history) {
       if (r > maxR) break;
-      const time = timeOf(h.ts, sim.zone);
+      const time = timeOf(h.ts, scene.zone);
       scr.text(x + 1, r, time, C.muted, C.panelBg);
       T(h.text, C.text, x + 7, inner - 6);
       r++;
@@ -952,8 +956,8 @@ function drawPanel(scr, L, sim, model) {
   heading(t('tui.log'));
   for (const ev of model.log) {
     if (r > maxR) break;
-    const cfg = personOf(ev.role);
-    const time = timeOf(ev.ts, sim.zone);
+    const cfg = personOf(ev.role) || (ev.expert ? expertPerson(ev.expert) : null);
+    const time = timeOf(ev.ts, scene.zone);
     scr.text(x + 1, r, time, C.muted, C.panelBg);
     const who = ev.kind === 'chat' || ev.kind === 'poke' || (ev.kind === 'btw' && ev.phase === 'ask') ? ev.from : cfg?.name || t('events.office');
     let c = x + 7;
@@ -1001,8 +1005,8 @@ const PH = Object.fromEntries(Object.entries({ bg: '#06100b', head: '#0b1d14', p
 /** The services left running in the background and, below, what the chosen one prints (a phosphor terminal). */
 // The whiteboard, expanded: the tasks as post-its in three columns (to do, doing, done).
 const POSTIT = { pending: { bg: hex('#fef08a'), fg: hex('#3f3a0b') }, in_progress: { bg: hex('#fdba74'), fg: hex('#431407') }, completed: { bg: hex('#bbf7d0'), fg: hex('#14532d') } };
-function drawBoardView(scr, L, sim) {
-  const board = sim.board;
+function drawBoardView(scr, L, scene) {
+  const board = scene.board;
   const w = Math.min(L.cols - 2, 110), x0 = Math.floor((L.cols - w) / 2);
   const h = Math.max(10, L.rows - 4), y0 = Math.max(1, Math.floor((L.rows - h) / 2));
   const paper = hex('#f8fafc'), ink = hex('#1e3a8a'), frame = hex('#9ca3af');
@@ -1179,10 +1183,10 @@ function drawBrief(scr, L, model) {
 }
 
 /** The character closest to a cell (for mouse clicks). */
-export function agentAtCell(L, sim, col, row) {
-  if (L.tooSmall) return null;
+export function agentAtCell(L, scene, col, row) {
+  if (L.tooSmall || !scene) return null;
   let best = null, bestD = 4;
-  for (const a of Object.values(sim.agents)) {
+  for (const a of Object.values(scene.team || scene.agents)) {
     if (a.hidden) continue;
     const x = L.ox + Math.round((a.x - LEFT) * L.s);
     const y = Math.floor((L.oy + Math.round((a.seated || a.perch ? a.y - 20 : a.y - 30) * L.s)) / 2);

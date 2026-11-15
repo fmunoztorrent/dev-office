@@ -40,6 +40,8 @@ This page explains what it does and how to register it by hand in another client
 | `list_teams` · `install_team` | `team`, `harness`, `project?` | The team packs (one subagent per role), for Pi, Claude Code, OpenCode or Codex |
 | `list_systems` | — | **The systems:** each product and its artifacts (repo or component, kind, what it uses, shared or not), the order a change goes in and its team |
 | `handoff` | `text` | When your brief is part of a system and other artifacts use yours (its header says "used by …"): what they need to know (what changed in what you expose: endpoints, shapes, types, events, how to try it). Their briefs carry it; they go after yours |
+| `loop_report` | `results: [{ criterion, met, note? }]`, `loop?`, `step?` | When your brief starts with 🔁 it is a step of a **project loop**: check each numbered criterion for real (run its command if it has one) and report all of them. The loop moves to its next step only when every one is met; otherwise the step comes back with what is missing |
+| `list_loops` | — | **The project loops:** each one's steps and criteria, which step is going, how each criterion is (✅ ❌ ❔) and whether its project is working or idle |
 | `my_<name>` | the tool's parameters | **The user's own tools** (⚙ › Mine, [api.md](api.md#yours-private-skills-and-your-own-tools)): each one that is on is a tool of its own, with its description and parameters. It runs in the agent's folder and answers its output and exit code (an error if it is not 0 or it ran out of time). Works with the office off too (it reads the database) |
 | `list_my_tools` · `run_my_tool` | — · `name`, `args?` | The user's tools, and running one by name: also one added after the session started (the tool list is read when the agent connects) |
 

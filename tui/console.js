@@ -41,6 +41,8 @@ export function activityLine(ev) {
     case 'done': text = `🎉 ${ev.text}`; tone = 'ok'; break;
     case 'task': text = `📝 ${ev.text}`; break;
     case 'standup': text = t('events.standup', { text: ev.text || '' }); break;
+    // a project's loop (server/loops.js): its text already says what happened
+    case 'loop': tone = ev.ok === false ? 'warn' : ['passed', 'done'].includes(ev.phase) ? 'ok' : ev.phase === 'report' ? 'dim' : undefined; break;
     case 'btw':
       text = ev.phase === 'ask' ? `❓ btw: ${ev.text}` : ev.phase === 'answer' ? `💡 ${ev.text}` : `✖ btw: ${ev.text}`;
       tone = ev.phase === 'failed' ? 'err' : ev.phase === 'answer' ? 'ok' : undefined;
@@ -92,7 +94,7 @@ export function createLog({ server, write, color = true, colorMode = '256' }) {
   function onActivity(office, ev) {
     const a = activityLine(ev);
     if (!a) return;
-    const p = ev.role ? person(office, ev.role) : null;
+    const p = ev.expert && ev.role === 'sme' ? { name: ev.expert.name, shirt: ev.expert.shirt } : ev.role ? person(office, ev.role) : null;
     line({ ts: ev.ts, office, who: a.speaker ?? (p?.name || t('events.office')), shirt: a.speaker ? null : p?.shirt, text: a.text, tone: a.tone });
     // the daily: each one's line, then what waits for you and what is still open
     if (ev.kind === 'standup') {

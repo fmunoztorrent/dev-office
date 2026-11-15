@@ -30,6 +30,7 @@ To add yourself and this project to the office in one step, call join_office (or
 Use these tools to: register the current project (register_project) so the office can send it work; see what a project's harness brings (detect_project); tell the office which role and phase you are in while you work (report_activity: task → phase … → done); send a prompt to another registered agent (send_task); and open herdr panes for side activities (open_pane).
 The company has two shared floors. The archive keeps what the company knows: before starting a task, search it (search_knowledge, then get_knowledge for the whole entry) for decisions, docs, skills and connectors that apply; when you settle something worth keeping (a decision, a convention, how something works), save it (save_knowledge). The executive floor gives orders that cover several offices or projects at once (send_directive, list_directives); when a brief starts with 🏛 it is your part of one: do only this project's part.
 A company groups its repos in systems (a product: "Payments" = its core, its bff and its web; list_systems): a brief whose header says other artifacts use yours goes before theirs, so when you finish, call handoff with what they need to know (what changed in what you expose). A brief that carries "What X left" is the handoff of an artifact you use: build on it.
+A brief that starts with 🔁 is a step of a project loop: it lists its success criteria, numbered. Before you end, check each one for real and report all of them with loop_report; the loop moves on only when every criterion is met.
 The user may have their own tools (small programs they defined in the office): they show up as my_<name> tools; list_my_tools lists them and run_my_tool runs one by name. Use them when they fit what you are doing: they are what the user wants used for that.
 If the office is not running, office_start opens it; office_status gives its URL. Reporting is best effort: never stop or retry your real work because the office is offline.`;
 
@@ -339,6 +340,32 @@ const TOOLS = [
     description: 'When your brief is part of a system (its header says "used by …"), call this as you finish: what the artifacts that use yours need to know to do their part (what changed in what you expose: endpoints, request/response shapes, types, events, flags, how to try it). Their briefs carry it; they go after yours.',
     inputSchema: { type: 'object', properties: { text: { type: 'string', description: 'The handoff, short and concrete' } }, required: ['text'], additionalProperties: false },
     annotations: { readOnlyHint: false, openWorldHint: false },
+  },
+  {
+    name: 'loop_report',
+    title: 'Report the success criteria of your loop step',
+    description: 'When your brief starts with 🔁 it is a step of a project loop, with its success criteria numbered. As you finish, check each criterion for real (run its check command if it has one) and report every one: met or not, and why not. The loop goes to its next step only when all are met; otherwise this step comes back with what is missing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        results: {
+          type: 'array', description: 'One per criterion', minItems: 1,
+          items: { type: 'object', properties: { criterion: { type: 'integer', description: 'Its number in the brief (1, 2, …)' }, met: { type: 'boolean' }, note: { type: 'string', description: 'Evidence, or what is missing (short)' } }, required: ['criterion', 'met'], additionalProperties: false },
+        },
+        loop: { type: 'string', description: 'The loop (its name or id, as the brief says); by default, the one running in this folder' },
+        step: { type: 'integer', description: 'The step number; by default, the one going' },
+      },
+      required: ['results'],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, openWorldHint: false },
+  },
+  {
+    name: 'list_loops',
+    title: 'List the project loops',
+    description: 'The project loops: each one\'s steps and success criteria, which step is going, how each criterion is (met, not met, not reported) and whether its project is working or idle.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true, openWorldHint: false },
   },
   {
     name: 'list_directives',
@@ -776,6 +803,22 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
       const out = await api('/v1/handoff', { cwd: where(), text });
       if (!out?.ok) throw new ToolError(out?.status === 404 || /no hay|there is no/.test(out?.error || '') ? 'There is no system brief running in this folder: nobody is waiting for a handoff from it.' : out?.error || 'no answer from the office');
       return { text: `🤝 Handoff left for ${out.for?.length ? out.for.join(', ') : 'the artifacts that use yours'} (directive ${out.directive}).`, data: out };
+    },
+
+    async loop_report({ results, loop, step } = {}) {
+      need(Array.isArray(results) && results.length, 'results is required: one per criterion');
+      need(await running(), 'the office is not running');
+      const out = await api('/v1/loops/report', { cwd: where(), loop, step, results });
+      if (!out?.ok) throw new ToolError(out?.status === 404 ? 'There is no loop running in this folder.' : out?.error || 'no answer from the office');
+      return { text: out.missing.length ? `🔁 Step ${out.step}: ${out.met}/${out.total} met. Still missing: ${out.missing.join('; ')}. The loop sends this step again with what is missing.` : `🔁 Step ${out.step}: all ${out.total} criteria met. The loop moves to the next step on its next look.`, data: out };
+    },
+
+    async list_loops() {
+      need(await running(), 'the office is not running: start it with office_start');
+      const list = okOr(await api('/v1/loops')).loops || [];
+      const mark = (r) => (r?.met === true ? '✅' : r?.met === false ? '❌' : '❔');
+      const line = (l) => `${l.name} (${l.project || '?'}, every ${l.interval} min): ${l.status}, ${l.activity}${l.detail ? ` — ${l.detail}` : ''}\n${l.steps.map((s, i) => `  ${i === l.current ? '▶' : ' '} ${i + 1}. [${s.status}${s.tries ? `, ${s.tries}/${l.tries}` : ''}] ${s.text.split('\n')[0].slice(0, 100)}${[...l.criteria, ...s.criteria].length ? `\n${[...l.criteria, ...s.criteria].map((c, k) => `      ${mark(s.results[c.id])} ${k + 1}. ${c.text}`).join('\n')}` : ''}`).join('\n')}`;
+      return { text: list.length ? list.map(line).join('\n') : 'No loops yet.', data: { loops: list } };
     },
 
     async list_directives() {

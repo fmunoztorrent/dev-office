@@ -4,7 +4,7 @@
 export default {
   team: {
     you: 'you', // the PO is the user
-    titles: { designer: 'Designer', po: 'Product Owner', analyst: 'Business Analyst', manager: 'Manager', frontend: 'Frontend', backend: 'Backend', qa: 'QA', tl: 'Tech Lead', devops: 'DevOps/SRE', security: 'Security' },
+    titles: { designer: 'Designer', po: 'Product Owner', analyst: 'Business Analyst', manager: 'Manager', frontend: 'Frontend', backend: 'Backend', qa: 'QA', tl: 'Tech Lead', devops: 'DevOps/SRE', security: 'Security', sme: 'Expert in {skill}' },
   },
   needs: { social: 'Social', coffee: 'Coffee', bladder: 'Bathroom', dream: 'Imagination', doubt: 'Doubts' },
   dream: { unicorn: 'a unicorn', rainbow: 'a rainbow', skull: 'a skull', pizza: 'pizza' },
@@ -92,6 +92,7 @@ export default {
     },
     // the chit-chat about what is going on (sim.js liveTopics)
     newcomer: { welcome: 'Welcome, {name}! 👋', bye: 'Done, heading out! 👋' },
+    expert: { arrive: '{name} comes up, who knows about {skill} 🎓', hello: 'I came to help with {skill} 🎓' },
     visitor: { arrive: '{name} from {role} is coming up {icon}', hello: { devops: 'Here to look at the infrastructure 🛠️', security: 'Here to review the security 🛡️' } },
     live: {
       board: "We're {done} of {total} on the board 📋", doing: '{name} is {action} 👀', stuck: '{name} got stuck {action} 😬',
@@ -286,7 +287,7 @@ export default {
   // the analyst reviews a brief before it goes to work (server/clarify.js)
   ingest: { tooBig: 'too big (more than {mb} MB)', convert: 'to read {name} the office needs {tool} installed (or ask an agent to convert it: ✨ Ask an agent)', format: 'the archive does not read .{ext} files (Markdown, text, CSV, JSON, HTML, PDF or Word)', empty: '{name} has no text', url: 'that is not an http(s) address', fetch: 'could not download it: {error}' },
   // the settings as a JSON file (server/settings-io.js): what could not be imported
-  settingsIo: { skill: 'Skill {name}', tool: 'Tool {name}', system: 'System {name}', systemParts: 'Artifacts of {name} without their repo here: {parts}', department: 'Department {name}', characters: 'Characters of {name}', pref: 'Setting {key}', project: 'Project {name}', component: 'Component {name} of {project}', instructions: 'Instructions of {path}' },
+  settingsIo: { skill: 'Skill {name}', tool: 'Tool {name}', expert: 'Expert in “{skill}”', system: 'System {name}', systemParts: 'Artifacts of {name} without their repo here: {parts}', department: 'Department {name}', characters: 'Characters of {name}', pref: 'Setting {key}', project: 'Project {name}', component: 'Component {name} of {project}', instructions: 'Instructions of {path}' },
   // a directive's impact map (server/components.js)
   impact: {
     ask: 'Does "{what}" exist? In which project and folder, or must it be created?', none: 'I could not tell which departments or projects it touches: choose them or name them.', unknownHead: 'It names things that are not on the map:',
@@ -324,6 +325,48 @@ export default {
 
   // ---------------------------------------------------------------- the two shared floors: the executive one and the archive
   directiveStatus: { running: 'running', done: 'accomplished', partial: 'partly accomplished', failed: 'failed', cancelled: 'cancelled', interrupted: 'interrupted' },
+  loopStatus: { running: 'running', paused: 'paused', blocked: 'waiting for you', done: 'finished' },
+  loopStep: { pending: 'to do', working: 'in progress', done: 'met', blocked: 'waiting for you', skipped: 'skipped' },
+  // a project's loop (server/loops.js): steps with success criteria, one after the other
+  loop: {
+    from: 'the loop',
+    brief: {
+      head: 'Loop “{name}” · step {n} of {total}', try: 'try {n} of {max}',
+      retry: 'Not every criterion of this step is met yet. Keep going until they are:',
+      verify: 'How each criterion of this step is going did not arrive. Check them now (if they are already met, without changing anything else) and report them:',
+      again: 'This step was left half done (it did not end well, or the office restarted while it went): check whether it is done and, if not, finish it.',
+      theStep: 'The step:', criteria: 'Success criteria (all of them, before the next step):', check: 'check it with `{cmd}`',
+      report: 'As you finish, check each criterion for real and report all of them with the MCP tool loop_report (loop “{name}”, step {n}): met or not, and why. If you do not have that tool, end your answer with one line per criterion: “✅ 1” if it is met, “❌ 2 — why” if not.',
+    },
+    detail: {
+      noSteps: 'no steps: add one', working: 'the project is working: it waits', waitingYou: 'the agent is asking you something: it waits for your answer', paused: 'paused',
+      blocked: 'step {n} did not meet its criteria in {tries} tries: retry it, skip it or change it', cantSend: 'could not send it: {error}',
+    },
+    log: {
+      created: '🔁 Loop “{name}” for {project}: {n} steps, looks every {every} min',
+      start: '🔁 “{name}” · step {n}/{total}: {step}', retry: '🔁 “{name}” · step {n}/{total} again (try {try} of {max}): criteria missing',
+      verify: '🔁 “{name}” · step {n}/{total}: asked to check its criteria (try {try} of {max})', report: '🔁 “{name}” · step {n}: {met} of {total} criteria met',
+      passed: '✅ “{name}” · step {n}/{total} met', skipped: '⏭ “{name}” · step {n} skipped', blocked: '✋ “{name}” · step {n} did not make it in {tries} tries: it waits for you',
+      cantSend: '✋ “{name}” · step {n} could not be sent: {error}', done: '🏁 Loop “{name}” finished: {n} steps',
+    },
+    ui: {
+      title: '🔁 Loops', button: '🔁 Loops', key: 'The projects\' loops: steps with success criteria (i)', new: '✚ New loop',
+      chip: 'Loops: {n} running, {blocked} waiting for you (i)', offline: 'the office does not answer', empty: 'Pick a loop, or create one.',
+      intro: 'A loop works a project step by step, on its own: every interval it looks whether the project is working or idle; idle, it sends the step that is due, or sends it again until it meets every success criterion. Only then it moves to the next one.',
+      nextIn: 'next look in {t}', nextNow: 'looks now', activity: { idle: 'idle', working: 'working', waiting: 'asking you something' },
+      meta: '{project} · looks every {every} min · {tries} tries per step ·', tick: '👀 Look now', pause: '⏸ Pause', resume: '▶ Go on', retry: '↻ Retry the step',
+      skip: '⏭ Skip the step', edit: '✎ Change', delete: '🗑', confirmDelete: 'Delete the loop “{name}”? What was done stays in the project.',
+      loopCriteria: 'Criteria of the whole loop', loopCriteriaHint: 'every step meets them (e.g. “the tests pass”). One per line; “text :: command” if a command checks it.',
+      noLoopCriteria: 'None: each step has its own.', addLoopCriterion: '＋ a criterion for every step', steps: 'Steps',
+      tries: 'try {n} of {max}', addStepCriterion: '＋ a criterion for this step', addStep: '＋ a step at the end',
+      markMet: 'It is met (your mark stays)', markUnmet: 'It is not met', byYou: 'you',
+      criteriaPh: 'One criterion per line · “text :: command that checks it”', stepPh: 'What has to be done in this step?', stepCriteria: 'Its success criteria', stepN: 'Step {n}', removeStep: 'Remove the step',
+      saved: 'Saved.', created: 'Loop created: its first step goes now (if the project is idle).', editTitle: 'Change “{name}”', newTitle: 'New loop',
+      noProjects: 'This department has no registered projects (⚙ › Agents).', name: 'Name', project: 'Project', every: 'Every (min)', triesLabel: 'Tries',
+      addStepBtn: '＋ Step', cancel: 'Cancel', save: 'Save', create: '🔁 Create the loop',
+    },
+    minuteTitle: 'Loop “{name}”', minuteProject: 'Project: {project}', minuteTries: '{n} tries',
+  },
   knowledgeKind: { note: 'note', decision: 'decision', doc: 'doc', term: 'term', minute: 'minutes', skill: 'skill', connector: 'connector' },
   floors: {
     lift: { title: 'Elevator', here: 'you are here' },
@@ -469,6 +512,8 @@ export default {
     connectorUrl: "the connector's URL must start with http:// or https://", connectorHow: 'a connector needs a command (a local MCP server) or a URL (a remote one)',
     unknownKnowledge: 'no such entry in the archive', notInstallable: 'only skills and connectors are installed in a project', installFailed: 'it was not installed in any project',
     pickProjects: 'pick at least one office or registered project', unknownProject: 'unknown project: {project}', tooManyProjects: 'at most {n} projects per directive', unknownDirective: 'no such directive',
+    loopName: 'give the loop a name', loopExists: 'there already is a loop called “{name}”', loopsMax: 'at most {n} loops', unknownLoop: 'no such loop: {loop}', loopInterval: 'the interval is in minutes, from 1 to 1440', loopTries: 'the tries per step go from 1 to 50', loopSteps: 'the steps are a list', loopStepsMax: 'at most {n} steps', loopStepEmpty: 'each step needs what to do', loopCriteria: 'the criteria are a list', loopCriteriaMax: 'at most {n} criteria', loopCriterionEmpty: 'the criterion is empty', unknownStep: 'no such step: {step}', unknownCriterion: 'no such criterion: {criterion}', loopDone: 'the loop already finished', loopNotRunning: 'the loop is {status}', noLoopHere: 'there is no loop running in this folder', loopNoResults: 'how each criterion is going is missing',
+    expertSkill: 'the expert\'s skill: its name, in lowercase (letters, digits, dots and dashes)', unknownExpert: 'no such expert: {expert}', expertExists: 'the skill “{skill}” already has its expert', expertName: 'the expert needs a name', expertsMax: 'at most {n} experts',
   },
   server: {
     started: 'Dev Team Office {version} at {url}', browser: '  Open it in your browser: {urls}', api: '  API: POST /v1/events/<source> · GET /v1/state · WS /v1/ws{socket}',
@@ -552,7 +597,7 @@ export default {
     keys: { field: 'field', change: 'change', action: 'action', save: 'save', close: 'close', tabs: '◂ ▸ switch tab' },
     yes: 'yes', no: 'no',
     general: {
-      io: 'Your settings (a JSON file)', ioHint: 'Exports what is yours: the general settings, the departments (with their instructions, autonomy and characters) the registered projects with their instructions and components, and what is yours (your skills and tools). Not the log, the briefs, the directives or the archive. Importing replaces what the file brings and leaves the rest; a project whose folder is not on this machine is skipped.', ioExport: '⬇ Export settings', ioImport: '⬆ Import settings', ioDone: 'Settings imported: {prefs} settings, {departments} departments, {characters} characters, {projects} projects, {components} components, {systems} systems, {skills} skills, {tools} tools.',
+      io: 'Your settings (a JSON file)', ioHint: 'Exports what is yours: the general settings, the departments (with their instructions, autonomy and characters) the registered projects with their instructions and components, what is yours (your skills and tools) and the experts. Not the log, the briefs, the directives or the archive. Importing replaces what the file brings and leaves the rest; a project whose folder is not on this machine is skipped.', ioExport: '⬇ Export settings', ioImport: '⬆ Import settings', ioDone: 'Settings imported: {prefs} settings, {departments} departments, {characters} characters, {projects} projects, {components} components, {systems} systems, {skills} skills, {tools} tools, {experts} experts.',
       archive: 'Archive (the agents’ knowledge)', archivePush: 'What the archive knows goes on top of every brief and question (the glossary terms and the most relevant passages)', embeddings: 'Semantic search', embed_off: 'Off: by words only (offline)', embed_ollama: 'Ollama, on this machine', embed_openai: 'An OpenAI-compatible API (OpenAI, Voyage…)', embedModel: 'Embedding model', embedUrl: 'Address', embedOllamaHint: 'Install Ollama and run: ollama pull nomic-embed-text. Nothing leaves this machine.', embedKeyHint: 'Its key goes in the DEV_TEAM_OFFICE_EMBED_KEY environment variable (never in the database). The archive’s text is sent to that API to be embedded.', indexStatus: '🧠 {chunks} chunk(s) indexed · {embedded} with embedding', reindex: '↻ Index it again',
       compact: 'The agents’ context', compactAuto: 'Compact it by itself past the limit', compactAt: 'Limit', compact_tokens: 'tokens', compact_pct: '% of its window', compactHint: 'Past the limit, the office asks the agent to compact its context when its turn ends: Pi and OpenCode do it themselves; inside herdr, /compact is typed in its pane; the Claude Code sessions the office opens compact by themselves at that limit. Otherwise the log tells you.',
       autonomy: 'Autonomy', clarify: 'Before a brief goes to work, the analyst checks it has everything (and asks you only what is missing)', autonomous: 'The agents work on their own to the end (they ask only what only you can answer)',
@@ -608,6 +653,12 @@ export default {
       args: 'Arguments', argsPh: 'e.g. --permission-mode acceptEdits', argsHint: 'Only for new sessions. Claude Code uses --permission-mode acceptEdits when left empty (in the background).',
       added: 'Done: “{name}” now shows up on the board.', updated: 'Agent updated.', removed: '“{name}” deleted (its folder is not touched).',
       confirmDelete: 'Delete the agent “{name}”? It is only removed from the office: its folder is not touched.', deleted: 'Agent deleted.',
+    },
+    experts: {
+      title: '🎓 Experts', hint: 'An expert (SME) knows a skill: when an agent uses it, they come up the elevator, sit at a free desk with the skill in their badge and leave when the turn ends. For now each one is associated with their skill by hand. The experts are the whole company\'s.',
+      namePh: 'Name', skill: 'Skill', skillPh: 'its name, e.g. pci-dss', topic: 'Knows about', topicPh: 'e.g. payments and PCI',
+      role: 'expert in the skill “{skill}”', new: 'new: save them so they come', remove: 'Delete the expert', removeConfirm: 'Delete {name}, expert in “{skill}”?',
+      save: '💾 Save', saved: '{name} is now the expert in “{skill}”.', add: '＋ New expert',
     },
     look: {
       hint: 'How the characters of this office look and what they are called. Each one still stands for its role (QA, backend…).',

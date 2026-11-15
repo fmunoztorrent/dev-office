@@ -16,6 +16,7 @@ export function localFeed(server) {
   const onPipelines = () => h?.onPipelines(server.pipelines.snapshot(view).runs);
   const onTargets = () => h?.onTargets?.(server.registry.targets(view));
   const onSystems = () => h?.onSystems?.(server.systemsPublic());
+  const onExperts = () => h?.onExperts?.(server.store.listExperts());
   const onAppearance = (id, a) => { if (mine(id)) h?.onAppearance?.(a); };
   const onWeather = (id, w) => { if (mine(id)) h?.onWeather?.(w); };
   const onPrefs = (p) => h?.onPrefs?.(p);
@@ -35,6 +36,7 @@ export function localFeed(server) {
     h.onPipelines(st.pipelines);
     h.onTargets?.(st.targets);
     h.onSystems?.(st.systems || []);
+    h.onExperts?.(st.experts || []);
     h.onAppearance?.(st.appearance);
     h.onWeather?.(st.weather);
     h.onHerdr?.(st.herdr);
@@ -54,6 +56,7 @@ export function localFeed(server) {
       server.pipelines.on('change', onPipelines);
       server.registry.on('change', onTargets);
       server.bus.on('systems', onSystems);
+      server.bus.on('experts', onExperts);
       server.bus.on('appearance', onAppearance);
       server.bus.on('weather', onWeather);
       server.bus.on('prefs', onPrefs);
@@ -84,6 +87,7 @@ export function localFeed(server) {
       server.bus.off('offices', onOffices);
       server.bus.off('herdr', onHerdr);
       server.bus.off('systems', onSystems);
+      server.bus.off('experts', onExperts);
       server.services.off('change', onServices);
       server.prompts?.off('change', onPrompts);
       server.directives?.off('change', onDirectives);
@@ -114,6 +118,7 @@ export function remoteFeed(wsUrl) {
         h.onPipelines(st.pipelines || []);
         h.onTargets?.(st.targets || []);
         h.onSystems?.(st.systems || []);
+        h.onExperts?.(st.experts || []);
         h.onAppearance?.(st.appearance || {});
         h.onWeather?.(st.weather || null);
         h.onHerdr?.(st.herdr || null);
@@ -133,6 +138,7 @@ export function remoteFeed(wsUrl) {
       if (msg.type === 'floor') h.onFloorEvent?.(msg.event);
       if (msg.type === 'targets') h.onTargets?.(msg.targets);
       if (msg.type === 'systems') h.onSystems?.(msg.systems || []);
+      if (msg.type === 'experts') h.onExperts?.(msg.experts || []);
       if (msg.type === 'event') h.onEvent(msg.event, msg.session);
       if (msg.type === 'tasks') h.onTasks(msg);
       if (msg.type === 'ack' && msg.ok === false) h.onError?.(msg.error);

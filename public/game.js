@@ -1,4 +1,6 @@
-// Canvas renderer (browser) of the sim.js simulation.
+// Canvas renderer (browser) of the office: each frame the simulation (sim.js) moves and its scene
+// (scene.js: what is on screen, as plain data) is what gets drawn; another renderer (renderers.js) can
+// draw that same scene instead.
 // The world is x LEFT..W by y 0..H (the office, and left of it the hallway with the elevator and the
 // bathroom); the canvas is drawn at an integer multiple of that size so that in full screen
 // the "pixels" stay crisp. There are two views of the same office, to choose from (⚙ › General,
@@ -20,6 +22,8 @@ import { outdoor, lightning, colorHex, weatherIcon } from './sky.js';
 import { isoCamera, apply, unapply, scaled, BACK, WALL_H } from './iso.js';
 import { t } from './i18n.js';
 import { createFloors, drawFloor, floorHit } from './floors.js';
+import { buildScene, personIn } from './scene.js';
+import { getRenderer } from './renderers.js';
 export { TEAM, personOf, PHASES, phaseInfo } from './sim.js';
 
 const P = 3; // size of a sprite "pixel"
@@ -37,13 +41,16 @@ const hslRgb = (h, s, l) => {
  * @param now   () => Date: the instant (daylight, clock, lunch). The real one by default.
  * @param zone  the office's time zone (null: the system's); changed with sim.setZone
  */
-export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHover, onFloorClick, now: clockNow = () => new Date(), zone = null, view = 'flat' } = {}) {
+export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHover, onFloorClick, now: clockNow = () => new Date(), zone = null, view = 'flat', renderer = null } = {}) {
   const ctx = canvas.getContext('2d');
   let iso = view !== 'flat';
   // the camera fits the whole floor (the office and the hallway, left of it) in the canvas
   const cam = isoCamera({ ox: 560, oy: 195 });
   const sim = createSim({ wall: () => clockNow().getTime(), zone });
   const { agents } = sim;
+  // the frame's scene (public/scene.js): what the game says must be on screen. Everything below draws
+  // from it, never from the simulation (sim.step and sim.handle are the game's, not the drawing's)
+  let scene = null;
   let selected = null;
   let hover = null;
   let hoverBoard = false;
@@ -138,7 +145,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   // alarm, hanging from the beam (off by default; with the fire it spins and lights up)
   function drawAlarm(now) {
     R(ALARM.x + 3, ALARM.y, 4, 3, '#1b1f33');
-    R(ALARM.x, ALARM.y + 3, 10, 8, sim.fire && ['burning', 'fighting'].includes(sim.fire.phase) && Math.floor(now / 150) % 2 ? '#ff3b3b' : '#7a1f2b');
+    R(ALARM.x, ALARM.y + 3, 10, 8, scene.fire && ['burning', 'fighting'].includes(scene.fire.phase) && Math.floor(now / 150) % 2 ? '#ff3b3b' : '#7a1f2b');
     R(ALARM.x - 1, ALARM.y + 11, 12, 2, '#1b1f33');
   }
   function drawRugs() {
@@ -172,7 +179,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
 
   // The glass wall: the landscape (sky.js) with its glass on top, between the ceiling beam and the skirting.
   function drawGlass(now, light) {
-    drawOutdoor(outdoor({ date: sim.date(), weather: sim.weather, light, now, x0: GLASS.x0, x1: GLASS.x1, top: GLASS.top, bottom: GLASS.bottom }));
+    drawOutdoor(outdoor({ date: scene.date, weather: scene.weather, light, now, x0: GLASS.x0, x1: GLASS.x1, top: GLASS.top, bottom: GLASS.bottom }));
     R(GLASS.x0, 0, GLASS.x1 - GLASS.x0, GLASS.top, '#262c42');               // ceiling beam
     R(GLASS.x0, GLASS.top - 1, GLASS.x1 - GLASS.x0, 1, '#1b1f33');
     R(GLASS.x0, GLASS.bottom, GLASS.x1 - GLASS.x0, 116 - GLASS.bottom, '#3a4158'); // window sill
@@ -212,7 +219,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   }
   // a stall: its partitions and door (open for a moment when someone goes in or out) and its sign
   function drawStall(s, i, now) {
-    const x0 = s.x - s.w / 2, open = !wing && now - sim.bath.doorAt[i] < 650, busy = !wing && !!sim.bath.stalls[i];
+    const x0 = s.x - s.w / 2, open = !wing && now - scene.bath.doorAt[i] < 650, busy = !wing && !!scene.bath.stalls[i];
     R(x0 - 2, 32, s.w + 4, 90, '#8d99ae');
     R(x0, 36, s.w, 82, open ? '#2b2d42' : '#eef1f4');
     if (open) {
@@ -235,7 +242,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   }
   // the elevator, at the end of the hallway: steel doors that slide open when someone arrives or leaves
   function drawElevator(now) {
-    const { x, w } = ELEVATOR, e = wing ? { floor: wing.tag, doorAt: wing.doorAt } : sim.elevator, dt = now - e.doorAt;
+    const { x, w } = ELEVATOR, e = wing ? { floor: wing.tag, doorAt: wing.doorAt } : scene.elevator, dt = now - e.doorAt;
     const open = dt < 0 ? 0 : dt < 400 ? dt / 400 : dt < 2400 ? 1 : dt < 2800 ? 1 - (dt - 2400) / 400 : 0;
     R(x, 24, w, 98, '#9aa3ae'); R(x + 3, 27, w - 6, 95, '#6c757d');
     const inner = w - 16, half = inner / 2, gap = Math.round(half * open), cx = x + w / 2;
@@ -376,7 +383,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     R(e + 8, 100, 8, 4, '#2b2d42'); R(e + 26, 100, 8, 4, '#2b2d42'); R(e + 10, 104, 4, 2, '#2b2d42'); R(e + 28, 104, 4, 2, '#2b2d42');
     R(e + 2, 112, 38, 4, '#5c636e');
     // steam when someone is ordering
-    const ordering = Object.values(agents).some((a) => !a.walking && Math.abs(a.y - 150) < 3 && a.x > c.x && a.x < c.x + c.w);
+    const ordering = Object.values(scene.team).some((a) => !a.walking && Math.abs(a.y - 150) < 3 && a.x > c.x && a.x < c.x + c.w);
     if (ordering) for (let i = 0; i < 3; i++) {
       const k = ((now / 1400 + i / 3) % 1);
       ctx.fillStyle = `rgba(255,255,255,${0.45 * (1 - k)})`;
@@ -488,7 +495,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     R(x - 26, y - 10, 4, 8, '#7ad7f0'); R(x - 27, y - 15, 6, 5, '#ef476f');
     // what the ones at the back eat (the ones at the front show their backs)
     ctx.font = `13px ${EMOJI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    for (const a of Object.values(agents)) {
+    for (const a of Object.values(scene.team)) {
       if (!a.perch || !a.food || a.diningSeat?.row !== 'back') continue;
       ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.ellipse(a.x, y - 4, 9, 3.5, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillText(a.food, a.x, y - 7);
@@ -517,7 +524,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     R(x, y, w, h, '#f8f9fa');
     ctx.font = `15px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     ctx.fillStyle = '#2b2d42';
-    const board = sim.board;
+    const board = scene.board;
     ctx.fillText(fit(board.title ? t('scene.taskTitle', { title: board.title }) : t('scene.noTask'), w - 12), x + 6, y + 3);
     const cols = [[t('scene.todo'), 'pending', '#ffe08a'], [t('scene.doing'), 'in_progress', '#9ad1ff'], [t('scene.done'), 'completed', '#a8e6a1']];
     const cw = (w - 16) / 3;
@@ -568,7 +575,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     const { x, y, w, h } = CLOCK;
     R(x - 2, y - 2, w + 4, h + 4, '#0b0c14');
     R(x, y, w, h, '#160a0c');
-    const d = sim.date();
+    const d = scene.date;
     const pad = (n) => String(n).padStart(2, '0');
     const chars = [...`${pad(d.getHours())}:${pad(d.getMinutes())}`];
     const pitch = 3, cols = chars.reduce((n, c) => n + DOTS[c][0].length + 1, -1);
@@ -668,7 +675,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
       ctx.fillStyle = '#00000080'; ctx.fillText(c.name, x + 1, y - 21 * P - 1);
       ctx.fillStyle = '#fff'; ctx.fillText(c.name, x, y - 21 * P - 2);
     }
-    const icon = STATUS_ICON[a.state] || (a.badges.size ? '🤖' : '');
+    const icon = STATUS_ICON[a.state] || (a.subagents ? '🤖' : '');
     if (icon) {
       ctx.font = `${fpx(16)}px ${EMOJI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
       const bob = Math.sin(now / 250) * 2;
@@ -677,7 +684,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     // what they eat at their desk
     if (a.seated && a.food) { ctx.font = `13px ${EMOJI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(a.food, a.cfg.seat.x - 30, a.cfg.seat.y - 18); }
     // Label of the role "on duty" with its phase (e.g. ▶ RED), to the left of the head.
-    const { turn, turnPhase } = sim;
+    const { role: turn, phase: turnPhase } = scene.turn;
     if (turn === a.id && turnPhase) {
       const label = `▶ ${phaseInfo(turnPhase).label}`;
       ctx.font = `${fpx(15)}px ${FONT}`;
@@ -688,7 +695,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
       ctx.fillStyle = '#1b1f33'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
       ctx.fillText(label, tx + 5, ty + lh / 2 + 1);
     }
-    if (hover === a.id && selected !== a.id) {
+    if (scene.hover === a.id && scene.selected !== a.id) {
       ctx.strokeStyle = '#ffffff99'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.ellipse(a.x, feetY(a) + 12, 26, 7, 0, 0, Math.PI * 2); ctx.stroke();
     }
@@ -801,16 +808,16 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     }
     R(s.x + 6, s.y - 12, 12, 4, '#2b2d42'); // teclado
     // assigned subagents: folders on the desk
-    for (let i = 0; i < Math.min(3, a.badges.size); i++) {
+    for (let i = 0; i < Math.min(3, a.subagents); i++) {
       R(s.x - 46 + i * 4, s.y - 30 - i * 3, 18, 13, '#ffb703'); R(s.x - 46 + i * 4, s.y - 32 - i * 3, 8, 3, '#fb8500');
     }
   }
 
   // ---------------------------------------------------------------- the newcomers (subagents)
 
-  const atDesk = (i) => sim.ghosts.find((g) => g.desk === i);
+  const atDesk = (i) => scene.visitors.find((g) => g.desk === i);
   /** The desks in use: each one is there while its newcomer is (it fades in and out with them). */
-  const desksInUse = () => sim.ghosts.filter((g) => g.desk >= 0 && g.fade > 0).map((g) => ({ i: g.desk, s: HOT_DESKS[g.desk], alpha: Math.min(1, g.fade * 1.4) }));
+  const desksInUse = () => scene.visitors.filter((g) => g.desk >= 0 && g.fade > 0).map((g) => ({ i: g.desk, s: HOT_DESKS[g.desk], alpha: Math.min(1, g.fade * 1.4) }));
   const faded = (alpha, fn) => () => { ctx.save(); ctx.globalAlpha *= alpha; fn(); ctx.restore(); };
   function drawHotChair(i) {
     const s = HOT_DESKS[i];
@@ -839,7 +846,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     R(s.x + 2, s.y - 34, 28, 19, '#2b2d42');
     drawScreen(g?.id || `hot${i}`, s.x + 4, s.y - 32, 24, 15, screenMode(g, now), g?.cfg.shirt || '#8d99ae', now);
     R(s.x - 2, s.y - 15, 36, 3, '#adb5bd');
-    if (g?.badges.size) { R(s.x - 30, s.y - 24, 16, 11, '#ffb703'); R(s.x - 30, s.y - 26, 7, 3, '#fb8500'); }
+    if (g?.subagents) { R(s.x - 30, s.y - 24, 16, 11, '#ffb703'); R(s.x - 30, s.y - 26, 7, 3, '#fb8500'); }
   }
   /** A newcomer: their role's look, translucent and with a soft glow, like a ghost. A visiting
    *  specialist (DevOps, security) is a person: solid, only fading in and out by the elevator. */
@@ -863,9 +870,9 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   // server rack: blinks with the backend; on fire, red; when repaired, it boots row by row
   function drawRack(now) {
     const { x: rx, y: ry } = RACK;
-    const f = sim.fire;
+    const f = scene.fire;
     R(rx, ry, 42, 92, '#1b1f33'); R(rx + 2, ry + 2, 38, 88, f && f.phase !== 'done' && f.phase !== 'repair' ? '#3a2324' : '#2b2d42');
-    const be = agents.backend.state === 'working';
+    const be = scene.team.backend.state === 'working';
     const booted = f?.phase === 'repair' ? Math.floor((now - f.at) / 900) : 6;
     for (let i = 0; i < 6; i++) {
       R(rx + 5, ry + 6 + i * 14, 32, 10, '#3a3f58');
@@ -877,12 +884,12 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
         R(rx + 8 + j * 5, ry + 9 + i * 14, 3, 3, on ? col : '#1b1f33');
       }
     }
-    if (sim.heat > 0.75 && !f) R(rx + 2, ry + 2, 38, 3, '#ff9f1c'); // red-hot
+    if (scene.heat > 0.75 && !f) R(rx + 2, ry + 2, 38, 3, '#ff9f1c'); // red-hot
     // each service running in the background lights a unit (cyan, with its own heartbeat)
-    const running = services.filter((s) => s.status === 'running');
+    const running = scene.services.filter((s) => s.status === 'running');
     running.slice(0, 6).forEach((s, i) => R(rx + 25, ry + 9 + i * 14, 9, 3, (Math.floor(now / 700) + i) % 3 ? '#7ff7ff' : '#2bb7c9'));
     if (hoverRack) { ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2; ctx.strokeRect(rx - 1, ry - 1, 44, 94); }
-    if (!iso && services.length) drawServiceTag(rx + 21, ry - 4, running.length);
+    if (!iso && scene.services.length) drawServiceTag(rx + 21, ry - 4, running.length);
     drawFire(now);
   }
 
@@ -899,7 +906,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
 
   // the fire extinguisher, next to the rack
   function drawExtinguisher() {
-    if (sim.extinguisher === 'floor') {
+    if (scene.extinguisher === 'floor') {
       const { x, y } = EXTINGUISHER;
       R(x - 5, y - 24, 10, 24, '#d62828'); R(x - 4, y - 22, 2, 18, '#ff6b6b'); R(x - 5, y - 14, 10, 5, '#f4f1de');
       R(x - 3, y - 28, 6, 4, '#2b2d42'); R(x + 3, y - 27, 5, 2, '#2b2d42'); R(x + 6, y - 25, 2, 12, '#2b2d42');
@@ -945,7 +952,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     const sx = x - w / 2 + 3, sy = top + 3, sw = w - 6, sh = h - 9;
     ctx.save();
     ctx.beginPath(); ctx.rect(sx, sy, sw, sh); ctx.clip();
-    drawChannel(tvChannel(sim, now), sx, sy, sw, sh, now);
+    drawChannel(tvChannel(scene, now), sx, sy, sw, sh, now);
     ctx.globalAlpha = 0.07; ctx.fillStyle = '#ffffff';
     ctx.beginPath(); ctx.moveTo(sx + sw * 0.55, sy); ctx.lineTo(sx + sw, sy); ctx.lineTo(sx + sw, sy + sh * 0.5); ctx.closePath(); ctx.fill();
     ctx.globalAlpha = 1;
@@ -985,14 +992,14 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
       R(x + k(10), y + k(13), k(10), k(8), '#e0ac7e'); R(x + k(9), y + k(12), k(12), k(3), '#2b1b12'); R(x + k(7), y + k(21), k(16), k(6), '#457b9d'); // the presenter
       R(x + k(28), y + k(14), w - k(32), k(2), '#a8dadc'); R(x + k(28), y + k(19), w - k(40), k(2), '#a8dadc55');
       R(x, y + h - k(8), w, k(8), '#e9ecf5');
-      const news = sim.board.title ? t('scene.tvLive', { title: sim.board.title }) : (sim.journal.at(-1)?.text || t('scene.tvQuiet'));
+      const news = scene.board.title ? t('scene.tvLive', { title: scene.board.title }) : (scene.news || t('scene.tvQuiet'));
       ctx.font = `${k(11)}px ${FONT}`;
       const tw = ctx.measureText(news).width;
       text(news, x + w - ((now / 28) % (tw + w)), y + h - k(4), 11, '#1d3557');
       return;
     }
     // the weather (the same one seen through the glass)
-    const wth = sim.weather, light = daylight(sim.date(), wth);
+    const wth = scene.weather, light = scene.light;
     const bg = light.night > 0.5 ? '#141c40' : { clear: '#4a92d8', partly: '#5a95cc', cloudy: '#6f7a8a', fog: '#8d96a3', drizzle: '#55657a', rain: '#4a5568', snow: '#8fa6bf', storm: '#2d3340' }[wth.kind];
     R(x, y, w, h, bg);
     R(x, y, w, k(9), '#0b0c1499'); text(t('scene.tvWeather'), x + 3, y + k(5), 11, '#ffd166');
@@ -1006,7 +1013,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
 
   // Pixel-art flames over the rack: three layers (red, orange, yellow) that flicker.
   function drawFire(now) {
-    const f = sim.fire;
+    const f = scene.fire;
     if (!f || f.level <= 0) return;
     const { x: rx, y: ry, w } = RACK;
     const L = f.level;
@@ -1034,9 +1041,9 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
 
   // The extinguisher's jet: a cone of foam from the nozzle to the fire.
   function drawSpray(now) {
-    const f = sim.fire;
+    const f = scene.fire;
     if (f?.phase !== 'fighting' || f.sprinklers) return;
-    const a = agents[f.fighter];
+    const a = scene.team[f.fighter];
     if (a.carry !== 'ext' || a.walking) return;
     const nx = a.x + 27, ny = a.y - 37, tx = RACK.x + RACK.w / 2, ty = RACK.y + 30;
     ctx.globalAlpha = 0.45 + 0.2 * Math.sin(now / 40);
@@ -1146,7 +1153,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     return lines.map((l) => fit(l, maxW));
   }
 
-  function drawParticles(list = sim.particles) {
+  function drawParticles(list = scene.particles) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     for (const p of list) {
       ctx.globalAlpha = Math.max(0, Math.min(1, p.life));
@@ -1180,7 +1187,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     // the hallway's ceiling lights, the bathroom's, the stalls' signs and the elevator's display
     for (const y of [220, 420, 620]) glow(HALL.spine, y, 70, '255,226,170', 0.02 + n * 0.08);
     glow((BW.x0 + BW.x1) / 2, 260, 90, '235,245,255', 0.02 + n * 0.07);
-    BW.stalls.forEach((s, i) => glow(s.x, 25, 10, sim.bath.stalls[i] ? '255,60,60' : '60,255,120', 0.22));
+    BW.stalls.forEach((s, i) => glow(s.x, 25, 10, scene.bath.stalls[i] ? '255,60,60' : '60,255,120', 0.22));
     glow(ELEVATOR.x + ELEVATOR.w / 2, 14, 22, '255,90,90', 0.12 + n * 0.08);
     // the café's neon and the light under the shelf
     glow(840, 30, 60, '255,95,162', (0.1 + n * 0.1) * flick);
@@ -1193,7 +1200,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     for (const lx of [DINING.table.x - 34, DINING.table.x + 34]) glow(lx, DINING.table.y - 52, 70, '255,206,140', 0.03 + n * 0.11);
     // the dot clock and the TV
     glow(CLOCK.x + CLOCK.w / 2, CLOCK.y + CLOCK.h / 2, 48, '255,59,48', 0.04 + n * 0.05);
-    const tvRgb = { breaking: '255,60,40', sports: '80,200,110', news: '90,140,220', weather: '150,190,255' }[tvChannel(sim, now)];
+    const tvRgb = { breaking: '255,60,40', sports: '80,200,110', news: '90,140,220', weather: '150,190,255' }[tvChannel(scene, now)];
     glow(TV.x, TV.feet - 18 - TV.h / 2, 84, tvRgb, 0.04 + n * 0.08);
     // the light coming through the glass: by day, a warm strip on the floor (more golden at sunset)
     if (light.alt > 0) {
@@ -1204,15 +1211,15 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
       ctx.fillStyle = sun; ctx.fillRect(GLASS.x0, 116, GLASS.x1 - GLASS.x0, 114);
     }
     // monitores
-    for (const a of Object.values(agents)) {
+    for (const a of Object.values(scene.team)) {
       const busy = ['working', 'thinking', 'red'].includes(a.state);
       if (busy || n > 0.3) glow(a.cfg.seat.x + 34, a.cfg.seat.y - 34, 34, a.state === 'red' ? '255,80,100' : '120,190,255', (busy ? 0.06 : 0.02) + n * 0.06);
     }
-    for (const g of sim.ghosts) if (g.desk >= 0 && g.fade > 0 && ['working', 'thinking'].includes(g.state)) glow(HOT_DESKS[g.desk].x + 16, HOT_DESKS[g.desk].y - 26, 26, '150,210,255', 0.05 + n * 0.06);
+    for (const g of scene.visitors) if (g.desk >= 0 && g.fade > 0 && ['working', 'thinking'].includes(g.state)) glow(HOT_DESKS[g.desk].x + 16, HOT_DESKS[g.desk].y - 26, 26, '150,210,255', 0.05 + n * 0.06);
     // the office sign
     glow(SIGN.x, SIGN.y + 22, 56, '255,209,102', 0.03 + n * 0.05);
     // the fire: flickering orange light and the alarm spinning
-    const f = sim.fire;
+    const f = scene.fire;
     if (f) {
       const cx = RACK.x + RACK.w / 2;
       if (f.level > 0) {
@@ -1225,7 +1232,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     // with the fire, the office turns red in pulses
     if (f && ['burning', 'fighting'].includes(f.phase)) R(LEFT, 0, WORLD_W, H, `rgba(255,40,20,${0.03 + 0.02 * Math.sin(now / 160)})`);
     // lightning lights up the office for an instant
-    const bolt = lightning(now, sim.weather);
+    const bolt = lightning(now, scene.weather);
     if (bolt.flash > 0) R(LEFT, 0, WORLD_W, H, `rgba(220,230,255,${0.08 * bolt.flash})`);
   }
 
@@ -1237,7 +1244,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   }
 
   function drawBanner(now) {
-    const banner = sim.banner;
+    const banner = scene.banner;
     if (!banner) return;
     const colors = { warn: ['#f4a261', '#2b2d42'], done: ['#2a9d8f', '#fff'], chat: ['#3f73f0', '#fff'], fire: ['#e85d04', '#fff'] }[banner.tone] || ['#2b2d42', '#fff'];
     const pulse = banner.tone === 'warn' || banner.tone === 'fire' ? 0.85 + Math.sin(now / 200) * 0.15 : 1;
@@ -1301,7 +1308,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   const rgb = (c) => `rgb(${c.join(',')})`;
   function drawIsoBackdrop(now, light) {
     use([BACKDROP_PX, 0, 0, BACKDROP_PX, 0, 0]);
-    drawOutdoor(outdoor({ date: sim.date(), weather: sim.weather, light, now, x0: 0, x1: WORLD_W / BACKDROP_PX, top: 0, bottom: H / BACKDROP_PX, glass: false, arc: 165 }));
+    drawOutdoor(outdoor({ date: scene.date, weather: scene.weather, light, now, x0: 0, x1: WORLD_W / BACKDROP_PX, top: 0, bottom: H / BACKDROP_PX, glass: false, arc: 165 }));
     drawTower(light);
   }
   /** The tower's colors: by day and by night, greyer on a grey day and warmer at sunset. */
@@ -1436,9 +1443,9 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     box(x, gy - 22, x + w, gy, h, { top: '#2b2d42', front: '#1b1f33', side: '#151827' });
     use(cam.front(gy, gy));
     drawRack(now);
-    if (services.length) {
+    if (scene.services.length) {
       use(ID);
-      drawServiceTag(...cam.proj(x + w / 2, gy - 11, h + 10), services.filter((s) => s.status === 'running').length);
+      drawServiceTag(...cam.proj(x + w / 2, gy - 11, h + 10), scene.services.filter((s) => s.status === 'running').length);
     }
   }
   /** Is the pointer over the rack? (in the isometric view, its volume on the screen) */
@@ -1522,8 +1529,8 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     isoWall(BW.x0, BW.front - 8, HALL.x0, BW.front, add);
     add(COOLER.x, COOLER.y, at(cam.billboard(COOLER.x, COOLER.y, COOLER.x, COOLER.y), drawCooler));
     for (const sg of SIGNS) add(sg.x + 6, sg.y + 8, at(cam.billboard(sg.x, sg.y, sg.x, sg.y + 8, LOW_WALL + 22), () => drawSignPlate(sg)));
-    for (const g of sim.ghosts) { const [x, y] = anchor(g); add(x, y, at(personM(g), () => drawGhost(g, now))); }
-    for (const a of Object.values(agents)) {
+    for (const g of scene.visitors) { const [x, y] = anchor(g); add(x, y, at(personM(g), () => drawGhost(g, now))); }
+    for (const a of Object.values(scene.team)) {
       const s = a.cfg.seat;
       add(s.x, s.y - 44, () => isoChair(s));
       add(s.x, s.y + 4, () => isoDesk(a, now));
@@ -1531,7 +1538,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     }
     add(BOARD.x + BOARD.w / 2, EASEL.feet, at(BOARD_M(), () => drawBoard(now)));
     add(RACK.x + RACK.w / 2, RACK.y + RACK.h - 10, () => isoRack(now));
-    if (sim.extinguisher === 'floor') add(EXTINGUISHER.x, EXTINGUISHER.y, at(cam.billboard(EXTINGUISHER.x, EXTINGUISHER.y, EXTINGUISHER.x, EXTINGUISHER.y), drawExtinguisher));
+    if (scene.extinguisher === 'floor') add(EXTINGUISHER.x, EXTINGUISHER.y, at(cam.billboard(EXTINGUISHER.x, EXTINGUISHER.y, EXTINGUISHER.x, EXTINGUISHER.y), drawExtinguisher));
     for (const [x, y] of PLANTS) add(x, y, at(cam.billboard(x, y, x, y), () => drawPlant(x, y)));
     add(SPOT.table.x, SPOT.table.y, isoMeetingTable);
     add(TV.x, TV.feet, at(cam.front(TV.feet), () => drawTV(now)));
@@ -1549,9 +1556,9 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
 
   // The extinguisher's jet, from the nozzle (on the person) to the fire (on the rack's front).
   function drawSprayIso(now) {
-    const f = sim.fire;
+    const f = scene.fire;
     if (f?.phase !== 'fighting' || f.sprinklers) return;
-    const a = agents[f.fighter];
+    const a = scene.team[f.fighter];
     if (a.carry !== 'ext' || a.walking) return;
     const [nx, ny] = apply(personM(a), a.x + 27, a.y - 37);
     const [tx, ty] = apply(cam.front(RACK.y + RACK.h), RACK.x + RACK.w / 2, RACK.y + 30);
@@ -1565,7 +1572,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   // Particles are born where the simulation puts them (over the desks, the heads): they stand on
   // the floor a little further forward and at that height.
   function drawParticlesIso() {
-    for (const p of sim.particles) {
+    for (const p of scene.particles) {
       use(cam.billboard(p.x, p.y, p.x, p.y + 40, 40));
       drawParticles([p]);
     }
@@ -1586,10 +1593,10 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     use(cam.front(BACK));
     glow(840, 30, 60, '255,95,162', (0.1 + n * 0.1) * flick);
     glow(791, 29, 24, '127,247,255', (0.1 + n * 0.1) * flick);
-    BW.stalls.forEach((s, i) => glow(s.x, 25, 10, sim.bath.stalls[i] ? '255,60,60' : '60,255,120', 0.22));
+    BW.stalls.forEach((s, i) => glow(s.x, 25, 10, scene.bath.stalls[i] ? '255,60,60' : '60,255,120', 0.22));
     glow(ELEVATOR.x + ELEVATOR.w / 2, 14, 22, '255,90,90', 0.12 + n * 0.08);
     glow(SIGN.x, SIGN.y + 22, 56, '255,209,102', 0.03 + n * 0.05);
-    const f = sim.fire;
+    const f = scene.fire;
     if (f && ['burning', 'fighting'].includes(f.phase)) glow(ALARM.x + 5, ALARM.y + 7, 34, '255,40,40', 0.15 + 0.2 * Math.max(0, Math.sin(now / 110)));
     use(cam.front(BACK + 24, CAFE.fridge.y + CAFE.fridge.h));
     glow(CAFE.fridge.x + 14, 100, 38, '150,215,255', 0.04 + n * 0.08);
@@ -1598,7 +1605,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     use(BOARD_M());
     glow(CLOCK.x + CLOCK.w / 2, CLOCK.y + CLOCK.h / 2, 48, '255,59,48', 0.04 + n * 0.05);
     use(cam.front(TV.feet));
-    const tvRgb = { breaking: '255,60,40', sports: '80,200,110', news: '90,140,220', weather: '150,190,255' }[tvChannel(sim, now)];
+    const tvRgb = { breaking: '255,60,40', sports: '80,200,110', news: '90,140,220', weather: '150,190,255' }[tvChannel(scene, now)];
     glow(TV.x, TV.feet - 18 - TV.h / 2, 84, tvRgb, 0.04 + n * 0.08);
     // the light coming through the glass: a warm strip on the floor
     if (light.alt > 0) {
@@ -1609,7 +1616,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
       sun.addColorStop(1, 'rgba(255,236,200,0)');
       ctx.fillStyle = sun; ctx.fillRect(GLASS.x0, BACK, GLASS.x1 - GLASS.x0, 134);
     }
-    for (const a of Object.values(agents)) {
+    for (const a of Object.values(scene.team)) {
       const busy = ['working', 'thinking', 'red'].includes(a.state);
       if (!busy && n <= 0.3) continue;
       const s = a.cfg.seat;
@@ -1625,7 +1632,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     use(ID);
     ctx.globalCompositeOperation = 'source-over';
     if (f && ['burning', 'fighting'].includes(f.phase)) R(0, 0, WORLD_W, H, `rgba(255,40,20,${0.03 + 0.02 * Math.sin(now / 160)})`);
-    const bolt = lightning(now, sim.weather);
+    const bolt = lightning(now, scene.weather);
     if (bolt.flash > 0) R(0, 0, WORLD_W, H, `rgba(220,230,255,${0.08 * bolt.flash})`);
   }
 
@@ -1635,11 +1642,11 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     drawSprayIso(now);
     drawParticlesIso();
     drawLightsIso(now, light);
-    for (const a of Object.values(agents)) { use(personM(a)); drawDream(a, now); }
-    if (person(selected)) { use(personM(person(selected))); drawPlumbob(person(selected), now); }
-    for (const a of [...Object.values(agents), ...sim.ghosts]) if (!a.bubble) { use(personM(a)); drawTag(a, now); }
-    for (const a of Object.values(agents)) { use(personM(a)); drawBubble(a, now); }
-    for (const g of sim.ghosts) if (g.fade > 0.5) { use(personM(g)); drawBubble(g, now); }
+    for (const a of Object.values(scene.team)) { use(personM(a)); drawDream(a, now); }
+    if (person(selected)) { use(personM(person(selected))); drawPlumbob(personIn(scene, scene.selected), now); }
+    for (const a of [...Object.values(scene.team), ...scene.visitors]) if (!a.bubble) { use(personM(a)); drawTag(a, now); }
+    for (const a of Object.values(scene.team)) { use(personM(a)); drawBubble(a, now); }
+    for (const g of scene.visitors) if (g.fade > 0.5) { use(personM(g)); drawBubble(g, now); }
     use(ID);
     drawVignette();
     drawBanner(now);
@@ -1652,7 +1659,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     /** Their base transform: the canvas's in the top-down view, centered in the front one. */
     get ID() { return iso ? ID : FLOOR_FLAT; },
     use,
-    outdoorAt: (opts, now, light) => drawOutdoor(outdoor({ date: sim.date(), weather: sim.weather, light, now, ...opts })),
+    outdoorAt: (opts, now, light) => drawOutdoor(outdoor({ date: scene.date, weather: scene.weather, light, now, ...opts })),
     isoBackdrop: (now, light, kind) => (kind === 'archive' ? drawUnderground() : drawIsoBackdrop(now, light)),
     isoWing,
   };
@@ -1781,7 +1788,10 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     const t = now / 1000;
     sim.step(dt, now);
     floors.step(dt, now);
-    const light = daylight(sim.date(), sim.weather);
+    scene = buildScene(sim, { now, floor, selected, hover, services });
+    const light = scene.light;
+    // a registered renderer (public/renderers.js) draws the office instead of this canvas's own
+    if (external && floor === 'office') { drawExternal(); requestAnimationFrame(frame); return; }
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     ctx.imageSmoothingEnabled = false;
     if (floor !== 'office') {
@@ -1807,7 +1817,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     drawBoard(now);
     // depth order: chairs → seated people → desks; walkers by their y
     const items = [];
-    for (const a of Object.values(agents)) {
+    for (const a of Object.values(scene.team)) {
       const s = a.cfg.seat;
       items.push({ y: s.y - 1, fn: () => drawChair(a) });
       items.push({ y: s.y + 1, fn: () => drawDesk(a, now) });
@@ -1817,7 +1827,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     for (const [x, y] of PLANTS) items.push({ y, fn: () => drawPlant(x, y) });
     items.push({ y: COOLER.y, fn: drawCooler });
     items.push({ y: BW.front - 1, fn: drawBathFront });
-    for (const g of sim.ghosts) items.push({ y: g.seated ? g.cfg.seat.y : g.y, fn: () => drawGhost(g, now) });
+    for (const g of scene.visitors) items.push({ y: g.seated ? g.cfg.seat.y : g.y, fn: () => drawGhost(g, now) });
     items.push({ y: CAFE.bistro.y, fn: () => drawBistro() });
     items.push({ y: DINING.top + 13, fn: () => drawDiningWall() });
     items.push({ y: DINING.table.y - 1, fn: () => drawDiningBackChairs() });
@@ -1831,11 +1841,11 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     drawSpray(now);
     drawParticles();
     drawLights(now, light);
-    for (const a of Object.values(agents)) drawDream(a, now);
-    drawPlumbob(person(selected), now);
-    for (const a of [...Object.values(agents), ...sim.ghosts]) if (!a.bubble) drawTag(a, now);
-    for (const a of Object.values(agents)) drawBubble(a, now);
-    for (const g of sim.ghosts) if (g.fade > 0.5) drawBubble(g, now);
+    for (const a of Object.values(scene.team)) drawDream(a, now);
+    drawPlumbob(personIn(scene, scene.selected), now);
+    for (const a of [...Object.values(scene.team), ...scene.visitors]) if (!a.bubble) drawTag(a, now);
+    for (const a of Object.values(scene.team)) drawBubble(a, now);
+    for (const g of scene.visitors) if (g.fade > 0.5) drawBubble(g, now);
     use(ID);
     drawVignette();
     drawBanner(now);
@@ -1843,13 +1853,39 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   }
   requestAnimationFrame(frame);
 
+  // ---------------------------------------------------------------- another renderer (public/renderers.js)
+
+  // a registered renderer draws the office on a canvas of its own (WebGL, if it wants), and that canvas is
+  // copied onto this one: so the page, the HUD and the clicks stay the same whatever draws
+  let external = null;
+  function useRenderer(id) {
+    try { external?.instance.dispose?.(); } catch { /* it is going away anyway */ }
+    external = null;
+    const spec = id && getRenderer(id);
+    if (!spec) return false;
+    const own = document.createElement('canvas');
+    own.width = canvas.width; own.height = canvas.height;
+    external = { id, canvas: own, instance: spec.create(own, { world: { width: WORLD_W, height: H } }) };
+    return true;
+  }
+  function drawExternal() {
+    const { canvas: own, instance } = external;
+    if (own.width !== canvas.width || own.height !== canvas.height) { own.width = canvas.width; own.height = canvas.height; instance.resize?.(own.width, own.height); }
+    instance.draw(scene);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(own, 0, 0, canvas.width, canvas.height);
+  }
+  useRenderer(renderer);
+
   // ---------------------------------------------------------------- interaction
 
   /** A character of the team, or a newcomer ('new:<subId>') while they are in the office. */
   const person = (id) => agents[id] || sim.ghosts.find((g) => g.id === id && !g.gone) || null;
   function agentAt(mx, my) {
+    if (external) return external.instance.pick?.(mx / WORLD_W, my / H)?.person || null;
     let best = null, bestD = iso ? 40 * SP : 40;
-    for (const a of [...Object.values(agents), ...sim.ghosts.filter((g) => g.fade > 0.3 && !g.gone)]) {
+    if (!scene) return null;
+    for (const a of [...Object.values(scene.team), ...scene.visitors.filter((g) => g.fade > 0.3 && !g.gone)]) {
       if (a.hidden) continue;
       const [hx, hy] = apply(personM(a), a.x, feetY(a) - 33);
       const d = Math.hypot(mx - hx, my - hy);
@@ -1910,6 +1946,12 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     select(id) { selected = id; },
     person,
     reset: sim.reset,
+    /** The renderer drawing the office: 'flat' or 'iso' (this canvas's own) or a registered one (public/renderers.js). */
+    get renderer() { return external?.id || (iso ? 'iso' : 'flat'); },
+    /** Draws with a registered renderer (null: this canvas's own again). false if there is no such renderer. */
+    setRenderer: (id) => useRenderer(id),
+    /** The last frame's scene (public/scene.js): what is on screen, as data. */
+    get scene() { return scene; },
     /** 'flat' (the front view, the default) or 'iso' (the isometric top-down one): the office view. */
     get view() { return iso ? 'iso' : 'flat'; },
     setView(v) { iso = v !== 'flat'; },

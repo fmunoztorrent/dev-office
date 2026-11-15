@@ -10,6 +10,9 @@
 //   prompts    history of what was sent to the agents and how it ended
 //   directives the executive floor's orders: one text sent to several offices' projects at once
 //   knowledge  the archive floor: the company's notes, decisions, docs, skills and connectors
+//   systems    the products (a system) and their artifacts (server/systems.js)
+//   loops      the projects' loops: steps with success criteria, and how each one goes (server/loops.js)
+//   experts    the subject matter experts: who knows each skill, and how they look (server/experts.js)
 //
 // Everything is validated before writing: an error returns { ok: false, error } and touches nothing.
 
@@ -254,6 +257,25 @@ const MIGRATIONS = [
      created_at   INTEGER NOT NULL,
      updated_at   INTEGER NOT NULL
    );`,
+  // 10 → 11: the projects' loops: steps with success criteria, worked through on their own (server/loops.js)
+  `CREATE TABLE loops (
+     id         TEXT PRIMARY KEY,
+     name       TEXT NOT NULL UNIQUE COLLATE NOCASE,
+     agent_id   TEXT NOT NULL,                  -- the registered project it works on
+     status     TEXT NOT NULL DEFAULT 'running', -- running | paused | blocked | done
+     data       TEXT NOT NULL DEFAULT '{}',      -- JSON: its interval, criteria and steps, and how each one goes
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL
+   );`,
+  // 11 → 12: the subject matter experts: a character who knows a skill (server/experts.js)
+  `CREATE TABLE experts (
+     id         TEXT PRIMARY KEY,
+     skill      TEXT NOT NULL UNIQUE,           -- the skill's name: when an agent uses it, the expert comes
+     look       TEXT NOT NULL DEFAULT '{}',     -- JSON: name, title, sex, personality, style and appearance
+     topic      TEXT NOT NULL DEFAULT '',       -- what they know about, in a few words
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL
+   );`,
 ];
 
 // what is yours (⚙ › Mine): how many, how long, and how your tools run
@@ -291,6 +313,26 @@ function toolConfig(c = {}) {
   return { run, params: list, timeout, ...(role ? { role } : {}) };
 }
 const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+/** A character's look, checked (`who` names it in the errors): only the keys that can be changed, each with its type. */
+function cleanLook(who, look) {
+  const clean = {};
+  for (const [k, v] of Object.entries(look || {})) {
+    const type = APPEARANCE[k] || fail(t('err.notEditable', { role: who, key: k }));
+    if (type === 'color') { if (!COLOR_RX.test(String(v))) fail(t('err.color', { role: who, key: k })); clean[k] = String(v).toLowerCase(); }
+    else if (type === 'bool') clean[k] = !!v;
+    else if (Array.isArray(type)) { if (!type.includes(v)) fail(t('err.oneOf', { role: who, key: k, values: type.join(', ') })); clean[k] = v; }
+    else {
+      const s = String(v ?? '').trim();
+      if (!s) fail(t('err.empty', { role: who, key: k }));
+      clean[k] = s.slice(0, k === 'name' ? 20 : 30);
+    }
+  }
+  return clean;
+}
+/** A skill's name, as agents call it: lowercase letters, digits, dots, dashes and underscores. */
+export const SKILL_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+const EXPERTS_MAX = 40;
+const LOOPS_MAX = 100;
 
 /** Opens (and creates or migrates) the database. `file` ':memory:' is for the tests. */
 export function openStore(file = dbFile()) {
@@ -641,6 +683,83 @@ export class Store {
     return out;
   }
 
+  // ---------------------------------------------------------------- the projects' loops (server/loops.js)
+
+  #loop(r) {
+    if (!r) return null;
+    return { ...(json(r.data, {}) || {}), id: r.id, name: r.name, agent: r.agent_id, status: r.status, createdAt: r.created_at, updatedAt: r.updated_at };
+  }
+  listLoops() { return this.db.prepare('SELECT * FROM loops ORDER BY created_at').all().map((r) => this.#loop(r)); }
+  getLoop(id) { return this.#loop(this.db.prepare('SELECT * FROM loops WHERE id = ?').get(String(id))); }
+  /** A loop by its id or its name. */
+  findLoop(ref) { return this.getLoop(ref) || this.#loop(this.db.prepare('SELECT * FROM loops WHERE name = ? COLLATE NOCASE').get(String(ref ?? '').trim())); }
+  /**
+   * Saves a loop as server/loops.js keeps it (it checks it): { id, name, agent, status, ...the rest as JSON }.
+   * Returns { ok } or { ok: false, error } (a name another loop has, or too many loops).
+   */
+  saveLoop(loop) {
+    return this.#write(() => {
+      const { id, name, agent, status, createdAt, updatedAt, ...data } = loop;
+      const clash = this.findLoop(name);
+      if (clash && clash.id !== id) fail(t('err.loopExists', { name }));
+      const now = Date.now();
+      if (this.getLoop(id)) {
+        this.db.prepare('UPDATE loops SET name = ?, agent_id = ?, status = ?, data = ?, updated_at = ? WHERE id = ?').run(String(name), String(agent), String(status), JSON.stringify(data), now, String(id));
+      } else {
+        if (this.db.prepare('SELECT count(*) AS n FROM loops').get().n >= LOOPS_MAX) fail(t('err.loopsMax', { n: LOOPS_MAX }));
+        this.db.prepare('INSERT INTO loops (id, name, agent_id, status, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(String(id), String(name), String(agent), String(status), JSON.stringify(data), createdAt || now, now);
+      }
+      return { ok: true };
+    });
+  }
+  deleteLoop(id) {
+    const r = this.db.prepare('DELETE FROM loops WHERE id = ?').run(String(id));
+    return r.changes ? { ok: true } : { ok: false, status: 404, error: t('err.unknownLoop', { loop: id }) };
+  }
+
+  // ---------------------------------------------------------------- the subject matter experts (server/experts.js)
+
+  #expert(r) {
+    return r ? { id: r.id, skill: r.skill, topic: r.topic || '', look: json(r.look, {}) || {}, createdAt: r.created_at, updatedAt: r.updated_at } : null;
+  }
+  listExperts() { return this.db.prepare('SELECT * FROM experts ORDER BY skill').all().map((r) => this.#expert(r)); }
+  getExpert(id) { return this.#expert(this.db.prepare('SELECT * FROM experts WHERE id = ?').get(String(id))); }
+  /** An expert by their id or the name of their skill. */
+  findExpert(ref) { return this.getExpert(ref) || this.#expert(this.db.prepare('SELECT * FROM experts WHERE skill = ?').get(String(ref ?? '').trim().toLowerCase())); }
+
+  /**
+   * Saves a subject matter expert: { id?, skill, topic?, look: { name, title?, sex?, personality?, style?, shirt… } }.
+   * Without `id`, the expert of that skill is updated. Returns { ok, expert, created }.
+   */
+  saveExpert(input = {}) {
+    return this.#write(() => {
+      const skill = String(input.skill ?? '').trim().toLowerCase();
+      if (!SKILL_NAME.test(skill)) fail(t('err.expertSkill'));
+      const current = input.id ? this.getExpert(input.id) : this.findExpert(skill);
+      if (input.id && !current) fail(t('err.unknownExpert', { expert: input.id }));
+      const clash = this.findExpert(skill);
+      if (clash && clash.id !== current?.id) fail(t('err.expertExists', { skill }));
+      const look = cleanLook('sme', input.look === undefined ? current?.look || {} : input.look);
+      if (!look.name) fail(t('err.expertName'));
+      const topic = String(input.topic ?? current?.topic ?? '').replace(/\s+/g, ' ').trim().slice(0, 120);
+      const now = Date.now();
+      if (current) {
+        this.db.prepare('UPDATE experts SET skill = ?, look = ?, topic = ?, updated_at = ? WHERE id = ?').run(skill, JSON.stringify(look), topic, now, current.id);
+        return { ok: true, expert: this.getExpert(current.id), created: false };
+      }
+      if (this.db.prepare('SELECT count(*) AS n FROM experts').get().n >= EXPERTS_MAX) fail(t('err.expertsMax', { n: EXPERTS_MAX }));
+      const id = `x${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+      this.db.prepare('INSERT INTO experts (id, skill, look, topic, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, skill, JSON.stringify(look), topic, now, now);
+      return { ok: true, expert: this.getExpert(id), created: true };
+    });
+  }
+  deleteExpert(id) {
+    const e = this.findExpert(id);
+    if (!e) return { ok: false, status: 404, error: t('err.unknownExpert', { expert: id }) };
+    this.db.prepare('DELETE FROM experts WHERE id = ?').run(e.id);
+    return { ok: true, expert: e };
+  }
+
   /** Every folder with instructions: [{ path, instructions }]. */
   listProjectInstructions() { return this.db.prepare('SELECT path, instructions FROM projects ORDER BY path').all().map((r) => ({ path: r.path, instructions: r.instructions })); }
   /** Sets (or, empty, removes) a project folder's instructions: an existing absolute path. */
@@ -798,18 +917,7 @@ export class Store {
       for (const [key, look] of Object.entries(patch || {})) {
         const role = normRole(key) || fail(t('err.unknownRole', { role: key }));
         if (look === null) { delete appearance[role]; continue; }
-        const clean = {};
-        for (const [k, v] of Object.entries(look || {})) {
-          const type = APPEARANCE[k] || fail(t('err.notEditable', { role, key: k }));
-          if (type === 'color') { if (!COLOR_RX.test(String(v))) fail(t('err.color', { role, key: k })); clean[k] = String(v).toLowerCase(); }
-          else if (type === 'bool') clean[k] = !!v;
-          else if (Array.isArray(type)) { if (!type.includes(v)) fail(t('err.oneOf', { role, key: k, values: type.join(', ') })); clean[k] = v; }
-          else {
-            const s = String(v ?? '').trim();
-            if (!s) fail(t('err.empty', { role, key: k }));
-            clean[k] = s.slice(0, k === 'name' ? 20 : 30);
-          }
-        }
+        const clean = cleanLook(role, look);
         if (Object.keys(clean).length) appearance[role] = clean; else delete appearance[role];
       }
       this.#put(this.#appearanceKey(office), appearance);

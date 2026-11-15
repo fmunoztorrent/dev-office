@@ -33,6 +33,7 @@
         </span>
         <button id="svc-chip" class="svc-chip" type="button" hidden data-i18n-title="ui.servicesKey"></button>
         <button id="ask-chip" class="ask-chip" type="button" hidden></button>
+        <button id="loop-chip" class="svc-chip loop-chip" type="button" hidden></button>
       </div>
       <div class="hud hud-tr">
         <button id="open-settings" class="hud-btn" type="button" data-i18n-title="ui.settingsKey" data-i18n-aria="ui.settings">
@@ -224,6 +225,25 @@
     </form>
   </dialog>
 
+  <!-- A project's loops: steps with success criteria, worked through on their own (loops-ui.js). -->
+  <dialog id="loops" class="brief floors-dlg loops-dlg" aria-labelledby="lp-title">
+    <div class="lp-card">
+      <header class="brief-head">
+        <span class="pin" aria-hidden="true"></span>
+        <h2 id="lp-title" data-i18n="loop.ui.title">🔁 Loops</h2>
+        <button type="button" class="brief-x" id="lp-close" data-i18n-aria="settings.close">✕</button>
+      </header>
+      <div class="lp-panes">
+        <ul id="lp-list" class="lp-list"></ul>
+        <section id="lp-detail" class="lp-detail"></section>
+      </div>
+      <footer class="brief-foot">
+        <p id="lp-msg" class="b-problem muted" role="status" aria-live="polite"></p>
+        <button type="button" class="btn" id="lp-new" data-i18n="loop.ui.new">✚ New loop</button>
+      </footer>
+    </div>
+  </dialog>
+
   <!-- The archive: the company's knowledge, its skills and its connectors (floors-ui.js). -->
   <dialog id="archive" class="brief floors-dlg archive-dlg" aria-labelledby="ar-title">
     <div class="ar-card">
@@ -269,6 +289,7 @@
         </dl>
         <div class="w-actions">
           <button id="new-brief" class="btn" type="button" data-i18n="ui.newBrief">📋 New brief</button>
+          <button id="open-loops" class="btn ghost" type="button" data-i18n="loop.ui.button" data-i18n-title="loop.ui.key">🔁 Loops</button>
           <button id="standup" class="btn ghost" type="button" data-i18n="ui.standupBtn" data-i18n-title="ui.standupTip">🗣 Daily</button>
           <button id="demo" class="btn ghost" type="button" data-i18n="ui.demo">▶ Demo</button>
           <button id="demo-pi" class="btn ghost" type="button" data-i18n="ui.demoTdd">▶ TDD demo</button>

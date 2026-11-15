@@ -11,6 +11,7 @@
 //                instructions of folders that are not registered
 //   systems      the products or business projects (server/systems.js): their team, instructions and artifacts
 //   mine         what is yours (⚙ › Mine): your private skills and your own tools (server/mine.js)
+//   experts      the subject matter experts (server/experts.js): who knows each skill, and how they look
 //
 // What is not: what belongs to the game (the default team, the map, the phases, which character does
 // each tool) and what is history or content rather than a setting (the log, the briefs, the directives,
@@ -59,7 +60,8 @@ export function exportSettings(store, { app = '' } = {}) {
   const instructions = (store.listProjectInstructions?.() || []).filter((x) => !registered.has(x.path));
   const mine = (kind) => (store.listMine?.(kind) || []).map((e) => ({ name: e.name, title: e.title, body: e.body, enabled: e.enabled, ...(e.config ? { config: e.config } : {}) }));
   const systems = (store.listSystems?.() || []).map((s) => ({ name: s.name, department: s.office, instructions: s.instructions, parts: s.parts.map(({ name, project, component, path: sub, kind, uses }) => ({ name, project, ...(component ? { component } : {}), ...(sub ? { path: sub } : {}), kind, uses })) }));
-  return { kind: SETTINGS_KIND, version: SETTINGS_VERSION, app, exportedAt: new Date().toISOString(), prefs, departments, projects, instructions, systems, mine: { skills: mine('skill'), tools: mine('tool') } };
+  const experts = (store.listExperts?.() || []).map(({ skill, topic, look }) => ({ skill, ...(topic ? { topic } : {}), look }));
+  return { kind: SETTINGS_KIND, version: SETTINGS_VERSION, app, exportedAt: new Date().toISOString(), prefs, departments, projects, instructions, systems, mine: { skills: mine('skill'), tools: mine('tool') }, experts };
 }
 
 /** Is it a settings file? Returns { ok, data } or { ok: false, error } (said in the game's language). */
@@ -81,7 +83,7 @@ export function importSettings(store, raw, { mine: yours = new Mine({ store }) }
   const parsed = parseSettings(raw);
   if (!parsed.ok) return parsed;
   const d = parsed.data;
-  const applied = { prefs: 0, departments: 0, characters: 0, projects: 0, components: 0, instructions: 0, systems: 0, skills: 0, tools: 0 };
+  const applied = { prefs: 0, departments: 0, characters: 0, projects: 0, components: 0, instructions: 0, systems: 0, skills: 0, tools: 0, experts: 0 };
   const skipped = [];
   const skip = (what, error) => skipped.push({ what, error: String(error || '') });
 
@@ -170,6 +172,12 @@ export function importSettings(store, raw, { mine: yours = new Mine({ store }) }
         if (out.ok) applied[`${kind}s`]++; else skip(t(`settingsIo.${kind}`, { name: e.name || '?' }), out.error);
       }
     }
+  }
+  // the experts: by their skill (the one there was for that skill is updated)
+  for (const x of Array.isArray(d.experts) ? d.experts : []) {
+    if (!isObj(x)) continue;
+    const out = store.saveExpert({ skill: x.skill, topic: x.topic ?? '', look: isObj(x.look) ? x.look : {} });
+    if (out.ok) applied.experts++; else skip(t('settingsIo.expert', { skill: x.skill || '?' }), out.error);
   }
   return { ok: true, applied, skipped, lang: isObj(d.prefs) && d.prefs.lang ? store.getPrefs().lang : undefined };
 }

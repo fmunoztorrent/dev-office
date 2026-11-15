@@ -52,6 +52,23 @@ export const VISITORS = {
   security: { name: 'Inés', title: 'Seguridad', sex: 'f', personality: 'focused', style: 'normal', shirt: '#ffd166', pants: '#2b2d42', hair: '#151515', skin: '#f0c8a8', long: true, beard: false, glasses: true, prop: 'laptop', icon: '🛡️' },
 };
 export const VISITOR_ROLES = Object.keys(VISITORS);
+// The subject matter experts (server/experts.js): a character who knows a skill. You make them (⚙ ›
+// Characters › Experts) and associate each one with a skill; when an agent uses it, its expert comes up by
+// the elevator like a visiting specialist (solid, always the same person) and leaves when the turn ends.
+// Their role is 'sme'; which expert, the event's `expert`.
+export const EXPERT_ROLE = 'sme';
+export const DEFAULT_EXPERT = { name: 'Ana', sex: 'f', personality: 'calm', style: 'teacher', shirt: '#8e7dbe', pants: '#2b2d42', hair: '#7a4a2a', skin: '#e8b894', long: true, beard: false, glasses: true, prop: 'laptop', icon: '🎓' };
+const EXPERTS = new Map();
+/** The experts as the office keeps them ([{ id, skill, topic, look }]): the viewer passes them on. */
+export function setExperts(list) { EXPERTS.clear(); for (const x of Array.isArray(list) ? list : []) if (x?.id) EXPERTS.set(x.id, x); }
+/** An expert's person: their look over the default one, and their title (their topic, or "expert in <skill>"). */
+export function expertPerson(ref) {
+  const x = EXPERTS.get(ref?.id ?? ref) || (ref && typeof ref === 'object' ? { id: ref.id, skill: ref.skill, look: { name: ref.name, title: ref.title, shirt: ref.shirt || undefined } } : null);
+  if (!x) return null;
+  const look = Object.fromEntries(Object.entries(x.look || {}).filter(([, v]) => v !== undefined && v !== null && v !== ''));
+  const base = { ...DEFAULT_EXPERT, ...lookForSex(look.sex || DEFAULT_EXPERT.sex), ...look };
+  return { ...base, title: look.title || x.topic || t('team.titles.sme', { skill: x.skill, g: base.sex }), expert: x.id, skill: x.skill };
+}
 /** A role's person: the team's character or the visiting specialist (null if neither). */
 export const personOf = (role) => TEAM[role] || VISITORS[role] || null;
 /** A role's default look (before ⚙ › Characters): the team's, or the visiting specialist's. */
@@ -213,10 +230,10 @@ export const TAG_MS = 120_000;
 const DEVS = ['backend', 'frontend', 'designer'];
 const SPEED = 120; // world px per second when walking
 export const LUNCH = { start: 13 * 60, end: 14 * 60 }; // minutes of the day
-/** What is on TV: breaking news if the server catches fire; if someone is watching, football too. */
-export function tvChannel(sim, now) {
-  if (sim.fire && sim.fire.phase !== 'done') return 'breaking';
-  const watched = Object.values(sim.agents).some((a) => a.back);
+/** What is on TV: breaking news if the server catches fire; if someone is watching, football too. (`s`: a scene, or the simulation) */
+export function tvChannel(s, now) {
+  if (s.fire && s.fire.phase !== 'done') return 'breaking';
+  const watched = Object.values(s.team || s.agents).some((a) => a.back);
   const list = watched ? ['sports', 'weather', 'news', 'sports'] : ['weather', 'news'];
   return list[Math.floor(now / 9000) % list.length];
 }
@@ -428,7 +445,7 @@ function describe(kind, who, extra) {
     case 'standup': case 'deskchat': case 'gossip': case 'bathgossip': case 'idea': case 'feasibility': case 'consult': case 'rounds': case 'coffee': case 'requirement':
     case 'bathroom': case 'lunch': case 'lunchend': case 'fire': case 'repaired': case 'tv': case 'pane': case 'paneDone':
       return t(`sim.journal.${kind}`, vars);
-    case 'newcomer': case 'farewell': case 'visitor': return t(`sim.journal.${kind}`, { ...vars, name: extra.name || '', role: personOf(who)?.title || who });
+    case 'newcomer': case 'farewell': case 'visitor': return t(`sim.journal.${kind}`, { ...vars, name: extra.name || '', role: extra.role || personOf(who)?.title || who });
     default: return t('sim.journal.other', { ...vars, kind });
   }
 }
@@ -773,7 +790,10 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
 
   function handle(ev) {
     const ghost = ev.subId ? ghosts.get(ev.subId) : null; // a subagent's events are its newcomer's
-    const a = ghost || agents[ev.role] || specialist(ev); // DevOps and security have no desk: they come up
+    // DevOps and security have no desk: they come up; so does the expert of a skill the agent uses
+    const a = ghost || (ev.role === EXPERT_ROLE ? expert(ev) : agents[ev.role] || specialist(ev));
+    // a subagent that uses a skill with its expert: the subagent works, and the expert comes to help
+    if (ghost && ev.expert && !ghost.specialist) expert({ ...ev, subId: null });
     const now = simNow;
     if (a) log(a, ev.text);
     // the badge over their head: what their agent is doing now (it goes when the turn ends, or after a while)
@@ -985,6 +1005,11 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         if (!a) break;
         a.jumpUntil = now + 700;
         a.say(T('sim.poke', { from: ev.from }), 2500);
+        break;
+      case 'loop':
+        // a project's loop moves (server/loops.js): the manager runs it; what it sends or decides shows in the banner
+        if (ev.phase !== 'report') banner = { text: ev.text, tone: ev.ok === false ? 'warn' : 'chat', until: now + (ev.ok === false ? 15_000 : 6000) };
+        if (a && !a.hidden && !a.lunch && ['passed', 'blocked', 'done'].includes(ev.phase)) a.say(short(ev.text.replace(/^\S+\s/, ''), 90), 3500);
         break;
       case 'dispatch':
         // A brief sent from the office: it is a new requirement for the team.
@@ -1226,7 +1251,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     if (e && simNow - e.at < 120_000 && e.text && nameOf(e.role)) out.push(T('sim.live.stuck', { name: nameOf(e.role), action: lower(short(e.text, 36)) }));
     if (memory.lastGreen && simNow - memory.lastGreen.at < 120_000) out.push(T('sim.gossipGreen', { name: TEAM.qa.name }));
     if (agents.manager.handUp) out.push(T('sim.live.waitingYou'));
-    for (const g of ghosts.values()) if (!g.leaving) out.push(T(g.specialist ? 'sim.live.visitor' : 'sim.live.newcomer', { name: g.cfg.name, role: personOf(g.role)?.title || g.role }));
+    for (const g of ghosts.values()) if (!g.leaving) out.push(T(g.specialist ? 'sim.live.visitor' : 'sim.live.newcomer', { name: g.cfg.name, role: (g.specialist && g.cfg.title) || personOf(g.role)?.title || g.role }));
     return out;
   }
 
@@ -1258,13 +1283,12 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
    * work; the first one of their role is the specialist in person (solid, always the same), the rest
    * are newcomers of that role.
    */
-  function hire(ev, key = ev.subId) {
-    const look = personOf(ev.role);
+  function hire(ev, key = ev.subId, { look = personOf(ev.role), solid = !!VISITORS[ev.role] } = {}) {
     if (!look || !key) return null;
     const { desk, seat } = seatFor();
     const present = [...ghosts.values()].filter((g) => !g.gone);
     const used = new Set(present.map((g) => g.cfg.name));
-    const specialist = !!VISITORS[ev.role] && !used.has(look.name);
+    const specialist = solid && !used.has(look.name);
     const name = specialist ? look.name : P(NEWCOMER_NAMES.filter((n) => !used.has(n))) || `${look.name} 2`;
     const cfg = specialist ? { ...look, title: look.title, name, seat }
       : { ...look, title: look.title, name, seat, prop: 'laptop', hair: P(LOOK_PALETTES.hair), skin: P(LOOK_PALETTES.skin), long: chance(0.5), beard: chance(0.25), glasses: chance(0.3) };
@@ -1301,6 +1325,34 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     note('visitor', ev.role, { name: v.cfg.name, text: ev.text });
     agents.manager.say(T('sim.visitor.arrive', { name: v.cfg.name, role: v.cfg.title, icon: VISITORS[ev.role].icon }), 2600);
     log(v, T(`sim.visitor.hello.${ev.role}`));
+    return v;
+  }
+
+  /**
+   * The subject matter expert of the skill an agent uses (server/experts.js): already here, on their way
+   * out (they come back) or called now by the elevator. They stay until that session's turn ends.
+   */
+  function expert(ev) {
+    if (!ev.expert?.id) return null;
+    const key = `visit:${ev.session || ''}:sme:${ev.expert.id}`;
+    const g = ghosts.get(key);
+    if (g && !g.leaving) return g;
+    if (!CALLS.has(ev.kind)) return null;
+    if (g) {
+      const { desk, seat } = seatFor(g);
+      g.desk = desk; g.cfg.seat = seat;
+      Object.assign(g, { leaving: false, gone: false, queue: [] });
+      if (g.fade <= 0) Object.assign(g, { x: ELEVATOR.spot.x, y: ELEVATOR.spot.y, seated: false });
+      g.goHome();
+      return g;
+    }
+    const look = expertPerson(ev.expert);
+    const v = hire({ ...ev, role: EXPERT_ROLE, subId: null }, key, { look, solid: true });
+    if (!v) return null;
+    v.expert = ev.expert.id;
+    note('visitor', EXPERT_ROLE, { name: v.cfg.name, role: v.cfg.title, text: ev.text });
+    agents.manager.say(T('sim.expert.arrive', { name: v.cfg.name, skill: ev.expert.skill }), 2600);
+    log(v, T('sim.expert.hello', { skill: ev.expert.skill }));
     return v;
   }
 

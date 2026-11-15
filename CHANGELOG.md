@@ -4,6 +4,19 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-11-15
+
+### Added
+
+- **Loops: a project worked step by step, with success criteria.** 🔁 in the HUD, `i`, or 🔁 Loops in the work dialog. A loop has its project, its interval (it looks every **5 minutes** by default), its tries per step, the criteria every step must meet and each step with its own:
+  - every interval it looks at its project: while it is **working** (the step's brief is open, or a session in its folder is mid-turn: yours too) or the agent asks you something, it only waits; **idle**, the step that is due goes, or the one that went is checked against its criteria;
+  - **all met**, the next step goes; **one not met**, the same step goes again with what is missing; **not reported**, the agent is asked to check them. After its tries, the step waits for you (retry, skip or change it);
+  - the agent reports each criterion with the new MCP tool **`loop_report`** (or `✅ n` / `❌ n — why` lines at the end of a background session's answer), and you can mark one yourself: your mark stays. The office never runs the checks;
+  - criteria and steps can be added while it runs; whether the project works or is idle shows live, with the countdown to the next look; a finished loop leaves its minutes in the archive.
+  - `GET|POST /v1/loops`, `GET|PUT|DELETE /v1/loops/<id>`, `POST /v1/loops/<id>/{criteria,steps,mark,pause,resume,skip,tick}`, `POST /v1/loops/report`; MCP `loop_report` and `list_loops`.
+- **Subject matter experts (SME).** A new kind of character, associated by hand with a skill (⚙ › Characters › 🎓 Experts: their name, what they know about, their look; the skill picked from the ones the company knows). When an agent uses that skill (Claude Code's `Skill`, OpenCode's `skill`, or reading the skill's files), its expert comes up by the elevator, sits at a hot desk with the skill in their badge (`🎓 pci-dss`) and leaves when the turn ends. In the browser and in the terminal; the log names them. They travel in your settings file. `GET|POST /v1/experts`, `PUT|DELETE /v1/experts/<id>`.
+- **The scene: a layer between the game and what draws it**, so other graphics (a 3D one, say) can be added without touching the game. Each frame the simulation becomes a scene (`public/scene.js`): plain data with the people (look, pose, position, bubble, badge), the world that does not move (rooms, doors, glass wall, furniture with their footprint and height, in world units) and the light, weather and whiteboard. The canvas (front and top-down) and the terminal now draw only from it; a renderer registers itself in `public/renderers.js`, and `?renderer=plan` opens the reference one. The contract: [docs/rendering.md](docs/rendering.md).
+
 ## [0.20.0] - 2026-11-13
 
 ### Added
@@ -309,7 +322,8 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.18.1...v0.19.0
 [0.18.1]: https://github.com/fmunoztorrent/dev-office/compare/v0.18.0...v0.18.1

@@ -7,7 +7,7 @@
 //   Characters   how the characters of the office being watched look.
 //   Mine         what is yours, not the company's: your private skills and your own tools (server/mine.js).
 
-import { personOf, defaultLook, VISITORS, APPEARANCE_KEYS, LOOK_PALETTES, SEXES, PERSONALITIES, STYLES, randomLook, lookForSex } from './sim.js';
+import { personOf, defaultLook, VISITORS, APPEARANCE_KEYS, LOOK_PALETTES, SEXES, PERSONALITIES, STYLES, randomLook, lookForSex, DEFAULT_EXPERT } from './sim.js';
 import { exportCharacter, parseCharacter, characterFile } from './character.js';
 import { drawSprite } from './sprite.js';
 import { t, LANGUAGES, getLanguage } from './i18n.js';
@@ -139,7 +139,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     else if (tab === 'agents') renderAgents();
     else if (tab === 'models') { st.models = null; renderModels(); }
     else if (tab === 'mine') renderMine();
-    else { st.looks = null; renderLook(); }
+    else { st.looks = null; st.experts = null; renderLook(); loadExperts(); }
   }
 
   /** How the archive is indexed: chunks, and how many have their embedding. */
@@ -760,9 +760,86 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     const box = panel.closest('.brief-body'), top = box?.scrollTop, focus = document.activeElement?.getAttribute('aria-label');
     put(panel,
       el('p', { class: 'hint' }, `${getOffice()?.name ? `🏢 ${getOffice().name} · ` : ''}${LK('hint')}`),
-      el('div', { class: 's-looks' }, cards));
+      el('div', { class: 's-looks' }, cards),
+      expertsBox());
     if (box) box.scrollTop = top;
     if (focus) [...panel.querySelectorAll('[aria-label]')].find((x) => x.getAttribute('aria-label') === focus)?.focus();
+  }
+
+  // ------------------------------------------------------------ the subject matter experts (server/experts.js)
+
+  const XK = (k, v) => t(`settings.experts.${k}`, v);
+  const EXPERT_LOOK = APPEARANCE_KEYS;
+  /** An expert as the form edits it: their skill, their topic and their whole look. */
+  const expertForm = (x = {}) => ({
+    id: x.id || null, skill: x.skill || '', topic: x.topic || '',
+    look: { ...Object.fromEntries(EXPERT_LOOK.map((k) => [k, DEFAULT_EXPERT[k] ?? ''])), title: '', ...(x.look || {}) },
+  });
+  /** The experts and the skills the company knows (the archive's, yours, the projects'): to pick one. */
+  async function loadExperts() {
+    const r = await api('GET', '/v1/experts');
+    if (!r.ok) return msg(r.error);
+    st.experts = r.experts.map(expertForm);
+    st.skills = r.skills || [];
+    if (st.tab === 'look' && $('settings').open) renderLook();
+  }
+  /** The experts changed elsewhere (another window): reloaded, unless one is being written here. */
+  function expertsChanged() { if ($('settings').open && st.tab === 'look' && !st.experts?.some((x) => x.dirty)) loadExperts(); }
+
+  function expertsBox() {
+    const list = st.experts;
+    const card = (x, i) => {
+      const look = x.look;
+      const canvas = el('canvas', { 'aria-label': LK('preview', { name: look.name || '?' }) });
+      const redraw = () => drawSprite(canvas, { ...DEFAULT_EXPERT, ...look });
+      const set = (k, v, again = true) => { look[k] = v; x.dirty = true; if (again) renderLook(); else redraw(); };
+      const toggle = (k) => el('label', {}, el('input', { type: 'checkbox', checked: look[k] ? true : undefined, onchange: (e) => set(k, e.target.checked, false) }), LK(k));
+      const select = (k, values, label) => el('label', { class: 's-pick' }, el('span', {}, LK(k)),
+        el('select', { 'aria-label': LK('of', { label: LK(k), name: look.name }), onchange: (e) => (k === 'sex' ? (Object.assign(look, lookForSex(e.target.value)), x.dirty = true, renderLook()) : set(k, e.target.value, false)) },
+          values.map((v) => option(v, label(v), look[k] === v))));
+      redraw();
+      const save = async () => {
+        const body = { skill: x.skill, topic: x.topic, look: Object.fromEntries(Object.entries(look).filter(([, v]) => v !== '' && v !== null && v !== undefined)) };
+        const r = await api(x.id ? 'PUT' : 'POST', x.id ? `/v1/experts/${encodeURIComponent(x.id)}` : '/v1/experts', body);
+        if (!r.ok) return msg(r.error);
+        msg(XK('saved', { name: r.expert.look.name, skill: r.expert.skill }), true);
+        await loadExperts();
+      };
+      const remove = async () => {
+        if (x.id) {
+          if (!confirm(XK('removeConfirm', { name: look.name, skill: x.skill }))) return;
+          const r = await api('DELETE', `/v1/experts/${encodeURIComponent(x.id)}`);
+          if (!r.ok) return msg(r.error);
+        }
+        list.splice(i, 1);
+        renderLook();
+      };
+      return el('div', { class: 's-look s-expert' },
+        canvas,
+        el('div', { class: 'pair' },
+          el('input', { type: 'text', value: look.name, maxlength: 20, placeholder: XK('namePh'), 'aria-label': LK('name'), oninput: (e) => { look.name = e.target.value; x.dirty = true; } }),
+          el('input', { type: 'text', value: look.title, maxlength: 30, placeholder: t('team.titles.sme', { skill: x.skill || '…', g: look.sex }), 'aria-label': LK('title'), oninput: (e) => { look.title = e.target.value; x.dirty = true; } })),
+        el('label', { class: 's-pick s-skill' }, el('span', {}, XK('skill')),
+          el('input', { type: 'text', value: x.skill, list: 's-skills', maxlength: 64, placeholder: XK('skillPh'), 'aria-label': XK('skill'), oninput: (e) => { x.skill = e.target.value; x.dirty = true; } })),
+        el('label', { class: 's-pick s-skill' }, el('span', {}, XK('topic')),
+          el('input', { type: 'text', value: x.topic, maxlength: 120, placeholder: XK('topicPh'), 'aria-label': XK('topic'), oninput: (e) => { x.topic = e.target.value; x.dirty = true; } })),
+        el('div', { class: 'pair' },
+          select('sex', SEXES, (v) => LK(`sexes.${v}`)),
+          select('personality', Object.keys(PERSONALITIES), (v) => LK(`personalities.${v}`))),
+        el('div', { class: 'colors' }, colorField(look, 'skin', set), colorField(look, 'hair', set), colorField(look, 'shirt', set), colorField(look, 'pants', set)),
+        el('div', { class: 'toggles' }, toggle('long'), toggle('beard'), toggle('glasses')),
+        el('div', { class: 'toggles' },
+          el('span', { class: 'hint' }, x.id ? XK('role', { skill: x.skill }) : XK('new')),
+          el('button', { type: 'button', class: 's-mini', title: LK('randomTitle'), onclick: () => { Object.assign(look, randomLook(look.sex)); x.dirty = true; renderLook(); } }, '🎲'),
+          el('button', { type: 'button', class: 's-mini danger', title: XK('remove'), 'aria-label': XK('remove'), onclick: remove }, '🗑'),
+          el('button', { type: 'button', class: 's-mini', onclick: save }, XK('save'))));
+    };
+    return el('section', { class: 's-experts' },
+      el('h3', {}, XK('title')),
+      el('p', { class: 'hint' }, XK('hint')),
+      el('datalist', { id: 's-skills' }, (st.skills || []).map((k) => el('option', { value: k.name }, k.where ? `${k.name} · ${k.where}` : k.name))),
+      list ? el('div', { class: 's-looks' }, list.map(card)) : el('p', { class: 'hint' }, t('settings.loading')),
+      el('div', { class: 's-row' }, el('button', { type: 'button', class: 's-mini', disabled: !list, onclick: () => { list.push({ ...expertForm(), dirty: true }); renderLook(); } }, XK('add'))));
   }
 
   // A character as a JSON file (public/character.js): to share them, and to bring one in.
@@ -850,5 +927,5 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   $('settings-save').onclick = () => (st.tab === 'look' ? saveLook() : st.tab === 'models' ? setPref({ models: st.models }) : null);
   $('settings-form').onsubmit = (e) => e.preventDefault();
 
-  return { open, refresh, appearanceChanged };
+  return { open, refresh, appearanceChanged, expertsChanged };
 }

@@ -32,6 +32,8 @@ import { fromFile, fromUrl } from './ingest.js';
 import { AskDesk } from './asks.js';
 import { Archive } from './archive.js';
 import { DirectiveDesk } from './directives.js';
+import { LoopDesk } from './loops.js';
+import { expertOfTool, knownSkills } from './experts.js';
 import { openStore, dbFile, MAIN_OFFICE } from './store.js';
 import { Weather, findPlaces } from './weather.js';
 import { Herdr, paneRole, quote } from './herdr.js';
@@ -47,7 +49,7 @@ import { zoneInfo, systemZone } from '../public/clock.js';
 import { insideDir as inside, insideDir } from './paths.js';
 import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.20.0';
+export const VERSION = '0.21.0';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
 const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
@@ -83,7 +85,7 @@ class HttpError extends Error {
  *                 says it, so `update` knows whether it can bring the office back by itself
  * @returns {Promise<{company, office, url, socket, command, handleMessage, close, …}>}
  */
-export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {}, clarify: clarifyOpt = {}, rag: ragOpt = {}, standup: standupOpt = {}, mine: mineOpt = {}, mode = 'terminal', outdatedAfter = 3000 } = {}) {
+export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {}, clarify: clarifyOpt = {}, rag: ragOpt = {}, standup: standupOpt = {}, mine: mineOpt = {}, loops: loopsOpt = {}, mode = 'terminal', outdatedAfter = 3000 } = {}) {
   const ownStore = !db || typeof db === 'string';
   const store = ownStore ? openStore(db || dbFile()) : db; // oficinas, agentes, ajustes e historial
   setLanguage(store.getPrefs().lang);
@@ -159,7 +161,16 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     const kind = comp?.kind && comp.kind !== 'other' ? comp.kind : detectKind(root);
     return kind === 'other' ? null : kind;
   };
+  // the subject matter experts (server/experts.js): when an agent uses their skill, they come
+  let expertsSeen = { at: 0, list: [] };
+  const expertsNow = () => { if (Date.now() - expertsSeen.at > 3000) { try { expertsSeen = { at: Date.now(), list: store.listExperts() }; } catch { /* closing */ } } return expertsSeen.list; };
+  company.expertFor = (tool, input) => expertOfTool(expertsNow(), tool, input);
+  const expertsChanged = () => { expertsSeen = { at: 0, list: [] }; bus.emit('experts'); };
   const directives = new DirectiveDesk({ store, registry, hub, pipelines, archive, company });
+  // the projects' loops: steps with success criteria, worked through on their own (server/loops.js)
+  const { autostart: loopsStart = true, ...loopsRest } = loopsOpt;
+  const loops = new LoopDesk({ store, registry, hub, pipelines, company, archive, ...loopsRest });
+  if (loopsStart) loops.start();
   // the systems (server/systems.js), as the viewers see them: their order, their team and each artifact's repo
   const systemsPublic = () => {
     const agents = store.listAgents();
@@ -243,7 +254,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       appearance: store.getAppearance(id), weather: weatherOf(id)?.current || null,
       office: company.info(id), offices: company.list(), prefs: prefs(), herdr: herdr ? herdr.status() : { available: false, panes: [] },
       asks: asks.list(id, 10), clarifications: clarify.list(id), services: services.list(id), prompts: promptsOf(id),
-      directives: directives.list(), archive: archive.snapshot(), overview: overview(), systems: systemsPublic(),
+      directives: directives.list(), archive: archive.snapshot(), overview: overview(), systems: systemsPublic(), loops: loops.list(), experts: store.listExperts(),
     };
   };
 
@@ -914,6 +925,44 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const out = directives.handoff({ cwd: b.cwd, text: b.text });
         return json(res, out.ok ? 200 : out.status || 400, out);
       }
+      // the subject matter experts (server/experts.js): a character who knows a skill
+      if (req.method === 'GET' && p === '/v1/experts') return json(res, 200, { ok: true, experts: store.listExperts(), skills: knownSkills(store, { dirs: mine.list().dirs }) });
+      if ((req.method === 'POST' && p === '/v1/experts') || (req.method === 'PUT' && (m = p.match(/^\/v1\/experts\/([^/]+)$/)))) {
+        const out = store.saveExpert({ ...(await body(req)), ...(m ? { id: decodeURIComponent(m[1]) } : {}) });
+        if (out.ok) expertsChanged();
+        return json(res, out.ok ? (out.created ? 201 : 200) : 400, out);
+      }
+      if (req.method === 'DELETE' && (m = p.match(/^\/v1\/experts\/([^/]+)$/))) {
+        const out = store.deleteExpert(decodeURIComponent(m[1]));
+        if (out.ok) expertsChanged();
+        return json(res, out.ok ? 200 : out.status || 400, out);
+      }
+      // the projects' loops (server/loops.js): steps with success criteria, one after the other
+      if (req.method === 'GET' && p === '/v1/loops') return json(res, 200, { ok: true, loops: loops.list() });
+      if (req.method === 'POST' && p === '/v1/loops') {
+        const out = loops.create(await body(req));
+        return json(res, out.ok ? 201 : 400, out);
+      }
+      // the agent reports how the criteria of its step are going (the MCP tool `loop_report`)
+      if (req.method === 'POST' && p === '/v1/loops/report') {
+        const b = await body(req);
+        const out = loops.report({ loop: b.loop, cwd: b.cwd, step: b.step, results: b.results, by: 'agent' });
+        return json(res, out.ok ? 200 : out.status || 400, out);
+      }
+      if ((m = p.match(/^\/v1\/loops\/([^/]+)(?:\/(pause|resume|skip|tick|criteria|steps|mark))?$/))) {
+        const id = decodeURIComponent(m[1]);
+        if (req.method === 'GET' && !m[2]) { const l = loops.get(id); return l ? json(res, 200, { ok: true, loop: l }) : json(res, 404, { ok: false, error: t('err.unknownLoop', { loop: id }) }); }
+        if (req.method === 'PUT' && !m[2]) { const out = loops.update(id, await body(req)); return json(res, out.ok ? 200 : out.status || 400, out); }
+        if (req.method === 'DELETE' && !m[2]) { const out = loops.remove(id); return json(res, out.ok ? 200 : out.status || 400, out); }
+        if (req.method === 'POST' && m[2]) {
+          const b = await body(req);
+          const out = m[2] === 'criteria' ? loops.addCriteria(id, { criteria: b.criteria ?? b.text, step: b.step })
+            : m[2] === 'steps' ? loops.addSteps(id, b.steps ?? b.text)
+              : m[2] === 'mark' ? loops.report({ loop: id, step: b.step, results: b.results ?? [{ criterion: b.criterion, met: b.met, note: b.note }], by: 'you' })
+                : loops[m[2]](id);
+          return json(res, out.ok ? 200 : out.status || 400, out);
+        }
+      }
       // the MCP server (in each agent) offers your tools that are on: whole, with their scripts
       if (req.method === 'GET' && p === '/v1/mine/tools') return json(res, 200, { ok: true, tools: store.listMine('tool').filter((x) => x.enabled) });
       if ((req.method === 'POST' && p === '/v1/mine') || (req.method === 'PUT' && (m = p.match(/^\/v1\/mine\/([^/]+)$/)))) {
@@ -1045,6 +1094,10 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   // past your threshold, the agent is asked to compact its context (server/compact.js)
   const compactor = new Compactor({ prefs, hub, herdr, company });
   company.on('event', (id, event, session) => compactor.onEvent(id, event, session));
+  // a loop looks at whether its project is working or idle (server/loops.js)
+  company.on('event', (id, event, session) => loops.onEvent(id, event, session));
+  loops.on('change', (list) => broadcast({ type: 'loops', loops: list }));
+  bus.on('experts', () => broadcast({ type: 'experts', experts: store.listExperts() }));
   company.on('reset', (id) => toOffice(id, { type: 'snapshot', state: fullState(id) }));
   services.on('change', (id) => toOffice(id, { type: 'services', services: services.list(id), office: id }));
   prompts.on('change', (id) => toOffice(id, { type: 'prompts', prompts: promptsOf(id), office: id }));
@@ -1149,6 +1202,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     standup,
     mine,
     directives,
+    loops,
     overview,
     bus,
     herdr,
@@ -1172,6 +1226,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     async close() {
       stopDemo?.();
       standup.stop();
+      loops.stop();
       indexer.stop();
       clearTimeout(overviewTimer);
       for (const w of weathers.values()) w.stop();

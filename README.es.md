@@ -56,6 +56,8 @@ Con el plugin de Claude Code no hace falta instalar nada más: pídele a Claude 
 
 Y dos **especialistas de visita**, sin escritorio propio: cuando el trabajo es suyo suben por el ascensor, se sientan en un escritorio libre mientras dura y se van cuando termina el turno del agente (un subagente de su rol también son ellos; un segundo al mismo tiempo es alguien nuevo de ese rol). Son personas, no extras: siempre los mismos, dibujados sólidos, y se personalizan en ⚙ › Personajes como el resto.
 
+Y los **expertos** (SME, *subject matter experts*), los que tú creas: en ⚙ › Personajes › 🎓 Expertos, cada uno se **asocia a mano a una skill** (`pci-dss`, `kafka`…), con su nombre, de qué sabe y su aspecto. Cuando un agente usa esa skill (la herramienta `Skill` de Claude Code, `skill` de OpenCode, o leyendo los archivos de la skill, como Pi y Codex), su experto sube por el ascensor como un especialista de visita, se sienta en un escritorio libre con la skill en su badge (🎓 pci-dss) y se va cuando termina el turno. Los expertos son de toda la empresa y viajan en tu archivo de ajustes.
+
 | Personaje | Rol | Qué del agente los hace subir |
 |---|---|---|
 | Rafa | DevOps/SRE | CI/CD (`.github/workflows/`, `.gitlab-ci.yml`, `gh run`), contenedores (`Dockerfile`, `compose.yaml`, `docker`), clústeres e IaC (`k8s/`, `helm`, `terraform`, `*.tf`), nubes y despliegues (`aws`, `gcloud`, `vercel`, `npm publish`, `deploy`), los MCP de Sentry, Datadog o de la nube |
@@ -262,6 +264,17 @@ Una empresa no trabaja en repos, trabaja en productos: «Pagos» es su **core**,
 
 **El impacto de una directiva sigue las dependencias:** cambiar el core trae al BFF y al front que lo usan («usa core, que cambia»), y nombrar el sistema trae a todos sus artefactos. Y **el tipo decide quién hace el código que ninguna regla reclama:** el `src/lib/money.ts` de un repo frontend es del frontend; el de uno de infraestructura, de DevOps.
 
+### Loops: un proyecto paso a paso, con criterios de éxito
+
+Un **loop** trabaja un proyecto con una lista de pasos, solo, y pasa al siguiente paso únicamente cuando el actual **cumple sus criterios de éxito**. Se abre con el chip 🔁 del HUD, con `i` o con 🔁 Loops en el diálogo de trabajo (`w`):
+
+- **su proyecto** (uno registrado), **su intervalo** (mira cada **5 minutos** por defecto; de 1 a 1440) y **sus intentos** por paso (5 por defecto);
+- **los criterios del loop**, que cada paso debe cumplir («los tests pasan»), y **cada paso** con qué hacer y sus propios criterios («POST /login devuelve un JWT»). Un criterio puede llevar el comando que lo prueba (`texto :: npm test`). Los criterios y los pasos se pueden agregar mientras corre.
+
+Cada intervalo **mira su proyecto**: si está **trabajando** (el encargo del paso sigue abierto, o una sesión en su carpeta va a mitad de turno — la tuya también: el loop no te interrumpe) o el agente **te está preguntando algo**, sólo espera. **Libre**, avanza: el paso que no ha ido, va (a una sesión abierta del proyecto, o a una nueva); el que fue se revisa contra sus criterios. Todos cumplidos: el paso queda hecho y va el siguiente. Uno sin cumplir: el mismo paso vuelve con lo que falta (❌). Sin reportar: se le pide al agente que los verifique. Si el proyecto trabaja o está libre se ve en vivo en el diálogo, con la cuenta regresiva de la próxima mirada.
+
+El agente reporta cada criterio con la herramienta MCP **`loop_report`** (o, una sesión lanzada en segundo plano, con una línea por criterio al final de su respuesta: `✅ 1`, `❌ 2 — por qué`). Tú puedes marcar uno (✓ / ✗): tu marca queda sobre lo que diga el agente. Tras sus intentos sin cumplirlos, el paso **te espera** (✋ en el chip): ↻ reintentarlo, ⏭ saltarlo o ✎ cambiarlo. Cuando se cumple el último paso, el acta del loop va al archivo. La oficina nunca corre las verificaciones: las hace el agente. API en [docs/api.es.md](docs/api.es.md#loops-un-proyecto-paso-a-paso).
+
 ## Dos pisos más: la dirección y el archivo
 
 El edificio de la empresa tiene, además de sus oficinas, dos pisos que comparten todas. Sube o baja con el selector de **arriba a la izquierda** (`o`, o `RePág`/`AvPág`), o **con el ascensor**: al hacerle clic, en cualquier piso y en las dos vistas, se abre su panel con un botón por piso, y te lleva al que aprietes. En la vista cenital todos los pisos tienen la misma planta: la sala y, a su izquierda, el pasillo con el ascensor del edificio y el baño.
@@ -396,28 +409,35 @@ El engranaje de la oficina (arriba a la derecha, en la web y en la terminal; tam
 
 | Pestaña | Qué hay |
 |---|---|
-| General | **Tus ajustes como archivo JSON:** ⬇ Exportar / ⬆ Importar lo que es tuyo (los ajustes generales, los departamentos con sus indicaciones, autonomía y personajes, los proyectos con sus indicaciones y componentes, tus skills y tus herramientas), para guardarlos o llevarlos a otra máquina; no el historial ni el archivo (también `dev-team-office settings export|import`). **Idioma** (inglés por defecto, o español: cambia todo en vivo, en la web, la terminal y la bitácora), **zona horaria** de la empresa (se busca escribiendo la ciudad, la región o el país) y su **ciudad** (entre las ciudades del país de esa zona), clima real o simulado, la vida de la oficina en la bitácora, la **vista de la oficina** (frontal o cenital isométrica), y herdr: agentes en panes, cada subagente en su pane, hacia dónde se abre el pane y qué agente se abre al empezar |
+| General | **Tus ajustes como archivo JSON:** ⬇ Exportar / ⬆ Importar lo que es tuyo (los ajustes generales, los departamentos con sus indicaciones, autonomía y personajes, los proyectos con sus indicaciones y componentes, tus skills y tus herramientas, los expertos), para guardarlos o llevarlos a otra máquina; no el historial ni el archivo (también `dev-team-office settings export|import`). **Idioma** (inglés por defecto, o español: cambia todo en vivo, en la web, la terminal y la bitácora), **zona horaria** de la empresa (se busca escribiendo la ciudad, la región o el país) y su **ciudad** (entre las ciudades del país de esa zona), clima real o simulado, la vida de la oficina en la bitácora, la **vista de la oficina** (frontal o cenital isométrica), y herdr: agentes en panes, cada subagente en su pane, hacia dónde se abre el pane y qué agente se abre al empezar |
 | Departamentos | El mantenedor de departamentos: cada departamento (una oficina) con sus **indicaciones**, sus **proyectos** (＋ uno nuevo, o traer uno que ya existe), su **personal** (👥 editar sus personajes), su zona horaria y su ciudad para el clima; ver, editar y eliminar (sus proyectos pasan al principal) |
 | Agentes | El mantenedor: agregar (ruta completa + CLI + departamento; detecta su harness al escribirla), las **indicaciones del proyecto**, editar, eliminar y ✉ enviarle un prompt. También las sesiones abiertas sin registrar |
 | Mío | **Lo tuyo, no de la empresa.** **Mis skills:** skills privadas (qué hace y cuándo usarla, y sus instrucciones), instaladas en tu carpeta personal de cada agente (`~/.claude/skills`, `~/.agents/skills`), nunca en un repo; apagarla la saca de ahí. **Mis herramientas:** programas chicos tuyos para tareas concretas (un script en sh, bash, node o python3, con sus parámetros, un tope de tiempo y quién la usa en el juego): tus agentes ven cada una como la herramienta MCP `my_<nombre>` y la corren en la carpeta en la que trabajan. Ninguna va al archivo ni a los encargos, y las dos viajan en tu archivo de ajustes. Los agentes no pueden crearlas: sólo tú |
-| Personajes | Nombre, cargo, **sexo** (su cara, su aspecto por defecto y cómo se escriben los textos sobre esa persona: *Diseñadora*/*Diseñador*), **personalidad** (conversador, concentrado, ansioso, tranquilo o soñador: cuánto conversa, se toma pausas, duda, ve tele o sueña despierto), **estilo** (cómo te contesta, como los de Claude: normal, conciso, explicativo, enseñador o formal), colores con paleta y selector libre (piel, pelo, camisa, pantalón), pelo largo, barba y lentes de cada personaje de la oficina que estás mirando. En la terminal, ◂ ▸ recorren cada paleta y escribir `#rrggbb` da cualquier otro color. **⬇ Exportar / ⬆ Importar:** un personaje como archivo JSON, para compartirlo (también `dev-team-office character export|import` y `GET|PUT /v1/characters/<rol>`) |
+| Personajes | Nombre, cargo, **sexo** (su cara, su aspecto por defecto y cómo se escriben los textos sobre esa persona: *Diseñadora*/*Diseñador*), **personalidad** (conversador, concentrado, ansioso, tranquilo o soñador: cuánto conversa, se toma pausas, duda, ve tele o sueña despierto), **estilo** (cómo te contesta, como los de Claude: normal, conciso, explicativo, enseñador o formal), colores con paleta y selector libre (piel, pelo, camisa, pantalón), pelo largo, barba y lentes de cada personaje de la oficina que estás mirando. En la terminal, ◂ ▸ recorren cada paleta y escribir `#rrggbb` da cualquier otro color. **⬇ Exportar / ⬆ Importar:** un personaje como archivo JSON, para compartirlo (también `dev-team-office character export|import` y `GET|PUT /v1/characters/<rol>`). **🎓 Expertos:** los expertos (SME), cada uno con su skill, de qué sabe y su aspecto (de toda la empresa) |
 
 **De la zona horaria sale todo lo "local":** la fecha y la hora (el reloj, el almuerzo, el día y la noche), el **país** y la ciudad (de la tabla de zonas IANA, sin conexión: `America/Santiago` → Chile, Santiago, −33.45, −70.67) y, con esas coordenadas, **el clima**. Por defecto, la zona del sistema.
 
-Todo se guarda en una base **SQLite** (también desde la CLI: `dev-team-office config`, `dev-team-office offices`): `~/.dev-team-office/office.db`, o la ruta de `DEV_TEAM_OFFICE_DB`. Usa `node:sqlite`, así que no hay dependencias nativas, y el archivo tiene permisos `0600`. Tiene cinco tablas:
+Todo se guarda en una base **SQLite** (también desde la CLI: `dev-team-office config`, `dev-team-office offices`): `~/.dev-team-office/office.db`, o la ruta de `DEV_TEAM_OFFICE_DB`. Usa `node:sqlite`, así que no hay dependencias nativas, y el archivo tiene permisos `0600`. Sus tablas principales:
 
 - `offices`: los departamentos (oficinas) de la empresa, con sus indicaciones;
 - `agents`: los agentes registrados (con su oficina);
 - `projects`: las indicaciones de la carpeta de cada proyecto;
 - `settings`: los ajustes generales (`prefs`: idioma, zona horaria, clima, herdr, bitácora y la oficina que se mira) y la apariencia de cada oficina;
 - `prompts`: el historial de lo que les mandaste y cómo terminó;
-- `mine`: tus skills privadas y tus herramientas.
+- `mine`: tus skills privadas y tus herramientas;
+- `systems`: los sistemas y sus artefactos;
+- `loops`: los loops de los proyectos, sus criterios y cómo va cada paso;
+- `experts`: los expertos y sus skills.
 
 Las bases de versiones anteriores se migran solas (se agrega la oficina principal). `DEV_TEAM_OFFICE_LANG=es` elige el idioma mientras no se haya guardado uno.
 
 Si existía un `~/.dev-team-office/config.json` de versiones anteriores, se importa la primera vez.
 
 Todo se valida antes de escribir, se aplica en caliente y un sitio web ajeno no puede cambiar nada.
+
+### La escena: la capa entre el juego y lo que lo dibuja
+
+El juego y su dibujo están separados: la simulación (`public/sim.js`) decide quién está dónde y qué pasa, y cada cuadro se convierte en una **escena** (`public/scene.js`): datos planos — la gente con su aspecto, pose, posición, burbuja y badge; el mundo que no se mueve (salas, puertas, la pared de vidrio, los muebles, en unidades del mundo y con su altura); la luz, el clima y la estación; la pizarra, el incendio, el ascensor. El canvas (vista frontal y cenital) y la terminal dibujan **sólo desde la escena**, y otro renderer — uno en 3D, por ejemplo — se registra (`public/renderers.js`) y dibuja la misma escena, sin tocar el juego. `?renderer=plan` abre el renderer de referencia (un plano simple dibujado sólo con la escena). El contrato está en [docs/rendering.es.md](docs/rendering.es.md).
 
 ## API de integración
 
@@ -486,6 +506,8 @@ server/components.js    el mapa de la empresa (departamentos → proyectos → c
 server/settings-io.js   tus ajustes como archivo JSON: exportar e importar
 server/compact.js       la autocompactación: pasado tu tope, se le pide al agente que compacte (a su manera)
 server/mine.js          lo tuyo: skills privadas (en tus carpetas personales) y tus herramientas (las corre el MCP)
+server/loops.js         el loop de un proyecto: pasos con criterios de éxito, uno tras otro, cada cierto intervalo
+server/experts.js       los expertos (SME): quién sabe de cada skill, y qué skill usa una herramienta del agente
 server/ws.js            WebSocket sin dependencias (RFC 6455)
 server/server.js        API HTTP + WebSocket en TCP y socket Unix
 server/adapters.js      payload nativo → formato genérico
@@ -516,6 +538,9 @@ tui/monitor.js          el monitor de actividad (dentro de herdr): cifras, cada 
 examples/tienda/        proyecto de ejemplo con equipo, pipelines y agentes
 tui/                    la oficina en la terminal: framebuffer de medios bloques, vista, teclado y ratón
 public/game.js          la oficina en canvas, para el navegador (vidrio, luces, noche, efectos), en vista frontal o cenital
+public/scene.js         la escena: lo que hay en pantalla en cada cuadro, como datos planos (la capa entre el juego y sus renderers)
+public/renderers.js     el registro de renderers (otro, uno en 3D, dibuja la misma escena); renderers/plan.js, el de referencia
+public/loops-ui.js      el diálogo de los loops
 public/floors.js        los dos pisos compartidos en canvas (la dirección y el archivo): sus escenas y su gente
 public/compact.js       el tope de la autocompactación en tokens (lo comparten el servidor y la barra de contexto)
 public/floors-ui.js     sus diálogos: las directivas y el archivo
@@ -525,7 +550,7 @@ integrations/           Claude Code (hook), Codex (hook), OpenCode (plugin), Pi 
 skills/                 los skills (cualquier harness): eventos por rol y configurar un harness
 .claude-plugin/         el plugin y el marketplace de Claude Code
 teams/                  team packs instalables (un subagente por rol)
-docs/                   instalación, uso, convenciones, API, MCP, eventos por rol, pipelines y cómo conectar un harness
+docs/                   instalación, uso, convenciones, API, MCP, eventos por rol, pipelines, el dibujo (la escena) y cómo conectar un harness
 test/                   node --test (incluye un agente de mentira: test/fixtures/fake-agent.mjs)
 ```
 

@@ -4,7 +4,7 @@
 export default {
   team: {
     you: 'tú', // the PO is the user
-    titles: { designer: '{g:Diseñadora|Diseñador}', po: 'Product Owner', analyst: 'Analista de negocio', manager: 'Manager', frontend: 'Frontend', backend: 'Backend', qa: 'QA', tl: 'Tech Lead', devops: 'DevOps/SRE', security: 'Seguridad' },
+    titles: { designer: '{g:Diseñadora|Diseñador}', po: 'Product Owner', analyst: 'Analista de negocio', manager: 'Manager', frontend: 'Frontend', backend: 'Backend', qa: 'QA', tl: 'Tech Lead', devops: 'DevOps/SRE', security: 'Seguridad', sme: '{g:Experta|Experto} en {skill}' },
   },
   needs: { social: 'Social', coffee: 'Café', bladder: 'Baño', dream: 'Imaginación', doubt: 'Dudas' },
   dream: { unicorn: 'un unicornio', rainbow: 'un arcoíris', skull: 'una calavera', pizza: 'pizza' },
@@ -92,6 +92,7 @@ export default {
     },
     // the chit-chat about what is going on (sim.js liveTopics)
     newcomer: { welcome: '¡{g:Bienvenida|Bienvenido}, {name}! 👋', bye: '¡Listo, me voy! 👋' },
+    expert: { arrive: 'Sube {name}, que sabe de {skill} 🎓', hello: 'Vengo a dar una mano con {skill} 🎓' },
     visitor: { arrive: 'Sube {name}, de {role} {icon}', hello: { devops: 'Vengo a ver la infraestructura 🛠️', security: 'Vengo a revisar la seguridad 🛡️' } },
     live: {
       board: 'Vamos {done} de {total} en el tablero 📋', doing: '{name} anda {action} 👀', stuck: '{name} se trabó {action} 😬',
@@ -286,7 +287,7 @@ export default {
   // la analista revisa un encargo antes de que pase a trabajo (server/clarify.js)
   ingest: { tooBig: 'demasiado grande (más de {mb} MB)', convert: 'para leer {name} la oficina necesita {tool} instalado (o pídele a un agente que lo convierta: ✨ Pedírselo a un agente)', format: 'el archivo no lee archivos .{ext} (Markdown, texto, CSV, JSON, HTML, PDF o Word)', empty: '{name} no tiene texto', url: 'eso no es una dirección http(s)', fetch: 'no se pudo bajar: {error}' },
   // los ajustes como archivo JSON (server/settings-io.js): qué no se pudo importar
-  settingsIo: { skill: 'Skill {name}', tool: 'Herramienta {name}', system: 'Sistema {name}', systemParts: 'Artefactos de {name} sin su repo aquí: {parts}', department: 'Departamento {name}', characters: 'Personajes de {name}', pref: 'Ajuste {key}', project: 'Proyecto {name}', component: 'Componente {name} de {project}', instructions: 'Indicaciones de {path}' },
+  settingsIo: { skill: 'Skill {name}', tool: 'Herramienta {name}', expert: 'Experto en «{skill}»', system: 'Sistema {name}', systemParts: 'Artefactos de {name} sin su repo aquí: {parts}', department: 'Departamento {name}', characters: 'Personajes de {name}', pref: 'Ajuste {key}', project: 'Proyecto {name}', component: 'Componente {name} de {project}', instructions: 'Indicaciones de {path}' },
   // el mapa de impacto de una directiva (server/components.js)
   impact: {
     ask: '¿Existe «{what}»? ¿En qué proyecto y carpeta está, o hay que crearlo?', none: 'No identifiqué qué departamentos ni proyectos toca: elígelos o nómbralos.', unknownHead: 'Nombra cosas que no están en el mapa:',
@@ -324,6 +325,48 @@ export default {
 
   // ---------------------------------------------------------------- the two shared floors: the executive one and the archive
   directiveStatus: { running: 'en curso', done: 'cumplida', partial: 'cumplida a medias', failed: 'falló', cancelled: 'cancelada', interrupted: 'interrumpida' },
+  loopStatus: { running: 'en marcha', paused: 'en pausa', blocked: 'te espera', done: 'terminado' },
+  loopStep: { pending: 'por hacer', working: 'en curso', done: 'cumplido', blocked: 'te espera', skipped: 'saltado' },
+  // a project's loop (server/loops.js): steps with success criteria, one after the other
+  loop: {
+    from: 'el loop',
+    brief: {
+      head: 'Loop «{name}» · paso {n} de {total}', try: 'intento {n} de {max}',
+      retry: 'Todavía no se cumplen todos los criterios de este paso. Sigue hasta cumplirlos:',
+      verify: 'No llegó cómo va cada criterio de este paso. Verifícalos ahora (si ya se cumplen, sin cambiar nada más) y repórtalos:',
+      again: 'Este paso quedó a medias (no terminó bien, o la oficina se reinició mientras iba): revisa si está hecho y, si no, termínalo.',
+      theStep: 'El paso:', criteria: 'Criterios de éxito (todos, antes de pasar al siguiente paso):', check: 'verifícalo con `{cmd}`',
+      report: 'Al terminar, verifica cada criterio de verdad y repórtalos todos con la herramienta MCP loop_report (loop «{name}», paso {n}): cumplido o no, y por qué. Si no tienes esa herramienta, termina tu respuesta con una línea por criterio: «✅ 1» si se cumple, «❌ 2 — por qué» si no.',
+    },
+    detail: {
+      noSteps: 'sin pasos: agrégale uno', working: 'el proyecto está trabajando: espera', waitingYou: 'el agente te pregunta algo: espera tu respuesta', paused: 'en pausa',
+      blocked: 'el paso {n} no cumplió sus criterios en {tries} intentos: reintenta, sáltalo o cámbialo', cantSend: 'no se pudo enviar: {error}',
+    },
+    log: {
+      created: '🔁 Loop «{name}» para {project}: {n} pasos, mira cada {every} min',
+      start: '🔁 «{name}» · paso {n}/{total}: {step}', retry: '🔁 «{name}» · paso {n}/{total} otra vez (intento {try} de {max}): faltan criterios',
+      verify: '🔁 «{name}» · paso {n}/{total}: que verifique sus criterios (intento {try} de {max})', report: '🔁 «{name}» · paso {n}: {met} de {total} criterios cumplidos',
+      passed: '✅ «{name}» · paso {n}/{total} cumplido', skipped: '⏭ «{name}» · paso {n} saltado', blocked: '✋ «{name}» · el paso {n} no cumplió en {tries} intentos: te espera',
+      cantSend: '✋ «{name}» · el paso {n} no se pudo enviar: {error}', done: '🏁 Loop «{name}» terminado: {n} pasos',
+    },
+    ui: {
+      title: '🔁 Loops', button: '🔁 Loops', key: 'Los loops de los proyectos: pasos con criterios de éxito (i)', new: '✚ Nuevo loop',
+      chip: 'Loops: {n} en marcha, {blocked} te esperan (i)', offline: 'la oficina no contesta', empty: 'Elige un loop, o crea uno.',
+      intro: 'Un loop trabaja un proyecto paso a paso, solo: cada intervalo mira si el proyecto está trabajando o libre; libre, envía el paso que toca, o lo vuelve a enviar hasta que cumpla todos sus criterios de éxito. Recién entonces pasa al siguiente.',
+      nextIn: 'próxima mirada en {t}', nextNow: 'mira ahora', activity: { idle: 'libre', working: 'trabajando', waiting: 'te pregunta algo' },
+      meta: '{project} · mira cada {every} min · {tries} intentos por paso ·', tick: '👀 Mirar ahora', pause: '⏸ Pausar', resume: '▶ Seguir', retry: '↻ Reintentar el paso',
+      skip: '⏭ Saltar el paso', edit: '✎ Cambiar', delete: '🗑', confirmDelete: '¿Borrar el loop «{name}»? Lo que ya se hizo queda en el proyecto.',
+      loopCriteria: 'Criterios de todo el loop', loopCriteriaHint: 'los cumple cada paso (p. ej. «los tests pasan»). Uno por línea; «texto :: comando» si un comando lo verifica.',
+      noLoopCriteria: 'Ninguno: cada paso tiene los suyos.', addLoopCriterion: '＋ un criterio para todos los pasos', steps: 'Pasos',
+      tries: 'intento {n} de {max}', addStepCriterion: '＋ un criterio para este paso', addStep: '＋ un paso al final',
+      markMet: 'Se cumple (tu marca queda)', markUnmet: 'No se cumple', byYou: 'tú',
+      criteriaPh: 'Un criterio por línea · «texto :: comando que lo verifica»', stepPh: '¿Qué hay que hacer en este paso?', stepCriteria: 'Sus criterios de éxito', stepN: 'Paso {n}', removeStep: 'Quitar el paso',
+      saved: 'Guardado.', created: 'Loop creado: su primer paso va ahora (si el proyecto está libre).', editTitle: 'Cambiar «{name}»', newTitle: 'Nuevo loop',
+      noProjects: 'Este departamento no tiene proyectos registrados (⚙ › Agentes).', name: 'Nombre', project: 'Proyecto', every: 'Cada (min)', triesLabel: 'Intentos',
+      addStepBtn: '＋ Paso', cancel: 'Cancelar', save: 'Guardar', create: '🔁 Crear el loop',
+    },
+    minuteTitle: 'Loop «{name}»', minuteProject: 'Proyecto: {project}', minuteTries: '{n} intentos',
+  },
   knowledgeKind: { note: 'nota', decision: 'decisión', doc: 'documento', term: 'término', minute: 'acta', skill: 'skill', connector: 'conector' },
   floors: {
     lift: { title: 'Ascensor', here: 'estás aquí' },
@@ -469,6 +512,8 @@ export default {
     connectorUrl: 'la URL del conector debe empezar con http:// o https://', connectorHow: 'un conector necesita un comando (servidor MCP local) o una URL (remoto)',
     unknownKnowledge: 'no existe esa entrada del archivo', notInstallable: 'sólo las skills y los conectores se instalan en un proyecto', installFailed: 'no se instaló en ningún proyecto',
     pickProjects: 'elige al menos una oficina o un proyecto registrado', unknownProject: 'proyecto desconocido: {project}', tooManyProjects: 'como máximo {n} proyectos por directiva', unknownDirective: 'no existe esa directiva',
+    loopName: 'ponle un nombre al loop', loopExists: 'ya hay un loop que se llama «{name}»', loopsMax: 'como máximo {n} loops', unknownLoop: 'no existe ese loop: {loop}', loopInterval: 'el intervalo va en minutos, de 1 a 1440', loopTries: 'los intentos por paso van de 1 a 50', loopSteps: 'los pasos son una lista', loopStepsMax: 'como máximo {n} pasos', loopStepEmpty: 'cada paso necesita qué hacer', loopCriteria: 'los criterios son una lista', loopCriteriaMax: 'como máximo {n} criterios', loopCriterionEmpty: 'el criterio está vacío', unknownStep: 'no existe ese paso: {step}', unknownCriterion: 'no existe ese criterio: {criterion}', loopDone: 'el loop ya terminó', loopNotRunning: 'el loop está {status}', noLoopHere: 'no hay un loop en curso en esta carpeta', loopNoResults: 'falta cómo va cada criterio',
+    expertSkill: 'la skill del experto: su nombre, en minúsculas (letras, números, puntos y guiones)', unknownExpert: 'no existe ese experto: {expert}', expertExists: 'la skill «{skill}» ya tiene su experto', expertName: 'el experto necesita un nombre', expertsMax: 'como máximo {n} expertos',
   },
   server: {
     started: 'Dev Team Office {version} en {url}', browser: '  Ábrela en el navegador: {urls}', api: '  API: POST /v1/events/<source> · GET /v1/state · WS /v1/ws{socket}',
@@ -552,7 +597,7 @@ export default {
     keys: { field: 'campo', change: 'cambia', action: 'acción', save: 'guardar', close: 'cerrar', tabs: '◂ ▸ cambia de pestaña' },
     yes: 'sí', no: 'no',
     general: {
-      io: 'Tus ajustes (archivo JSON)', ioHint: 'Exporta lo que es tuyo: los ajustes generales, los departamentos (con sus indicaciones, su autonomía y sus personajes) los proyectos registrados con sus indicaciones y sus componentes, y lo tuyo (tus skills y tus herramientas). No van la bitácora, los encargos, las directivas ni el archivo. Importar reemplaza lo que trae el archivo y deja lo demás; un proyecto cuya carpeta no está en esta máquina se salta.', ioExport: '⬇ Exportar ajustes', ioImport: '⬆ Importar ajustes', ioDone: 'Ajustes importados: {prefs} ajustes, {departments} departamentos, {characters} personajes, {projects} proyectos, {components} componentes, {systems} sistemas, {skills} skills, {tools} herramientas.',
+      io: 'Tus ajustes (archivo JSON)', ioHint: 'Exporta lo que es tuyo: los ajustes generales, los departamentos (con sus indicaciones, su autonomía y sus personajes) los proyectos registrados con sus indicaciones y sus componentes, lo tuyo (tus skills y tus herramientas) y los expertos. No van la bitácora, los encargos, las directivas ni el archivo. Importar reemplaza lo que trae el archivo y deja lo demás; un proyecto cuya carpeta no está en esta máquina se salta.', ioExport: '⬇ Exportar ajustes', ioImport: '⬆ Importar ajustes', ioDone: 'Ajustes importados: {prefs} ajustes, {departments} departamentos, {characters} personajes, {projects} proyectos, {components} componentes, {systems} sistemas, {skills} skills, {tools} herramientas, {experts} expertos.',
       archive: 'Archivo (lo que saben los agentes)', archivePush: 'Lo que sabe el archivo va arriba de cada encargo y pregunta (los términos del glosario y los fragmentos más relevantes)', embeddings: 'Búsqueda semántica', embed_off: 'Apagada: sólo por palabras (sin internet)', embed_ollama: 'Ollama, en esta máquina', embed_openai: 'Una API compatible con OpenAI (OpenAI, Voyage…)', embedModel: 'Modelo de embeddings', embedUrl: 'Dirección', embedOllamaHint: 'Instala Ollama y corre: ollama pull nomic-embed-text. Nada sale de esta máquina.', embedKeyHint: 'Su clave va en la variable de entorno DEV_TEAM_OFFICE_EMBED_KEY (nunca en la base). El texto del archivo se manda a esa API para sacar sus embeddings.', indexStatus: '🧠 {chunks} fragmento(s) indexado(s) · {embedded} con embedding', reindex: '↻ Indexarlo de nuevo',
       compact: 'Contexto de los agentes', compactAuto: 'Compactarlo solo al pasar el tope', compactAt: 'Tope', compact_tokens: 'tokens', compact_pct: '% de su ventana', compactHint: 'Pasado el tope, la oficina le pide al agente que compacte su contexto cuando termina su turno: Pi y OpenCode lo hacen solos; en herdr, se escribe /compact en su pane; los Claude Code que abre la oficina compactan solos en ese tope. Si no, la bitácora te avisa.',
       autonomy: 'Autonomía', clarify: 'Antes de que un encargo pase a trabajo, la analista revisa que tenga todo (y te pregunta sólo lo que falta)', autonomous: 'Los agentes trabajan solos hasta terminar (preguntan sólo lo que únicamente tú puedes responder)',
@@ -608,6 +653,12 @@ export default {
       args: 'Argumentos', argsPh: 'p. ej. --permission-mode acceptEdits', argsHint: 'Sólo para sesiones nuevas. Claude Code usa --permission-mode acceptEdits si no pones nada (en segundo plano).',
       added: 'Listo: «{name}» ya aparece en la pizarra.', updated: 'Agente actualizado.', removed: '«{name}» eliminado (su carpeta no se toca).',
       confirmDelete: '¿Eliminar el agente «{name}»? Sólo se borra de la oficina: su carpeta no se toca.', deleted: 'Agente eliminado.',
+    },
+    experts: {
+      title: '🎓 Expertos', hint: 'Un experto (SME) sabe de una skill: cuando un agente la usa, sube por el ascensor, se sienta en un escritorio libre con la skill en su badge y se va cuando termina el turno. Por ahora cada uno se asocia a mano a su skill. Los expertos son de toda la empresa.',
+      namePh: 'Nombre', skill: 'Skill', skillPh: 'su nombre, p. ej. pci-dss', topic: 'Sabe de', topicPh: 'p. ej. pagos y PCI',
+      role: 'experto en la skill «{skill}»', new: 'nuevo: guárdalo para que llegue', remove: 'Borrar el experto', removeConfirm: '¿Borrar a {name}, experto en «{skill}»?',
+      save: '💾 Guardar', saved: '{name} queda como experto en «{skill}».', add: '＋ Nuevo experto',
     },
     look: {
       hint: 'Cómo se ven y cómo se llaman los personajes de esta oficina. Cada uno sigue representando su rol (QA, backend…).',

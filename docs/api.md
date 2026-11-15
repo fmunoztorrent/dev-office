@@ -257,6 +257,40 @@ A system is a product or business project ("Payments"): its artifacts (a registe
 - **Briefs:** every brief to an artifact's folder carries, under the 📁 line, `🧩 Artifact <name> (<kind>) of the system <system> · uses … · used by …` and the system's instructions.
 - **The character:** code no rule claims (by its path or its command) is done by the kind's character: frontend and mobile, the frontend; infra, DevOps; the rest, the backend.
 
+## Loops: a project worked step by step
+
+A loop works one registered project through its steps, one after the other, and moves on only when a step meets its success criteria (server/loops.js). It looks at its project every `interval` minutes (5 by default).
+
+| Method | Path | Body |
+|---|---|---|
+| `GET` | `/v1/loops` | `{ loops: [{ id, name, agent, project, path, office, interval, tries, status, activity, activitySince, detail, lastTick, nextTick, current, criteria, steps: [{ id, text, criteria, status, tries, detail, sentAt, endedAt, ref, results: { <criterion id>: { met, note, by, at } \| null } }] }] }` |
+| `POST` | `/v1/loops` | `{ name, project (a registered project's id, folder or name), interval? (minutes, 1–1440), tries? (1–50), criteria?: [text \| { text, check? }], steps: [text \| { text, criteria? }], paused? }`: creates it; its first look is now. `201` |
+| `GET` · `PUT` · `DELETE` | `/v1/loops/<id>` | It · change it (the same fields; the steps that already went keep how they went, matched by `id`) · delete it |
+| `POST` | `/v1/loops/<id>/criteria` | `{ criteria: [text \| { text, check? }], step? }`: adds criteria to the loop (every step) or to one step (its number or id), while it runs |
+| `POST` | `/v1/loops/<id>/steps` | `{ steps: [text \| { text, criteria? }] }`: adds steps at the end (a finished loop goes on) |
+| `POST` | `/v1/loops/<id>/mark` | `{ step?, criterion (its number in the brief or its id), met: true \| false \| null, note? }`: your mark (it stays over the agent's; `null` forgets it) |
+| `POST` | `/v1/loops/<id>/pause` · `resume` · `skip` · `tick` | Pause · go on (a step that waits for you gets its tries back) · skip the step that is going · look now |
+| `POST` | `/v1/loops/report` | `{ cwd \| loop, step?, results: [{ criterion, met, note? }] }`: the agent's report (the MCP tool `loop_report`): the loop by its id or name, or the one running in that folder; the step by its number, or the one going. Returns `{ loop, step, met, total, missing }` |
+
+- **Statuses:** a loop is `running`, `paused`, `blocked` (a step used its tries, or could not be sent: it waits for you) or `done`; its project's `activity` is `idle`, `working` (the step's brief is open, or a session in its folder is mid-turn) or `waiting` (the agent asks you something). A step is `pending`, `working`, `done`, `blocked` or `skipped`.
+- **Each look** (every `interval`, or `tick`): working or waiting, it only waits. Idle: a `pending` step goes; a `working` one is checked: every criterion `met` → `done`, and the next one goes right away; one not met → it goes again (`🔁 … · try n of m`, with ❌ what is missing); none reported → it goes again asking to check and report them. A step without criteria is done when its brief ended well.
+- **The brief** starts with `🔁 Loop “name” · step n of m`, then the step, its criteria numbered (the loop's first, then the step's; `— check it with \`cmd\`` when one has a command) and how to report them. It goes through the registry like any prompt (an open session of the project, or a new one).
+- **Results:** `by: "agent"` (MCP), `"output"` (the `✅ n` / `❌ n — why` lines at the end of a background session's answer) or `"you"`. Each new round forgets the agent's, keeps yours.
+- **Events:** `kind: "loop"` (`phase`: `created`, `start`, `retry`, `verify`, `report`, `passed`, `skipped`, `blocked`, `failed`, `done`), from the manager; over WebSocket, `{ type: "loops", loops }`. A finished loop's minutes go to the archive (`kind: "minute"`, tag `loop`).
+
+## Experts: who knows a skill
+
+The subject matter experts (server/experts.js): a character associated by hand with a skill. When an agent uses that skill, its event is the expert's (`role: "sme"`, `expert: { id, name, title, skill, shirt }`, badge `🎓 <skill>`) and the game brings them up the elevator until the turn ends.
+
+| Method | Path | Body |
+|---|---|---|
+| `GET` | `/v1/experts` | `{ experts: [{ id, skill, topic, look }], skills: [{ name, where }] }` (`skills`: the ones the company knows, to pick from: the archive's, yours and the registered projects') |
+| `POST` | `/v1/experts` | `{ skill, topic?, look: { name, title?, sex?, personality?, style?, shirt?, pants?, hair?, skin?, long?, beard?, glasses? } }`: creates it (or updates the expert of that skill). A skill has one expert |
+| `PUT` · `DELETE` | `/v1/experts/<id>` | Changes it (its `look` is replaced whole) · deletes it (also by its skill) |
+
+- **Which skill a tool uses:** Claude Code's `Skill` (`{ skill }`, without its plugin: `plugin:name` → `name`), OpenCode's `skill` (`{ name }`), or a path with `…/skills/<name>/…` (reading the skill's `SKILL.md`, as Pi and Codex do; also in a command).
+- Over WebSocket, `{ type: "experts", experts }`; the state (`/v1/state`) carries `experts`. They travel in your settings file (`experts`).
+
 ## Yours: private skills and your own tools
 
 What is yours, not the company's (⚙ › Mine). It does not go to the archive, the briefs or any repo, and it travels in your settings file.

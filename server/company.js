@@ -64,6 +64,8 @@ export class Company extends EventEmitter {
     office.myToolRole = (name) => this.myToolRole?.(name) || null;
     // the kind of artifact a file (or a session's folder) is in (set by the server: server/systems.js)
     office.kindFor = (cwd, file) => this.kindFor?.(cwd, file) || null;
+    // the subject matter expert of the skill a tool uses, if any (set by the server: server/experts.js)
+    office.expertFor = (tool, input) => this.expertFor?.(tool, input) || null;
     office.on('event', (ev, session) => this.emit('event', id, ev, session));
     office.on('raw', (raw, ev) => this.emit('raw', id, raw, ev));
     office.on('reset', () => this.emit('reset', id));

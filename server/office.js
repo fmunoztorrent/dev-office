@@ -43,7 +43,7 @@ function excerpt(text, { max = 1200, lines = 14, head = false } = {}) {
   return kept.length > max ? (head ? `${kept.slice(0, max - 1)}…` : `…${kept.slice(-(max - 1))}`) : kept;
 }
 /** Announcements: they are logged but do not change any role's state. */
-const ANNOUNCEMENTS = new Set(['dispatch', 'clarify', 'standup', 'pane_open', 'pane_close', 'pane_state', 'service_up', 'service_down', 'autocompact']);
+const ANNOUNCEMENTS = new Set(['dispatch', 'clarify', 'standup', 'pane_open', 'pane_close', 'pane_state', 'service_up', 'service_down', 'autocompact', 'loop']);
 /** What state a character ends up in after one of its events (shared by the office and the monitor);
  *  `null` for announcements, which do not change the state (nor set it to idle). */
 export const roleStatus = (ev) => (ANNOUNCEMENTS.has(ev.kind) ? null : ev.phase === 'red' ? 'red' : ev.kind === 'tool_end' && !ev.ok ? 'blocked' : ev.kind === 'waiting' ? 'waiting' : ev.kind === 'done' ? 'done' : ev.kind === 'turn_end' || ev.kind === 'session_end' ? 'idle' : 'working');
@@ -196,6 +196,13 @@ export class Office extends EventEmitter {
       ev.text = clip(r.text && start ? r.text : describe(tool, input), 90);
       // what they are doing, as small as it gets, over their head (✏️ cart.js, 🧪 tests)
       if (start) { const b = badgeFor(tool, input); if (b) ev.badge = clip(b, 24); }
+      // a skill with its subject matter expert (server/experts.js): the expert comes, and this is theirs
+      const expert = this.expertFor?.(tool, input);
+      if (expert) {
+        ev.expert = expert;
+        if (!sub) { ev.role = 'sme'; delete ev.phase; }
+        if (start) ev.badge = clip(`🎓 ${expert.skill}`, 24);
+      }
       // the command line itself, apart from the words: for whoever wants to see it (never in a bubble)
       if (COMMAND_TOOLS.has(tl) && (input.command || input.cmd)) ev.command = clip(String(input.command || input.cmd), 300);
       if (!start && !ev.ok) ev.text = clip(t('events.failed', { text: ev.text, detail: r.text ? ` — ${r.text}` : '' }), 120);
@@ -235,6 +242,8 @@ export class Office extends EventEmitter {
         if (typeof r.text === 'string') r.text = unguided(r.text); // the 📁 scope and the 📋 instructions are the office's
         // a directive's part (directives.js): its header becomes a 🏛 before the request
         if (typeof r.text === 'string' && r.text.startsWith('🏛 ')) r.text = r.text.replace(/^🏛 [^\n]*\n+/, '🏛 ');
+        // a loop's step (loops.js): its header line stays, short, before the request
+        if (typeof r.text === 'string' && r.text.startsWith('🔁 ')) r.text = r.text.replace(/^(🔁 [^\n]*)\n+/, '$1: ');
         // Pi's extension and skill may announce the same task: the duplicate is dropped.
         if (s.title === clip(r.text, 300) && ev.ts - (s.taskAt || 0) < 30_000) return null;
         s.title = clip(r.text, 300);
@@ -296,6 +305,11 @@ export class Office extends EventEmitter {
       case 'clarify': {
         const phase = ['review', 'ask', 'sent', 'failed', 'cancelled'].includes(r.phase) ? r.phase : 'review';
         return { ...ev, role: 'analyst', phase, clarifyId: clip(r.clarifyId, 40), n: Number(r.n) || 0, project: clip(r.project, 60), text: clip(r.text, 600) };
+      }
+      // a project's loop (server/loops.js): a step goes, passes, goes again or waits for you; the manager runs it
+      case 'loop': {
+        const phase = ['created', 'start', 'retry', 'verify', 'report', 'passed', 'skipped', 'blocked', 'failed', 'done'].includes(r.phase) ? r.phase : 'start';
+        return { ...ev, role: 'manager', phase, loop: clip(r.loop, 40), ok: r.ok !== false, text: clip(r.text, 200) };
       }
       case 'dispatch': return { ...ev, role: 'po', from: clip(r.from || t('events.you'), 30), agent: clip(r.agent, 30), mode: r.mode === 'launch' ? 'launch' : 'session', text: clip(r.text, 200) };
       case 'poke': return normRole(r.role) ? { ...ev, role: normRole(r.role), from: clip(r.from || t('events.you'), 30), text: '👋' } : null;
@@ -383,7 +397,7 @@ export class Office extends EventEmitter {
     if ((ev.kind === 'tool_end' && !ev.ok && ev.phase !== 'red') || ev.kind === 'error') s.errors++;
     // an agent that asks you something with its question tool is waiting for you too
     const asksYou = ev.kind === 'tool_start' && ASK_TOOL.test(ev.tool || '');
-    if (!['chat', 'poke', 'dispatch', 'btw', 'clarify', 'standup', 'autocompact'].includes(ev.kind)) s.status = asksYou ? 'waiting' : SESSION_STATUS[ev.kind] || 'active';
+    if (!['chat', 'poke', 'dispatch', 'btw', 'clarify', 'standup', 'autocompact', 'loop'].includes(ev.kind)) s.status = asksYou ? 'waiting' : SESSION_STATUS[ev.kind] || 'active';
     // what it is waiting for, and since when: the screen's "they are waiting for you" signal
     if (s.status === 'waiting') s.waiting = { text: ev.text || s.waiting?.text || '', since: s.waiting?.since || ev.ts, question: asksYou || !!s.waiting?.question, role: ev.role || null };
     else delete s.waiting;
