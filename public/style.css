@@ -753,3 +753,85 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
 .s-sys-uses .b-check { margin: 0; }
 .fl-systems { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 4px 0 8px; }
 .fl-system { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+
+/* ---------- the impact of an order: the tree of its repos, the bubble, and the graph (impact-ui.js) ---------- */
+.imp { display: grid; gap: 4px; margin-top: 8px; }
+.imp[hidden] { display: none; }
+.imp-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.imp-head .fl-label { flex: 0 0 auto; }
+.imp-status { flex: 1 1 200px; font-size: 12px; color: #6b4d00; }
+.imp-expand { margin-left: auto; }
+.imp-scroll { overflow: auto; max-height: 42vh; padding: 6px; background: #fbf9f2; box-shadow: inset 0 0 0 2px #1b1f3322; }
+.imp-tree, .imp-graph { display: block; font: 12px "Space Grotesk", sans-serif; }
+.imp-link { fill: none; stroke: #1b1f3366; stroke-width: 1.5; }
+.imp-link.unknown { stroke: #ef476f; stroke-dasharray: 4 3; }
+.imp-node { cursor: help; outline: none; }
+.imp-node rect { fill: #fff; stroke: var(--ink); stroke-width: 2; }
+.imp-node .imp-t1 { fill: var(--ink); font-weight: 600; }
+.imp-node .imp-t2 { fill: #5c6074; font-size: 11px; }
+.imp-node:hover rect:first-child, .imp-node:focus-visible rect:first-child { stroke: #9c2c3f; stroke-width: 3; }
+.imp-node.k-task rect { fill: var(--ink); }
+.imp-node.k-task .imp-t1 { fill: var(--accent); }
+.imp-node.k-task .imp-t2 { fill: #c9cbe0; }
+.imp-node.k-dept rect { fill: #e8e4f6; }
+.imp-node.k-group rect { fill: #fde2e7; stroke: #ef476f; stroke-dasharray: 4 3; }
+.imp-node.k-repo rect { fill: #fff3c4; }
+.imp-node.k-repo.reached rect, .imp-node.s-reached rect { fill: #ffe3c8; }
+.imp-node.k-repo.model rect { fill: #e7f0ff; }
+.imp-node.k-resource rect { fill: #fff; }
+.imp-node.k-component rect { fill: #fffaf0; }
+.imp-node.k-unknown rect, .imp-node.s-unknown rect { fill: #fde2e7; stroke: #ef476f; stroke-dasharray: 4 3; }
+.imp-node.s-impacted.k-resource rect, .imp-node.k-resource.s-impacted rect { fill: #fff3c4; }
+.imp-node.s-dependency rect { fill: #fff; stroke: #8a8fa8; stroke-dasharray: 3 3; }
+.imp-node.s-new rect { fill: #d8f5e8; stroke: #2a7d5f; stroke-dasharray: 5 3; }
+.imp-node .imp-level { stroke: none; }
+.imp-node.lv-high .imp-level, .imp-level.lv-high { fill: #ef476f; }
+.imp-node.lv-medium .imp-level, .imp-level.lv-medium { fill: #f4a261; }
+.imp-node.lv-low .imp-level, .imp-level.lv-low { fill: #06d6a0; }
+.imp-bubble {
+  position: fixed; z-index: 50; max-width: min(340px, calc(100vw - 16px)); padding: 8px 10px; pointer-events: none;
+  color: var(--ink); background: #fffdf5; font: 12.5px/1.4 "Space Grotesk", sans-serif;
+  box-shadow: 0 0 0 2px var(--ink), 4px 4px 0 2px #0004;
+}
+.imp-bubble[hidden] { display: none; }
+.imp-bubble p { margin: 2px 0; }
+.imp-b-head { font: 18px/1.1 "VT323", monospace; }
+.imp-b-dim { color: #5c6074; font-size: 11.5px; }
+.imp-b-row { margin-top: 3px; overflow-wrap: anywhere; }
+.dv-q.from-model { box-shadow: inset 3px 0 0 #4d7cfe; }
+/* the graph, in its own dialog */
+.impact-dlg { width: min(1100px, calc(100vw - 24px)); }
+.ig-card { display: flex; flex-direction: column; max-height: calc(100vh - 32px); background: var(--paper, #f4f1e8); }
+.ig-card .brief-head { gap: 6px; }
+.ig-card .brief-head h2 { flex: 1; }
+.ig-summary { margin: 6px 12px 0; font-size: 13px; color: #3b2a14; }
+.ig-summary:empty { display: none; }
+.ig-legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 12px; font-size: 12px; color: #3b2a14; }
+.imp-key { display: inline-flex; gap: 5px; align-items: center; }
+.imp-key i { width: 16px; height: 11px; box-shadow: 0 0 0 2px var(--ink); background: #fff3c4; }
+.imp-key.s-reached i { background: #ffe3c8; }
+.imp-key.s-dependency i { background: #fff; box-shadow: 0 0 0 2px #8a8fa8; }
+.imp-key.s-new i { background: #d8f5e8; box-shadow: 0 0 0 2px #2a7d5f; }
+.imp-key.s-unknown i { background: #fde2e7; box-shadow: 0 0 0 2px #ef476f; }
+.imp-g-scroll { flex: 1; min-height: 50vh; overflow: auto; margin: 0 12px 8px; background: #fbf9f2; box-shadow: inset 0 0 0 2px #1b1f3322; }
+.imp-edge { fill: none; stroke: #1b1f3355; stroke-width: 1.5; }
+.imp-edge.e-uses { stroke: #9c2c3f88; stroke-width: 2; }
+.imp-edge.e-link, .imp-edge.e-runs { stroke: #2a7d5f88; }
+.imp-edge.e-model { stroke: #4d7cfe99; stroke-dasharray: 5 3; }
+.imp-edge.e-unknown { stroke: #ef476f; stroke-dasharray: 4 3; }
+#imp-arrow path { fill: #1b1f3388; }
+.imp-elabel { fill: #5c6074; font-size: 10.5px; paint-order: stroke; stroke: #fbf9f2; stroke-width: 3px; }
+.imp-graph.focus .imp-node:not(.lit) { opacity: .28; }
+.imp-graph.focus .imp-e:not(.lit) { opacity: .12; }
+.imp-graph .imp-e.lit .imp-edge { stroke: #9c2c3f; stroke-width: 2.5; }
+@media (max-width: 560px) {
+  .imp-scroll { max-height: 50vh; }
+  .ig-card .brief-head { flex-wrap: wrap; }
+  .ig-card .brief-head h2 { flex: 1 1 100%; font-size: 24px; }
+  .ig-card .brief-head .fl-mini { padding: 3px 8px; }
+  .imp-g-scroll { min-height: 40vh; margin: 0 8px 8px; }
+}
+/* ⚙ › Departments › 🗄 Infrastructure */
+.s-res { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
+.s-res li { display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; padding: 4px 6px; background: #fff; box-shadow: 0 0 0 2px var(--ink); }
+.s-res .s-x { margin-left: auto; border: 0; background: none; cursor: pointer; color: #9a3b3b; }

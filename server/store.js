@@ -13,6 +13,8 @@
 //   systems    the products (a system) and their artifacts (server/systems.js)
 //   loops      the projects' loops: steps with success criteria, and how each one goes (server/loops.js)
 //   experts    the subject matter experts: who knows each skill, and how they look (server/experts.js)
+//   resources  the infrastructure on the map: queues, topics, databases, third-party APIs, schedulers…,
+//              where they live and which projects use them (server/resources.js)
 //
 // Everything is validated before writing: an error returns { ok: false, error } and touches nothing.
 
@@ -28,6 +30,7 @@ import { SEXES, PERSONALITIES, STYLES } from '../public/sim.js';
 import { realDir, insideDir } from './paths.js';
 import { ARTIFACT_KINDS, PARTS_MAX, orderParts } from './systems.js';
 import { chunkText } from './chunks.js';
+import { RESOURCE_KINDS, RESOURCE_LINKS } from '../public/impact.js';
 
 const HARNESS_IDS = ['claude-code', 'opencode', 'pi', 'codex'];
 const ASKS_KEEP = 500;
@@ -47,6 +50,8 @@ const COLOR_RX = /^#[0-9a-f]{6}$/i;
 // what can be changed of each character, and how it is checked (a list: one of those values)
 const APPEARANCE = { name: 'text', title: 'text', sex: SEXES, personality: Object.keys(PERSONALITIES), style: STYLES, shirt: 'color', pants: 'color', hair: 'color', skin: 'color', long: 'bool', beard: 'bool', glasses: 'bool' };
 export const MAIN_OFFICE = 'main';
+/** Who the office can lean on for judgment (server/intelligence.js). */
+export const INTEL_PROVIDERS = ['off', 'agent', 'anthropic', 'openai', 'ollama'];
 /** The building's floors: the executive one on top, the offices, and the archive in the basement. */
 export const FLOORS = ['exec', 'office', 'archive'];
 
@@ -73,6 +78,11 @@ export const DEFAULT_PREFS = {
   // the agents' context: past this much it is compacted on its own (server/compact.js); `at` is tokens
   // (unit: tokens) or a share of the model's window (unit: pct)
   compact: { auto: true, at: 400_000, unit: 'tokens' },
+  // the model the office leans on for judgment (server/intelligence.js): the impact of an order (what it
+  // touches and how, and what it needs that is not on the map). off: only the words of the order; agent:
+  // one of your agents' CLIs, read-only (harness, and its model if you want another); anthropic, openai
+  // (any compatible API) or ollama: with its model and URL (the key, in an environment variable)
+  intelligence: { provider: 'off', harness: 'claude-code', model: '', url: '', timeout: 120 },
 };
 
 // The default language (until one is chosen in ⚙): $DEV_TEAM_OFFICE_LANG, otherwise English.
@@ -276,6 +286,20 @@ const MIGRATIONS = [
      created_at INTEGER NOT NULL,
      updated_at INTEGER NOT NULL
    );`,
+  // 12 → 13: the infrastructure on the map: queues, topics, databases, third-party APIs… (server/resources.js)
+  `CREATE TABLE resources (
+     id         TEXT PRIMARY KEY,
+     kind       TEXT NOT NULL,                  -- queue | topic | database | cache | storage | service | api | scheduler | repo | other
+     name       TEXT NOT NULL COLLATE NOCASE,
+     tech       TEXT NOT NULL DEFAULT '',       -- what it runs on: SQS, Kafka, PostgreSQL, Stripe…
+     location   TEXT NOT NULL DEFAULT '',       -- where it lives: an account, a cluster, a URL
+     state      TEXT NOT NULL DEFAULT 'exists', -- exists | planned (to be created)
+     notes      TEXT NOT NULL DEFAULT '',
+     links      TEXT NOT NULL DEFAULT '[]',     -- JSON: [{ project (a folder), how: uses | publishes | consumes | reads | writes | calls | schedules | owns }]
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL,
+     UNIQUE (kind, name)
+   );`,
 ];
 
 // what is yours (⚙ › Mine): how many, how long, and how your tools run
@@ -333,6 +357,8 @@ function cleanLook(who, look) {
 export const SKILL_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const EXPERTS_MAX = 40;
 const LOOPS_MAX = 100;
+const RESOURCES_MAX = 300;
+const RESOURCE_STATES = ['exists', 'planned'];
 
 /** Opens (and creates or migrates) the database. `file` ':memory:' is for the tests. */
 export function openStore(file = dbFile()) {
@@ -760,6 +786,70 @@ export class Store {
     return { ok: true, expert: e };
   }
 
+  // ---------------------------------------------------------------- the infrastructure on the map (server/resources.js)
+
+  #resource(r) {
+    return r ? { id: r.id, kind: r.kind, name: r.name, tech: r.tech, location: r.location, state: r.state, notes: r.notes, links: json(r.links, []) || [], createdAt: r.created_at, updatedAt: r.updated_at } : null;
+  }
+  listResources() { return this.db.prepare('SELECT * FROM resources ORDER BY kind, name').all().map((r) => this.#resource(r)); }
+  getResource(id) { return this.#resource(this.db.prepare('SELECT * FROM resources WHERE id = ?').get(String(id))); }
+  /** A resource by its id, or by its name (and kind, if given). */
+  findResource(ref, kind = null) {
+    const name = String(ref ?? '').trim();
+    return this.getResource(name) || this.#resource(kind
+      ? this.db.prepare('SELECT * FROM resources WHERE kind = ? AND name = ?').get(String(kind), name)
+      : this.db.prepare('SELECT * FROM resources WHERE name = ? ORDER BY updated_at DESC').get(name));
+  }
+
+  /**
+   * Puts a resource on the map: { id?, kind, name, tech?, location?, state?, notes?, links?: [{ project, how }] }.
+   * Without `id`, the one of that kind and name is updated; `addLinks` adds to its links instead of
+   * replacing them. Returns { ok, resource, created }.
+   */
+  saveResource(input = {}) {
+    return this.#write(() => {
+      // with an id, what is not said stays as it was
+      const byId = input.id ? this.getResource(input.id) : null;
+      if (input.id && !byId) fail(t('err.unknownResource', { resource: input.id }));
+      const kind = String(input.kind ?? byId?.kind ?? '').trim();
+      if (!RESOURCE_KINDS.includes(kind)) fail(t('err.resourceKind', { kinds: RESOURCE_KINDS.join(', ') }));
+      const name = String(input.name ?? byId?.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
+      if (!name) fail(t('err.resourceName'));
+      const current = byId || this.findResource(name, kind);
+      const clash = this.findResource(name, kind);
+      if (clash && clash.id !== current?.id) fail(t('err.resourceExists', { name }));
+      const text = (k, n) => String(input[k] ?? current?.[k] ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
+      const state = input.state ?? current?.state ?? 'exists';
+      if (!RESOURCE_STATES.includes(state)) fail(t('err.prefValue', { key: 'state' }));
+      const cleanLinks = (list) => (Array.isArray(list) ? list : []).map((l) => {
+        const dir = String(l?.project ?? '').trim().replace(/^~(?=$|\/)/, os.homedir());
+        if (!dir || !path.isAbsolute(dir)) fail(t('err.pathRelative', { path: dir }));
+        const how = l.how || 'uses';
+        if (!RESOURCE_LINKS.includes(how)) fail(t('err.resourceHow', { hows: RESOURCE_LINKS.join(', ') }));
+        return { project: realDir(dir), how };
+      });
+      let links = input.links !== undefined ? cleanLinks(input.links) : current?.links || [];
+      if (input.addLinks) for (const l of cleanLinks(input.addLinks)) if (!links.some((x) => x.project === l.project && x.how === l.how)) links = [...links.filter((x) => !(x.project === l.project && x.how === 'uses' && l.how !== 'uses')), l];
+      links = links.slice(0, 40);
+      const now = Date.now();
+      const row = [kind, name, text('tech', 60), text('location', 200), state, text('notes', 500), JSON.stringify(links)];
+      if (current) {
+        this.db.prepare('UPDATE resources SET kind = ?, name = ?, tech = ?, location = ?, state = ?, notes = ?, links = ?, updated_at = ? WHERE id = ?').run(...row, now, current.id);
+        return { ok: true, resource: this.getResource(current.id), created: false };
+      }
+      if (this.db.prepare('SELECT count(*) AS n FROM resources').get().n >= RESOURCES_MAX) fail(t('err.resourcesMax', { n: RESOURCES_MAX }));
+      const id = `r${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+      this.db.prepare('INSERT INTO resources (id, kind, name, tech, location, state, notes, links, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, ...row, now, now);
+      return { ok: true, resource: this.getResource(id), created: true };
+    });
+  }
+  deleteResource(id) {
+    const r = this.getResource(id);
+    if (!r) return { ok: false, status: 404, error: t('err.unknownResource', { resource: id }) };
+    this.db.prepare('DELETE FROM resources WHERE id = ?').run(r.id);
+    return { ok: true, resource: r };
+  }
+
   /** Every folder with instructions: [{ path, instructions }]. */
   listProjectInstructions() { return this.db.prepare('SELECT path, instructions FROM projects ORDER BY path').all().map((r) => ({ path: r.path, instructions: r.instructions })); }
   /** Sets (or, empty, removes) a project folder's instructions: an existing absolute path. */
@@ -860,6 +950,23 @@ export class Store {
                 if (u && !/^https?:\/\/[^\s]+$/i.test(u)) fail(t('err.prefValue', { key: 'archive.url' }));
                 next.archive.url = u.slice(0, 300);
               } else fail(t('err.pref', { key: `archive.${ak}` }));
+            }
+            break;
+          case 'intelligence':
+            if (!isObj(v)) fail(t('err.prefValue', { key: k }));
+            for (const [ik, iv] of Object.entries(v)) {
+              if (ik === 'provider') next.intelligence.provider = INTEL_PROVIDERS.includes(iv) ? iv : fail(t('err.prefValue', { key: 'intelligence.provider' }));
+              else if (ik === 'harness') next.intelligence.harness = HARNESS_IDS.includes(iv === 'claude' ? 'claude-code' : iv) ? (iv === 'claude' ? 'claude-code' : iv) : fail(t('err.prefValue', { key: 'intelligence.harness' }));
+              else if (ik === 'model') next.intelligence.model = String(iv ?? '').trim().slice(0, 120);
+              else if (ik === 'url') {
+                const u = String(iv ?? '').trim();
+                if (u && !/^https?:\/\/[^\s]+$/i.test(u)) fail(t('err.prefValue', { key: 'intelligence.url' }));
+                next.intelligence.url = u.slice(0, 300);
+              } else if (ik === 'timeout') {
+                const n = Number(iv);
+                if (!Number.isInteger(n) || n < 10 || n > 600) fail(t('err.prefValue', { key: 'intelligence.timeout' }));
+                next.intelligence.timeout = n;
+              } else fail(t('err.pref', { key: `intelligence.${ik}` }));
             }
             break;
           case 'compact': {

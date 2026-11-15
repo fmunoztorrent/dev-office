@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { detectHarness, harnessId, projectRoot, HARNESS_IDS, AGENT_ROLE_IDS, ROLE_NAME } from '../integrations/common/devteam.mjs';
 import { defaultLook } from '../public/sim.js';
 import { realDir } from './paths.js';
+import { RESOURCE_KINDS, RESOURCE_LINKS } from '../public/impact.js';
 import { guideFor, guideText } from './guides.js';
 import { spawnOffice } from './lifecycle.js';
 import { KNOWLEDGE_KINDS } from './store.js';
@@ -30,6 +31,7 @@ To add yourself and this project to the office in one step, call join_office (or
 Use these tools to: register the current project (register_project) so the office can send it work; see what a project's harness brings (detect_project); tell the office which role and phase you are in while you work (report_activity: task → phase … → done); send a prompt to another registered agent (send_task); and open herdr panes for side activities (open_pane).
 The company has two shared floors. The archive keeps what the company knows: before starting a task, search it (search_knowledge, then get_knowledge for the whole entry) for decisions, docs, skills and connectors that apply; when you settle something worth keeping (a decision, a convention, how something works), save it (save_knowledge). The executive floor gives orders that cover several offices or projects at once (send_directive, list_directives); when a brief starts with 🏛 it is your part of one: do only this project's part.
 A company groups its repos in systems (a product: "Payments" = its core, its bff and its web; list_systems): a brief whose header says other artifacts use yours goes before theirs, so when you finish, call handoff with what they need to know (what changed in what you expose). A brief that carries "What X left" is the handoff of an artifact you use: build on it.
+When a brief asks you to create infrastructure (🆕 a queue, a topic, a database, a scheduler…), declare it with declare_resource once it exists, so the company's map knows where it lives and who uses it.
 A brief that starts with 🔁 is a step of a project loop: it lists its success criteria, numbered. Before you end, check each one for real and report all of them with loop_report; the loop moves on only when every criterion is met.
 The user may have their own tools (small programs they defined in the office): they show up as my_<name> tools; list_my_tools lists them and run_my_tool runs one by name. Use them when they fit what you are doing: they are what the user wants used for that.
 If the office is not running, office_start opens it; office_status gives its URL. Reporting is best effort: never stop or retry your real work because the office is offline.`;
@@ -48,11 +50,12 @@ const expand = (p) => String(p || '').trim().replace(/^~(?=$|\/)/, os.homedir())
 
 /** The office API: through the Unix socket if it exists, otherwise over HTTP. null if it does not answer. */
 export function officeApi({ base, socket }) {
-  return async function api(route, body, method = body === undefined ? 'GET' : 'POST') {
+  // `timeout`: how long to wait for the answer (longer for what asks a model)
+  return async function api(route, body, method = body === undefined ? 'GET' : 'POST', { timeout = 4000 } = {}) {
     const data = body === undefined ? undefined : JSON.stringify(body);
     if (socket && fs.existsSync(socket)) {
       const out = await new Promise((resolve) => {
-        const req = http.request({ socketPath: socket, path: route, method, headers: { 'content-type': 'application/json', ...(data ? { 'content-length': Buffer.byteLength(data) } : {}) }, timeout: 4000 }, (res) => {
+        const req = http.request({ socketPath: socket, path: route, method, headers: { 'content-type': 'application/json', ...(data ? { 'content-length': Buffer.byteLength(data) } : {}) }, timeout }, (res) => {
           let s = '';
           res.on('data', (d) => { s += d; });
           res.on('end', () => { try { resolve(JSON.parse(s || '{}')); } catch { resolve(null); } });
@@ -64,7 +67,7 @@ export function officeApi({ base, socket }) {
       if (out !== undefined) return out;
     }
     try {
-      const res = await fetch(`${base}${route}`, { method, headers: { 'content-type': 'application/json' }, body: data, signal: AbortSignal.timeout(4000) });
+      const res = await fetch(`${base}${route}`, { method, headers: { 'content-type': 'application/json' }, body: data, signal: AbortSignal.timeout(timeout) });
       return await res.json();
     } catch { return null; }
   };
@@ -295,9 +298,14 @@ const TOOLS = [
             type: 'object',
             properties: {
               name: { type: 'string', description: 'The thing as the question named it, e.g. "servicio de notificaciones"' },
-              action: { type: 'string', enum: ['exists', 'create', 'department', 'ignore'], description: 'exists: it is in `project` (and `path`); create: it is new, to be created in `project`; department: it is a new department; ignore: not a part of the system' },
+              action: { type: 'string', enum: ['exists', 'create', 'repo', 'newRepo', 'resource', 'department', 'ignore'], description: 'A component — exists: it is in `project` (and `path`); create: it is new, to be created in `project`; repo: it is a repository of its own at `where` (a folder: it is registered; a URL: noted); newRepo: a new repository, created empty at `where` and registered; resource: it is infrastructure (`kind`). Infrastructure (a queue, a topic, a database…) — exists: it is at `where`, used by `project`; create: `project` creates it. Any — department: it is a new department; ignore: not part of the system' },
               project: { type: 'string', description: 'For exists or create: the registered project (id or path)' },
               path: { type: 'string', description: 'Its folder inside the project (optional)' },
+              where: { type: 'string', description: 'For repo or newRepo: the folder (full path) or the repository URL; for infrastructure: where it lives' },
+              harness: { type: 'string', enum: ['claude-code', 'opencode', 'pi', 'codex'], description: 'For repo or newRepo: the agent that works in it' },
+              office: { type: 'string', description: 'For repo or newRepo: its department (id or name)' },
+              kind: { type: 'string', enum: RESOURCE_KINDS, description: 'For resource: what it is' },
+              how: { type: 'string', enum: RESOURCE_LINKS, description: 'For infrastructure that exists: how `project` uses it' },
               department: { type: 'string', description: 'For department: its name (defaults to the thing\'s name)' },
             },
             required: ['name', 'action'],
@@ -313,7 +321,7 @@ const TOOLS = [
   {
     name: 'map_impact',
     title: 'Map the impact of an order',
-    description: 'Before a directive: which departments, projects and components of the company an order touches (by what it names, plus the projects or offices you pick), and what it names that is not on the map (to ask the user about). Read-only.',
+    description: 'Before a directive: which departments, projects, components and infrastructure (queues, topics, databases, third-party APIs, schedulers…) of the company an order touches (by what it names, plus the projects or offices you pick), and what it names that is not on the map (to ask the user about). With think, the model chosen in the office (⚙ › General › 🧠) adds how each repo is touched and what the words missed (it takes a while). Read-only.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -321,6 +329,7 @@ const TOOLS = [
         offices: { type: 'array', items: { type: 'string' } },
         projects: { type: 'array', items: { type: 'string' } },
         systems: { type: 'array', items: { type: 'string' } },
+        think: { type: 'boolean', description: 'Ask the office\'s model too (default false)' },
       },
       required: ['text'],
       additionalProperties: false,
@@ -356,6 +365,25 @@ const TOOLS = [
         step: { type: 'integer', description: 'The step number; by default, the one going' },
       },
       required: ['results'],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, openWorldHint: false },
+  },
+  {
+    name: 'declare_resource',
+    title: 'Put infrastructure on the company\'s map',
+    description: 'The infrastructure your project uses or created that is not a repository of the office: a queue, a topic, a database, a cache, a storage bucket, another team\'s service, a third-party API, a scheduler, or a repository the office does not have. Say where it lives and how this project uses it: an order that names it later reaches this project, and the impact map stops asking about it. Same kind and name: it is updated.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', enum: RESOURCE_KINDS },
+        name: { type: 'string', description: 'Its name as the code calls it: refunds, orders.created, customers…' },
+        tech: { type: 'string', description: 'What it runs on: SQS, Kafka, PostgreSQL, Stripe…' },
+        location: { type: 'string', description: 'Where it lives: an account, a cluster, a URL (never a secret)' },
+        how: { type: 'string', enum: RESOURCE_LINKS, description: 'How this project uses it (default uses; owns if it created it)' },
+        notes: { type: 'string' },
+      },
+      required: ['kind', 'name'],
       additionalProperties: false,
     },
     annotations: { readOnlyHint: false, openWorldHint: false },
@@ -768,8 +796,8 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
       const out = await api('/v1/directives', { text, ...(title ? { title } : {}), offices, targets, systems, answers: said, from: `MCP · ${client.name || 'agent'}` });
       // it names things that are not on the map: the user has to say what they are
       if (out?.needsAnswers) {
-        const asks = out.map.unknown.map((u) => `  - "${u.phrase}": ${u.question}`).join('\n');
-        throw new ToolError(`Not sent yet. ${out.text}\n\nAsk the user about each of these, then call send_directive again with answers [{ name, action: exists|create|department|ignore, project?, path?, department? }]:\n${asks}`);
+        const asks = out.map.unknown.map((u) => `  - "${u.phrase}" (${u.kind || 'component'}): ${u.question}`).join('\n');
+        throw new ToolError(`Not sent yet. ${out.text}\n\nAsk the user about each of these, then call send_directive again with answers [{ name, action, project?, path?, where?, harness?, office?, kind?, how?, department? }] (a component: exists|create|repo|newRepo|resource|department|ignore; infrastructure: exists|create|ignore):\n${asks}`);
       }
       const d = okOr(out).directive;
       const line = (p) => `  ${p.name} (${p.office}): ${p.status}${p.detail ? ` — ${p.detail}` : ''}${p.after?.length ? ` · after: ${p.after.join(', ')}` : ''}${p.components?.length ? ` · components: ${p.components.join(', ')}` : ''}${p.fresh?.length ? ` · new: ${p.fresh.join(', ')}` : ''}`;
@@ -777,13 +805,22 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
       return { text: `🏛 Directive ${d.id} "${d.title}" sent to ${d.total} project(s):\n${d.parts.map(line).join('\n')}${created}`, data: d };
     },
 
-    async map_impact({ text, offices = [], projects = [], systems = [] } = {}) {
+    async declare_resource({ kind, name, tech, location, how = 'uses', notes } = {}) {
+      need(String(name || '').trim(), 'name is required');
+      need(await running(), 'the office is not running');
+      const out = await api('/v1/resources', { kind, name, ...(tech ? { tech } : {}), ...(location ? { location } : {}), ...(notes ? { notes } : {}), state: 'exists', addLinks: [{ project: where(), how }] });
+      const r = okOr(out).resource;
+      return { text: `🗄 ${r.kind} "${r.name}" is on the map${r.tech ? ` (${r.tech})` : ''}${r.location ? ` at ${r.location}` : ''}, used by ${r.links.length} project(s).`, data: r };
+    },
+
+    async map_impact({ text, offices = [], projects = [], systems = [], think = false } = {}) {
       need(String(text || '').trim(), 'text is required');
       need(await running(), 'the office is not running: start it with office_start');
       const all = await listAgents();
       const targets = projects.map((ref) => (/[/~]/.test(ref) ? need(all.find((a) => realDir(a.path) === where(ref)), `no registered project at ${where(ref)}`).id : ref));
-      const out = okOr(await api('/v1/directives/plan', { text, offices, targets, systems }));
-      return { text: out.text, data: out.map };
+      const out = okOr(await api('/v1/directives/plan', { text, offices, targets, systems, think: !!think }, 'POST', { timeout: think ? 660_000 : 4000 }));
+      const note = think && out.insight && !out.insight.ok ? `\n\n(The model's analysis did not come: ${out.insight.error}. This is the map by words.)` : '';
+      return { text: `${out.text}${note}`, data: out.map };
     },
 
     async list_systems() {

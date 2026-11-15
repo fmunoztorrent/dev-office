@@ -165,6 +165,9 @@ export function createFloors({ clock = () => performance.now() } = {}) {
       } else if (ev.kind === 'impact') {
         // before an order goes, operations maps what it touches (and asks about what is not on the map)
         P.coo.say(t('floors.exec.react.impact', { n: ev.total || 0 }) + (ev.unknown ? ` ${t('floors.exec.react.impactAsk', { n: ev.unknown })}` : ''), 5500).setState('working', 4000);
+      } else if (ev.kind === 'think') {
+        // the model's analysis came back: the CTO reads it
+        P.cto.say(t(`floors.exec.react.${ev.ok === false ? 'thinkFailed' : 'think'}`, { n: ev.total || 0, q: ev.unknown || 0 }), 5500).setState('working', 4000);
       } else if (ev.kind === 'department') {
         // a new department: operations takes note and asks for what it is missing
         P.coo.say(t('floors.exec.react.department', { name: text }), 6000).setState('working', 4000);

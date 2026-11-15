@@ -11,6 +11,7 @@
 
 import { t } from './i18n.js';
 import { renderMarkdown } from './markdown.js';
+import { renderImpact, impactQuestions } from './impact-ui.js';
 
 const $ = (id) => document.getElementById(id);
 const KINDS = ['note', 'decision', 'doc', 'term', 'minute', 'skill', 'connector'];
@@ -67,7 +68,7 @@ function scopePicker(box, groups, { checked = () => false, extra = () => null, o
  */
 export function createDirectivesUi({ getDirectives = () => [], getOffices = () => [], getOverview = () => [], hhmm = (ts) => new Date(ts).toLocaleTimeString(), onDepartment }) {
   const dialog = $('directives');
-  const st = { chosen: () => [], busy: false, groups: [], plan: null, answers: () => [] };
+  const st = { chosen: () => [], busy: false, groups: [], plan: null, ask: null, picked: [], gen: 0 };
   $('dv-close').onclick = () => dialog.close();
   $('dv-cancel').onclick = () => dialog.close();
   dialog.addEventListener('click', (e) => { if (e.target === dialog) dialog.close(); });
@@ -76,8 +77,10 @@ export function createDirectivesUi({ getDirectives = () => [], getOffices = () =
   /** A line under the form: a problem (red) or that it went well. */
   const say = (text, good = false) => { $('dv-msg').textContent = text; $('dv-msg').classList.toggle('ok', good); };
 
-  async function open() {
+  /** Opens the dialog; `text`: an order already written (a brief that touches several repos). */
+  async function open({ text } = {}) {
     say('');
+    if (text) $('dv-text').value = text;
     if (!dialog.open) dialog.showModal();
     render();
     const groups = await projectsByOffice(getOffices());
@@ -114,20 +117,33 @@ export function createDirectivesUi({ getDirectives = () => [], getOffices = () =
   /** The text changed: the map has to be made again (the button goes back to 🗺). */
   function forget() {
     st.plan = null;
+    st.gen++;
+    st.ask = null;
     $('dv-map').hidden = true;
+    renderImpact($('dv-impact'), null);
     $('dv-ask').replaceChildren();
+    $('dv-ask')._kept = null;
     $('dv-go').textContent = t('exec.ui.mapBtn');
   }
   $('dv-text').addEventListener('input', () => { if (st.plan) forget(); });
 
-  /** 🗺: the departments, projects and components it touches (checked), and the questions about what is not on the map. */
+  /** 🗺: the departments, projects and components it touches (checked), its tree, and the questions about what is not on the map; then the model's analysis, if there is one. */
   async function mapIt(text) {
-    const out = await api('/v1/directives/plan', { text, targets: st.chosen() });
+    st.picked = st.chosen();
+    const out = await api('/v1/directives/plan', { text, targets: st.picked });
     if (!out.ok) return say(out.error || '?');
-    const m = out.map;
+    st.plan = { text };
+    showMap(text, out.map);
+    $('dv-go').textContent = t('exec.ui.send');
+    think(text, out.map);
+  }
+
+  /** The map on the dialog: who gets it (checked: what it touches, and what you had checked), the tree and the questions. */
+  function showMap(text, m, { status = '', keep = false } = {}) {
+    const before = new Set(keep ? st.chosen() : []);
     const byId = new Map(m.departments.flatMap((o) => o.projects).map((p) => [p.id, p]));
     st.chosen = scopePicker($('dv-offices'), st.groups, {
-      checked: (a) => !!byId.get(a.id)?.impacted,
+      checked: (a) => !!byId.get(a.id)?.impacted || before.has(a.id),
       extra: (a) => {
         const p = byId.get(a.id);
         if (!p?.impacted) return null;
@@ -140,31 +156,24 @@ export function createDirectivesUi({ getDirectives = () => [], getOffices = () =
     const touched = m.departments.filter((o) => o.impacted).length;
     $('dv-map').hidden = false;
     $('dv-map').textContent = m.matched ? t('exec.ui.mapNote', { n: m.targets.length, d: touched }) : t('impact.none');
-    renderQuestions(m.unknown);
-    st.plan = { text };
-    $('dv-go').textContent = t('exec.ui.send');
+    renderImpact($('dv-impact'), m, { title: text, status });
+    st.ask = impactQuestions($('dv-ask'), m.unknown, { projects: st.groups.flatMap((g) => g.projects.map((a) => ({ id: a.id, name: a.name, dept: g.name }))), offices: getOffices() });
   }
 
-  /** One question per thing it names that is not on the map: does it exist (where), create it, a new department, or nothing. */
-  function renderQuestions(unknown) {
-    const box = $('dv-ask');
-    const projects = st.groups.flatMap((g) => g.projects.map((a) => ({ ...a, dept: g.name })));
-    const rows = unknown.map((u) => {
-      const action = el('select', { 'aria-label': u.question }, ['', 'exists', 'create', 'department', 'ignore'].map((v) => el('option', { value: v }, t(`exec.ui.ans.${v || 'pick'}`))));
-      const project = el('select', { 'aria-label': t('exec.ui.ansProject') }, projects.map((a) => el('option', { value: a.id }, `${a.name} · ${a.dept}`)));
-      const where = el('input', { type: 'text', maxlength: 200, placeholder: t('exec.ui.ansPath'), 'aria-label': t('exec.ui.ansPath') });
-      const dept = el('input', { type: 'text', maxlength: 40, value: u.name, placeholder: t('exec.ui.ansDept'), 'aria-label': t('exec.ui.ansDept') });
-      const sync = () => {
-        const v = action.value;
-        project.hidden = where.hidden = !(v === 'exists' || v === 'create');
-        dept.hidden = v !== 'department';
-      };
-      action.onchange = sync;
-      sync();
-      return { u, action, project, where, dept, node: el('div', { class: 'dv-q' }, el('b', {}, u.question), el('div', { class: 'dv-q-row' }, action, project, where, dept)) };
-    });
-    box.replaceChildren(...(rows.length ? [el('span', { class: 'fl-label' }, t('impact.unknownHead')), ...rows.map((r) => r.node)] : []));
-    st.answers = () => rows.map((r) => ({ key: r.u.key, name: r.u.phrase, action: r.action.value, ...(r.action.value === 'exists' || r.action.value === 'create' ? { project: r.project.value, path: r.where.value.trim() } : {}), ...(r.action.value === 'department' ? { department: r.dept.value.trim() || r.u.name } : {}) }));
+  /** The model's analysis (⚙ › General › 🧠), when it arrives: the same map, with its judgment. */
+  async function think(text, m) {
+    const gen = ++st.gen;
+    const info = await api('/v1/intelligence');
+    if (gen !== st.gen) return;
+    if (!info.enabled) { renderImpact($('dv-impact'), m, { title: text, status: t('impact.ui.thinkOff') }); return; }
+    renderImpact($('dv-impact'), m, { title: text, status: t('impact.ui.thinking', { model: info.model }) });
+    const out = await api('/v1/directives/plan', { text, targets: st.picked, think: true });
+    // the order changed while it thought: that analysis is not for this one
+    if (gen !== st.gen || st.plan?.text !== text) return;
+    if (!out.ok) return say(out.error || '?');
+    const i = out.insight || {};
+    const status = i.ok ? t('impact.ui.thought', { model: i.model || info.model, s: Math.round((i.ms || 0) / 100) / 10 }) : t('impact.ui.thinkFailed', { model: i.model || info.model, error: i.error || '?' });
+    showMap(text, out.map, { status, keep: true });
   }
 
   // A department that does not exist yet: created here (its projects, people and instructions, in ⚙ › Departments)
@@ -194,12 +203,13 @@ export function createDirectivesUi({ getDirectives = () => [], getOffices = () =
       // first the map: what it touches, and what has to be asked
       if (!st.plan || st.plan.text !== text) { say(''); await mapIt(text); return; }
       const targets = st.chosen();
-      const answers = st.answers();
-      if (answers.some((a) => !a.action || ((a.action === 'exists' || a.action === 'create') && !a.project))) return say(t('exec.ui.answerAll'));
-      if (!targets.length && !answers.some((a) => a.action === 'exists' || a.action === 'create')) return say(t('exec.ui.pick'));
+      if (st.ask?.missing()) return say(t('exec.ui.answerAll'));
+      const answers = st.ask?.answers() || [];
+      if (!targets.length && !answers.some((a) => ['exists', 'create', 'repo', 'newRepo'].includes(a.action) && a.project !== '')) return say(t('exec.ui.pick'));
+      st.gen++; // an analysis still on its way is not needed any more
       const out = await api('/v1/directives', { text, targets, answers, exact: true });
       for (const o of out.created || []) onDepartment?.(o);
-      if (!out.ok) { if (out.needsAnswers) renderQuestions(out.map.unknown); say(out.error || '?'); return; }
+      if (!out.ok) { if (out.needsAnswers) showMap(text, out.map, { keep: true }); say(out.error || '?'); return; }
       $('dv-text').value = '';
       forget();
       say(t('exec.ui.sent', { n: out.directive.total }) + (out.created?.length ? ` · ${t('exec.ui.deptCreated', { name: out.created.map((o) => o.name).join(', ') })}` : ''), true);

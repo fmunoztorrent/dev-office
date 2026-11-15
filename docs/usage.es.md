@@ -68,7 +68,7 @@ En las dos vistas (y en el juego de la terminal):
 
 | Desde | Cómo |
 |---|---|
-| El juego | Clic en la pizarra (con tickets primero los expande como post-its: ahí, **✚ Nuevo encargo**), o `t`. Eliges el agente (agrupados por proyecto), el pipeline de su harness, la sesión, el perfil de modelos y escribes el prompt |
+| El juego | Clic en la pizarra (con tickets primero los expande como post-its: ahí, **✚ Nuevo encargo**), o `t`. Eliges el agente (agrupados por proyecto), el pipeline de su harness, la sesión, el perfil de modelos y escribes el prompt. **🗺 Impacto** muestra los repos que toca (pasa el puntero sobre una caja; ⤢ el grafo) y pregunta lo que no está en el mapa antes de que salga |
 | La terminal | `dev-team-office task "Agrega paginación" --agent pi`, o `dev-team-office prompt <id> "…" --pipeline <entrada>` |
 | Tu agente | Directo en su sesión: la oficina lo ve igual |
 | Otro agente (MCP) | La herramienta `send_task` |

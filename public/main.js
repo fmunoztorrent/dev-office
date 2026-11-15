@@ -8,6 +8,7 @@ import { createBoardView } from './board-ui.js';
 import { createPrompts } from './prompts-ui.js';
 import { createDirectivesUi, createArchiveUi } from './floors-ui.js';
 import { createLoops } from './loops-ui.js';
+import { renderImpact, impactQuestions } from './impact-ui.js';
 import './renderers/plan.js'; // the reference renderer (public/scene.js): ?renderer=plan
 import { drawSprite } from './sprite.js';
 import { season, isSouth, daylight, weatherIcon } from './sky.js';
@@ -1160,6 +1161,53 @@ $('b-text').onkeydown = (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKe
 $('brief-close').onclick = $('brief-cancel').onclick = () => $('brief').close();
 $('new-brief').onclick = () => openBrief();
 
+// 🗺 a brief's impact (impact-ui.js): the repos it touches, ⤢ the whole graph, and what it needs that is
+// not on the map. The answers go on the map when it is sent, and what they say goes on top of the brief.
+const briefImpact = { text: '', target: null, ask: null, gen: 0 };
+const postJson = (path, body) => fetch(path, { method: body === undefined ? 'GET' : 'POST', headers: { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) }).then((r) => r.json()).catch((err) => ({ ok: false, error: err.message }));
+/** What the brief's target is on the map: a registered project, a system, or nothing (an open session only). */
+const briefScope = (tg) => (tg?.system ? { systems: [tg.id.slice('system:'.length)] } : tg?.registered ? { targets: [tg.id] } : {});
+function forgetBriefImpact() {
+  Object.assign(briefImpact, { text: '', target: null, ask: null });
+  briefImpact.gen++;
+  renderImpact($('b-impact'), null);
+  $('b-ask').replaceChildren();
+  $('b-ask')._kept = null;
+  $('b-impact-note').hidden = true;
+}
+function showBriefImpact(text, tg, m, status = '') {
+  renderImpact($('b-impact'), m, { title: text, status });
+  const projects = targets.filter((x) => x.registered).map((x) => ({ id: x.id, name: x.name, dept: offices.find((o) => o.id === x.office)?.name || '' }));
+  briefImpact.ask = impactQuestions($('b-ask'), m.unknown, { projects, offices });
+  // it touches other repos too: a directive takes it to all of them
+  const others = m.departments.flatMap((o) => o.projects).filter((p) => p.impacted && p.id !== tg?.id && p.why !== 'chosen').map((p) => p.name);
+  const note = $('b-impact-note');
+  note.hidden = !others.length || !!tg?.system;
+  note.replaceChildren(...(others.length ? [t('impact.ui.briefNote', { list: others.join(', ') }), ' ', Object.assign(document.createElement('button'), { type: 'button', className: 'fl-mini', textContent: t('impact.ui.toDirective'), onclick: () => { $('brief').close(); directivesUi.open({ text }); } })] : []));
+}
+$('brief-impact').onclick = async () => {
+  const text = $('b-text').value.trim();
+  const tg = brief.opts?.target;
+  if (!text) { $('b-problem').textContent = t('brief.pWrite'); $('b-text').focus(); return; }
+  const gen = ++briefImpact.gen;
+  Object.assign(briefImpact, { text, target: tg });
+  const out = await postJson('/v1/directives/plan', { text, ...briefScope(tg) });
+  if (gen !== briefImpact.gen) return;
+  if (!out.ok) { $('b-problem').textContent = out.error || '?'; return; }
+  const info = await postJson('/v1/intelligence');
+  if (gen !== briefImpact.gen) return;
+  showBriefImpact(text, tg, out.map, info.enabled ? t('impact.ui.thinking', { model: info.model }) : t('impact.ui.thinkOff'));
+  if (!info.enabled) return;
+  const deep = await postJson('/v1/directives/plan', { text, ...briefScope(tg), think: true });
+  if (gen !== briefImpact.gen || !deep.ok) return;
+  const i = deep.insight || {};
+  showBriefImpact(text, tg, deep.map, i.ok ? t('impact.ui.thought', { model: i.model || info.model, s: Math.round((i.ms || 0) / 100) / 10 }) : t('impact.ui.thinkFailed', { model: i.model || info.model, error: i.error || '?' }));
+};
+// another text or another target: that map is not this brief's any more
+$('b-text').addEventListener('input', () => { if (briefImpact.text && briefImpact.text !== $('b-text').value.trim()) forgetBriefImpact(); });
+$('b-agent').addEventListener('change', () => { if (briefImpact.text) forgetBriefImpact(); });
+$('brief').addEventListener('close', forgetBriefImpact);
+
 // ⚙ Settings: general, offices, the agents maintainer and the characters' appearance.
 const settings = createSettings({
   getTargets: () => targets, getOffices: () => offices, getOffice: () => office, getPrefs: () => prefs, getHerdr: () => herdr,
@@ -1168,11 +1216,19 @@ const settings = createSettings({
   alerts: { get: alertPrefs, set: setAlertPrefs },
 });
 $('open-settings').onclick = () => settings.open();
-$('brief-form').onsubmit = (e) => {
+$('brief-form').onsubmit = async (e) => {
   e.preventDefault();
-  const text = $('b-text').value;
+  let text = $('b-text').value;
   const problem = briefProblem(brief.opts, text);
   if (problem) { $('b-problem').textContent = problem; return; }
+  // what you answered on its impact map: on the map now, and on top of the brief
+  const answers = briefImpact.ask && briefImpact.text === text.trim() ? briefImpact.ask.answers() : [];
+  if (answers.length) {
+    const tg = brief.opts.target;
+    const out = await postJson('/v1/impact/answers', { text: text.trim(), ...briefScope(tg), answers, target: tg.id });
+    if (!out.ok) { $('b-problem').textContent = out.error || '?'; return; }
+    if (out.lines?.length) text = `${out.lines.join('\n')}\n\n${text.trim()}`;
+  }
   send({ ...briefMessage(brief.opts, text, 'Web'), ref: Date.now() });
   $('b-text').value = '';
   $('brief').close();

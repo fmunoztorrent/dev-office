@@ -185,7 +185,7 @@ test('MCP: map_impact dice qué toca; send_directive no sale hasta que el usuari
     r = await tool('send_directive', { text });
     assert.equal(r.isError, true);
     assert.match(r.content[0].text, /^Not sent yet\./);
-    assert.match(r.content[0].text, /- "gateway de mensajería": ¿Existe/);
+    assert.match(r.content[0].text, /- "gateway de mensajería" \(component\): ¿Existe/);
     r = await tool('send_directive', { text, answers: [{ name: 'gateway de mensajería', action: 'create', project: dir, path: 'services/gateway' }] });
     assert.ok(!r.isError, r.content[0].text);
     assert.match(r.content[0].text, /api-pagos \(pagos\): .* · components: notificaciones · new: mensajería/);

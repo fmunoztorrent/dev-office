@@ -12,6 +12,8 @@
 //   systems      the products or business projects (server/systems.js): their team, instructions and artifacts
 //   mine         what is yours (⚙ › Mine): your private skills and your own tools (server/mine.js)
 //   experts      the subject matter experts (server/experts.js): who knows each skill, and how they look
+//   resources    the infrastructure on the map (server/resources.js): queues, topics, databases, APIs…,
+//                where each one lives and which project folders use it
 //
 // What is not: what belongs to the game (the default team, the map, the phases, which character does
 // each tool) and what is history or content rather than a setting (the log, the briefs, the directives,
@@ -61,7 +63,8 @@ export function exportSettings(store, { app = '' } = {}) {
   const mine = (kind) => (store.listMine?.(kind) || []).map((e) => ({ name: e.name, title: e.title, body: e.body, enabled: e.enabled, ...(e.config ? { config: e.config } : {}) }));
   const systems = (store.listSystems?.() || []).map((s) => ({ name: s.name, department: s.office, instructions: s.instructions, parts: s.parts.map(({ name, project, component, path: sub, kind, uses }) => ({ name, project, ...(component ? { component } : {}), ...(sub ? { path: sub } : {}), kind, uses })) }));
   const experts = (store.listExperts?.() || []).map(({ skill, topic, look }) => ({ skill, ...(topic ? { topic } : {}), look }));
-  return { kind: SETTINGS_KIND, version: SETTINGS_VERSION, app, exportedAt: new Date().toISOString(), prefs, departments, projects, instructions, systems, mine: { skills: mine('skill'), tools: mine('tool') }, experts };
+  const resources = (store.listResources?.() || []).map(({ kind, name, tech, location, state, notes, links }) => ({ kind, name, ...(tech ? { tech } : {}), ...(location ? { location } : {}), ...(state !== 'exists' ? { state } : {}), ...(notes ? { notes } : {}), ...(links.length ? { links } : {}) }));
+  return { kind: SETTINGS_KIND, version: SETTINGS_VERSION, app, exportedAt: new Date().toISOString(), prefs, departments, projects, instructions, systems, mine: { skills: mine('skill'), tools: mine('tool') }, experts, resources };
 }
 
 /** Is it a settings file? Returns { ok, data } or { ok: false, error } (said in the game's language). */
@@ -83,7 +86,7 @@ export function importSettings(store, raw, { mine: yours = new Mine({ store }) }
   const parsed = parseSettings(raw);
   if (!parsed.ok) return parsed;
   const d = parsed.data;
-  const applied = { prefs: 0, departments: 0, characters: 0, projects: 0, components: 0, instructions: 0, systems: 0, skills: 0, tools: 0, experts: 0 };
+  const applied = { prefs: 0, departments: 0, characters: 0, projects: 0, components: 0, instructions: 0, systems: 0, skills: 0, tools: 0, experts: 0, resources: 0 };
   const skipped = [];
   const skip = (what, error) => skipped.push({ what, error: String(error || '') });
 
@@ -178,6 +181,13 @@ export function importSettings(store, raw, { mine: yours = new Mine({ store }) }
     if (!isObj(x)) continue;
     const out = store.saveExpert({ skill: x.skill, topic: x.topic ?? '', look: isObj(x.look) ? x.look : {} });
     if (out.ok) applied.experts++; else skip(t('settingsIo.expert', { skill: x.skill || '?' }), out.error);
+  }
+  // the infrastructure: by its kind and name; a link to a folder that is not on this machine is left out
+  for (const x of Array.isArray(d.resources) ? d.resources : []) {
+    if (!isObj(x)) continue;
+    const links = (Array.isArray(x.links) ? x.links : []).filter((l) => isObj(l) && typeof l.project === 'string' && fs.existsSync(l.project));
+    const out = store.saveResource({ kind: x.kind, name: x.name, tech: x.tech ?? '', location: x.location ?? '', state: x.state || 'exists', notes: x.notes ?? '', links });
+    if (out.ok) applied.resources++; else skip(t('settingsIo.resource', { name: x.name || '?' }), out.error);
   }
   return { ok: true, applied, skipped, lang: isObj(d.prefs) && d.prefs.lang ? store.getPrefs().lang : undefined };
 }

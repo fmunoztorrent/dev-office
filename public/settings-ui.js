@@ -142,6 +142,33 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     else { st.looks = null; st.experts = null; renderLook(); loadExperts(); }
   }
 
+  /** 🧠 Intelligence: which model, its address and limit, and a button to try it. */
+  function intelGroup(c, G) {
+    const PH = { anthropic: ['claude-opus-5-5', 'https://api.anthropic.com/v1'], openai: ['gpt-…', 'https://api.openai.com/v1'], ollama: ['llama3.1', 'http://127.0.0.1:11434'] };
+    const result = el('span', { class: 'hint', role: 'status' });
+    const test = el('button', { type: 'button', class: 's-mini', onclick: async () => {
+      test.disabled = true;
+      result.textContent = G('intelTesting');
+      const r = await api('POST', '/v1/intelligence/test', {});
+      test.disabled = false;
+      result.textContent = r.ok ? G('intelOk', { model: r.model, s: Math.round((r.ms || 0) / 100) / 10 }) : G('intelFail', { error: r.error || '?' });
+    } }, G('intelTest'));
+    const on = c.provider !== 'off';
+    return [
+      el('h3', {}, G('intel')),
+      el('p', { class: 'hint' }, G('intelHint')),
+      el('label', { class: 'b-field' }, el('span', {}, G('intelProvider')),
+        el('select', { onchange: (e) => setPref({ intelligence: { provider: e.target.value } }) }, ['off', 'agent', 'anthropic', 'openai', 'ollama'].map((x) => option(x, G(`intel_${x}`), x === c.provider)))),
+      c.provider === 'agent' ? el('label', { class: 'b-field' }, el('span', {}, G('intelHarness')),
+        el('select', { onchange: (e) => setPref({ intelligence: { harness: e.target.value } }) }, ['claude-code', 'codex', 'opencode', 'pi'].map((h) => option(h, HARNESS_NAME[h] || h, h === c.harness)))) : null,
+      on ? el('label', { class: 'b-field' }, el('span', {}, G('intelModel')), el('input', { type: 'text', value: c.model || '', placeholder: c.provider === 'agent' ? G('intelModelAgent') : PH[c.provider]?.[0] || '', onchange: (e) => setPref({ intelligence: { model: e.target.value } }) })) : null,
+      on && c.provider !== 'agent' ? el('label', { class: 'b-field' }, el('span', {}, G('intelUrl')), el('input', { type: 'text', value: c.url || '', placeholder: PH[c.provider]?.[1] || '', onchange: (e) => setPref({ intelligence: { url: e.target.value } }) })) : null,
+      on ? el('label', { class: 'b-field' }, el('span', {}, G('intelTimeout')), el('input', { type: 'number', class: 's-num', min: 10, max: 600, value: c.timeout || 120, onchange: (e) => setPref({ intelligence: { timeout: Number(e.target.value) || 120 } }) })) : null,
+      on ? el('p', { class: 'hint' }, G(c.provider === 'agent' ? 'intelAgentHint' : c.provider === 'anthropic' ? 'intelKeyAnthropic' : c.provider === 'openai' ? 'intelKeyOpenai' : 'intelOllamaHint')) : null,
+      on ? el('div', { class: 's-row' }, test, result) : null,
+    ];
+  }
+
   /** How the archive is indexed: chunks, and how many have their embedding. */
   async function indexStatus() {
     const r = await api('GET', '/v1/archive/index');
@@ -210,6 +237,8 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       ] : null,
       el('p', { class: 'hint', id: 's-index' }),
       el('div', { class: 's-row' }, el('button', { type: 'button', class: 's-mini', onclick: async () => { await api('POST', '/v1/archive/reindex', {}); indexStatus(); } }, G('reindex'))),
+      // the model the office leans on to size an order's impact (server/intelligence.js)
+      intelGroup(p.intelligence || { provider: 'off', harness: 'claude-code', model: '', url: '', timeout: 120 }, G),
       // when they wait for you (this browser's own: a sound, a system notification)
       alerts ? check(alerts.get().sound, t('attention.sound'), (e) => alerts.set({ sound: e.target.checked })) : null,
       alerts && 'Notification' in window ? check(alerts.get().notify, t('attention.notify'), async (e) => {
@@ -415,6 +444,8 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       el('div', { class: 's-agents' }, cards),
       // the systems: a product or business project and its artifacts (repos, or components of one)
       systemsBox(projects),
+      // the infrastructure: queues, topics, databases, third-party APIs… and who uses them
+      resourcesBox(projects),
       el('h3', {}, editing ? O('editTitle', { name: editing.name }) : O('newTitle')),
       el('div', { class: 's-form', id: 's-office-form' },
         el('label', { class: 'b-field' }, el('span', {}, O('name')), el('input', { type: 'text', value: f.name, maxlength: 40, oninput: (e) => { f.name = e.target.value; } })),
@@ -448,6 +479,8 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     st.kinds = map.ok ? Object.fromEntries(map.departments.flatMap((o) => o.projects).map((p) => [p.id, p.kind])) : {};
     st.systems = sys.ok ? sys.systems : [];
     st.kindList = sys.ok ? sys.kinds : ['frontend', 'mobile', 'bff', 'backend', 'worker', 'library', 'data', 'infra', 'other'];
+    // the infrastructure: the declared ones, and what each project's folder says it uses
+    st.resources = map.ok ? map.resources || [] : [];
     if (st.tab === 'offices' && $('settings').open) renderOffices();
   }
 
@@ -471,6 +504,60 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         `🧩 ${c.name}`,
         c.declared ? el('button', { type: 'button', class: 's-x', 'aria-label': O('compRemove', { name: c.name }), onclick: async () => { const r = await api('DELETE', `/v1/components/${encodeURIComponent(c.id)}`); if (!r.ok) return msg(r.error); loadProjects(); } }, '✕') : null)) : el('span', { class: 'hint' }, O('compNone')),
       el('span', { class: 's-comp-add' }, name, where, el('button', { type: 'button', class: 's-mini', onclick: add }, O('compAdd'))));
+  }
+
+  // ------------------------------------------------------------ Infrastructure (server/resources.js)
+
+  const R = (k, v) => t(`settings.resources.${k}`, v);
+  const RICON = { queue: '📨', topic: '📣', database: '🗄', cache: '⚡', storage: '🪣', service: '🛰', api: '🔌', scheduler: '⏰', repo: '📦', other: '⚙️' };
+  const RKINDS = Object.keys(RICON);
+  const RHOWS = ['uses', 'publishes', 'consumes', 'reads', 'writes', 'calls', 'schedules', 'owns'];
+  const emptyResource = () => ({ kind: 'queue', name: '', tech: '', location: '', project: '', how: 'uses', planned: false });
+
+  /** The infrastructure on the map: the declared ones (with who uses them), what the repos use, and the form. */
+  function resourcesBox(projects) {
+    const all = st.resources || [];
+    const declared = all.filter((r) => r.source === 'declared');
+    const detected = all.filter((r) => r.source === 'detected');
+    const f = st.resource ||= emptyResource();
+    const users = (r) => r.projects.map((x) => `${x.name} (${t(`infra.how.${x.how}`)})`).join(', ');
+    const save = async () => {
+      if (!f.name.trim()) return msg(t('err.resourceName'));
+      const a = projects.find((x) => x.id === f.project);
+      const r = await api('POST', '/v1/resources', { kind: f.kind, name: f.name, tech: f.tech, location: f.location, state: f.planned ? 'planned' : 'exists', ...(a ? { addLinks: [{ project: a.id, how: f.how }] } : {}) });
+      if (!r.ok) return msg(r.error);
+      msg(R('saved', { name: r.resource.name }), true);
+      st.resource = emptyResource();
+      loadProjects();
+    };
+    const bind = (k) => (e) => { f[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value; };
+    return [
+      el('h3', {}, R('title')),
+      el('p', { class: 'hint' }, R('hint')),
+      declared.length ? el('ul', { class: 's-res' }, declared.map((r) => el('li', {},
+        el('b', {}, `${RICON[r.kind] || ''} ${r.name}`), ` · ${t(`infra.kinds.${r.kind}`)}`,
+        r.tech ? ` · ${r.tech}` : '', r.location ? el('span', { class: 'hint' }, ` · ${r.location}`) : null,
+        r.state === 'planned' ? el('span', { class: 's-tag' }, R('planned')) : null,
+        r.projects.length ? el('span', { class: 'hint' }, ` ← ${users(r)}`) : null,
+        el('button', { type: 'button', class: 's-x', 'aria-label': R('remove', { name: r.name }), onclick: async () => {
+          if (!confirm(R('confirmDelete', { name: r.name }))) return;
+          const out = await api('DELETE', `/v1/resources/${encodeURIComponent(r.id)}`);
+          if (!out.ok) return msg(out.error);
+          msg(R('removed'), true);
+          loadProjects();
+        } }, '✕')))) : el('p', { class: 'hint' }, R('none')),
+      detected.length ? el('div', { class: 's-comps' }, el('span', { class: 's-dept-k' }, R('detected')),
+        el('div', { class: 's-comp-row' }, detected.map((r) => el('span', { class: 's-comp', title: users(r) }, `${RICON[r.kind] || ''} ${r.name}${r.techOnly ? '' : ` (${r.tech})`}`)))) : null,
+      el('div', { class: 's-form s-res-form' },
+        el('label', { class: 'b-field' }, el('span', {}, R('kind')), el('select', { onchange: bind('kind') }, RKINDS.map((k) => option(k, `${RICON[k]} ${t(`infra.kinds.${k}`)}`, k === f.kind)))),
+        el('label', { class: 'b-field' }, el('span', {}, R('name')), el('input', { type: 'text', value: f.name, maxlength: 80, placeholder: R('namePh'), oninput: bind('name') })),
+        el('label', { class: 'b-field' }, el('span', {}, R('tech')), el('input', { type: 'text', value: f.tech, maxlength: 60, placeholder: R('techPh'), oninput: bind('tech') })),
+        el('label', { class: 'b-field' }, el('span', {}, R('location')), el('input', { type: 'text', value: f.location, maxlength: 200, placeholder: R('locationPh'), oninput: bind('location') })),
+        el('label', { class: 'b-field' }, el('span', {}, R('project')), el('select', { onchange: bind('project') }, option('', R('none2'), !f.project), projects.map((a) => option(a.id, a.name, a.id === f.project)))),
+        el('label', { class: 'b-field' }, el('span', {}, R('how')), el('select', { onchange: bind('how') }, RHOWS.map((h) => option(h, t(`infra.how.${h}`), h === f.how)))),
+        el('label', { class: 'b-check' }, el('input', { type: 'checkbox', checked: f.planned ? true : undefined, onchange: bind('planned') }), R('planned')),
+        el('div', { class: 's-row' }, el('button', { type: 'button', class: 'btn', onclick: save }, R('add')))),
+    ];
   }
 
   // ------------------------------------------------------------ Systems (server/systems.js)

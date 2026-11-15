@@ -67,7 +67,7 @@ In both views (and in the terminal game):
 
 | From | How |
 |---|---|
-| The game | Click the whiteboard (with tickets it first expands them as post-its: **✚ New brief** there), or `t`. You pick the agent (grouped by project), its harness's pipeline, the session, the model profile, and write the prompt |
+| The game | Click the whiteboard (with tickets it first expands them as post-its: **✚ New brief** there), or `t`. You pick the agent (grouped by project), its harness's pipeline, the session, the model profile, and write the prompt. **🗺 Impact** shows the repos it touches (hover a box; ⤢ the graph) and asks what is not on the map before it goes |
 | The terminal | `dev-team-office task "Add pagination" --agent pi`, or `dev-team-office prompt <id> "…" --pipeline <entry>` |
 | Your agent | Directly in its session: the office sees it all the same |
 | Another agent (MCP) | The `send_task` tool |

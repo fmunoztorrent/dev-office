@@ -8,12 +8,17 @@
 // on the map ("the notifications service", `billing-api`): those are asked before it goes (does it exist,
 // and where? is it a new component? a new department?). The systems (server/systems.js) count too: naming
 // one takes all its artifacts, and a change to an artifact reaches whoever uses it (core → bff → web).
+// And the infrastructure (server/resources.js): the queues, topics, databases, third-party APIs and
+// schedulers it names reach the projects that use them, and the ones that are not on the map are asked
+// too (do they exist, where? must they be created, by whom?). A model you choose can add its judgment
+// on top (server/intelligence.js, mergeInsight): how each repo is touched, and what the words missed.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { t } from '../public/i18n.js';
 import { realDir, insideDir } from './paths.js';
 import { consumersOf, detectKind } from './systems.js';
+import { detectInfra, namedInfra, knownResources, findResource, resourceLabel } from './resources.js';
 
 const CACHE_MS = 60_000;
 const COMPONENTS_MAX = 60;
@@ -94,7 +99,7 @@ export function companyMap(store, { name = (o) => o.name } = {}) {
     projects: agents.filter((a) => a.office === o.id).map((a) => {
       const own = declared.filter((c) => c.project === realDir(a.path)).map((c) => ({ id: c.id, name: c.name, path: c.path, description: c.description, declared: true }));
       const auto = detectComponents(a.path).filter((c) => !own.some((x) => x.path && x.path === c.path) && !own.some((x) => words(x.name) === words(c.name)));
-      return { id: a.id, name: a.name, path: a.path, harness: a.harness, kind: detectKind(a.path), components: [...own, ...auto.map((c) => ({ ...c, declared: false }))] };
+      return { id: a.id, name: a.name, path: a.path, harness: a.harness, kind: detectKind(a.path), infra: detectInfra(a.path), components: [...own, ...auto.map((c) => ({ ...c, declared: false }))] };
     }),
     // the systems this department answers for (their artifacts may be repos of other departments: shared)
     systems: systems.filter((s) => s.office === o.id).map((s) => ({ id: s.id, name: s.name, instructions: s.instructions, parts: s.parts })),
@@ -166,10 +171,12 @@ export function namedParts(text) {
  * components: [{ name, path, declared, impacted }] }] }], unknown: [{ phrase, key, question }], targets, matched }.
  * `why`: 'named' (the order names it), 'chosen' (you picked it), 'part' (it names one of its components).
  */
-export function mapImpact(map, text, { targets = [] } = {}) {
+export function mapImpact(map, text, { targets = [], resources = [] } = {}) {
   const flat = words(text);
   const chosen = new Set(targets);
-  const parts = namedParts(text);
+  // the infrastructure it names; a part it names is not said twice ("la API de Stripe" is Stripe's API)
+  const infra = namedInfra(text);
+  const parts = namedParts(text).filter((p) => !infra.some((m) => ` ${m.w} `.includes(` ${p.key} `) || ` ${p.key} `.includes(` ${m.w} `)));
   const known = new Set(); // the keys of the named parts that are on the map
   const knows = (key, name) => { const w = words(name).trim(); return w === key || ` ${w} `.includes(` ${key} `) || ` ${key} `.includes(` ${w} `); };
   const departments = map.map((o) => {
@@ -186,13 +193,36 @@ export function mapImpact(map, text, { targets = [] } = {}) {
         return { ...c, impacted: hit };
       });
       const why = chosen.has(a.id) ? 'chosen' : projNamed ? 'named' : components.some((c) => c.impacted) ? 'part' : deptNamed ? 'department' : null;
-      return { id: a.id, name: a.name, harness: a.harness, path: a.path, impacted: !!why, why, components };
+      return { id: a.id, name: a.name, harness: a.harness, path: a.path, kind: a.kind, infra: a.infra || [], impacted: !!why, why, components };
     });
     const impacted = projects.some((p) => p.impacted) || deptNamed;
     return { id: o.id, name: o.name, impacted, why: deptNamed ? 'named' : impacted ? 'part' : null, projects };
   });
-  // the systems: naming one takes all its artifacts; an artifact touched reaches whoever uses it
   const all = departments.flatMap((o) => o.projects);
+  // the infrastructure: what it names reaches the projects that use it (a technology alone, like
+  // "Redis", does not: too many use it); a part it names may be a resource on the map (an external repo)
+  const res = knownResources({ declared: resources, projects: all });
+  const unknownInfra = [];
+  const reach = (r, m) => {
+    r.impacted = 'named';
+    r.said = m.phrase;
+    // a technology alone ("Redis") does not say which projects; a vendor's API does (the ones that call it)
+    if (r.techOnly && r.kind !== 'api') return;
+    for (const x of r.projects) {
+      const p = all.find((y) => y.id === x.id);
+      if (p && !p.impacted) Object.assign(p, { impacted: true, why: 'resource', via: r.name });
+    }
+  };
+  for (const m of infra) {
+    const r = findResource(res, m);
+    if (r) reach(r, m); else unknownInfra.push(m);
+  }
+  for (const p of parts) {
+    if (known.has(p.key)) continue;
+    const r = findResource(res, { name: p.name, kind: 'any' });
+    if (r) { known.add(p.key); reach(r, p); }
+  }
+  // the systems: naming one takes all its artifacts; an artifact touched reaches whoever uses it
   const repo = (folder) => all.find((p) => insideDir(folder, p.path) && insideDir(p.path, folder));
   const systems = map.flatMap((o) => (o.systems || []).map((s) => {
     const sysNamed = says(flat, s.name);
@@ -220,9 +250,100 @@ export function mapImpact(map, text, { targets = [] } = {}) {
     return { id: s.id, name: s.name, office: o.id, impacted: touched.size > 0, parts: s.parts.map((p) => ({ ...p, impacted: touched.has(p.name) ? 'touched' : reached.has(p.name) ? 'uses' : null })) };
   }));
   for (const o of departments) if (!o.impacted && o.projects.some((p) => p.impacted)) Object.assign(o, { impacted: true, why: 'part' });
-  const unknown = parts.filter((p) => !known.has(p.key)).map((p) => ({ ...p, question: t('impact.ask', { what: p.phrase }) }));
+  const unknown = [
+    ...parts.filter((p) => !known.has(p.key)).map((p) => ({ ...p, kind: 'component', question: t('impact.ask', { what: p.phrase }) })),
+    ...unknownInfra.map(({ w, vendor, ...m }) => ({ ...m, question: t('impact.askInfra', { what: m.phrase, kind: t(`infra.kinds.${m.kind}`) }) })),
+  ];
   const ids = departments.flatMap((o) => o.projects.filter((p) => p.impacted).map((p) => p.id));
-  return { departments, systems, unknown, targets: ids, matched: ids.length > 0 };
+  // the resources that matter here: the ones it names, the planned ones, and what the projects it touches use
+  const touched = new Set(ids);
+  const out = res.filter((r) => r.impacted || r.projects.some((x) => touched.has(x.id))).map((r) => ({ ...r, impacted: r.impacted || null }));
+  return { departments, systems, resources: out, unknown, targets: ids, matched: ids.length > 0 };
+}
+
+/**
+ * The model's analysis on top of the map (server/intelligence.js): { summary, projects: [{ id, how, level,
+ * components }], resources: [{ name, kind, known, action, projects, how }], unknown: [{ name, kind, question }],
+ * links: [{ from, to, label }] }. What it says touches a project marks it (why: 'model'); what it says is
+ * needed and is not on the map becomes a question. `known`: knownResources of the whole company.
+ */
+export function mergeInsight(m, insight, { known = [], model = '' } = {}) {
+  if (!insight || typeof insight !== 'object') return m;
+  const all = m.departments.flatMap((o) => o.projects);
+  const proj = (ref) => all.find((p) => p.id === ref) || all.find((p) => words(p.name) === words(ref));
+  for (const x of insight.projects || []) {
+    const p = proj(x.id);
+    if (!p) continue;
+    p.how = clipText(x.how, 400);
+    if (['high', 'medium', 'low'].includes(x.level)) p.level = x.level;
+    if (!p.impacted) Object.assign(p, { impacted: true, why: 'model' });
+    for (const c of p.components) if ((x.components || []).some((n) => words(n) === words(c.name))) c.impacted = true;
+  }
+  const has = (key, w) => m.unknown.some((u) => u.key === key || ` ${words(u.name).trim()} `.includes(` ${w} `) || ` ${w} `.includes(` ${words(u.name).trim()} `));
+  for (const x of insight.resources || []) {
+    const kind = RESOURCE_KIND_SET.has(x.kind) ? x.kind : 'other';
+    const w = words(x.name).trim();
+    if (!w) continue;
+    let r = m.resources.find((y) => words(y.name).trim() === w || (y.tech && words(y.tech).trim() === w));
+    const k = known.find((y) => words(y.name).trim() === w || (y.tech && words(y.tech).trim() === w));
+    if (!r && k) { r = { ...k, impacted: null }; m.resources.push(r); }
+    if (r) {
+      if (x.action === 'change' || x.action === 'create' || !r.impacted) r.impacted = r.impacted || 'model';
+      r.how = clipText(x.how, 300);
+      for (const ref of x.projects || []) { const p = proj(ref); if (p && !r.projects.some((y) => y.id === p.id)) r.projects.push({ id: p.id, name: p.name, how: 'uses', model: true }); }
+    } else if (!has(`${kind}:${w}`, w)) {
+      m.unknown.push({ phrase: clipText(x.name, 60), name: clipText(x.name, 60), key: `${kind}:${w}`, kind, source: 'model', question: clipText(x.how, 200) || t('impact.askInfra', { what: x.name, kind: t(`infra.kinds.${kind}`) }) });
+    }
+  }
+  for (const x of insight.unknown || []) {
+    const w = words(x.name).trim();
+    if (!w || w.length < 3) continue;
+    const kind = x.kind === 'component' || x.kind === 'repo' ? 'component' : RESOURCE_KIND_SET.has(x.kind) ? x.kind : 'component';
+    // on the map after all (the model did not see it, or says it longer: "the notifications service" is notifications): no question
+    const onMap = (name) => { const n = words(name).trim(); return n === w || (n.length > 3 && ` ${w} `.includes(` ${n} `)); };
+    if (all.some((p) => onMap(p.name) || p.components.some((c) => onMap(c.name))) || m.resources.some((r) => onMap(r.name))) continue;
+    const key = kind === 'component' ? w : `${kind}:${w}`;
+    if (!has(key, w)) m.unknown.push({ phrase: clipText(x.name, 60), name: clipText(x.name, 60), key, kind, source: 'model', question: clipText(x.question, 240) || (kind === 'component' ? t('impact.ask', { what: x.name }) : t('impact.askInfra', { what: x.name, kind: t(`infra.kinds.${kind}`) })) });
+  }
+  // what the projects it added use (their stack and their infrastructure on the map): dependencies too
+  for (const p of all.filter((x) => x.why === 'model')) {
+    for (const r of known.filter((y) => y.projects.some((x) => x.id === p.id))) if (!m.resources.some((y) => y.key === r.key)) m.resources.push({ ...r, impacted: null });
+  }
+  m.links = (insight.links || []).slice(0, 60).map((l) => ({ from: clipText(l.from, 80), to: clipText(l.to, 80), label: clipText(l.label, 40) })).filter((l) => l.from && l.to);
+  for (const o of m.departments) if (!o.impacted && o.projects.some((p) => p.impacted)) Object.assign(o, { impacted: true, why: 'part' });
+  m.targets = all.filter((p) => p.impacted).map((p) => p.id);
+  m.matched = m.targets.length > 0;
+  m.insight = { model, summary: clipText(insight.summary, 600) };
+  return m;
+}
+
+const RESOURCE_KIND_SET = new Set(['queue', 'topic', 'database', 'cache', 'storage', 'service', 'api', 'scheduler', 'repo', 'other']);
+const clipText = (s, n) => { const x = String(s ?? '').replace(/\s+/g, ' ').trim(); return x.length > n ? `${x.slice(0, n - 1)}…` : x; };
+
+/**
+ * What a project's brief carries of its impact: the components it touches, the new ones, the
+ * infrastructure it touches or must create, the repositories the office does not have, and the
+ * model's analysis of it. `fresh`: the components to create in it; `newRepo`: it was created empty now.
+ */
+export function briefLines(m, id, { fresh = [], newRepo = false } = {}) {
+  const p = m.departments.flatMap((o) => o.projects).find((x) => x.id === id);
+  const lines = [];
+  if (newRepo) lines.push(`🆕 ${t('exec.newRepo')}`);
+  const comps = (p?.components || []).filter((c) => c.impacted && !fresh.some((f) => f.name === c.name));
+  if (comps.length) lines.push(`🧩 ${t('exec.components', { list: comps.map((c) => `${c.name}${c.path ? ` (${c.path})` : ''}`).join(', ') })}`);
+  for (const f of fresh) lines.push(`🆕 ${t('exec.newComponent', { name: f.name, path: f.path ? ` (${f.path})` : '' })}`);
+  // what it must create first, then what it touches
+  const creates = [], touches = [];
+  for (const r of (m.resources || []).filter((x) => x.impacted && !x.techOnly)) {
+    const link = r.projects.find((x) => x.id === id);
+    if (r.projects.length && !link) continue;
+    if (r.state === 'planned' && link?.how === 'owns') creates.push(`🆕 ${t('exec.createResource', { what: resourceLabel(r) })}`);
+    else if (r.kind === 'repo') touches.push(`🔗 ${t('exec.externalRepo', { name: r.name, where: r.location || '?' })}`);
+    else touches.push(`🗄 ${t('exec.touchesResource', { what: resourceLabel(r), how: t(`infra.how.${link?.how || 'uses'}`) })}`);
+  }
+  lines.push(...creates, ...touches);
+  if (p?.how) lines.push(`🧠 ${t('exec.analysis', { how: p.how })}`);
+  return lines;
 }
 
 /** The impact in words (for the MCP and the terminal). */
@@ -233,10 +354,14 @@ export function impactText(m) {
     for (const p of o.projects.filter((x) => x.impacted)) {
       const comps = p.components.filter((c) => c.impacted).map((c) => `${c.name}${c.path ? ` (${c.path})` : ''}`);
       out.push(`  📁 ${p.name} — ${t(`impact.why.${p.why}`, { via: p.via || '' })}${comps.length ? `: ${comps.join(', ')}` : ''}`);
+      if (p.how) out.push(`     🧠 ${p.how}`);
     }
   }
+  const named = (m.resources || []).filter((r) => r.impacted);
+  if (named.length) out.push(...named.map((r) => `${resourceLabel(r)}${r.projects?.length ? ` ← ${r.projects.map((x) => x.name).join(', ')}` : ''}${r.state === 'planned' ? ` · ${t('infra.planned')}` : ''}`));
   for (const s of (m.systems || []).filter((x) => x.impacted)) out.push(`🧩 ${s.name}: ${s.parts.map((p) => `${p.name}${p.impacted === 'touched' ? ' ✱' : p.impacted === 'uses' ? ' ↺' : ''}`).join(' · ')}`);
   if (!out.length) out.push(t('impact.none'));
+  if (m.insight?.summary) out.unshift(`🧠 ${m.insight.summary}${m.insight.model ? ` (${m.insight.model})` : ''}`, '');
   if (m.unknown.length) out.push('', t('impact.unknownHead'), ...m.unknown.map((u) => `  ? ${u.question}`));
   return out.join('\n');
 }

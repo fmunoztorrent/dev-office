@@ -18,17 +18,29 @@
 // (what they left with the MCP tool `handoff`, or the end of their output) and may read their folders.
 // If one of them fails or is cancelled, the parts that use it do not go. A brief to a system is a
 // directive to its artifacts (`systems`).
+//
+// The infrastructure counts too (server/resources.js): the queues, topics, databases, third-party APIs
+// and schedulers it names reach the projects that use them, and what is not on the map is asked (does
+// it exist, where? must it be created, by whom?). A component that is a repository of its own is
+// registered (a folder) or noted (a URL); a new repository is created empty and registered. With a
+// model chosen (server/intelligence.js), `think` adds its analysis: how each repo is touched, and what
+// the words missed; the latest analysis of each order is kept a while, for when it goes.
 
 import { EventEmitter } from 'node:events';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { clip } from './roles.js';
 import { t as tr } from '../public/i18n.js';
 import { MAIN_OFFICE } from './store.js';
-import { companyMap, mapImpact, impactText } from './components.js';
-import { insideDir } from './paths.js';
+import { companyMap, mapImpact, impactText, mergeInsight, briefLines } from './components.js';
+import { knownResources } from './resources.js';
+import { insideDir, realDir } from './paths.js';
 
 const TEXT_MAX = 4000;
 const PARTS_MAX = 20;
 const KEEP = 30;
+const INSIGHT_MS = 30 * 60_000;
 const ENDED = new Set(['done', 'failed', 'cancelled']);
 
 /** How a directive goes, from how its parts go. */
@@ -48,8 +60,10 @@ export class DirectiveDesk extends EventEmitter {
    * @param archive   the archive (server/archive.js): the minutes of each directive that ends
    * @param company   the offices: their names
    */
-  constructor({ store, registry, hub, pipelines, archive, company }) {
+  constructor({ store, registry, hub, pipelines, archive, company, intel = null }) {
     super();
+    this.intel = intel;
+    this.insights = new Map(); // the order's text → { insight, model, at }: the model's latest analysis
     this.store = store;
     this.registry = registry;
     this.hub = hub;
@@ -96,48 +110,184 @@ export class DirectiveDesk extends EventEmitter {
   /** The company's map, with each department's name as the game says it. */
   #map() { return companyMap(this.store, { name: (o) => this.company?.info?.(o.id)?.name || o.name || o.id }); }
 
+  /** The impact of a text on the map (with the model's latest analysis of it, if there is one). */
+  #impact(text, targets) {
+    const company = this.#map();
+    const declared = this.store.listResources?.() || [];
+    const map = mapImpact(company, text, { targets, resources: declared });
+    const seen = this.insights.get(text);
+    if (seen && Date.now() - seen.at < INSIGHT_MS) mergeInsight(map, seen.insight, { known: knownResources({ declared, projects: company.flatMap((o) => o.projects) }), model: seen.model });
+    return { map, company, declared };
+  }
+
   /**
-   * The impact of an order before it goes: { ok, map: { departments, unknown, targets, matched }, text }.
-   * { text, offices?, targets? }: the departments and projects chosen by hand count too.
+   * The impact of an order before it goes: { ok, map: { departments, systems, resources, unknown, targets, matched, insight? }, text }.
+   * { text, offices?, targets?, systems? }: the departments, projects and systems chosen by hand count too.
    */
   plan({ text, offices, targets, systems } = {}) {
     text = String(text ?? '').trim();
     if (!text) return { ok: false, error: tr('err.taskEmpty') };
     const pick = this.#targets({ offices, targets, systems });
     if (pick.error) return { ok: false, error: pick.error };
-    const map = mapImpact(this.#map(), text, { targets: pick.agents.map((a) => a.id) });
+    const { map } = this.#impact(text, pick.agents.map((a) => a.id));
     return { ok: true, map, text: impactText(map) };
   }
 
   /**
-   * Your answers about what the order names that is not on the map: [{ key | phrase, action, project?, path?, department? }]
+   * The impact with the model's judgment (⚙ › General › 🧠): the plan, then what the model says on top.
+   * Returns the plan plus { insight: { ok, model, ms, error? } } (without a model: { ok: false, error: 'off' }).
+   */
+  async think(args = {}) {
+    const text = String(args.text ?? '').trim();
+    const first = this.plan({ ...args, text });
+    if (!first.ok || !this.intel?.enabled) return { ...first, insight: { ok: false, error: 'off' } };
+    // the words' map, without an earlier analysis: the model starts from what the order says
+    this.insights.delete(text);
+    const pick = this.#targets(args);
+    const { map, company, declared } = this.#impact(text, pick.agents.map((a) => a.id));
+    const known = knownResources({ declared, projects: company.flatMap((o) => o.projects) });
+    const out = await this.intel.analyzeImpact({ order: text, company, known, first: map });
+    if (!out.ok) return { ...first, insight: { ok: false, model: out.model, ms: out.ms, error: out.error } };
+    this.insights.set(text, { insight: out.insight, model: out.model, at: Date.now() });
+    while (this.insights.size > 20) this.insights.delete(this.insights.keys().next().value);
+    const again = this.plan({ ...args, text });
+    return { ...again, insight: { ok: true, model: out.model, ms: out.ms } };
+  }
+
+  /**
+   * Your answers for a single brief (the brief dialog's 🗺): they go on the map as for a directive, and
+   * it returns the lines its brief carries: { ok, lines, created, registered, others: [names it also touches] }.
+   * `target`: the agent the brief goes to (a system's id: `system:<id>`).
+   */
+  answer({ text, targets, systems, answers = [], target } = {}) {
+    text = String(text ?? '').trim();
+    if (!text) return { ok: false, error: tr('err.taskEmpty') };
+    const first = this.plan({ text, targets, systems });
+    if (!first.ok) return first;
+    const answered = this.#answer(first.map.unknown, answers || []);
+    if (answered.error) return { ok: false, error: answered.error };
+    const chosen = this.#targets({ targets, systems }).agents.map((a) => a.id);
+    const { map } = this.#impact(text, [...new Set([...chosen, ...answered.targets])]);
+    const id = String(target || '');
+    const lines = briefLines(map, id.startsWith('system:') ? null : id, { fresh: answered.fresh.get(id) || [], newRepo: answered.newRepos.has(id) });
+    const names = new Map(map.departments.flatMap((o) => o.projects).map((p) => [p.id, p.name]));
+    return { ok: true, lines, created: answered.created, registered: answered.registered, others: map.targets.filter((x) => x !== id && !chosen.includes(x)).map((x) => names.get(x) || x) };
+  }
+
+  /**
+   * Your answers about what the order names that is not on the map: [{ key | phrase, action, … }].
+   * A component (kind 'component'):
    *   exists      it is in that project (and folder): it is mapped as a component of it
    *   create      it is new: it is mapped in that project, and its part says to create it
+   *   repo        it is a repository of its own, at `where`: a folder is registered as a project (with
+   *               `harness`, in `office`); a URL is noted as a repository the office does not have
+   *   newRepo     it is a new repository: the folder `where` is created empty and registered
+   *   resource    it is infrastructure after all (`kind`: a service, an API…): as `exists` below
    *   department  it is a new department: it is created (its projects come later)
    *   ignore      it is not a part of the system
-   * Returns { fresh: Map(project id → [names to create]), created: [offices], targets: [ids], error? }.
+   * Infrastructure (a queue, a topic, a database…):
+   *   exists      it is on the map now: where it lives (`where`), and which project uses it and how (`project`, `how`)
+   *   create      it must be created, by that project (`project`): planned, and its part says to create it
+   *   ignore
+   * Returns { fresh: Map(project id → [{ name, path }]), created: [offices], registered: [agents],
+   * newRepos: Set(ids), targets: [ids], error? }.
    */
   #answer(unknown, answers) {
-    const fresh = new Map(), created = [], targets = [];
-    const agents = this.store.listAgents();
+    const fresh = new Map(), created = [], registered = [], newRepos = new Set(), targets = [];
+    let agents = this.store.listAgents();
+    const projectOf = (ref) => agents.find((x) => x.id === ref || x.path === ref);
+    const harnessOf = (a) => a.harness || Object.entries(agents.reduce((n, x) => ({ ...n, [x.harness]: (n[x.harness] || 0) + 1 }), {})).sort((x, y) => y[1] - x[1])[0]?.[0] || 'claude-code';
+    const home = (p) => String(p || '').trim().replace(/^~(?=$|\/)/, os.homedir());
+    const register = (dir, a, u) => {
+      const real = realDir(dir);
+      const had = agents.find((x) => realDir(x.path) === real);
+      if (had) return { agent: had };
+      const out = this.store.createAgent({ path: dir, harness: harnessOf(a), office: a.office || MAIN_OFFICE, name: String(a.component || u.name).trim().slice(0, 40) });
+      if (!out.ok) return { error: out.error };
+      agents = this.store.listAgents();
+      registered.push(out.agent);
+      return { agent: out.agent };
+    };
+    const answerOf = (u) => answers.find((x) => x && (x.key === u.key || x.phrase === u.phrase || x.name === u.phrase || x.name === u.name));
+    // every answer is checked before any is applied: a wrong one leaves nothing half done (no folder, no project)
     for (const u of unknown) {
-      const a = answers.find((x) => x && (x.key === u.key || x.phrase === u.phrase || x.name === u.phrase || x.name === u.name));
-      if (!a) continue;
-      if (a.action === 'exists' || a.action === 'create') {
-        const p = agents.find((x) => x.id === a.project || x.path === a.project);
+      const a = answerOf(u);
+      if (!a || a.action === 'ignore') continue;
+      const infra = u.kind && u.kind !== 'component';
+      const p = a.project ? projectOf(a.project) : null;
+      if (infra || a.action === 'resource') {
+        if (!['exists', 'create', 'resource'].includes(a.action)) return { error: tr('impact.badAnswer', { what: u.phrase }) };
+        if (a.project && !p) return { error: tr('err.unknownProject', { project: a.project }) };
+        if (a.action === 'create' && !p) return { error: tr('impact.whoCreates', { what: u.phrase }) };
+      } else if (a.action === 'exists' || a.action === 'create') {
+        if (!p) return { error: tr('err.unknownProject', { project: a.project || '?' }) };
+      } else if (a.action === 'repo') {
+        const where = String(a.where || a.path || '').trim();
+        if (!where) return { error: tr('impact.needWhere', { what: u.phrase }) };
+        if (/^[~/]/.test(where) && !fs.statSync(home(where), { throwIfNoEntry: false })?.isDirectory()) return { error: tr('impact.noFolder', { path: where }) };
+      } else if (a.action === 'newRepo') {
+        const dir = home(a.where || a.path);
+        if (!dir || !path.isAbsolute(dir)) return { error: tr('err.pathRelative', { path: a.where || a.path || '' }) };
+        const st = fs.statSync(dir, { throwIfNoEntry: false });
+        if (st && (!st.isDirectory() || fs.readdirSync(dir).length)) return { error: tr('impact.repoExists', { path: a.where || a.path }) };
+        if (!fs.statSync(path.dirname(dir), { throwIfNoEntry: false })?.isDirectory()) return { error: tr('impact.noFolder', { path: path.dirname(dir) }) };
+      } else if (a.action !== 'department') return { error: tr('impact.badAnswer', { what: u.phrase }) };
+    }
+    for (const u of unknown) {
+      const a = answerOf(u);
+      if (!a || a.action === 'ignore') continue;
+      const infra = u.kind && u.kind !== 'component';
+      if (infra || a.action === 'resource') {
+        if (!['exists', 'create', 'resource'].includes(a.action)) return { error: tr('impact.badAnswer', { what: u.phrase }) };
+        const p = a.project ? projectOf(a.project) : null;
+        if (a.project && !p) return { error: tr('err.unknownProject', { project: a.project }) };
+        if (a.action === 'create' && !p) return { error: tr('impact.whoCreates', { what: u.phrase }) };
+        const out = this.store.saveResource({
+          kind: infra ? u.kind : a.kind || 'service', name: String(a.resource || u.name).trim(), tech: a.tech ?? u.tech ?? undefined, location: a.where ?? a.location ?? undefined,
+          state: a.action === 'create' ? 'planned' : 'exists', ...(p ? { addLinks: [{ project: p.path, how: a.action === 'create' ? 'owns' : a.how || 'uses' }] } : {}),
+        });
+        if (!out.ok) return { error: out.error };
+        if (p) targets.push(p.id);
+      } else if (a.action === 'exists' || a.action === 'create') {
+        const p = projectOf(a.project);
         if (!p) return { error: tr('err.unknownProject', { project: a.project || '?' }) };
         const name = String(a.component || u.name).trim();
         const out = this.store.addComponent({ project: p.path, name, path: a.path || '', description: a.action === 'create' ? tr('impact.newDesc') : '' });
         if (!out.ok) return { error: out.error };
         targets.push(p.id);
         if (a.action === 'create') fresh.set(p.id, [...(fresh.get(p.id) || []), { name, path: out.component.path }]);
+      } else if (a.action === 'repo') {
+        const where = String(a.where || a.path || '').trim();
+        if (!where) return { error: tr('impact.needWhere', { what: u.phrase }) };
+        if (!/^[~/]/.test(where)) {
+          // a URL (or owner/name): a repository the office does not have, noted on the map
+          const out = this.store.saveResource({ kind: 'repo', name: String(a.component || u.name).trim(), location: where });
+          if (!out.ok) return { error: out.error };
+          continue;
+        }
+        const dir = home(where);
+        if (!fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory()) return { error: tr('impact.noFolder', { path: where }) };
+        const out = register(dir, a, u);
+        if (out.error) return { error: out.error };
+        targets.push(out.agent.id);
+      } else if (a.action === 'newRepo') {
+        const dir = home(a.where || a.path);
+        if (!dir || !path.isAbsolute(dir)) return { error: tr('err.pathRelative', { path: a.where || a.path || '' }) };
+        const st = fs.statSync(dir, { throwIfNoEntry: false });
+        if (st && (!st.isDirectory() || fs.readdirSync(dir).length)) return { error: tr('impact.repoExists', { path: a.where || a.path }) };
+        if (!fs.statSync(path.dirname(dir), { throwIfNoEntry: false })?.isDirectory()) return { error: tr('impact.noFolder', { path: path.dirname(dir) }) };
+        try { fs.mkdirSync(dir, { recursive: false }); } catch (err) { if (err.code !== 'EEXIST') return { error: err.message }; }
+        const out = register(dir, a, u);
+        if (out.error) return { error: out.error };
+        newRepos.add(out.agent.id);
+        targets.push(out.agent.id);
       } else if (a.action === 'department') {
         const out = this.store.createOffice({ name: String(a.department || u.name).trim() });
         if (!out.ok) return { error: out.error };
         created.push(out.office);
-      } else if (a.action !== 'ignore') return { error: tr('impact.badAnswer', { what: u.phrase }) };
+      } else return { error: tr('impact.badAnswer', { what: u.phrase }) };
     }
-    return { fresh, created, targets };
+    return { fresh, created, registered, newRepos, targets };
   }
 
   /**
@@ -159,13 +309,14 @@ export class DirectiveDesk extends EventEmitter {
     if (answered.error) return { ok: false, error: answered.error };
     // the map again: what was answered is on it now
     const chosen = this.#targets({ offices, targets, systems }).agents.map((a) => a.id);
-    const map = mapImpact(this.#map(), text, { targets: [...new Set([...chosen, ...answered.targets])] });
+    const { map } = this.#impact(text, [...new Set([...chosen, ...answered.targets])]);
     const agents = this.store.listAgents();
     const going = exact ? new Set([...chosen, ...answered.targets]) : new Set(map.targets);
     const pick = { agents: agents.filter((a) => going.has(a.id)) };
     if (!pick.agents.length) return { ok: false, error: answered.created.length ? tr('impact.deptEmpty', { names: answered.created.map((o) => o.name).join(', ') }) : tr('err.pickProjects'), created: answered.created };
     if (pick.agents.length > PARTS_MAX) return { ok: false, error: tr('err.tooManyProjects', { n: PARTS_MAX }) };
     const touches = (id) => map.departments.flatMap((o) => o.projects).find((p) => p.id === id)?.components.filter((c) => c.impacted) || [];
+    const named = (id) => (map.resources || []).filter((r) => r.impacted && !r.techOnly && (!r.projects.length || r.projects.some((x) => x.id === id))).map((r) => r.name);
 
     const d = {
       id: `d${Date.now().toString(36)}${++this.seq}`, title: clip(title || text.split('\n')[0], 120), text, status: 'running',
@@ -178,19 +329,17 @@ export class DirectiveDesk extends EventEmitter {
     try {
       for (const a of pick.agents) {
         const others = names.filter((n) => n !== a.name);
-        // the components of this project it touches, and the new ones to create in it
+        // the components of this project it touches, the new ones to create in it, the infrastructure
+        // it touches or creates, and the model's analysis of it
         const fresh = answered.fresh.get(a.id) || [];
         const comps = touches(a.id).filter((c) => !fresh.some((f) => f.name === c.name));
-        const lines = [
-          comps.length ? `🧩 ${tr('exec.components', { list: comps.map((c) => `${c.name}${c.path ? ` (${c.path})` : ''}`).join(', ') })}` : '',
-          ...fresh.map((f) => `🆕 ${tr('exec.newComponent', { name: f.name, path: f.path ? ` (${f.path})` : '' })}`),
-        ].filter(Boolean);
+        const lines = briefLines(map, a.id, { fresh, newRepo: answered.newRepos.has(a.id) });
         const needs = [...(after.get(a.id) || [])];
         const users = pick.agents.filter((x) => after.get(x.id)?.has(a.id)).map((x) => x.name);
         if (users.length) lines.push(`🤝 ${tr('exec.leaveHandoff', { list: users.join(', ') })}`);
         const part = {
           target: a.id, name: a.name, harness: a.harness, office: a.office || MAIN_OFFICE, kind: null, ref: null, status: 'running', detail: '',
-          components: comps.map((c) => c.name), fresh: fresh.map((f) => f.name), after: needs, handoff: '', output: '',
+          components: comps.map((c) => c.name), fresh: fresh.map((f) => f.name), resources: named(a.id), after: needs, handoff: '', output: '',
           brief: tr('exec.brief', { title: d.title, others: others.length ? others.join(', ') : '—' }) + (lines.length ? `\n${lines.join('\n')}` : '') + `\n\n${text}`,
         };
         d.parts.push(part);
@@ -210,7 +359,7 @@ export class DirectiveDesk extends EventEmitter {
     this.emit('created', this.#public(d));
     if (d.status !== 'running') this.#ended(d);
     this.#changed();
-    return { ok: true, directive: this.#public(d), created: answered.created };
+    return { ok: true, directive: this.#public(d), created: answered.created, registered: answered.registered };
   }
 
   #sending = false;
@@ -383,7 +532,7 @@ export class DirectiveDesk extends EventEmitter {
     const done = d.parts.filter((p) => p.status === 'done').length;
     return {
       id: d.id, title: d.title, text: d.text, status: d.status, source: d.source, createdAt: d.createdAt, updatedAt: d.updatedAt, done, total: d.parts.length,
-      parts: d.parts.map(({ target, name, harness, office, kind, ref, status, detail, components = [], fresh = [], after = [], handoff = '' }) => ({ target, name, harness, office, kind, ref, status, detail, components, fresh, after: after.map((id) => d.parts.find((p) => p.target === id)?.name || id), handoff: !!handoff })),
+      parts: d.parts.map(({ target, name, harness, office, kind, ref, status, detail, components = [], fresh = [], resources = [], after = [], handoff = '' }) => ({ target, name, harness, office, kind, ref, status, detail, components, fresh, resources, after: after.map((id) => d.parts.find((p) => p.target === id)?.name || id), handoff: !!handoff })),
     };
   }
 }

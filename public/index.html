@@ -207,8 +207,10 @@
             <button type="button" class="btn ghost" id="dv-dept-add" data-i18n="exec.ui.deptAdd">＋ New department</button>
           </div>
         </div>
-        <!-- the impact map (🗺): what the order touches, and what it names that is not on the map -->
+        <!-- the impact map (🗺): what the order touches (a tree of the repos, ⤢ the whole graph), and what it
+             needs that is not on the map (impact-ui.js) -->
         <p id="dv-map" class="dv-map" hidden></p>
+        <div id="dv-impact" class="imp" hidden></div>
         <div id="dv-ask" class="dv-ask"></div>
         <p id="dv-msg" class="b-problem" role="status" aria-live="polite"></p>
         <span class="fl-label" data-i18n="exec.ui.recent">The latest</span>
@@ -223,6 +225,25 @@
         <button type="submit" class="btn" id="dv-go" data-i18n="exec.ui.mapBtn">🗺 See the impact</button>
       </footer>
     </form>
+  </dialog>
+
+  <!-- The impact of an order in detail: every repo, component and piece of infrastructure it touches or
+       depends on, as a graph (impact-ui.js). It opens over the directives or the brief dialog. -->
+  <dialog id="impact-graph" class="brief impact-dlg" aria-labelledby="ig-title">
+    <div class="ig-card">
+      <header class="brief-head">
+        <span class="pin" aria-hidden="true"></span>
+        <h2 id="ig-title" data-i18n="impact.ui.graphTitle">🗺 The impact in detail</h2>
+        <button type="button" class="fl-mini" id="ig-out" data-i18n-aria="impact.ui.zoomOut">−</button>
+        <button type="button" class="fl-mini" id="ig-fit" data-i18n="impact.ui.fit">Fit</button>
+        <button type="button" class="fl-mini" id="ig-in" data-i18n-aria="impact.ui.zoomIn">＋</button>
+        <button type="button" class="brief-x" id="ig-close" data-i18n-aria="settings.close">✕</button>
+      </header>
+      <p id="ig-summary" class="ig-summary"></p>
+      <div id="ig-legend" class="ig-legend"></div>
+      <div class="imp-g-scroll"></div>
+      <footer class="brief-foot"><span id="ig-count" class="muted"></span></footer>
+    </div>
   </dialog>
 
   <!-- A project's loops: steps with success criteria, worked through on their own (loops-ui.js). -->
@@ -380,10 +401,15 @@
         <p id="b-profile-note" class="b-desc"></p>
         <label class="note"><span data-i18n="brief.prompt">Prompt</span><textarea id="b-text" rows="3" maxlength="4000" data-i18n-ph="brief.placeholder"></textarea></label>
         <div id="b-stages" class="b-stages"></div>
+        <!-- 🗺 its impact: the repos it touches, and what it needs that is not on the map (impact-ui.js) -->
+        <div id="b-impact" class="imp" hidden></div>
+        <p id="b-impact-note" class="b-desc" hidden></p>
+        <div id="b-ask" class="dv-ask"></div>
         <p id="b-problem" class="b-problem" role="status"></p>
       </div>
       <footer class="brief-foot">
         <span class="muted" data-i18n="brief.send">⌘↵ to send</span>
+        <button type="button" class="btn ghost" id="brief-impact" data-i18n="impact.ui.briefBtn">🗺 Impact</button>
         <button type="button" class="btn ghost" id="brief-cancel" data-i18n="brief.cancelBtn">Cancel</button>
         <button type="submit" class="btn" id="brief-go" data-i18n="brief.go">▶ Get to work!</button>
       </footer>

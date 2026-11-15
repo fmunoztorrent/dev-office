@@ -512,17 +512,19 @@ export function agentCommand(harness, inv, { bin, args } = {}) {
  *   pi       -p --fork <session> --no-session --tools read,grep,find,ls …
  *   codex    exec --sandbox read-only --skip-git-repo-check …   (no fork: the context goes in the text)
  */
-export function askCommand(harness, { question, session, bin } = {}) {
+export function askCommand(harness, { question, session, bin, model } = {}) {
   const h = harnessId(harness);
   if (!h) return { error: `no sé preguntarle a "${harness}"`, code: 'unknown', bin: harness };
   const exe = which(expandHome(bin || (h === 'claude-code' ? process.env.DEV_TEAM_OFFICE_CLAUDE_BIN : '') || HARNESSES[h].bin));
   if (!exe) return { error: `no encuentro "${bin || HARNESSES[h].bin}" en el PATH`, code: 'missing', bin: bin || HARNESSES[h].bin };
   const q = String(question || '');
   const sid = session && /^[\w.:-]{4,200}$/.test(String(session)) ? String(session) : null;
-  if (h === 'claude-code') return { exe, forked: !!sid, argv: ['-p', q, ...(sid ? ['--resume', sid, '--fork-session'] : []), '--no-session-persistence', '--permission-mode', 'plan'] };
-  if (h === 'opencode') return { exe, forked: !!sid, argv: ['run', ...(sid ? ['--session', sid, '--fork'] : []), '--agent', 'plan', q] };
-  if (h === 'pi') return { exe, forked: !!sid, argv: ['-p', ...(sid ? ['--fork', sid] : []), '--no-session', '--tools', 'read,grep,find,ls', q] };
-  return { exe, forked: false, argv: ['exec', '--sandbox', 'read-only', '--skip-git-repo-check', q] };
+  // another model than the agent's own, if asked (a name its CLI understands)
+  const m = model && /^[\w.:/@-]{1,120}$/.test(String(model)) ? String(model) : null;
+  if (h === 'claude-code') return { exe, forked: !!sid, argv: ['-p', q, ...(sid ? ['--resume', sid, '--fork-session'] : []), '--no-session-persistence', '--permission-mode', 'plan', ...(m ? ['--model', m] : [])] };
+  if (h === 'opencode') return { exe, forked: !!sid, argv: ['run', ...(sid ? ['--session', sid, '--fork'] : []), '--agent', 'plan', ...(m ? ['--model', m] : []), q] };
+  if (h === 'pi') return { exe, forked: !!sid, argv: ['-p', ...(sid ? ['--fork', sid] : []), '--no-session', '--tools', 'read,grep,find,ls', ...(m ? ['--model', m] : []), q] };
+  return { exe, forked: false, argv: ['exec', '--sandbox', 'read-only', '--skip-git-repo-check', ...(m ? ['-m', m] : []), q] };
 }
 
 // ------------------------------------------------------------------ running inside the session

@@ -34,6 +34,8 @@ import { Archive } from './archive.js';
 import { DirectiveDesk } from './directives.js';
 import { LoopDesk } from './loops.js';
 import { expertOfTool, knownSkills } from './experts.js';
+import { Intelligence } from './intelligence.js';
+import { knownResources, RESOURCE_KINDS } from './resources.js';
 import { openStore, dbFile, MAIN_OFFICE } from './store.js';
 import { Weather, findPlaces } from './weather.js';
 import { Herdr, paneRole, quote } from './herdr.js';
@@ -49,7 +51,7 @@ import { zoneInfo, systemZone } from '../public/clock.js';
 import { insideDir as inside, insideDir } from './paths.js';
 import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.21.0';
+export const VERSION = '0.22.0';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
 const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
@@ -85,7 +87,7 @@ class HttpError extends Error {
  *                 says it, so `update` knows whether it can bring the office back by itself
  * @returns {Promise<{company, office, url, socket, command, handleMessage, close, …}>}
  */
-export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {}, clarify: clarifyOpt = {}, rag: ragOpt = {}, standup: standupOpt = {}, mine: mineOpt = {}, loops: loopsOpt = {}, mode = 'terminal', outdatedAfter = 3000 } = {}) {
+export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {}, clarify: clarifyOpt = {}, rag: ragOpt = {}, standup: standupOpt = {}, mine: mineOpt = {}, loops: loopsOpt = {}, intelligence: intelOpt = {}, mode = 'terminal', outdatedAfter = 3000 } = {}) {
   const ownStore = !db || typeof db === 'string';
   const store = ownStore ? openStore(db || dbFile()) : db; // oficinas, agentes, ajustes e historial
   setLanguage(store.getPrefs().lang);
@@ -166,7 +168,9 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   const expertsNow = () => { if (Date.now() - expertsSeen.at > 3000) { try { expertsSeen = { at: Date.now(), list: store.listExperts() }; } catch { /* closing */ } } return expertsSeen.list; };
   company.expertFor = (tool, input) => expertOfTool(expertsNow(), tool, input);
   const expertsChanged = () => { expertsSeen = { at: 0, list: [] }; bus.emit('experts'); };
-  const directives = new DirectiveDesk({ store, registry, hub, pipelines, archive, company });
+  // the model the office leans on for judgment (⚙ › General › 🧠): the impact of an order (server/intelligence.js)
+  const intel = new Intelligence({ getPrefs: () => store.getPrefs(), ...intelOpt });
+  const directives = new DirectiveDesk({ store, registry, hub, pipelines, archive, company, intel });
   // the projects' loops: steps with success criteria, worked through on their own (server/loops.js)
   const { autostart: loopsStart = true, ...loopsRest } = loopsOpt;
   const loops = new LoopDesk({ store, registry, hub, pipelines, company, archive, ...loopsRest });
@@ -875,7 +879,32 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       // The executive floor: directives (one order for several offices or projects) and how each office is doing
       if (req.method === 'GET' && p === '/v1/directives') return json(res, 200, { ok: true, directives: directives.list(Number(q('limit')) || 12), overview: overview() });
       // The company's map: departments → projects → components (detected from each folder, and the declared ones)
-      if (req.method === 'GET' && p === '/v1/map') return json(res, 200, { ok: true, departments: companyMap(store, { name: (o) => officeName(o.id) }) });
+      if (req.method === 'GET' && p === '/v1/map') {
+        const departments = companyMap(store, { name: (o) => officeName(o.id) });
+        return json(res, 200, { ok: true, departments, resources: knownResources({ declared: store.listResources(), projects: departments.flatMap((o) => o.projects) }) });
+      }
+      // The infrastructure on the map: queues, topics, databases, third-party APIs, schedulers… (server/resources.js)
+      if (req.method === 'GET' && p === '/v1/resources') return json(res, 200, { ok: true, resources: store.listResources(), kinds: RESOURCE_KINDS });
+      if ((req.method === 'POST' && p === '/v1/resources') || (req.method === 'PUT' && (m = p.match(/^\/v1\/resources\/([^/]+)$/)))) {
+        const b = await body(req);
+        // a link's project may be a registered project's id (its folder) or a folder
+        const agents = store.listAgents();
+        const folder = (ref) => agents.find((a) => a.id === ref)?.path || ref;
+        const links = (list) => (Array.isArray(list) ? list.map((l) => ({ ...l, project: folder(l?.project) })) : undefined);
+        const out = store.saveResource({ ...b, ...(m ? { id: decodeURIComponent(m[1]) } : {}), links: links(b.links), addLinks: links(b.addLinks) });
+        return json(res, out.ok ? (out.created ? 201 : 200) : out.status || 400, out);
+      }
+      if (req.method === 'DELETE' && (m = p.match(/^\/v1\/resources\/([^/]+)$/))) {
+        const out = store.deleteResource(decodeURIComponent(m[1]));
+        return json(res, out.ok ? 200 : out.status || 400, out);
+      }
+      // The model the office leans on (⚙ › General › 🧠): how it is set, and a small question to try it
+      if (req.method === 'GET' && p === '/v1/intelligence') return json(res, 200, { ok: true, enabled: intel.enabled, model: intel.label, config: intel.config, problem: intel.problem() });
+      if (req.method === 'POST' && p === '/v1/intelligence/test') {
+        if (!intel.enabled) return json(res, 400, { ok: false, error: t('intel.off') });
+        const out = await intel.test();
+        return json(res, out.ok ? 200 : 502, out);
+      }
       if (req.method === 'POST' && p === '/v1/components') {
         const b = await body(req);
         const a = store.listAgents().find((x) => x.id === b.project || x.path === b.project);
@@ -974,16 +1003,27 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         return json(res, out.ok ? 200 : out.status || 400, out);
       }
       // the impact before it goes: the departments, projects and components it touches, and what is not on the map
+      // (with `think`, the model chosen in ⚙ › General › 🧠 adds its analysis: it takes a while)
       if (req.method === 'POST' && p === '/v1/directives/plan') {
         const b = await body(req);
-        const out = directives.plan({ text: b.text, offices: b.offices, targets: b.targets ?? b.projects, systems: b.systems });
-        if (out.ok) floor('exec', 'impact', { text: clip(b.text, 80), total: out.map.targets.length, unknown: out.map.unknown.length });
+        const args = { text: b.text, offices: b.offices, targets: b.targets ?? b.projects, systems: b.systems };
+        const out = b.think ? await directives.think(args) : directives.plan(args);
+        if (out.ok) floor('exec', b.think ? 'think' : 'impact', { text: clip(b.text, 80), total: out.map.targets.length, unknown: out.map.unknown.length, ok: out.insight?.ok });
+        return json(res, out.ok ? 200 : 400, out);
+      }
+      // your answers for a single brief (the brief dialog's 🗺): on the map, and the lines its brief carries
+      if (req.method === 'POST' && p === '/v1/impact/answers') {
+        const b = await body(req);
+        const out = directives.answer({ text: b.text, targets: b.targets, systems: b.systems, answers: b.answers, target: b.target });
+        if (out.created?.length) officesChanged();
+        if (out.registered?.length) { registry.changed(); bus.emit('offices', company.list()); }
         return json(res, out.ok ? 200 : 400, out);
       }
       if (req.method === 'POST' && p === '/v1/directives') {
         const b = await body(req);
         const out = directives.create({ text: b.text, title: b.title, offices: b.offices, targets: b.targets ?? b.projects, systems: b.systems, answers: b.answers, ask: b.ask !== false, exact: !!b.exact, from: b.from });
         if (out.created?.length) { officesChanged(); for (const o of out.created) floor('exec', 'department', { text: o.name }); }
+        if (out.registered?.length) { registry.changed(); bus.emit('offices', company.list()); }
         return json(res, out.ok ? 201 : out.needsAnswers ? 409 : 400, out);
       }
       if ((m = p.match(/^\/v1\/directives\/([^/]+)(\/cancel)?$/))) {

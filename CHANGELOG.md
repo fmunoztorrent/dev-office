@@ -4,6 +4,16 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-11-15
+
+### Added
+
+- **The impact of an order, drawn.** When an order (a directive, or a single brief with the new **🗺 Impact** button) is sized, a **tree of the repos it touches** appears: a box per repo under its department, and what is not on the map apart. **Hovering a box** (or focusing it with the keyboard) shows a bubble with how it is touched: why it is in, how (the model's words), its impact level, the components it touches, the infrastructure it uses and how, its stack, its system and its folder. **⤢ See the detail** opens **the graph** of every impact and dependency: the order, the repos and the ones they use or that use them (web → bff → core), their components, the infrastructure and what is still unknown, in layers, with what each node reaches lit on hover and zoom.
+- **Infrastructure on the map:** queues, topics, databases, caches, buckets, other teams' services, third-party APIs, schedulers and repositories the office does not have (⚙ › Departments › 🗄 Infrastructure, `GET|POST /v1/resources`, `PUT|DELETE /v1/resources/<id>`, MCP `declare_resource`). What each repo uses is detected from its folder (its dependencies in `package.json`, `requirements.txt`, `pyproject.toml` or `go.mod`, its docker-compose images, and what its Terraform declares by name). An order that names a queue, a topic, a table, a bucket, a cron or a vendor's API reaches the projects that use it. It travels in your settings file.
+- **What is not on the map is asked, with better answers.** A component: it exists in a project, it is **a repository of its own** (a folder, registered as a project; or a URL, noted), it is **a new repository** (the folder is created empty and registered, and its brief says to set it up), it must be created in a project, it is infrastructure, or a new department. **Infrastructure:** does it exist, and where (and who uses it, how)? Or must it be created, and by whom (planned; that project's brief says to create it)? Every answer is checked before any is applied.
+- **🧠 Intelligence: a model you choose for judgment** (⚙ › General): none (only the order's words), **one of your agents** (Claude Code, Codex, OpenCode or Pi: its CLI read-only, with its own login and, if you want, another of its models), **the Claude API**, **an OpenAI-compatible API** or **Ollama**. After the map by words comes its analysis: how each repo is touched, the repos and infrastructure the words missed, and its own questions. Keys go in environment variables, never in the database; 🧪 tries the setting. `GET /v1/intelligence`, `POST /v1/intelligence/test`, `think` in `POST /v1/directives/plan` and in MCP `map_impact`.
+- **Each brief carries its part of the impact:** what it must create (🆕), the infrastructure it touches and how (🗄), the repositories the office does not have (🔗) and the model's analysis (🧠), on top of the components it touches. `POST /v1/impact/answers` does it for a single brief.
+
 ## [0.21.0] - 2026-11-15
 
 ### Added
@@ -322,7 +332,8 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.18.1...v0.19.0
