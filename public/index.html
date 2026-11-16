@@ -111,6 +111,16 @@
           <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><path d="M1 5h2v-2h10v2h2v3h-3v-1h-2v-1h-4v1h-2v1h-3z"/><path d="M5 9h6v2h-1v1h2v-1h1v3h-1v1h-8v-1h-1v-3h1v1h2v-1h-1z"/><rect x="7" y="12" width="2" height="1" fill="#0b0c14"/></g></svg>
         </button>
       </div>
+      <!-- the status card: every few minutes, what each connected agent is working on, with a timer (pulse-ui.js) -->
+      <aside id="pulse" class="pulse" hidden aria-live="polite" aria-labelledby="pulse-title">
+        <header class="pulse-head">
+          <h2 id="pulse-title" data-i18n="ui.pulse.title">⏱ What everyone is on</h2>
+          <span id="pulse-timer" class="pulse-timer"></span>
+          <button type="button" class="sheet-x" id="pulse-close" data-i18n-aria="settings.close">✕</button>
+        </header>
+        <div id="pulse-body" class="pulse-body"></div>
+        <div class="pulse-track" aria-hidden="true"><div id="pulse-bar" class="pulse-bar"></div></div>
+      </aside>
       <!-- the e2e tests an agent runs: a small monitor with the browser under test (e2e-ui.js); a click expands it -->
       <div id="e2e-mini" class="e2e-mini" hidden role="button" tabindex="0"></div>
       <!-- the activity: a log you read, light, over the office -->

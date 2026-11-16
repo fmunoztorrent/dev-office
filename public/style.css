@@ -945,3 +945,18 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
 .phone .muted { color: #5c4630; margin: 8px 0 0; min-height: 1.2em; }
 .phone .muted.bad { color: #b3261e; }
 .phone .quiet { margin: 0; color: #5c4630; font-size: 13px; }
+
+/* the status card: what every connected agent is on, with its timer (public/pulse-ui.js) */
+.pulse { position: absolute; right: 16px; bottom: 16px; z-index: 30; width: min(360px, calc(100vw - 32px)); background: #f6f3e9; color: #2b2d42; box-shadow: 0 0 0 3px #0b0c14, 4px 4px 0 3px #0008; }
+.pulse[hidden] { display: none; }
+.pulse-head { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: #ffd166; }
+.pulse-head h2 { flex: 1; margin: 0; font: 20px/1 "VT323", monospace; }
+.pulse-timer { font: 20px/1 "VT323", monospace; color: #6b4d00; }
+.pulse-body { max-height: 40vh; overflow: auto; padding: 8px; }
+.pulse-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.pulse-list li { display: grid; gap: 1px; padding: 6px 8px; background: #fff8dc; box-shadow: inset 3px 0 0 #06d6a0; font-size: 13px; overflow-wrap: anywhere; }
+.pulse-list li.waiting { box-shadow: inset 3px 0 0 #f0a73a; }
+.pulse-list small { color: #6b4d00; }
+.pulse-track { height: 4px; background: #0b0c14; }
+.pulse-bar { height: 100%; width: 100%; background: #ffd166; transition: width 1s linear; }
+@media (prefers-reduced-motion: reduce) { .pulse-bar { transition: none; } }

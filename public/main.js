@@ -9,6 +9,7 @@ import { createPrompts } from './prompts-ui.js';
 import { createDirectivesUi, createArchiveUi } from './floors-ui.js';
 import { createLoops } from './loops-ui.js';
 import { createPhone } from './phone-ui.js';
+import { createPulse } from './pulse-ui.js';
 import { renderImpact, impactQuestions } from './impact-ui.js';
 import { createE2E } from './e2e-ui.js';
 import './renderers/plan.js'; // the reference renderer (public/scene.js): ?renderer=plan
@@ -189,6 +190,9 @@ const loopsUi = createLoops({
   getProjects: () => targets.filter((x) => x.registered).map((x) => ({ id: x.id, name: x.name })),
   office: () => office?.id || 'main',
 });
+// what each session was last seen doing (the status card's lines)
+const doing = new Map();
+createPulse({ getSessions: () => [...sessions.values()], getDoing: () => doing, agentName: (src) => AGENT_NAME[src] || src });
 let experts = []; // the company's experts (⚙ › Characters › Experts)
 const phone = createPhone({ getExperts: () => experts, personOf: (x) => expertPerson(x) });
 function onExperts(list) { experts = Array.isArray(list) ? list : []; setExperts(experts); phone.refresh(); }
@@ -608,6 +612,8 @@ function onSnapshot(state) {
 
 function onEvent(ev, session) {
   if (session && session.id !== OFFICE_SESSION) sessions.set(session.id, session);
+  if (ev.session && ev.text && ['tool_start', 'phase', 'thinking', 'task', 'todos'].includes(ev.kind) && !ev.subId) doing.set(ev.session, { text: ev.text, at: Date.now() });
+  if (ev.session && ['turn_end', 'done', 'session_end'].includes(ev.kind) && !ev.subId) doing.delete(ev.session);
   const current = currentSession();
   // Events from other sessions move the team all the same, but the board shows the focused session.
   game.handle(ev.kind === 'subagent_start' ? { ...ev, project: projectOf(ev.session) } : ev);
