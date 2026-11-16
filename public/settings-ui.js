@@ -764,7 +764,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         el('p', { class: 'hint' }, A('argsHint'))),
       el('div', { class: 's-row' },
         el('button', { type: 'button', class: 'btn', onclick: save }, f.id ? A('saveChanges') : A('addAgent')),
-        f.id || f.path ? el('button', { type: 'button', class: 'btn ghost', onclick: () => { st.form = emptyForm(); renderForm(); } }, A('cancel')) : null));
+        el('button', { type: 'button', class: 'btn ghost', onclick: () => { st.form = emptyForm(); renderForm(); } }, A('cancel'))));
   }
 
   async function detect() {

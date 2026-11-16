@@ -244,6 +244,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
       f.push({ type: 'text', label: t('settings.agents.instructions'), value: () => s.form.instructions || '', placeholder: t('settings.agents.instructionsPh'), edit: (v) => { s.form.instructions = v.slice(0, 4000); } });
       if (s.offices.length > 1) f.push({ type: 'select', label: t('settings.agents.office'), value: () => officeName(s.form.office), cycle: (d) => { s.form.office = cycle(s.offices.map((o) => o.id), s.form.office, d); } });
       f.push({ type: 'action', label: '', value: () => t('settings.agents.addBtn'), run: () => addAgent() });
+      f.push({ type: 'action', label: '', value: () => t('settings.agents.cancel'), run: () => { s.form = { path: '', harness: 'claude-code', name: '', office: office() }; } });
       if (loose.length) {
         f.push({ type: 'heading', text: t('settings.agents.loose') });
         for (const a of loose) f.push({ type: 'info', text: `  ${HARNESS_NAME[a.harness] || a.harness} · ${tilde(a.path)}${a.kinds.length ? ` · ${a.kinds.join(' + ')}` : ''}` });
