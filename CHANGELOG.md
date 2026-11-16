@@ -4,6 +4,17 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-11-16
+
+### Added
+
+- **Experts with quick-action buttons.** In ⚙ › Characters › Experts, each expert (SME) can now carry **quick actions**: a button per recipe the skill offers, each with a label and the task it dispatches. A ▶ sends the task straight to the agent of the project that knows the skill (through the analyst's review, like the whiteboard); the actions the skill itself declares can be suggested from its `SKILL.md` (⤳ *Suggest from the skill*), so an expert on `loyalty-abono` gets one button per action in its playbook. The actions are part of the expert and travel in your settings file. `GET /v1/experts/suggest?skill=`, `POST /v1/experts/<id>/run { prompt }`, and `actions` in `GET|POST|PUT /v1/experts`.
+
+### Fixed
+
+- **You can now cancel adding an agent.** In the web form, the *Cancel* button no longer waits for a path to appear, and in the terminal's ⚙ › Agents there is a *Cancel* action below *＋ Add* that resets the form.
+- **The archive's URL field no longer shadows the connector's.** The *load documents* dialog had a second `url` label that overrode the connector form's "or URL (a remote MCP server)"; each field now has its own key and reads its own label.
+
 ## [0.25.0] - 2026-11-16
 
 ### Changed
