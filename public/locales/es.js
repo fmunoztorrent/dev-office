@@ -670,7 +670,7 @@ export default {
       save: 'Guardar cambios', create: 'Crear el proyecto', cancel: 'Cancelar', saved: 'Proyecto «{name}» guardado.', createdTeam: 'Proyecto «{name}» creado, con su equipo «{team}».',
     },
     offices: {
-      hint: 'Cada departamento es un equipo de la empresa, y el juego lo dibuja como una oficina (un piso del edificio): sus proyectos (repositorios, con sus agentes), su personal (los personajes), sus indicaciones (cómo trabajar ahí: van con cada encargo, directiva y pregunta a sus proyectos) y los sistemas por los que responde. Su zona horaria y su ciudad son opcionales: sin ellas, las de la empresa. Arriba a la izquierda eliges cuál ver.',
+      hint: 'Cada departamento es un equipo de la empresa, y el juego lo dibuja como una oficina (un piso del edificio): sus repositorios (cada uno con su agente), su personal (los personajes), sus indicaciones (cómo trabajar ahí: van con cada encargo, directiva y pregunta a sus repositorios) y los proyectos por los que responde. Su zona horaria y su ciudad son opcionales: sin ellas, las de la empresa. Arriba a la izquierda eliges cuál ver.',
       companyTitle: 'La empresa', departments: 'Departamentos', saveCompany: 'Guardar',
       standards: 'Estándares de la empresa (los del CTO)', standardsPh: 'Lo que siguen todos los proyectos de todos los departamentos: convenciones, seguridad, cómo documentar… Van arriba de cada encargo, antes de las indicaciones del departamento y del proyecto.',
       capacity: 'Capacidad', capacityHint: 'Cuántos encargos toma un departamento a la vez de una directiva (contando los que ya tiene abiertos). Operaciones no satura a nadie: el resto espera turno y sale en cuanto termina uno.',
@@ -678,11 +678,11 @@ export default {
       autonomyLevel: { guided: 'Guiada', balanced: 'Equilibrada', autonomous: 'Autónoma' },
       autonomyHint: { guided: 'La analista revisa cada encargo y el agente te pregunta cuando tiene dudas.', balanced: 'La analista revisa cada encargo; después el agente trabaja solo hasta terminar.', autonomous: 'Sin revisión: cada encargo pasa directo a trabajo y el agente trabaja solo hasta terminar.' },
       name: 'Nombre', timezone: 'Zona horaria', inherit: 'la de la empresa ({tz})', location: 'Ciudad (clima)', locationPh: 'la de la zona horaria ({city})', cityInherit: 'la de la empresa ({city})',
-      repos: '{n} repositorio(s)', viewing: '● la que estás mirando', main: 'principal', view: 'Ver', edit: 'Editar', delete: 'Eliminar', add: '＋ Agregar departamento', saveChanges: 'Guardar cambios',
+      reposCount: '{n} repositorio(s)', viewing: '● la que estás mirando', main: 'principal', view: 'Ver', edit: 'Editar', delete: 'Eliminar', add: '＋ Agregar departamento', saveChanges: 'Guardar cambios',
       newTitle: 'Nuevo departamento', editTitle: 'Editar «{name}»', created: 'Listo: «{name}» ya es parte de la empresa.', updated: 'Departamento actualizado.', deleted: 'Departamento eliminado (sus proyectos pasaron al principal).',
       confirmDelete: '¿Eliminar el departamento «{name}»? Sus proyectos pasan al principal; sus carpetas no se tocan.', cancel: 'Cancelar',
       instructions: 'Indicaciones', instructionsPh: 'Cómo se trabaja en este departamento: convenciones, lo que nunca se hace, a quién preguntar… Van con cada encargo, directiva y pregunta a sus proyectos.',
-      projects: 'Proyectos', noProjects: 'Todavía sin proyectos.', compName: 'componente', compPath: 'carpeta (opcional)', compAdd: '＋ Componente', compAdded: 'Componente «{name}» en el mapa', compNone: 'una sola pieza', compDeclared: 'declarado por ti', compDetected: 'detectado en su carpeta', compRemove: 'Quitar {name} del mapa', addProject: '＋ Nuevo proyecto', moveHere: 'Traer un proyecto aquí…', people: 'Personal', editPeople: 'Editar su personal', hasInstructions: '📋 con indicaciones',
+      repos: 'Repositorios', noRepos: 'Todavía sin repositorios.', compName: 'componente', compPath: 'carpeta (opcional)', compAdd: '＋ Componente', compAdded: 'Componente «{name}» en el mapa', compNone: 'una sola pieza', compDeclared: 'declarado por ti', compDetected: 'detectado en su carpeta', compRemove: 'Quitar {name} del mapa', addRepo: '＋ Repositorio', moveRepo: 'Traer un repositorio aquí…', hasInstructions: '📋 con indicaciones',
     },
     repos: {
       instructions: 'Indicaciones del repositorio', instructionsPh: 'Cómo trabajar con este repositorio (para todos los agentes de su carpeta): comandos, convenciones, qué no tocar… Van con cada encargo, pipeline y pregunta.', hasInstructions: '📋 indicaciones',

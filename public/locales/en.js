@@ -670,7 +670,7 @@ export default {
       save: 'Save changes', create: 'Create the project', cancel: 'Cancel', saved: 'Project “{name}” saved.', createdTeam: 'Project “{name}” created, with its team “{team}”.',
     },
     offices: {
-      hint: 'Each department is a team of the company, and the game draws it as an office (a floor of the building): its projects (repositories, with their agents), its people (the characters), its instructions (how to work there: they go with every brief, directive and question to its projects) and the systems it answers for. Its time zone and its city are optional: without them, the company’s. Pick which one to view at the top left.',
+      hint: 'Each department is a team of the company, and the game draws it as an office (a floor of the building): its repositories (each with its agent), its people (the characters), its instructions (how to work there: they go with every brief, directive and question to its repositories) and the projects it answers for. Its time zone and its city are optional: without them, the company’s. Pick which one to view at the top left.',
       companyTitle: 'The company', departments: 'Departments', saveCompany: 'Save',
       standards: 'The company’s standards (the CTO’s)', standardsPh: 'What every project of every department follows: conventions, security, how to document… They go on top of every brief, before the department’s and the project’s instructions.',
       capacity: 'Capacity', capacityHint: 'How many briefs a department takes at once from a directive (counting the ones it already has open). Operations does not overload anyone: the rest wait their turn and go as soon as one ends.',
@@ -678,11 +678,11 @@ export default {
       autonomyLevel: { guided: 'Guided', balanced: 'Balanced', autonomous: 'Autonomous' },
       autonomyHint: { guided: 'The analyst reviews each brief and the agent asks you when in doubt.', balanced: 'The analyst reviews each brief; then the agent works to the end on its own.', autonomous: 'No review: each brief goes straight to work and the agent works to the end on its own.' },
       name: 'Name', timezone: 'Time zone', inherit: 'the company’s ({tz})', location: 'City (weather)', locationPh: 'the time zone’s ({city})', cityInherit: 'the company’s ({city})',
-      repos: '{n} repo(s)', viewing: '● the one you are viewing', main: 'main', view: 'View', edit: 'Edit', delete: 'Delete', add: '＋ Add department', saveChanges: 'Save changes',
+      reposCount: '{n} repo(s)', viewing: '● the one you are viewing', main: 'main', view: 'View', edit: 'Edit', delete: 'Delete', add: '＋ Add department', saveChanges: 'Save changes',
       newTitle: 'New department', editTitle: 'Edit “{name}”', created: 'Done: “{name}” is now part of the company.', updated: 'Department updated.', deleted: 'Department deleted (its projects moved to the main one).',
       confirmDelete: 'Delete the department “{name}”? Its projects move to the main one; their folders are not touched.', cancel: 'Cancel',
       instructions: 'Instructions', instructionsPh: 'How to work in this department: conventions, what to never do, who to ask… They go with every brief, directive and question to its projects.',
-      projects: 'Projects', noProjects: 'No projects yet.', compName: 'component', compPath: 'folder (optional)', compAdd: '＋ Component', compAdded: 'Component "{name}" on the map', compNone: 'a single piece', compDeclared: 'declared by you', compDetected: 'detected in its folder', compRemove: 'Remove {name} from the map', addProject: '＋ New project', moveHere: 'Bring a project here…', people: 'People', editPeople: 'Edit its people', hasInstructions: '📋 with instructions',
+      repos: 'Repositories', noRepos: 'No repositories yet.', compName: 'component', compPath: 'folder (optional)', compAdd: '＋ Component', compAdded: 'Component "{name}" on the map', compNone: 'a single piece', compDeclared: 'declared by you', compDetected: 'detected in its folder', compRemove: 'Remove {name} from the map', addRepo: '＋ Repository', moveRepo: 'Bring a repository here…', hasInstructions: '📋 with instructions',
     },
     repos: {
       instructions: 'Repository instructions', instructionsPh: 'How to work with this repository (for every agent in its folder): commands, conventions, what not to touch… They go with every brief, pipeline and question.', hasInstructions: '📋 instructions',

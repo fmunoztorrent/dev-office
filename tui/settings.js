@@ -206,7 +206,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
       f.push({ type: 'info', text: `  ${t('settings.offices.hint')}` });
       for (const o of s.offices) {
         const own = o.ownTimezone ? tzLabel(o.timezone) : t('settings.offices.inherit', { tz: o.timezone });
-        f.push({ type: 'info', text: `  ${o.name}${o.id === 'main' ? ` (${t('settings.offices.main')})` : ''} · ${own}${o.place?.name ? ` · 📍 ${o.place.name}` : ''} · ${t('settings.offices.repos', { n: o.agents })}${o.id === office() ? `  ${t('settings.offices.viewing')}` : ''}`, color: C.ink });
+        f.push({ type: 'info', text: `  ${o.name}${o.id === 'main' ? ` (${t('settings.offices.main')})` : ''} · ${own}${o.place?.name ? ` · 📍 ${o.place.name}` : ''} · ${t('settings.offices.reposCount', { n: o.agents })}${o.id === office() ? `  ${t('settings.offices.viewing')}` : ''}`, color: C.ink });
         if (o.id !== office()) f.push({ type: 'action', label: '', value: () => `👁 ${t('settings.offices.view')} ${o.name}`, run: () => onView?.(o.id) });
         f.push({ type: 'action', label: '', value: () => `✎ ${t('settings.offices.edit')} ${o.name}`, run: () => { s.officeForm = { ...emptyOffice(), id: o.id, name: o.custom ? o.name : '', timezone: o.ownTimezone, location: o.location || '', instructions: o.instructions || '' }; s.focus = 0; } });
         if (o.id !== 'main') f.push({ type: 'action', label: '', value: () => `✕ ${t('settings.offices.delete')} ${o.name}`, run: () => deleteOffice(o) });
