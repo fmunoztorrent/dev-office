@@ -617,3 +617,23 @@ test('el badge sobre cada personaje: llega con lo que hace su agente y se va al 
   run(TAG_MS / 1000 + 5);
   assert.equal(sim.agents.qa.badge, null);
 });
+
+test('un turno abierto sigue "trabajando" aunque no lleguen eventos; al cerrarse queda libre', () => {
+  const { sim, run } = office();
+  const be = sim.agents.backend;
+  sim.handle({ kind: 'tool_start', role: 'backend', tool: 'Bash', session: 's1', text: 'Compilando' });
+  run(30); // far beyond the 6 s a tool shows
+  assert.equal(be.state, 'working', 'a long tool call is still work, not "free"');
+  sim.handle({ kind: 'turn_end', role: 'backend', session: 's1' });
+  run(30);
+  assert.equal(be.state, 'idle', 'the turn ended: now they are free');
+});
+
+test('una herramienta que falla no deja al personaje "bloqueado"', () => {
+  const { sim, run } = office();
+  const be = sim.agents.backend;
+  sim.handle({ kind: 'tool_start', role: 'backend', tool: 'Bash', session: 's1', text: 'npm test' });
+  sim.handle({ kind: 'tool_end', role: 'backend', tool: 'Bash', session: 's1', ok: false, text: 'falló' });
+  run(2);
+  assert.notEqual(be.state, 'blocked');
+});

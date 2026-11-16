@@ -44,9 +44,10 @@ function excerpt(text, { max = 1200, lines = 14, head = false } = {}) {
 }
 /** Announcements: they are logged but do not change any role's state. */
 const ANNOUNCEMENTS = new Set(['dispatch', 'clarify', 'standup', 'pane_open', 'pane_close', 'pane_state', 'service_up', 'service_down', 'autocompact', 'loop', 'e2e']);
-/** What state a character ends up in after one of its events (shared by the office and the monitor);
+/** What state a character ends up in after one of its events (shared by the office and the monitor).
+ *  A failed tool is not "blocked": the agent reads the error and goes on, so it keeps working.
  *  `null` for announcements, which do not change the state (nor set it to idle). */
-export const roleStatus = (ev) => (ANNOUNCEMENTS.has(ev.kind) ? null : ev.phase === 'red' ? 'red' : ev.kind === 'tool_end' && !ev.ok ? 'blocked' : ev.kind === 'waiting' ? 'waiting' : ev.kind === 'done' ? 'done' : ev.kind === 'turn_end' || ev.kind === 'session_end' ? 'idle' : 'working');
+export const roleStatus = (ev) => (ANNOUNCEMENTS.has(ev.kind) ? null : ev.phase === 'red' ? 'red' : ev.kind === 'waiting' ? 'waiting' : ev.kind === 'done' ? 'done' : ev.kind === 'turn_end' || ev.kind === 'session_end' ? 'idle' : 'working');
 const SUB_TOOLS = new Set(['task', 'agent', 'subagent', 'subagent_run', 'subagent_continue']);
 const COMMAND_TOOLS = new Set(['bash', 'shell', 'exec', 'exec_command', 'local_shell', 'unified_exec', 'bash_background']);
 

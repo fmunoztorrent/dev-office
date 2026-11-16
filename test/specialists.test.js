@@ -135,7 +135,7 @@ test('si vuelve a haber trabajo suyo mientras se iba, vuelve; un subagente de De
   assert.ok(!b.specialist && b.cfg.name !== 'Rafa' && b.cfg.shirt === VISITORS.devops.shirt, 'otro, con la camisa de DevOps');
   run(25);
   sim.handle({ kind: 'tool_end', role: 'devops', subId: 'd1', tool: 'Bash', ok: false, text: 'Falló el build' });
-  assert.equal(a.state, 'blocked');
+  assert.equal(a.state, 'working', 'a failing tool is not a blocked agent');
   sim.handle({ kind: 'subagent_end', role: 'devops', subId: 'd1', text: 'listo' });
   assert.ok(a.leaving);
   assert.ok(sim.journal.some((j) => j.kind === 'farewell' && /Rafa/.test(j.text)));

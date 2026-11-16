@@ -251,6 +251,9 @@ const ANIME_NEWCOMER_NAMES = ['Yui', 'Aoi', 'Miyu', 'Riko', 'Saki', 'Nao', 'Kana
 const FADE_MS = 900;
 // how long the badge of what their agent does stays without news (the end of the turn takes it away first)
 export const TAG_MS = 120_000;
+/** How long an open turn counts as working without any event from it (a stuck session does not work forever). */
+const OPEN_TURN_MS = 10 * 60_000;
+const TURN_KINDS = new Set(['tool_start', 'tool_end', 'thinking', 'phase']);
 const DEVS = ['backend', 'frontend', 'designer'];
 const SPEED = 120; // world px per second when walking
 export const LUNCH = { start: 13 * 60, end: 14 * 60 }; // minutes of the day
@@ -488,6 +491,7 @@ class Agent {
     this.bubble = null;
     this.badges = new Map(); // assigned subagents: id → description
     this.tag = null;         // what their agent is doing, as a badge over their head: { text, session, until }
+    this.openTurn = null;    // { session, at }: their agent's turn is open (it works even when no event arrives for a while)
     this.walkT = 0;
     this.taskAt = -Infinity; // the last time they did real work (their screen stays on a while)
     this.lastActive = clock() + random() * 20_000;
@@ -542,7 +546,12 @@ class Agent {
   walk(pt) { this.queue.push({ t: 'walk', path: [{ x: pt.x, y: pt.y }], end: { x: pt.x, y: pt.y } }); return this; }
 
   update(dt, now) {
-    if (this.state !== 'idle' && now > this.stateUntil && !['waiting', 'blocked'].includes(this.state)) this.state = 'idle';
+    if (this.state !== 'idle' && now > this.stateUntil && !['waiting', 'blocked'].includes(this.state)) {
+      // a long tool call or a long think sends no events: while the turn is open they still work, never "free"
+      if (this.openTurn && now - this.openTurn.at < OPEN_TURN_MS) { this.state = 'working'; this.stateUntil = now + 2000; } else this.state = 'idle';
+    } else if (this.state === 'idle' && this.openTurn && now - this.openTurn.at < OPEN_TURN_MS && !this.scene && !this.lunch && !this.hidden) {
+      this.state = 'working'; this.stateUntil = now + 2000;
+    }
     if (this.state === 'blocked' && now > this.stateUntil + 4000) this.state = 'idle';
     if (this.bubble && now > this.bubble.until) this.bubble = null;
 
@@ -820,6 +829,10 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     if (ghost && ev.expert && !ghost.specialist) expert({ ...ev, subId: null });
     const now = simNow;
     if (a) log(a, ev.text);
+    if (a && TURN_KINDS.has(ev.kind)) a.openTurn = { session: ev.session || null, at: now };
+    if (['turn_end', 'done', 'session_end'].includes(ev.kind) && !ev.subId) {
+      for (const x of [...Object.values(agents), ...ghosts.values()]) if (x.openTurn && (!ev.session || !x.openTurn.session || x.openTurn.session === ev.session)) x.openTurn = null;
+    }
     // the badge over their head: what their agent is doing now (it goes when the turn ends, or after a while)
     // (a subagent's is its newcomer's, not its role's character's: see subagent_start)
     if (a && ev.badge && ev.kind !== 'subagent_start') a.tag = { text: ev.badge, session: ev.session || null, until: now + TAG_MS };
@@ -885,7 +898,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
             after: () => later(1200, () => { dev.setState('thinking', 6000); dev.say(T('sim.checkIt'), 3000); }),
           });
         } else {
-          a.setState('blocked', 6000);
+          a.setState('working', 6000); // a failing tool is not a blocked agent: it reads the error and goes on
           a.shakeUntil = now + 700;
           a.say(ev.text, 5000, 'error');
           emit(a.x, a.y - 40, 14, 'spark', '#ff4d4d');
@@ -2193,7 +2206,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     },
     reset() {
       for (const a of Object.values(agents)) {
-        Object.assign(a, { stress: null, tired: false, taskAt: -Infinity, queue: [], seated: true, x: a.cfg.seat.x, y: a.cfg.seat.y, state: 'idle', bubble: null, handUp: false, history: [], dream: null, scene: null, carry: false, perch: false, hidden: false, dance: false, food: null, lunch: null, back: false, tvSeat: null, diningSeat: null, tag: null });
+        Object.assign(a, { stress: null, tired: false, taskAt: -Infinity, queue: [], seated: true, x: a.cfg.seat.x, y: a.cfg.seat.y, state: 'idle', bubble: null, handUp: false, history: [], dream: null, scene: null, carry: false, perch: false, hidden: false, dance: false, food: null, lunch: null, back: false, tvSeat: null, diningSeat: null, tag: null, openTurn: null });
         a.badges.clear();
       }
       ghosts.clear();

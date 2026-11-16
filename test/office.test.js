@@ -77,7 +77,7 @@ test('TodoWrite actualiza el tablero y los errores cuentan', () => {
   const s = o.sessionSummary('s1');
   assert.deepEqual(s.todos.map((t) => t.status), ['completed', 'in_progress']);
   assert.equal(s.errors, 1);
-  assert.equal(o.roles.qa.status, 'blocked');
+  assert.equal(o.roles.qa.status, 'working', 'a failed command is not a blocked agent: it keeps working');
 });
 
 test('formato genérico (OpenCode / Pi) y la demo completa', () => {
