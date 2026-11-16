@@ -17,6 +17,7 @@ import { guideFor, guideText, unguided } from '../server/guides.js';
 import { scoped } from '../server/tasks.js';
 import { exportCharacter, parseCharacter, changedLook, characterFile, CHARACTER_KIND } from '../public/character.js';
 import { applyAppearance, TEAM } from '../public/sim.js';
+import { tildeHome, artifactFolder } from '../public/targets.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(here, '..');
@@ -183,4 +184,16 @@ test('la CLI: departamentos y proyectos con indicaciones, y personajes que se ex
     assert.equal(store.getProjectInstructions(dir), 'pnpm test antes de cerrar.');
     assert.deepEqual([store.getAppearance('pagos').tl.name, store.getAppearance('pagos').tl.style], ['Pilar', 'explanatory']);
   } finally { store.close(); }
+});
+
+test('la carpeta de un proyecto y la de un artefacto se escriben con ~ y con su componente', () => {
+  // ⚙ › Departamentos shows each project's folder; ⚙ › Departamentos › Sistemas, each artifact's
+  assert.equal(tildeHome('/Users/ana/Workspace/tienda'), '~/Workspace/tienda');
+  assert.equal(tildeHome('/srv/repos/tienda'), '/srv/repos/tienda', 'otra raíz que no es el home se deja tal cual');
+  assert.equal(tildeHome(null), '');
+  const repo = { project: '/Users/ana/Workspace/tienda', path: '' };
+  assert.equal(tildeHome(artifactFolder(repo)), '~/Workspace/tienda');
+  assert.equal(tildeHome(artifactFolder({ ...repo, path: 'apps/web' })), '~/Workspace/tienda/apps/web');
+  assert.equal(tildeHome(artifactFolder({ ...repo, path: '/apps/web/' })), '~/Workspace/tienda/apps/web', 'una carpeta se guarda sin barras de más');
+  assert.equal(artifactFolder({}), '', 'un artefacto sin repo no inventa una carpeta');
 });

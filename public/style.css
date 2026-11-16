@@ -508,6 +508,7 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
 .s-tag.kind { background: #2a9d8f; color: #fff; }
 .s-entries { display: flex; flex-wrap: wrap; gap: 4px; }
 .s-entries span { font-size: 12px; padding: 1px 6px; box-shadow: 0 0 0 1px #c9b48a; background: #fdfcf6; }
+.s-path { font-size: 11px; line-height: 1.25; color: #6c757d; overflow-wrap: anywhere; }
 .s-form { display: grid; gap: 8px; }
 .s-ok { color: #2a9d8f; font-size: 13px; } .s-bad { color: #c1121f; font-size: 13px; }
 .s-project { background: #fff; box-shadow: 0 0 0 2px var(--ink); padding: 6px 10px; display: grid; gap: 4px; }

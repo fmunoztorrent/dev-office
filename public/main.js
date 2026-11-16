@@ -104,7 +104,8 @@ function connect() {
   ws.onopen = () => { setConn(true); ws.send(JSON.stringify({ type: 'client', app: 'web' })); };
   ws.onclose = () => { setConn(false); setTimeout(connect, 1500); };
   ws.onmessage = (m) => {
-    const msg = JSON.parse(m.data);
+    let msg;
+    try { msg = JSON.parse(m.data); } catch { return; } // a frame that is not ours: nothing to do
     // the office was restarted with another version (an update): this page has the old code
     if (msg.type === 'hello') { if (served && msg.version && msg.version !== served) location.reload(); served = msg.version || served; }
     if (msg.type === 'snapshot') {
@@ -1226,6 +1227,8 @@ const settings = createSettings({
   getTargets: () => targets, getOffices: () => offices, getOffice: () => office, getPrefs: () => prefs, getHerdr: () => herdr,
   onPrompt: (id) => { $('settings').close(); openBrief(id); },
   onView: (id) => viewOffice(id),
+  // the departments a save just brought: redrawn from the answer, not from the WebSocket's message
+  onOffices: (list) => onOffices(list, list.find((o) => o.id === office?.id)),
   alerts: { get: alertPrefs, set: setAlertPrefs },
 });
 $('open-settings').onclick = () => settings.open();

@@ -15,6 +15,7 @@ import { t, LANGUAGES, getLanguage } from './i18n.js';
 import { allZones, zoneInfo, countryName } from './clock.js';
 import { parsePlace } from './sky.js';
 import { MODEL_ROLES, PROFILE_HARNESSES } from './models.js';
+import { tildeHome as tilde, artifactFolder } from './targets.js';
 
 const ROLE_ORDER = ['po', 'analyst', 'manager', 'tl', 'qa', 'backend', 'frontend', 'designer', 'devops', 'security']; // the last two: the visiting specialists
 const HARNESS_NAME = { pi: 'Pi', 'claude-code': 'Claude Code', opencode: 'OpenCode', codex: 'Codex' };
@@ -32,7 +33,6 @@ function el(tag, attrs = {}, ...children) {
   return e;
 }
 const put = (panel, ...nodes) => panel.replaceChildren(...nodes.flat(Infinity).filter((n) => n !== null && n !== undefined && n !== false));
-const tilde = (p) => String(p || '').replace(/^\/Users\/[^/]+/, '~');
 const option = (value, label, selected) => el('option', { value, selected: selected ? true : undefined }, label);
 const tzLabel = (tz) => { const z = zoneInfo(tz); return z.country ? `${tz} · ${countryName(z.country, getLanguage())}` : tz; };
 
@@ -106,10 +106,12 @@ function cityInput({ value, timezone, placeholder, label, onPick }) {
 
 /**
  * @param getOffices/getOffice  the offices and the one being watched
+ * @param onOffices             (list) => the company's offices, as the API returns them (to redraw them now,
+ *                              without waiting for the WebSocket's `offices` message)
  * @param getPrefs/getHerdr     the general settings and herdr's state (they arrive over WebSocket)
  * @param onView                (id) => watch another office
  */
-export function createSettings({ getTargets = () => [], getOffices = () => [], getOffice = () => null, getPrefs = () => null, getHerdr = () => null, onPrompt, onView, onSaved, alerts } = {}) {
+export function createSettings({ getTargets = () => [], getOffices = () => [], getOffice = () => null, getPrefs = () => null, getHerdr = () => null, onPrompt, onView, onSaved, onOffices, alerts } = {}) {
   const st = { tab: 'general', data: null, looks: null, form: emptyForm(), office: emptyOffice() };
   const msg = (text, ok = false) => { $('s-msg').textContent = text; $('s-msg').style.color = ok ? '#2a9d8f' : ''; };
   const here = () => getOffice()?.id || 'main';
@@ -412,7 +414,9 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         o.instructions ? el('p', { class: 's-dept-text' }, o.instructions) : null,
         // its projects: the repositories of the company that work for it
         el('div', { class: 's-dept-k' }, `${O('projects')} (${mine.length})`),
-        el('div', { class: 's-entries' }, mine.length ? mine.map((a) => el('span', { title: `${tilde(a.path)}${a.instructions ? `\n📋 ${a.instructions}` : ''}` }, `${a.name} · ${HARNESS_NAME[a.harness] || a.harness}${a.instructions ? ' 📋' : ''}`)) : el('span', { class: 'hint' }, O('noProjects'))),
+        el('div', { class: 's-entries' }, mine.length ? mine.map((a) => el('span', { title: a.instructions ? `📋 ${a.instructions}` : undefined },
+          `${a.name} · ${HARNESS_NAME[a.harness] || a.harness}${a.instructions ? ' 📋' : ''}`,
+          el('div', { class: 's-path' }, tilde(a.path)))) : el('span', { class: 'hint' }, O('noProjects'))),
         // the components of each project: what a directive can name (detected ones, and the ones you declare)
         mine.length && st.components ? el('div', { class: 's-comps' }, mine.map((a) => componentsRow(a))) : null,
         el('div', { class: 's-row' },
@@ -580,7 +584,8 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         s.instructions ? el('span', { class: 's-tag kind', title: s.instructions }, S('hasInstructions')) : null),
       el('div', { class: 's-sys-order' }, s.order.join('  →  ')),
       el('ul', { class: 's-sys-parts' }, s.parts.map((p) => el('li', {},
-        el('b', {}, p.name), ` · ${KIND(p.kind)} · `, el('span', { class: 'hint' }, `${p.repo}${p.path ? `/${p.path}` : ''}`),
+        el('b', {}, p.name), ` · ${KIND(p.kind)} · `,
+        el('span', { class: 'hint' }, `${p.repo}${p.path ? `/${p.path}` : ''}${p.target ? ` · ${tilde(artifactFolder(p))}` : ''}`),
         p.uses?.length ? ` · ${t('system.uses', { list: p.uses.join(', ') })}` : '',
         p.shared ? el('span', { class: 's-tag', title: S('sharedHint') }, S('shared')) : null,
         p.target ? null : el('span', { class: 's-tag danger' }, S('noRepo'))))),
@@ -612,7 +617,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       return el('div', { class: 's-sys-part' },
         el('input', { type: 'text', value: p.name, maxlength: 60, placeholder: S('partName'), 'aria-label': S('partName'), oninput: (e) => { const was = p.name; p.name = e.target.value; for (const x of f.parts) x.uses = x.uses.map((u) => (u === was ? p.name : u)); } }),
         el('select', { 'aria-label': S('repo'), onchange: (e) => { p.project = e.target.value; p.component = ''; p.path = ''; const a = projects.find((x) => x.id === p.project); if (!p.name && a) p.name = a.name; p.kind = st.kinds?.[p.project] || p.kind; rerender(); } },
-          option('', S('pickRepo'), !p.project), projects.map((a) => option(a.id, `${a.name} · ${HARNESS_NAME[a.harness] || a.harness}`, a.id === p.project))),
+          option('', S('pickRepo'), !p.project), projects.map((a) => option(a.id, `${a.name} · ${HARNESS_NAME[a.harness] || a.harness} · ${tilde(a.path)}`, a.id === p.project))),
         compsOf(p.project).length ? el('select', { 'aria-label': S('component'), onchange: (e) => { const c = compsOf(p.project).find((x) => x.name === e.target.value); p.component = c?.name || ''; p.path = c?.path || ''; if (c?.kind && c.kind !== 'other') p.kind = c.kind; rerender(); } },
           option('', S('wholeRepo'), !p.component), compsOf(p.project).map((c) => option(c.name, `🧩 ${c.name}`, c.name === p.component))) : null,
         el('select', { 'aria-label': S('kind'), onchange: (e) => { p.kind = e.target.value; } }, kinds.map((k) => option(k, KIND(k), k === p.kind))),
@@ -657,6 +662,12 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     loadProjects();
   }
 
+  /** The departments, as the API returns them: redrawn now, without waiting for the WebSocket's message. */
+  async function reloadOffices() {
+    const r = await api('GET', '/v1/offices');
+    if (r.ok) onOffices?.(r.offices || []);
+  }
+
   async function saveOffice() {
     const f = st.office;
     const body = { name: f.name, timezone: f.timezone || null, location: f.location || null, instructions: f.instructions || '', autonomy: f.autonomy || null };
@@ -664,6 +675,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     if (!r.ok) return msg(r.error);
     msg(f.id ? t('settings.offices.updated') : t('settings.offices.created', { name: r.office.name }), true);
     st.office = emptyOffice();
+    await reloadOffices();
     await load();
     renderOffices();
   }
@@ -673,6 +685,8 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     const r = await api('DELETE', `/v1/offices/${encodeURIComponent(o.id)}`);
     if (!r.ok) return msg(r.error);
     msg(t('settings.offices.deleted'), true);
+    if (st.office.id === o.id) st.office = emptyOffice();
+    await reloadOffices();
   }
 
   // ------------------------------------------------------------ Agents (the maintainer)
