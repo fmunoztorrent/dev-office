@@ -33,7 +33,7 @@ import { AskDesk } from './asks.js';
 import { Archive } from './archive.js';
 import { DirectiveDesk } from './directives.js';
 import { LoopDesk } from './loops.js';
-import { expertOfTool, knownSkills } from './experts.js';
+import { expertOfTool, knownSkills, skillAgent, suggestExpertActions } from './experts.js';
 import { Intelligence } from './intelligence.js';
 import { E2EDesk } from './e2e.js';
 import { knownResources, RESOURCE_KINDS } from './resources.js';
@@ -970,6 +970,19 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       }
       // the subject matter experts (server/experts.js): a character who knows a skill
       if (req.method === 'GET' && p === '/v1/experts') return json(res, 200, { ok: true, experts: store.listExperts(), skills: knownSkills(store, { dirs: mine.list().dirs }) });
+      // the quick actions a skill offers, suggested from its SKILL.md (to fill an expert's buttons)
+      if (req.method === 'GET' && p === '/v1/experts/suggest') return json(res, 200, { ok: true, actions: suggestExpertActions(store, q('skill'), { dirs: mine.list().dirs }) });
+      // an expert's quick action: dispatch its prompt to the project agent that knows the skill
+      if (req.method === 'POST' && (m = p.match(/^\/v1\/experts\/([^/]+)\/run$/))) {
+        const expert = store.findExpert(decodeURIComponent(m[1]));
+        if (!expert) return json(res, 404, { ok: false, error: t('err.unknownExpert', { expert: m[1] }) });
+        const prompt = String((await body(req)).prompt ?? '').trim();
+        if (!prompt) return json(res, 400, { ok: false, error: t('err.expertAction') });
+        const agent = skillAgent(store, expert.skill);
+        if (!agent) return json(res, 400, { ok: false, error: t('err.expertNoAgent', { skill: expert.skill }) });
+        const out = clarify.review({ target: agent.id, entry: 'prompt', session: null, text: prompt, from: expert.look?.name || expert.skill });
+        return json(res, out.ok ? 200 : 400, out);
+      }
       if ((req.method === 'POST' && p === '/v1/experts') || (req.method === 'PUT' && (m = p.match(/^\/v1\/experts\/([^/]+)$/)))) {
         const out = store.saveExpert({ ...(await body(req)), ...(m ? { id: decodeURIComponent(m[1]) } : {}) });
         if (out.ok) expertsChanged();

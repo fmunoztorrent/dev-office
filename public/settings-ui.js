@@ -880,6 +880,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   const expertForm = (x = {}) => ({
     id: x.id || null, skill: x.skill || '', topic: x.topic || '',
     look: { ...Object.fromEntries(EXPERT_LOOK.map((k) => [k, DEFAULT_EXPERT[k] ?? ''])), title: '', ...(x.look || {}) },
+    actions: (Array.isArray(x.actions) ? x.actions : []).map((a) => ({ label: String(a?.label ?? ''), prompt: String(a?.prompt ?? '') })),
   });
   /** The experts and the skills the company knows (the archive's, yours, the projects'): to pick one. */
   async function loadExperts() {
@@ -905,7 +906,8 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
           values.map((v) => option(v, label(v), look[k] === v))));
       redraw();
       const save = async () => {
-        const body = { skill: x.skill, topic: x.topic, look: Object.fromEntries(Object.entries(look).filter(([, v]) => v !== '' && v !== null && v !== undefined)) };
+        const actions = x.actions.map((a) => ({ label: a.label.trim(), prompt: a.prompt.trim() })).filter((a) => a.label && a.prompt);
+        const body = { skill: x.skill, topic: x.topic, look: Object.fromEntries(Object.entries(look).filter(([, v]) => v !== '' && v !== null && v !== undefined)), actions };
         const r = await api(x.id ? 'PUT' : 'POST', x.id ? `/v1/experts/${encodeURIComponent(x.id)}` : '/v1/experts', body);
         if (!r.ok) return msg(r.error);
         msg(XK('saved', { name: r.expert.look.name, skill: r.expert.skill }), true);
@@ -920,6 +922,35 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         list.splice(i, 1);
         renderLook();
       };
+      /** An action's button: it sends the prompt to the project agent that knows the skill. */
+      const run = async (a) => {
+        if (!x.id) return msg(XK('actionSaveFirst'));
+        if (!String(a.prompt || '').trim()) return msg(XK('actionPromptEmpty'));
+        const r = await api('POST', `/v1/experts/${encodeURIComponent(x.id)}/run`, { prompt: a.prompt });
+        if (!r.ok) return msg(r.error);
+        msg(XK('actionSent'), true);
+      };
+      /** The actions the skill offers, read from its SKILL.md (server/experts.js). */
+      const suggest = async () => {
+        const skill = String(x.skill || '').trim();
+        if (!skill) return msg(XK('skillFirst'));
+        const r = await api('GET', `/v1/experts/suggest?skill=${encodeURIComponent(skill)}`);
+        if (!r.ok) return msg(r.error);
+        const found = Array.isArray(r.actions) ? r.actions : [];
+        if (!found.length) return msg(XK('actionNoSuggest'));
+        const have = new Set(x.actions.map((a) => a.label.trim().toLowerCase()).filter(Boolean));
+        let added = 0;
+        for (const s of found) {
+          const label = String(s.label ?? '').trim();
+          if (!label || have.has(label.toLowerCase())) continue;
+          x.actions.push({ label, prompt: String(s.prompt ?? '').trim() });
+          have.add(label.toLowerCase());
+          added++;
+        }
+        x.dirty = true;
+        renderLook();
+        msg(XK('actionSuggested', { n: added }), true);
+      };
       return el('div', { class: 's-look s-expert' },
         canvas,
         el('div', { class: 'pair' },
@@ -929,6 +960,17 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
           el('input', { type: 'text', value: x.skill, list: 's-skills', maxlength: 64, placeholder: XK('skillPh'), 'aria-label': XK('skill'), oninput: (e) => { x.skill = e.target.value; x.dirty = true; } })),
         el('label', { class: 's-pick s-skill' }, el('span', {}, XK('topic')),
           el('input', { type: 'text', value: x.topic, maxlength: 120, placeholder: XK('topicPh'), 'aria-label': XK('topic'), oninput: (e) => { x.topic = e.target.value; x.dirty = true; } })),
+        el('div', { class: 's-actions' },
+          el('div', { class: 's-row' },
+            el('span', { class: 'hint' }, XK('actionsHint')),
+            el('button', { type: 'button', class: 's-mini', onclick: suggest }, XK('actionSuggest')),
+            el('button', { type: 'button', class: 's-mini', onclick: () => { x.actions.push({ label: '', prompt: '' }); x.dirty = true; renderLook(); } }, XK('actionAdd'))),
+          x.actions.map((a) => el('div', { class: 's-action' },
+            el('div', { class: 's-action-top' },
+              el('input', { type: 'text', value: a.label, maxlength: 60, placeholder: XK('actionLabel'), 'aria-label': XK('actionLabel'), oninput: (e) => { a.label = e.target.value; x.dirty = true; } }),
+              el('button', { type: 'button', class: 's-mini', title: XK('actionRun'), 'aria-label': XK('actionRun'), onclick: () => run(a) }, '▶'),
+              el('button', { type: 'button', class: 's-mini danger', title: XK('actionRemove'), 'aria-label': XK('actionRemove'), onclick: () => { x.actions.splice(x.actions.indexOf(a), 1); x.dirty = true; renderLook(); } }, '✕')),
+            el('textarea', { rows: 2, maxlength: 4000, placeholder: XK('actionPrompt'), oninput: (e) => { a.prompt = e.target.value; x.dirty = true; } }, a.prompt)))),
         el('div', { class: 'pair' },
           currentTheme() === 'anime' ? null : select('sex', SEXES, (v) => LK(`sexes.${v}`)),
           select('personality', Object.keys(PERSONALITIES), (v) => LK(`personalities.${v}`))),

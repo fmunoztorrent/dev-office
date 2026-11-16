@@ -502,7 +502,7 @@ export default {
       termField: 'Término', definition: 'Definición (Markdown)', synonyms: 'Sinónimos (separados por coma)', project: 'Sólo para el proyecto', anyProject: 'cualquier proyecto', validUntil: 'Vigente hasta', expired: 'vencido', origin: 'de {origin}',
       index: '🧠 {n} fragmento(s) indexado(s) · {e} con embedding', chunks: 'Cómo se indexó', download: '⬇ .md',
       import: '📥 Cargar', importTitle: 'Cargar documentos', importHint: 'Markdown, texto, CSV, JSON, HTML, PDF o Word (PDF y Word necesitan pdftotext o pandoc en esta máquina). Se guarda su texto legible y se indexa para los agentes.',
-      drop: 'Suelta aquí los archivos, o elígelos', url: 'o una dirección web', importGo: '📥 Cargar al archivo', importing: 'Cargando {name}…', imported: 'Cargado(s): {n} documento(s)', importFailed: '{name}: {error}',
+      drop: 'Suelta aquí los archivos, o elígelos', importUrl: 'o una dirección web', importGo: '📥 Cargar al archivo', importing: 'Cargando {name}…', imported: 'Cargado(s): {n} documento(s)', importFailed: '{name}: {error}',
       gaps: '🕳 Vacíos', gapsHint: 'Lo que los agentes buscaron y no encontraron. Contéstalo (una nota, un documento, un término) y la próxima vez lo encuentran.', gapsEmpty: 'Sin vacíos: los agentes encontraron lo que buscaron.',
       gapTimes: '{n} vez/veces', gapAnswer: '✍ Contestarlo', gapDismiss: 'Descartar',
     },
@@ -548,7 +548,7 @@ export default {
     unknownKnowledge: 'no existe esa entrada del archivo', notInstallable: 'sólo las skills y los conectores se instalan en un proyecto', installFailed: 'no se instaló en ningún proyecto',
     pickProjects: 'elige al menos una oficina o un proyecto registrado', unknownProject: 'proyecto desconocido: {project}', tooManyProjects: 'como máximo {n} proyectos por directiva', unknownDirective: 'no existe esa directiva',
     loopName: 'ponle un nombre al loop', loopExists: 'ya hay un loop que se llama «{name}»', loopsMax: 'como máximo {n} loops', unknownLoop: 'no existe ese loop: {loop}', loopInterval: 'el intervalo va en minutos, de 1 a 1440', loopTries: 'los intentos por paso van de 1 a 50', loopSteps: 'los pasos son una lista', loopStepsMax: 'como máximo {n} pasos', loopStepEmpty: 'cada paso necesita qué hacer', loopCriteria: 'los criterios son una lista', loopCriteriaMax: 'como máximo {n} criterios', loopCriterionEmpty: 'el criterio está vacío', unknownStep: 'no existe ese paso: {step}', unknownCriterion: 'no existe ese criterio: {criterion}', loopDone: 'el loop ya terminó', loopNotRunning: 'el loop está {status}', noLoopHere: 'no hay un loop en curso en esta carpeta', loopNoResults: 'falta cómo va cada criterio',
-    expertSkill: 'la skill del experto: su nombre, en minúsculas (letras, números, puntos y guiones)', unknownExpert: 'no existe ese experto: {expert}', expertExists: 'la skill «{skill}» ya tiene su experto', expertName: 'el experto necesita un nombre', expertsMax: 'como máximo {n} expertos',
+    expertSkill: 'la skill del experto: su nombre, en minúsculas (letras, números, puntos y guiones)', unknownExpert: 'no existe ese experto: {expert}', expertExists: 'la skill «{skill}» ya tiene su experto', expertName: 'el experto necesita un nombre', expertsMax: 'como máximo {n} expertos', expertAction: 'cada acción necesita una etiqueta y un texto', expertActionsMax: 'como máximo {n} acciones por experto', expertNoAgent: 'no hay un proyecto registrado con la skill «{skill}» para mandarle la tarea',
     resourceKind: 'el tipo es uno de: {kinds}', resourceName: 'falta su nombre', unknownResource: 'no existe esa infraestructura: {resource}', resourceExists: 'ya hay una «{name}» de ese tipo', resourceHow: 'cómo la usa es uno de: {hows}', resourcesMax: 'como máximo {n}',
   },
   server: {
@@ -703,6 +703,7 @@ export default {
       namePh: 'Nombre', skill: 'Skill', skillPh: 'su nombre, p. ej. pci-dss', topic: 'Sabe de', topicPh: 'p. ej. pagos y PCI',
       role: 'experto en la skill «{skill}»', new: 'nuevo: guárdalo para que llegue', remove: 'Borrar el experto', removeConfirm: '¿Borrar a {name}, experto en «{skill}»?',
       save: '💾 Guardar', saved: '{name} queda como experto en «{skill}».', add: '＋ Nuevo experto',
+      actionsHint: 'Botones de acción inmediata: cada uno manda su tarea al agente del proyecto que conoce la skill.', actionLabel: 'Etiqueta', actionPrompt: 'Qué tarea despachar', actionAdd: '＋ Acción', actionRemove: 'Quitar la acción', actionRun: 'Ejecutar', actionSuggest: 'Sugerir del skill', actionSuggested: '{n} acción(es) sugerida(s) del skill.', actionNoSuggest: 'No encontré acciones en el SKILL.md del skill.', actionSaveFirst: 'Guardá el experto antes de ejecutar.', actionPromptEmpty: 'La acción no tiene texto para despachar.', actionSent: 'Tarea enviada al agente.', skillFirst: 'Elegí una skill para sugerir sus acciones.',
     },
     look: {
       hint: 'Cómo se ven y cómo se llaman los personajes de esta oficina. Cada uno sigue representando su rol (QA, backend…).',

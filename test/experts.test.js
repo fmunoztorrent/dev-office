@@ -8,8 +8,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { EventEmitter } from 'node:events';
 import { openStore } from '../server/store.js';
-import { skillOf, expertOfTool, knownSkills, skillName } from '../server/experts.js';
+import { skillOf, expertOfTool, knownSkills, skillName, skillAgent, suggestExpertActions, parseSkillActions } from '../server/experts.js';
 import { Office } from '../server/office.js';
 import { createSim, setExperts, expertPerson, ELEVATOR, HOT_DESKS } from '../public/sim.js';
 import { exportSettings, importSettings } from '../server/settings-io.js';
@@ -125,5 +126,89 @@ test('API: crear, listar (con las skills conocidas) y borrar expertos', async ()
     assert.equal(server.fullState().experts.length, 1, 'van en el estado de la oficina');
     assert.equal((await call('DELETE', `/v1/experts/${made.expert.id}`)).ok, true);
     assert.equal((await call('GET', '/v1/experts')).experts.length, 0);
+  } finally { await server.close(); }
+});
+
+test('un experto guarda sus acciones rápidas y las valida', () => {
+  const store = openStore(':memory:');
+  const actions = [{ label: 'Listar runs', prompt: 'Listá los runs' }, { label: 'Forzar run', prompt: 'Forzá el tick' }];
+  const out = store.saveExpert({ skill: 'abonos', look: { name: 'Ana' }, actions });
+  assert.ok(out.ok, out.error);
+  assert.deepEqual(out.expert.actions, actions);
+  assert.deepEqual(store.findExpert('abonos').actions.length, 2);
+  // sin id, la misma skill reemplaza sus acciones
+  assert.deepEqual(store.saveExpert({ skill: 'abonos', look: { name: 'Ana' }, actions: [{ label: 'Otra', prompt: 'x' }] }).expert.actions, [{ label: 'Otra', prompt: 'x' }]);
+  // sin acciones (o inválidas): vacío o error
+  assert.deepEqual(store.saveExpert({ skill: 'sola', look: { name: 'Z' } }).expert.actions, []);
+  assert.match(store.saveExpert({ skill: 'ok', look: { name: 'Z' }, actions: [{ label: '', prompt: 'x' }] }).error, /acción/);
+  assert.match(store.saveExpert({ skill: 'ok', look: { name: 'Z' }, actions: 'no' }).error, /acción/);
+  assert.match(store.saveExpert({ skill: 'ok', look: { name: 'Z' }, actions: Array.from({ length: 13 }, () => ({ label: 'a', prompt: 'b' })) }).error, /12/);
+});
+
+test('sugiere las acciones de una skill desde su SKILL.md y resuelve su proyecto', () => {
+  assert.deepEqual(parseSkillActions('## Índice de acciones\n\n| Nombre | Qué hace |\n| --- | --- |\n| Listar runs | lee |\n| Forzar run | escribe |\n'), ['Listar runs', 'Forzar run']);
+  assert.deepEqual(parseSkillActions('## Listar runs\ncurl\n\n## Forzar run\ncurl\n\n## Registro de lo observado\nnotas\n'), ['Listar runs', 'Forzar run'], 'las ## que no son acciones se saltan');
+  const store = openStore(':memory:');
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dto-actions-')));
+  fs.mkdirSync(path.join(dir, '.pi', 'skills', 'loyalty-abono'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.pi', 'skills', 'loyalty-abono', 'SKILL.md'), '## Índice de acciones\n\n| Nombre | Qué hace |\n| --- | --- |\n| Listar runs | lee |\n| Forzar run | escribe |\n');
+  assert.equal(skillAgent(store, 'loyalty-abono'), null, 'sin proyecto registrado no hay agente');
+  store.createAgent({ path: dir, harness: 'pi', name: 'core' });
+  assert.equal(skillAgent(store, 'loyalty-abono').name, 'core');
+  assert.deepEqual(suggestExpertActions(store, 'loyalty-abono'), [
+    { label: 'Listar runs', prompt: 'Ejecutar la acción «Listar runs» del skill «loyalty-abono».' },
+    { label: 'Forzar run', prompt: 'Ejecutar la acción «Forzar run» del skill «loyalty-abono».' },
+  ]);
+  assert.deepEqual(suggestExpertActions(store, 'no-existe'), []);
+});
+
+test('las acciones del experto van en tus ajustes (exportar e importar)', () => {
+  const store = openStore(':memory:');
+  store.saveExpert({ skill: 'abonos', look: { name: 'Ana' }, actions: [{ label: 'Forzar run', prompt: 'Forzá' }] });
+  const file = exportSettings(store);
+  assert.deepEqual(file.experts, [{ skill: 'abonos', look: { name: 'Ana' }, actions: [{ label: 'Forzar run', prompt: 'Forzá' }] }]);
+  const other = openStore(':memory:');
+  const out = importSettings(other, JSON.stringify(file), { mine: { save: () => ({ ok: true }) } });
+  assert.equal(out.applied.experts, 1);
+  assert.deepEqual(other.findExpert('abonos').actions, [{ label: 'Forzar run', prompt: 'Forzá' }]);
+});
+
+test('API: sugerir acciones y ejecutar una (va a la analista como la pizarra)', async () => {
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dto-actions-home-')));
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dto-actions-proj-')));
+  fs.mkdirSync(path.join(dir, '.pi', 'skills', 'loyalty-abono'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.pi', 'skills', 'loyalty-abono', 'SKILL.md'), '## Índice de acciones\n\n| Nombre | Qué hace |\n| --- | --- |\n| Listar runs | lee |\n');
+  const spawn = (_exe, _argv, _opts) => {
+    const child = new EventEmitter();
+    child.stdout = new EventEmitter();
+    child.kill = () => {};
+    setTimeout(() => { child.stdout.emit('data', 'Q: ¿Para qué perfil?\n'); child.emit('close', 0); }, 5);
+    return child;
+  };
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false, places: false, mine: { home }, loops: { autostart: false }, clarify: { spawn, timeoutMs: 1000 } });
+  const call = (method, p, body) => fetch(server.url + p, { method, headers: { 'content-type': 'application/json' }, body: body && JSON.stringify(body) }).then(async (r) => ({ status: r.status, ...(await r.json()) }));
+  try {
+    assert.deepEqual((await call('GET', '/v1/experts/suggest?skill=loyalty-abono')).actions, [], 'sin proyecto registrado no hay de dónde leer');
+    await call('POST', '/v1/agents', { path: dir, harness: 'pi', name: 'core', bin: process.execPath });
+    assert.deepEqual((await call('GET', '/v1/experts/suggest?skill=loyalty-abono')).actions.map((a) => a.label), ['Listar runs']);
+    assert.equal((await call('POST', '/v1/experts/nada/run', { prompt: 'x' })).status, 404);
+    const made = await call('POST', '/v1/experts', { skill: 'loyalty-abono', look: { name: 'Ana' }, actions: [{ label: 'Listar runs', prompt: 'Listá los runs' }] });
+    assert.equal(made.status, 201, made.error);
+    assert.equal((await call('POST', `/v1/experts/${made.expert.id}/run`, { prompt: '' })).status, 400);
+    const out = await call('POST', `/v1/experts/${made.expert.id}/run`, { prompt: 'Listá los runs' });
+    assert.equal(out.ok, true, out.error);
+    assert.ok(out.clarify, 'pasa por la analista, como la pizarra');
+  } finally { await server.close(); }
+});
+
+test('API: ejecutar una acción sin proyecto que conozca la skill se lo dice', async () => {
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dto-actions-noagent-')));
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false, places: false, mine: { home }, loops: { autostart: false } });
+  const call = (method, p, body) => fetch(server.url + p, { method, headers: { 'content-type': 'application/json' }, body: body && JSON.stringify(body) }).then(async (r) => ({ status: r.status, ...(await r.json()) }));
+  try {
+    const made = await call('POST', '/v1/experts', { skill: 'pci-dss', look: { name: 'Ana' } });
+    const out = await call('POST', `/v1/experts/${made.expert.id}/run`, { prompt: 'Auditá' });
+    assert.equal(out.status, 400);
+    assert.match(out.error, /proyecto registrado/);
   } finally { await server.close(); }
 });

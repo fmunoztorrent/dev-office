@@ -303,9 +303,13 @@ The subject matter experts (server/experts.js): a character associated by hand w
 
 | Method | Path | Body |
 |---|---|---|
-| `GET` | `/v1/experts` | `{ experts: [{ id, skill, topic, look }], skills: [{ name, where }] }` (`skills`: the ones the company knows, to pick from: the archive's, yours and the registered projects') |
-| `POST` | `/v1/experts` | `{ skill, topic?, look: { name, title?, sex?, personality?, style?, shirt?, pants?, hair?, skin?, long?, beard?, glasses? } }`: creates it (or updates the expert of that skill). A skill has one expert |
+| `GET` | `/v1/experts` | `{ experts: [{ id, skill, topic, look, actions }], skills: [{ name, where }] }` (`skills`: the ones the company knows, to pick from: the archive's, yours and the registered projects') |
+| `POST` | `/v1/experts` | `{ skill, topic?, look: { name, title?, sex?, personality?, style?, shirt?, pants?, hair?, skin?, long?, beard?, glasses? }, actions?: [{ label, prompt }] }`: creates it (or updates the expert of that skill). A skill has one expert |
 | `PUT` · `DELETE` | `/v1/experts/<id>` | Changes it (its `look` is replaced whole) · deletes it (also by its skill) |
+| `GET` | `/v1/experts/suggest?skill=<name>` | `{ actions: [{ label, prompt }] }`: the quick actions a skill offers, read from its `SKILL.md` action table (or its `##` recipes) |
+| `POST` | `/v1/experts/<id>/run` | `{ prompt }`: sends it as a task to the project agent that knows the expert's skill (through the analyst's review, like the whiteboard) |
+
+Each expert keeps a list of quick actions (`actions`: `[{ label, prompt }]`, at most 12): buttons of immediate action, one per recipe the skill offers. In ⚙ › Characters › Experts each action has a ▶ that dispatches its prompt to the agent of the project that knows the skill; the ones the skill itself declares can be suggested from its `SKILL.md` (⤳ Suggest). The actions are part of the expert and travel in the settings file.
 
 - **Which skill a tool uses:** Claude Code's `Skill` (`{ skill }`, without its plugin: `plugin:name` → `name`), OpenCode's `skill` (`{ name }`), or a path with `…/skills/<name>/…` (reading the skill's `SKILL.md`, as Pi and Codex do; also in a command).
 - Over WebSocket, `{ type: "experts", experts }`; the state (`/v1/state`) carries `experts`. They travel in your settings file (`experts`).

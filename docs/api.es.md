@@ -303,9 +303,13 @@ Los expertos (SME, server/experts.js): un personaje asociado a mano a una skill.
 
 | Método | Ruta | Cuerpo |
 |---|---|---|
-| `GET` | `/v1/experts` | `{ experts: [{ id, skill, topic, look }], skills: [{ name, where }] }` (`skills`: las que conoce la empresa, para elegir: las del archivo, las tuyas y las de los proyectos registrados) |
-| `POST` | `/v1/experts` | `{ skill, topic?, look: { name, title?, sex?, personality?, style?, shirt?, pants?, hair?, skin?, long?, beard?, glasses? } }`: lo crea (o actualiza al experto de esa skill). Una skill tiene un experto |
+| `GET` | `/v1/experts` | `{ experts: [{ id, skill, topic, look, actions }], skills: [{ name, where }] }` (`skills`: las que conoce la empresa, para elegir: las del archivo, las tuyas y las de los proyectos registrados) |
+| `POST` | `/v1/experts` | `{ skill, topic?, look: { name, title?, sex?, personality?, style?, shirt?, pants?, hair?, skin?, long?, beard?, glasses? }, actions?: [{ label, prompt }] }`: lo crea (o actualiza al experto de esa skill). Una skill tiene un experto |
 | `PUT` · `DELETE` | `/v1/experts/<id>` | Cambiarlo (su `look` se reemplaza entero) · borrarlo (también por su skill) |
+| `GET` | `/v1/experts/suggest?skill=<nombre>` | `{ actions: [{ label, prompt }] }`: las acciones rápidas que ofrece una skill, leídas de su tabla de acciones en el `SKILL.md` (o de sus recetas `##`) |
+| `POST` | `/v1/experts/<id>/run` | `{ prompt }`: lo manda como tarea al agente del proyecto que conoce la skill del experto (por la revisión de la analista, como la pizarra) |
+
+Cada experto guarda una lista de acciones rápidas (`actions`: `[{ label, prompt }]`, como máximo 12): botones de acción inmediata, uno por receta que ofrece la skill. En ⚙ › Personajes › Expertos cada acción tiene un ▶ que despacha su texto al agente del proyecto que conoce la skill; las que la skill misma declara se pueden sugerir desde su `SKILL.md` (⤳ Sugerir). Las acciones son parte del experto y viajan en el archivo de ajustes.
 
 - **Qué skill usa una herramienta:** `Skill` de Claude Code (`{ skill }`, sin su plugin: `plugin:nombre` → `nombre`), `skill` de OpenCode (`{ name }`), o una ruta con `…/skills/<nombre>/…` (leer el `SKILL.md` de la skill, como hacen Pi y Codex; también en un comando).
 - Por WebSocket, `{ type: "experts", experts }`; el estado (`/v1/state`) trae `experts`. Viajan en tu archivo de ajustes (`experts`).

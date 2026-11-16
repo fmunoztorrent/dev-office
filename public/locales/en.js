@@ -502,7 +502,7 @@ export default {
       termField: 'Term', definition: 'Definition (Markdown)', synonyms: 'Synonyms (comma-separated)', project: 'Only for the project', anyProject: 'any project', validUntil: 'Valid until', expired: 'expired', origin: 'from {origin}',
       index: '🧠 {n} chunk(s) indexed · {e} with embedding', chunks: 'How it was indexed', download: '⬇ .md',
       import: '📥 Load', importTitle: 'Load documents', importHint: 'Markdown, text, CSV, JSON, HTML, PDF or Word (PDF and Word need pdftotext or pandoc on this machine). Their readable text is kept, and it is indexed for the agents.',
-      drop: 'Drop files here, or pick them', url: 'or a web address', importGo: '📥 Load into the archive', importing: 'Loading {name}…', imported: 'Loaded: {n} document(s)', importFailed: '{name}: {error}',
+      drop: 'Drop files here, or pick them', importUrl: 'or a web address', importGo: '📥 Load into the archive', importing: 'Loading {name}…', imported: 'Loaded: {n} document(s)', importFailed: '{name}: {error}',
       gaps: '🕳 Gaps', gapsHint: 'What the agents searched and did not find. Answer it (a note, a doc, a term) and they will find it next time.', gapsEmpty: 'No gaps: the agents found what they searched for.',
       gapTimes: '{n} time(s)', gapAnswer: '✍ Answer it', gapDismiss: 'Dismiss',
     },
@@ -548,7 +548,7 @@ export default {
     unknownKnowledge: 'no such entry in the archive', notInstallable: 'only skills and connectors are installed in a project', installFailed: 'it was not installed in any project',
     pickProjects: 'pick at least one office or registered project', unknownProject: 'unknown project: {project}', tooManyProjects: 'at most {n} projects per directive', unknownDirective: 'no such directive',
     loopName: 'give the loop a name', loopExists: 'there already is a loop called “{name}”', loopsMax: 'at most {n} loops', unknownLoop: 'no such loop: {loop}', loopInterval: 'the interval is in minutes, from 1 to 1440', loopTries: 'the tries per step go from 1 to 50', loopSteps: 'the steps are a list', loopStepsMax: 'at most {n} steps', loopStepEmpty: 'each step needs what to do', loopCriteria: 'the criteria are a list', loopCriteriaMax: 'at most {n} criteria', loopCriterionEmpty: 'the criterion is empty', unknownStep: 'no such step: {step}', unknownCriterion: 'no such criterion: {criterion}', loopDone: 'the loop already finished', loopNotRunning: 'the loop is {status}', noLoopHere: 'there is no loop running in this folder', loopNoResults: 'how each criterion is going is missing',
-    expertSkill: 'the expert\'s skill: its name, in lowercase (letters, digits, dots and dashes)', unknownExpert: 'no such expert: {expert}', expertExists: 'the skill “{skill}” already has its expert', expertName: 'the expert needs a name', expertsMax: 'at most {n} experts',
+    expertSkill: 'the expert\'s skill: its name, in lowercase (letters, digits, dots and dashes)', unknownExpert: 'no such expert: {expert}', expertExists: 'the skill “{skill}” already has its expert', expertName: 'the expert needs a name', expertsMax: 'at most {n} experts', expertAction: 'each action needs a label and a text', expertActionsMax: 'at most {n} actions per expert', expertNoAgent: 'no registered project has the skill “{skill}” to send the task to',
     resourceKind: 'its kind is one of: {kinds}', resourceName: 'its name is missing', unknownResource: 'no such infrastructure: {resource}', resourceExists: 'there is already a “{name}” of that kind', resourceHow: 'how it is used is one of: {hows}', resourcesMax: 'at most {n}',
   },
   server: {
@@ -703,6 +703,7 @@ export default {
       namePh: 'Name', skill: 'Skill', skillPh: 'its name, e.g. pci-dss', topic: 'Knows about', topicPh: 'e.g. payments and PCI',
       role: 'expert in the skill “{skill}”', new: 'new: save them so they come', remove: 'Delete the expert', removeConfirm: 'Delete {name}, expert in “{skill}”?',
       save: '💾 Save', saved: '{name} is now the expert in “{skill}”.', add: '＋ New expert',
+      actionsHint: 'Quick-action buttons: each one sends its task to the agent of the project that knows the skill.', actionLabel: 'Label', actionPrompt: 'The task to dispatch', actionAdd: '＋ Action', actionRemove: 'Remove the action', actionRun: 'Run', actionSuggest: 'Suggest from the skill', actionSuggested: '{n} action(s) suggested from the skill.', actionNoSuggest: 'No actions found in the skill\'s SKILL.md.', actionSaveFirst: 'Save the expert before running.', actionPromptEmpty: 'The action has no text to dispatch.', actionSent: 'Task sent to the agent.', skillFirst: 'Pick a skill to suggest its actions.',
     },
     look: {
       hint: 'How the characters of this office look and what they are called. Each one still stands for its role (QA, backend…).',

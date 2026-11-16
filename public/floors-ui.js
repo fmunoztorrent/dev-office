@@ -340,6 +340,8 @@ export function createArchiveUi({ getOffices = () => [], hhmm = (ts) => new Date
     const expired = e.validUntil && e.validUntil < Date.now();
     // the readable text, as a document; the index (its chunks and embeddings) underneath
     const read = el('div', { class: 'ar-read' });
+    // renderMarkdown escapes everything first, so innerHTML is safe here.
+    // pi-lens-ignore: no-inner-html-js
     read.innerHTML = renderMarkdown(e.body || '');
     const download = () => {
       const a = el('a', { href: URL.createObjectURL(new Blob([`# ${e.title}\n\n${e.body || ''}\n`], { type: 'text/markdown' })), download: `${(e.name || e.title).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || e.id}.md` });
@@ -487,7 +489,7 @@ export function createArchiveUi({ getOffices = () => [], hhmm = (ts) => new Date
     box.innerHTML = '';
     const files = el('input', { type: 'file', multiple: true, accept: '.md,.markdown,.txt,.csv,.tsv,.json,.yaml,.yml,.xml,.html,.htm,.pdf,.docx,.odt,.rtf,.epub' });
     const drop = el('label', { class: 'ar-drop' }, el('span', {}, A('drop')), files);
-    const url = el('input', { type: 'url', placeholder: 'https://…', 'aria-label': A('url') });
+    const url = el('input', { type: 'url', placeholder: 'https://…', 'aria-label': A('importUrl') });
     const kind = el('select', {}, ['doc', 'note', 'decision', 'term'].map((x) => el('option', { value: x }, `${ICON[x]} ${t(`knowledgeKind.${x}`)}`)));
     const office = el('select', {}, el('option', { value: '' }, A('company')), getOffices().map((o) => el('option', { value: o.id }, o.name)));
     const project = el('select', {}, el('option', { value: '' }, A('anyProject')));
@@ -535,7 +537,7 @@ export function createArchiveUi({ getOffices = () => [], hhmm = (ts) => new Date
     box.append(
       el('h3', {}, A('importTitle')),
       el('p', { class: 'fl-dim' }, A('importHint')),
-      el('div', { class: 'ar-form' }, drop, row(A('url'), url), row(A('kind'), kind), row(A('office'), office), row(A('project'), project), row(A('tags'), tags), row(A('validUntil'), until)),
+      el('div', { class: 'ar-form' }, drop, row(A('importUrl'), url), row(A('kind'), kind), row(A('office'), office), row(A('project'), project), row(A('tags'), tags), row(A('validUntil'), until)),
       el('div', { class: 'ar-row' }, el('button', { type: 'button', class: 'btn ghost', onclick: () => show(st.current?.id || null) }, A('back')), go),
       log,
     );

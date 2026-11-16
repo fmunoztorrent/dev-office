@@ -547,6 +547,13 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
 .s-expert { background: #fbf8ff; }
 .s-expert canvas { background: #d9cff2; }
 .s-skill input { min-width: 0; font: 13px "Space Grotesk", sans-serif; }
+.s-actions { display: grid; gap: 4px; }
+.s-actions .s-row { justify-content: flex-start; }
+.s-actions .hint { font-size: 12px; color: #6c757d; }
+.s-action { display: grid; gap: 3px; padding: 4px; box-shadow: 0 0 0 1px #2b2d4233; }
+.s-action-top { display: grid; grid-template-columns: 1fr auto auto; gap: 4px; align-items: center; }
+.s-action-top input, .s-action textarea { min-width: 0; font: 13px "Space Grotesk", sans-serif; }
+.s-action textarea { resize: vertical; }
 .s-dept-text { margin: 4px 0; padding: 6px 8px; font-size: 12.5px; white-space: pre-wrap; max-height: 6.5em; overflow: auto; background: #f6f3e9; box-shadow: inset 3px 0 0 #e9c46a; }
 .s-dept-k { margin-top: 6px; font-size: 12px; font-weight: 600; color: #6c757d; }
 .s-share { display: flex; gap: 6px; align-items: flex-end; justify-content: flex-end; }

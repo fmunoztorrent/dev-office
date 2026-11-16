@@ -302,6 +302,9 @@ const MIGRATIONS = [
      updated_at INTEGER NOT NULL,
      UNIQUE (kind, name)
    );`,
+  // 13 → 14: an expert's quick actions (server/experts.js): buttons that dispatch a task to the
+  // project agent that knows the skill, one per recipe the skill offers.
+  `ALTER TABLE experts ADD COLUMN actions TEXT NOT NULL DEFAULT '[]';`,
 ];
 
 // what is yours (⚙ › Mine): how many, how long, and how your tools run
@@ -339,6 +342,18 @@ function toolConfig(c = {}) {
   return { run, params: list, timeout, ...(role ? { role } : {}) };
 }
 const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+/** An expert's quick actions, checked: [{ label, prompt }], at most EXPERT_ACTIONS_MAX. */
+function cleanActions(list) {
+  if (list === undefined || list === null) return [];
+  if (!Array.isArray(list)) fail(t('err.expertAction'));
+  if (list.length > EXPERT_ACTIONS_MAX) fail(t('err.expertActionsMax', { n: EXPERT_ACTIONS_MAX }));
+  return list.map((a) => {
+    const label = String(a?.label ?? '').trim().slice(0, 60);
+    const prompt = String(a?.prompt ?? '').trim().slice(0, 4000);
+    if (!label || !prompt) fail(t('err.expertAction'));
+    return { label, prompt };
+  });
+}
 /** A character's look, checked (`who` names it in the errors): only the keys that can be changed, each with its type. */
 function cleanLook(who, look) {
   const clean = {};
@@ -358,6 +373,7 @@ function cleanLook(who, look) {
 /** A skill's name, as agents call it: lowercase letters, digits, dots, dashes and underscores. */
 export const SKILL_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const EXPERTS_MAX = 40;
+const EXPERT_ACTIONS_MAX = 12;
 const LOOPS_MAX = 100;
 const RESOURCES_MAX = 300;
 const RESOURCE_STATES = ['exists', 'planned'];
@@ -727,7 +743,7 @@ export class Store {
    */
   saveLoop(loop) {
     return this.#write(() => {
-      const { id, name, agent, status, createdAt, updatedAt, ...data } = loop;
+      const { id, name, agent, status, createdAt, updatedAt: _updatedAt, ...data } = loop;
       const clash = this.findLoop(name);
       if (clash && clash.id !== id) fail(t('err.loopExists', { name }));
       const now = Date.now();
@@ -748,7 +764,7 @@ export class Store {
   // ---------------------------------------------------------------- the subject matter experts (server/experts.js)
 
   #expert(r) {
-    return r ? { id: r.id, skill: r.skill, topic: r.topic || '', look: json(r.look, {}) || {}, createdAt: r.created_at, updatedAt: r.updated_at } : null;
+    return r ? { id: r.id, skill: r.skill, topic: r.topic || '', look: json(r.look, {}) || {}, actions: json(r.actions, []) || [], createdAt: r.created_at, updatedAt: r.updated_at } : null;
   }
   listExperts() { return this.db.prepare('SELECT * FROM experts ORDER BY skill').all().map((r) => this.#expert(r)); }
   getExpert(id) { return this.#expert(this.db.prepare('SELECT * FROM experts WHERE id = ?').get(String(id))); }
@@ -769,15 +785,16 @@ export class Store {
       if (clash && clash.id !== current?.id) fail(t('err.expertExists', { skill }));
       const look = cleanLook('sme', input.look === undefined ? current?.look || {} : input.look);
       if (!look.name) fail(t('err.expertName'));
+      const actions = cleanActions(input.actions === undefined ? current?.actions || [] : input.actions);
       const topic = String(input.topic ?? current?.topic ?? '').replace(/\s+/g, ' ').trim().slice(0, 120);
       const now = Date.now();
       if (current) {
-        this.db.prepare('UPDATE experts SET skill = ?, look = ?, topic = ?, updated_at = ? WHERE id = ?').run(skill, JSON.stringify(look), topic, now, current.id);
+        this.db.prepare('UPDATE experts SET skill = ?, look = ?, topic = ?, actions = ?, updated_at = ? WHERE id = ?').run(skill, JSON.stringify(look), topic, JSON.stringify(actions), now, current.id);
         return { ok: true, expert: this.getExpert(current.id), created: false };
       }
       if (this.db.prepare('SELECT count(*) AS n FROM experts').get().n >= EXPERTS_MAX) fail(t('err.expertsMax', { n: EXPERTS_MAX }));
       const id = `x${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-      this.db.prepare('INSERT INTO experts (id, skill, look, topic, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, skill, JSON.stringify(look), topic, now, now);
+      this.db.prepare('INSERT INTO experts (id, skill, look, topic, actions, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, skill, JSON.stringify(look), topic, JSON.stringify(actions), now, now);
       return { ok: true, expert: this.getExpert(id), created: true };
     });
   }

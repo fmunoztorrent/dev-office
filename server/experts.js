@@ -66,3 +66,57 @@ export function knownSkills(store, { dirs = [] } = {}) {
   for (const a of store.listAgents()) for (const sub of PROJECT_SKILL_DIRS) for (const n of skillsIn(path.join(a.path, sub))) add(n, a.name);
   return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
+
+/** The registered project agent whose folder knows `skill` (its .pi/.claude/… skills), or null. */
+export function skillAgent(store, skill) {
+  const name = skillName(skill);
+  if (!name) return null;
+  for (const a of store.listAgents?.() || []) {
+    for (const sub of PROJECT_SKILL_DIRS) {
+      if (fs.existsSync(path.join(a.path, sub, name, 'SKILL.md'))) return a;
+    }
+  }
+  return null;
+}
+
+// a markdown table's action column, named in the header (any language the skill is written in)
+const ACTION_HEADER = /^(nombre|name|acción|acciones|accion|action|actions|receta|recipe)$/i;
+// ## sections that are not actions (a log, notes, the warnings…)
+const ACTION_SKIP = /^(registro|antes|before|notas|notes|referencias|references|reference|constantes|constants|advertencias|warnings|índice|indice|index)(?:\s|$)/i;
+
+/** The action names a skill's SKILL.md declares: the first column of its action index table, or its ## headers. */
+export function parseSkillActions(md) {
+  const lines = String(md ?? '').split(/\r?\n/);
+  const labels = [];
+  let header = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line.startsWith('|')) { if (header >= 0) break; continue; }
+    const cells = line.slice(1, -1).split('|').map((c) => c.trim());
+    const first = cells[0] || '';
+    if (header < 0) { if (ACTION_HEADER.test(first)) header = i; continue; }
+    if (/^[-: ]+$/.test(first)) continue; // the separator row under the header
+    const label = first.replace(/[*_`]/g, '').trim();
+    if (label) labels.push(label);
+  }
+  if (labels.length) return [...new Set(labels)];
+  // no action table: the ## headers of an actions.md-style catalog (minus the obvious non-actions)
+  return [...new Set(lines.filter((l) => l.startsWith('## ')).map((l) => l.slice(3).trim()).filter((l) => l && !ACTION_SKIP.test(l)))];
+}
+
+/** The quick actions a skill offers, suggested from its SKILL.md: [{ label, prompt }] ([] when not found). */
+export function suggestExpertActions(store, skill, { dirs = [] } = {}) {
+  const name = skillName(skill);
+  if (!name) return [];
+  const files = [];
+  for (const a of store.listAgents?.() || []) for (const sub of PROJECT_SKILL_DIRS) files.push(path.join(a.path, sub, name, 'SKILL.md'));
+  for (const d of dirs) files.push(path.join(d.dir || d, name, 'SKILL.md'));
+  for (const file of files) {
+    if (!fs.existsSync(file)) continue;
+    const labels = parseSkillActions(fs.readFileSync(file, 'utf8'));
+    if (!labels.length) continue;
+    return labels.map((label) => ({ label, prompt: `Ejecutar la acción «${label}» del skill «${name}».` }));
+  }
+  return [];
+}
+
