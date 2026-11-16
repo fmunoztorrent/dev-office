@@ -4,6 +4,17 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-11-16
+
+### Changed
+
+- **A bigger ⚙ Settings sheet.** Six tabs of fields no longer fit in a narrow panel: the sheet is now wider (up to 1000px) and as tall as the window, with the panels scrolling inside it.
+- **The weather in the HUD is only its icon.** Next to the connection and the context bar it no longer prints the temperature; it is still there, with the place and the season, in its tooltip.
+
+### Fixed
+
+- **A subagent that never reports its end no longer leaves the office (and its pane) waiting.** A harness can lose the end of a subagent (a pane that goes away before the result is recorded): until now its `follow` pane stayed open and the office kept it working for up to 30 minutes. Now a subagent whose pane is not there anymore —or whose own process ended, the ones that run as a process of their own, like Pi's— is over once it has been quiet for a few seconds: the office closes its pane, takes it off the team and says so in the log. `server/subpanes.js`, `server/office.js`.
+
 ## [0.26.0] - 2026-11-16
 
 ### Added
