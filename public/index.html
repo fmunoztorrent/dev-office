@@ -106,6 +106,10 @@
         <button id="open-daily" class="hud-btn" type="button" data-i18n-title="ui.dailyKey" data-i18n-aria="ui.daily" aria-controls="daily">
           <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><path fill-rule="evenodd" d="M1 2h10v7H5l-3 3V9H1zM2 3v5h1v1.6L4.6 8H10V3z"/><path d="M12 5h3v7h-1v3l-3-3H6v-2h1v1h4.4L13 12.6V11h1V6h-2z"/><rect x="4" y="5" width="4" height="1"/></g></svg>
         </button>
+        <!-- the expert phone: call an expert of the company when you need them (only when there are experts) -->
+        <button id="open-phone" class="hud-btn" type="button" hidden data-i18n-title="ui.phone.key" data-i18n-aria="ui.phone.title" aria-controls="phone">
+          <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><path d="M1 5h2v-2h10v2h2v3h-3v-1h-2v-1h-4v1h-2v1h-3z"/><path d="M5 9h6v2h-1v1h2v-1h1v3h-1v1h-8v-1h-1v-3h1v1h2v-1h-1z"/><rect x="7" y="12" width="2" height="1" fill="#0b0c14"/></g></svg>
+        </button>
       </div>
       <!-- the e2e tests an agent runs: a small monitor with the browser under test (e2e-ui.js); a click expands it -->
       <div id="e2e-mini" class="e2e-mini" hidden role="button" tabindex="0"></div>
@@ -362,6 +366,19 @@
         <button type="submit" class="btn" id="cl-send" data-i18n="clarify.ui.send">▶ Send it to work</button>
       </footer>
     </form>
+  </dialog>
+
+  <!-- The expert phone: call one of the company's experts (their quick actions, or a free request). -->
+  <dialog id="phone" class="brief phone" aria-labelledby="phone-title">
+    <header class="brief-head">
+      <span class="pin" aria-hidden="true"></span>
+      <h2 id="phone-title" data-i18n="ui.phone.title">Call an expert</h2>
+      <button type="button" class="brief-x" id="phone-close" data-i18n-aria="settings.close">✕</button>
+    </header>
+    <div class="brief-body">
+      <div id="phone-list" class="phone-list"></div>
+      <p class="muted" id="phone-note" aria-live="polite"></p>
+    </div>
   </dialog>
 
   <!-- The daily on demand: what each one did since the last daily and what they are on (the company's: every department). -->

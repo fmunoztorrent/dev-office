@@ -929,3 +929,19 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
   .e2e-mini { width: auto; max-width: 70cqi; font-size: 12px; }
   .e2e-mini-screen, .e2e-mini-now { display: none; }
 }
+
+/* the expert phone: a card per expert with their quick actions and a free request */
+.phone { width: min(560px, calc(100vw - 32px)); }
+.phone-list { display: grid; gap: 12px; max-height: 62vh; overflow: auto; }
+.phone-card { display: grid; gap: 8px; padding: 10px; background: #fff8dc; box-shadow: inset 3px 0 0 #7bb6ff; }
+.phone-head { display: flex; align-items: center; gap: 10px; }
+.phone-portrait { width: 48px; height: 48px; image-rendering: pixelated; background: #c7d6e6; flex: none; }
+.phone-who { display: grid; gap: 1px; min-width: 0; font-size: 13px; }
+.phone-who b { font: 20px/1 "VT323", monospace; color: #3b2a14; }
+.phone-who small { color: #6b4d00; }
+.phone-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.phone-row { display: flex; gap: 6px; }
+.phone-input { flex: 1; min-width: 0; font: 14px "Space Grotesk", sans-serif; padding: 6px 8px; }
+.phone .muted { color: #5c4630; margin: 8px 0 0; min-height: 1.2em; }
+.phone .muted.bad { color: #b3261e; }
+.phone .quiet { margin: 0; color: #5c4630; font-size: 13px; }

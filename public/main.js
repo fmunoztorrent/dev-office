@@ -8,6 +8,7 @@ import { createBoardView } from './board-ui.js';
 import { createPrompts } from './prompts-ui.js';
 import { createDirectivesUi, createArchiveUi } from './floors-ui.js';
 import { createLoops } from './loops-ui.js';
+import { createPhone } from './phone-ui.js';
 import { renderImpact, impactQuestions } from './impact-ui.js';
 import { createE2E } from './e2e-ui.js';
 import './renderers/plan.js'; // the reference renderer (public/scene.js): ?renderer=plan
@@ -120,7 +121,7 @@ function connect() {
       onTargets(st.targets);
       onLoops(st.loops || []);
       e2eUi.update(st.e2e || []);
-      setExperts(st.experts || []);
+      onExperts(st.experts || []);
       onServices(st.services || []);
       onPrompts(st.prompts || []);
       clarifications = st.clarifications || [];
@@ -139,7 +140,7 @@ function connect() {
     if (msg.type === 'systems') { systems = msg.systems || []; if ($('brief').open) renderBrief(); }
     if (msg.type === 'loops') onLoops(msg.loops);
     if (msg.type === 'e2e') e2eUi.update(msg.runs);
-    if (msg.type === 'experts') { setExperts(msg.experts); settings?.expertsChanged?.(msg.experts); }
+    if (msg.type === 'experts') { onExperts(msg.experts); settings?.expertsChanged?.(msg.experts); }
     if (msg.type === 'services' && msg.office === office?.id) onServices(msg.services);
     if (msg.type === 'prompts' && msg.office === office?.id) onPrompts(msg.prompts);
     if (msg.type === 'clarify' && msg.clarify?.office === office?.id) onClarify(msg.clarify);
@@ -188,6 +189,9 @@ const loopsUi = createLoops({
   getProjects: () => targets.filter((x) => x.registered).map((x) => ({ id: x.id, name: x.name })),
   office: () => office?.id || 'main',
 });
+let experts = []; // the company's experts (⚙ › Characters › Experts)
+const phone = createPhone({ getExperts: () => experts, personOf: (x) => expertPerson(x) });
+function onExperts(list) { experts = Array.isArray(list) ? list : []; setExperts(experts); phone.refresh(); }
 function onLoops(list) {
   loops = Array.isArray(list) ? list : [];
   renderLoopChip();
@@ -1308,6 +1312,7 @@ document.addEventListener('keydown', (e) => {
   if (k === 'a') { e.preventDefault(); toggleFeed(); }
   else if (k === 'w') { e.preventDefault(); openWork(); }
   else if (k === 'd') { e.preventDefault(); openDaily(); }
+  else if (k === 'p') { e.preventDefault(); phone.open(); }
   else if (k === 't') { e.preventDefault(); if (game.floor === 'exec') directivesUi.open(); else if (game.floor === 'archive') archiveUi.open({ create: true }); else openBrief(); }
   else if (e.key === 'PageUp' || e.key === 'PageDown') { e.preventDefault(); moveFloor(e.key === 'PageUp' ? -1 : 1); }
   else if (k === 'c') { e.preventDefault(); settings.open(); }
