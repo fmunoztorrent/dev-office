@@ -564,6 +564,8 @@ export default {
   herdr: {
     opened: '🪟 pane {pane} opened: {title} ({office})', closed: '🪟 pane {pane} closed: {title}', noAgent: 'cannot find any installed agent (claude, pi or opencode)',
     launched: '🪟 {agent} opened in pane {pane} ({office})', notInside: 'Not inside herdr: agents run in the background.',
+    subagentOver: '🪟 subagent {title}: it stopped reporting and its pane is gone or its process ended, so it is over (it never sent its end)',
+    subagentStale: '🪟 subagent {title}: it has not reported for 30 minutes, so I close its pane and consider it over',
     startTitle: 'the office agent', noPane: 'herdr did not return the new pane',
   },
   // the activity monitor (inside herdr, instead of the game)

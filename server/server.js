@@ -52,7 +52,7 @@ import { zoneInfo, systemZone } from '../public/clock.js';
 import { insideDir as inside, insideDir } from './paths.js';
 import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.26.0';
+export const VERSION = '0.27.0';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
 const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
@@ -399,6 +399,12 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     env: () => ({ DEV_TEAM_OFFICE_URL: officeUrl() }),
     enabled: () => prefs().herdr.subagents !== false,
     who: (id, role) => store.getAppearance(id)?.[role]?.name || defaultLook(role)?.name || '',
+    // a subagent that is over without having said so (its pane is gone, or its own process ended):
+    // the office stops waiting for it, as if it had reported its end
+    onEnded: (e, why) => {
+      say(t(why === 'stale' ? 'herdr.subagentStale' : 'herdr.subagentOver', { title: e.title || e.role || e.subId }), { office: e.office, pane: e.pane });
+      company.ingest('herdr', { session: e.session, office: e.office, kind: 'subagent_end', subId: e.subId, role: e.role, text: e.title });
+    },
   }) : null;
   company.on('event', (id, event) => subPanes?.onEvent(id, event));
 
