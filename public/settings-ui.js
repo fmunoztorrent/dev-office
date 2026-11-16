@@ -1,9 +1,9 @@
 // ⚙ Settings in the web view. The office is the frontend and keeps its own data in its SQLite database:
 //   General      game language, the company's time zone and city, real weather, herdr and the log
 //   Offices      the company's offices (teams or domains): name, time zone and city
-//   Agents       the maintainer: each agent is a full path + the CLI that serves it + its
-//                office. What its harness brings (Errementari, commands, prompts, .devteam/) is
-//                detected, and a prompt sent from the whiteboard starts THAT pipeline.
+//   Repositories the maintainer: each repository is a full path + the agent (CLI) that serves it
+//                + its department. What that harness brings (Errementari, commands, prompts,
+//                .devteam/) is detected, and a prompt sent from the whiteboard starts THAT pipeline.
 //   Characters   how the characters of the office being watched look.
 //   Mine         what is yours, not the company's: your private skills and your own tools (server/mine.js).
 
@@ -139,7 +139,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     $('s-file').textContent = st.data ? t('settings.file', { file: tilde(st.data.office.file) }) : '';
     if (tab === 'general') { renderGeneral(); indexStatus(); }
     else if (tab === 'offices') { renderOffices(); loadProjects(); }
-    else if (tab === 'agents') renderAgents();
+    else if (tab === 'repos') renderRepos();
     else if (tab === 'models') { st.models = null; renderModels(); }
     else if (tab === 'mine') renderMine();
     else { st.looks = null; st.experts = null; renderLook(); loadExperts(); }
@@ -183,7 +183,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   /** Something new arrived (agents, offices, settings, the language…): the tab is redrawn. */
   function refresh(all = false) {
     if (!$('settings').open) return;
-    if (st.tab === 'agents') return renderList();
+    if (st.tab === 'repos') return renderList();
     if (all || st.tab === 'general' || st.tab === 'offices') show(st.tab);
   }
   /** The watched office's characters changed (another office chosen, or saved): Characters shows them. */
@@ -689,12 +689,12 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     await reloadOffices();
   }
 
-  // ------------------------------------------------------------ Agents (the maintainer)
+  // ------------------------------------------------------------ Repositories (the maintainer)
 
-  const A = (k, v) => t(`settings.agents.${k}`, v);
+  const A = (k, v) => t(`settings.repos.${k}`, v);
 
-  function renderAgents() {
-    const panel = document.querySelector('[data-panel="agents"]');
+  function renderRepos() {
+    const panel = document.querySelector('[data-panel="repos"]');
     put(panel,
       el('p', { class: 'hint' }, A('hint')),
       el('div', { id: 's-agent-list', class: 's-agents' }),

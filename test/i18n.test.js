@@ -28,7 +28,7 @@ test('inglés por defecto; español al elegirlo (y uno desconocido vuelve al ing
   assert.equal(getLanguage(), 'en');
   assert.equal(t('conn.live'), 'live');
   assert.equal(t('err.noDir', { dir: '/x' }), 'the directory /x does not exist');
-  assert.equal(t('settings.offices.agents', { n: 0 }), '0 agent(s)', 'el 0 también se escribe');
+  assert.equal(t('settings.offices.repos', { n: 0 }), '0 repo(s)', 'el 0 también se escribe');
   assert.equal(t('err.noDir', {}), 'the directory  does not exist', 'lo que falta queda vacío');
   assert.equal(listOf(['Ana', 'Leo', 'Sol']), 'Ana, Leo, and Sol');
   assert.equal(describe('Edit', { file_path: 'src/api.js' }), 'Editing api.js');

@@ -29,8 +29,8 @@ test('desde la terminal: ⚙ → Personajes → renombrar a Tomás → ctrl+s gu
     await until(() => stdout.out.includes('⚙ Ajustes') && stdout.out.includes('Idioma'));
     type('\x1b[C'); // tabs: General → Offices
     await until(() => stdout.out.includes('Agregar departamento'));
-    type('\x1b[C'); // → Agentes
-    await until(() => stdout.out.includes('Agentes registrados'));
+    type('\x1b[C'); // → Repositorios
+    await until(() => stdout.out.includes('Repositorios registrados'));
     type('\x1b[C'); // → Personajes
     await until(() => stdout.out.includes('Pelo largo'));
     type('\x1b[B'); // Character (Tomás by default)
