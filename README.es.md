@@ -138,6 +138,8 @@ La simulación es la misma en la terminal y en el navegador ([`public/sim.js`](p
 | Gemini CLI | — | `mcpServers` en `~/.gemini/settings.json` | — |
 | Cursor | — | `mcpServers` en `~/.cursor/mcp.json` | — |
 
+**Las skills de la oficina van al paso de la oficina.** Cada una se instala con una marca de la versión que la puso (`.dev-team-office.json` en su carpeta), así que cada `setup`, y por eso cada `update`, la reemplaza entera (un archivo que la versión nueva dejó de traer no se queda), quita las que la oficina ya no trae y `doctor` avisa de una de otra versión. Una carpeta con el mismo nombre que no es de la oficina nunca se toca (setup lo dice). **Con el plugin de Claude Code**, las skills vienen dentro del plugin: `setup` y `update` le piden a la CLI de Claude Code que refresque su marketplace y actualice el plugin (`claude plugin marketplace update dev-office`, `claude plugin update dev-team-office@dev-office`; reinicia Claude Code para usarlo), quitan las copias sueltas que dejó un setup anterior en `~/.claude/skills`, y si la CLI no está te dicen esos dos comandos.
+
 Los hooks y el MCP apuntan a un lanzador estable (`~/.dev-team-office/bin/dev-team-office`) que recuerda qué Node usar, así funcionan también desde apps de escritorio con un PATH mínimo. Un hook nunca rompe a su agente: si la oficina está apagada, no hace nada. `--only codex,claude` conecta sólo esos; `--dry-run` muestra lo que haría.
 
 **Binario independiente** (no necesita Node; se compila con Deno): `npm run build` deja `dist/dev-team-office` (arm64; `npm run build:mac-x64` para Intel).

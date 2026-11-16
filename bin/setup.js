@@ -16,12 +16,12 @@ import { fileURLToPath } from 'node:url';
 import { t } from '../public/i18n.js';
 import { which, piAgentDir } from '../integrations/common/devteam.mjs';
 import { install, claudeHooks } from './install.js';
+import { syncSkills, removeSkills, skillsState } from './skills.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const MARK = 'dev-team-office';
 // what the agent reads from the server before connecting (Pi puts it in its system prompt)
 const MCP_DESCRIPTION = 'Dev Team Office: register projects, report which role and phase of the team you are in, send tasks to other agents';
-const SKILLS = ['dev-team-office', 'dev-team-office-config', 'stay-focused'];
 const APP_FILES = ['bin', 'server', 'tui', 'public', 'integrations', 'skills', 'teams', 'docs', 'package.json', 'README.md', 'install.sh', '.claude-plugin'];
 
 // Everything is computed when called (not on import): the tests change $HOME.
@@ -253,15 +253,19 @@ function copyDir(from, to, ctx) {
   }
 }
 
+/** The office's skills in an agent's skills folder (bin/skills.js): this version's, whole, and only its own. */
 function skillsAt(dir) {
   return {
-    apply(ctx) { for (const s of SKILLS) copyDir(path.join(ROOT, 'skills', s), path.join(dir, s), ctx); return { ok: true }; },
-    remove(ctx) {
-      let any = false;
-      for (const s of SKILLS) if (exists(path.join(dir, s, 'SKILL.md'))) { any = true; if (!ctx.dry) fs.rmSync(path.join(dir, s), { recursive: true, force: true }); }
-      return any;
+    apply(ctx) {
+      const r = syncSkills(dir, { dry: ctx.dry });
+      const lines = [
+        ...r.foreign.map((name) => t('setup.skillForeign', { path: tilde(path.join(dir, name)) })),
+        ...r.failed.map((f) => t('setup.skillFailed', { path: tilde(path.join(dir, f.name)), error: f.error })),
+      ];
+      return lines.length ? { ok: false, line: lines.join('\n  ✖ ') } : { ok: true };
     },
-    check: () => SKILLS.every((s) => exists(path.join(dir, s, 'SKILL.md'))),
+    remove: (ctx) => removeSkills(dir, { dry: ctx.dry }).length > 0,
+    check: () => { const st = skillsState(dir); return !st.missing.length && !st.outdated.length && !st.foreign.length; },
   };
 }
 
@@ -274,10 +278,37 @@ function fileStep(file) {
 
 // ---------------------------------------------------------------- the agents
 
-/** Is Dev Team Office installed as a Claude Code plugin? (then it brings hooks, MCP and skills) */
-export function claudePluginInstalled() {
+/** The office's Claude Code plugin as installed: { id: 'dev-team-office@<marketplace>', market, scope }, or null. */
+export function claudePlugin() {
   const data = readJson(path.join(home(), '.claude', 'plugins', 'installed_plugins.json')).data || {};
-  return JSON.stringify(data.plugins || data).includes(`"${MARK}@`);
+  const plugins = data.plugins || data;
+  const id = Object.keys(plugins || {}).find((k) => k.startsWith(`${MARK}@`));
+  if (!id) return null;
+  const first = Array.isArray(plugins[id]) ? plugins[id][0] : plugins[id];
+  return { id, market: id.slice(MARK.length + 1), scope: typeof first?.scope === 'string' ? first.scope : null };
+}
+
+/** Is Dev Team Office installed as a Claude Code plugin? (then it brings hooks, MCP and skills) */
+export function claudePluginInstalled() { return !!claudePlugin(); }
+
+/**
+ * The plugin brings its own copy of everything (skills too), which Claude Code only renews from its
+ * marketplace: so `setup` (and every `update`, which runs it) asks Claude Code's CLI to refresh the
+ * marketplace and update the plugin. Without the CLI, or if it fails, it says how. null: nothing to do.
+ */
+function updateClaudePlugin(ctx) {
+  const p = claudePlugin();
+  if (!p || ctx.dry || !ctx.cli) return null;
+  const hint = t('setup.pluginUpdateHint', { market: p.market, id: p.id });
+  const bin = which('claude');
+  if (!bin) return { ok: false, line: hint };
+  try {
+    ctx.run(bin, ['plugin', 'marketplace', 'update', p.market], { timeout: 120_000 });
+    ctx.run(bin, ['plugin', 'update', p.id, ...(p.scope ? ['--scope', p.scope] : [])], { timeout: 120_000 });
+    return { ok: true, line: t('setup.pluginUpdated') };
+  } catch {
+    return { ok: false, line: hint };
+  }
 }
 
 /** How to register the MCP in Claude Code: with its CLI if available (the official way), otherwise in ~/.claude.json. */
@@ -500,7 +531,7 @@ export function removePathFromProfiles({ dry = false } = {}) {
 
 // ---------------------------------------------------------------- setup · uninstall · doctor
 
-const runCli = (bin, argv) => execFileSync(bin, argv, { stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 });
+const runCli = (bin, argv, { timeout = 30_000 } = {}) => execFileSync(bin, argv, { stdio: ['ignore', 'pipe', 'pipe'], timeout });
 
 /** The agents on the machine (or the ones requested with `only`). */
 export function detect(only) {
@@ -536,6 +567,10 @@ export function setup({ only = [], dry = false, cli = process.env.DEV_TEAM_OFFIC
     if (def.plugin?.()) {
       report.push({ ...a, done: ['plugin'], failed, plugin: true });
       lines.push(t('setup.agentLine', { agent: def.label, what: t('setup.viaPlugin') }));
+      // the plugin brings the skills: a copy an earlier setup left would be another version of them
+      if (!dry) for (const name of removeSkills(path.join(home(), '.claude', 'skills'))) lines.push(`    ${t('setup.removedPath', { path: tilde(path.join(home(), '.claude', 'skills', name)) })}`);
+      const up = updateClaudePlugin(ctx);
+      if (up) lines.push(`    ${up.ok ? '' : '✖ '}${up.line}`);
       continue;
     }
     for (const [name, step] of Object.entries(def.steps())) {
@@ -566,7 +601,7 @@ export function uninstall({ only = [], dry = false, purge = false, cli = process
   }
   if (!only.length) {
     const shared = path.join(home(), '.agents', 'skills');
-    for (const s of SKILLS) if (exists(path.join(shared, s))) { if (!dry) fs.rmSync(path.join(shared, s), { recursive: true, force: true }); lines.push(t('setup.removedPath', { path: tilde(path.join(shared, s)) })); }
+    for (const s of removeSkills(shared, { dry })) lines.push(t('setup.removedPath', { path: tilde(path.join(shared, s)) }));
     const link = path.join(process.env.DEV_TEAM_OFFICE_BIN_DIR || path.join(home(), '.local', 'bin'), 'dev-team-office');
     try { if (fs.readlinkSync(link) === shimPath()) { if (!dry) fs.rmSync(link); lines.push(t('setup.removedPath', { path: tilde(link) })); } } catch { /* not ours */ }
     for (const f of removePathFromProfiles({ dry })) lines.push(t('setup.removedProfile', { file: tilde(f) }));

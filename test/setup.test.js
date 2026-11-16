@@ -173,6 +173,45 @@ test('un JSON roto no se pisa: se avisa y lo demás sigue; con el plugin de Clau
   uninstall({ cli: false });
 });
 
+test('con el plugin de Claude Code, setup (y cada update) lo actualiza desde su marketplace, y quita las copias sueltas de sus skills', () => {
+  write(P('.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'dev-team-office@dev-office': [{ scope: 'user' }] } }));
+  // a copy left by an earlier setup without the plugin (another version of the same skills), and one of the user's
+  write(P('.claude', 'skills', 'dev-team-office', 'SKILL.md'), 'vieja');
+  write(P('.claude', 'skills', 'mia', 'SKILL.md'), 'mía');
+  write(P('nada', 'claude'), '#!/bin/sh\n');
+  fs.chmodSync(P('nada', 'claude'), 0o755);
+  try {
+    const calls = [];
+    let out = setup({ only: ['claude-code'], cli: true, run: (bin, argv) => { calls.push(argv); return ''; } });
+    assert.deepEqual(calls, [['plugin', 'marketplace', 'update', 'dev-office'], ['plugin', 'update', 'dev-team-office@dev-office', '--scope', 'user']]);
+    assert.ok(out.lines.some((l) => /plugin actualizado/.test(l)), out.lines.join('\n'));
+    assert.equal(fs.existsSync(P('.claude', 'skills', 'dev-team-office')), false);
+    assert.ok(fs.existsSync(P('.claude', 'skills', 'mia', 'SKILL.md')));
+
+    // without an answer from Claude Code's CLI: it says how
+    out = setup({ only: ['claude-code'], cli: true, run: () => { throw new Error('sin red'); } });
+    assert.ok(out.lines.some((l) => l.includes('claude plugin marketplace update dev-office && claude plugin update dev-team-office@dev-office')), out.lines.join('\n'));
+  } finally {
+    fs.rmSync(P('nada'), { recursive: true, force: true });
+    fs.rmSync(P('.claude', 'plugins'), { recursive: true, force: true });
+    fs.rmSync(P('.claude', 'skills', 'mia'), { recursive: true, force: true });
+  }
+});
+
+test('doctor avisa de skills de otra versión, y setup las deja al día', async () => {
+  setup({ cli: false });
+  const mark = P('.agents', 'skills', 'stay-focused', '.dev-team-office.json');
+  write(mark, JSON.stringify({ skill: 'stay-focused', version: '0.0.1' }));
+  write(P('.agents', 'skills', 'stay-focused', 'sobra.txt'), 'de la versión vieja');
+  let d = await doctor({ base: 'http://127.0.0.1:9' });
+  assert.equal(d.checks.find((c) => /^Pi/.test(c.text) || c.text.includes('Pi:')).ok, false);
+  setup({ cli: false });
+  assert.equal(fs.existsSync(P('.agents', 'skills', 'stay-focused', 'sobra.txt')), false);
+  d = await doctor({ base: 'http://127.0.0.1:9' });
+  assert.ok(d.checks.filter((c) => /Claude Code|Codex|OpenCode|Pi:/.test(c.text)).every((c) => c.ok));
+  uninstall({ cli: false });
+});
+
 test('el PATH de las terminales nuevas: una vez en el perfil de su shell, y uninstall lo quita sin tocar lo demás', () => {
   const dir = path.join(HOME, '.local', 'bin');
   assert.equal(shellProfile('/bin/zsh', 'darwin').file, path.join(process.env.ZDOTDIR || HOME, '.zshrc'));

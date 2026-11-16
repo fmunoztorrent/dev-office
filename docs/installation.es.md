@@ -253,6 +253,8 @@ dev-team-office restart    # la detiene y la vuelve a iniciar con el código ins
 
 En un clon de git (el comando corre tu checkout), `update` hace `git pull --ff-only` (nunca un merge ni un rebase de tu trabajo), corre `setup` para que tus agentes reciban los hooks, la extensión y las skills nuevas, y reinicia la oficina si el código cambió. Con cambios locales o en otra rama lo dice y te lo deja a ti.
 
+De cualquiera de las dos formas, `update` termina con `setup`, así que las skills de la oficina son las de esta versión: cada una reemplazada entera, las que ya no trae quitadas, y nunca una carpeta que no sea de la oficina. Con el plugin de Claude Code, además actualiza el plugin desde su marketplace (reinicia Claude Code para usarlo); sin la CLI de Claude Code te dice los dos comandos.
+
 ## Si algo no anda
 
 | Síntoma | Qué hacer |

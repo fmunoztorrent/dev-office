@@ -4,6 +4,14 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-11-16
+
+### Changed
+
+- **Updating also updates the office's skills, whole.** Each skill is installed with a mark of the version that put it there, so every `setup`, and so every `update`, replaces it entirely (a file the new version dropped no longer stays behind), removes the office skills a version no longer ships, and never touches a folder with the same name that is not the office's (it says so). `doctor` flags a skill from another version. A new skill in `skills/` is installed with no list to keep.
+- **With the Claude Code plugin, `update` updates the plugin too** (its skills, hooks and MCP come inside it): it refreshes its marketplace and updates it with Claude Code's CLI, and removes the loose copies of the skills an earlier setup left in `~/.claude/skills`. Without the CLI, it tells you the two commands.
+- The skills are installed once per agent, by `setup` (the installer no longer copies them a second time).
+
 ## [0.24.1] - 2026-11-16
 
 ### Fixed
@@ -355,7 +363,9 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.24.1...v0.25.0
+[0.24.1]: https://github.com/fmunoztorrent/dev-office/compare/v0.24.0...v0.24.1
 [0.24.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.21.0...v0.22.0

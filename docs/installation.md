@@ -253,6 +253,8 @@ dev-team-office restart    # stops it and starts it again with the installed cod
 
 In a git clone (the command runs your checkout), `update` does `git pull --ff-only` (never a merge or a rebase of your work), runs `setup` so your agents get the new hooks, extension and skills, and restarts the office if the code changed. With local changes or on another branch it says so and leaves it to you.
 
+Either way `update` ends with `setup`, so the office's skills are this version's: each one replaced whole, the ones it no longer ships removed, and never a folder that is not the office's. With the Claude Code plugin, it also updates the plugin from its marketplace (restart Claude Code to use it); without Claude Code's CLI it tells you the two commands.
+
 ## Troubleshooting
 
 | Symptom | What to do |

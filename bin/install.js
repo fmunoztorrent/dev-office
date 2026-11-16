@@ -1,7 +1,7 @@
 // `dev-team-office install [pi|opencode|claude|codex]`: puts each integration's files in place.
 // The office is the frontend; the work is done by these pieces inside each agent, with the shared
 // library at ~/.dev-team-office/lib/devteam.mjs. `setup` (bin/setup.js) uses this and also wires
-// the hooks, the MCP server and the skills into each agent's configuration.
+// the hooks, the MCP server and the skills (bin/skills.js) into each agent's configuration.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -12,7 +12,6 @@ import { piAgentDir } from '../integrations/common/devteam.mjs';
 
 const REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = path.join(REPO, 'integrations');
-const SKILLS_DIR = path.join(REPO, 'skills');
 const HOME = os.homedir();
 const OFFICE_DIR = path.join(HOME, '.dev-team-office');
 const tilde = (p) => (p.startsWith(HOME) ? `~${p.slice(HOME.length)}` : p);
@@ -59,24 +58,6 @@ export const TARGETS = {
 };
 const ALIASES = { 'claude-code': 'claude', open: 'opencode' };
 
-/** The skills (how to work with the office and how to declare roles) in ~/.agents/skills, the place
- * Pi, Codex and OpenCode share. They are accessories: if one cannot be copied, it warns and goes on. */
-function installSkills() {
-  const lines = [];
-  for (const name of fs.readdirSync(SKILLS_DIR)) {
-    const from = path.join(SKILLS_DIR, name);
-    if (!fs.existsSync(path.join(from, 'SKILL.md'))) continue;
-    const to = path.join(HOME, '.agents', 'skills', name);
-    try {
-      for (const f of fs.readdirSync(from)) copy(path.join(from, f), path.join(to, f));
-      lines.push(t(name === 'dev-team-office-config' ? 'install.configSkill' : 'install.skill', { path: tilde(path.join(to, 'SKILL.md')) }));
-    } catch (error) {
-      lines.push(t(name === 'dev-team-office-config' ? 'install.configSkillFail' : 'install.skillFail', { error: error.message }));
-    }
-  }
-  return lines;
-}
-
 /** Empty `which`: every integration. With `{ all: false }`, empty means none (only the shared parts). */
 export function install(which = [], { all = true } = {}) {
   const names = (which.length || !all ? which : Object.keys(TARGETS)).map((n) => ALIASES[n] || n);
@@ -85,7 +66,7 @@ export function install(which = [], { all = true } = {}) {
   const lib = copy('common/devteam.mjs', path.join(OFFICE_DIR, 'lib', 'devteam.mjs'));
   // the Playwright reporter, next to the library: the agents' e2e tests show live in the office
   copy('playwright/reporter.cjs', path.join(OFFICE_DIR, 'lib', 'playwright-reporter.cjs'));
-  const lines = [t('install.lib', { path: tilde(lib) }), ...installSkills()];
+  const lines = [t('install.lib', { path: tilde(lib) })];
   for (const n of names) lines.push(...TARGETS[n]());
   return { ok: true, lines };
 }

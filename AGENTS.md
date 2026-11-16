@@ -20,7 +20,8 @@ Dev Team Office es una oficina en pixel art que muestra en vivo lo que hacen los
 | Ruta | Qué hay |
 |---|---|
 | `bin/dev-team-office.js` | La CLI: `open` (la bitácora, o el monitor dentro de herdr), `monitor`, `game`, `serve`, `join`, `follow`, `pane`, `setup`, `doctor`, `mcp`… |
-| `bin/setup.js` | Conecta cada agente (hooks, MCP, skills, lanzador), `doctor` y `uninstall` |
+| `bin/setup.js` | Conecta cada agente (hooks, MCP, skills, lanzador), `doctor` y `uninstall`; con el plugin de Claude Code, lo actualiza desde su marketplace |
+| `bin/skills.js` | Las skills propias de la oficina (`skills/`) en la carpeta de cada agente: cada una con su marca de versión (`.dev-team-office.json`), reemplazada entera en cada `setup`/`update`, las que ya no vienen se quitan, y nunca una carpeta ajena |
 | `server/server.js` | La API HTTP + WebSocket (TCP y socket Unix) y el cableado de todo |
 | `server/office.js` | El estado de una oficina: sesiones, subagentes (con `subId`), turnos, la pizarra y la bitácora |
 | `server/company.js` | Las oficinas de la empresa y a cuál va cada evento |
@@ -172,6 +173,9 @@ Más detalle en [docs/conventions.es.md](docs/conventions.es.md) y [CONTRIBUTING
   - **Sólo lee adjuntos dentro de la carpeta de la corrida** (`insideDir`), y los copia a su carpeta (`e2e-runs/`, junto a la base) apenas termina cada prueba, porque la próxima corrida borra `test-results`. **Sólo borra carpetas suyas** (`run-<id>` con la marca `.dev-team-office-e2e`): la base puede estar en cualquier carpeta del usuario.
   - **El punto del clic** está en los píxeles de la página, igual que el `w`×`h` de cada cuadro (el tamaño del viewport, no el del JPEG): la pantalla del reproductor toma esa forma (`--ar`) para que caiga donde fue.
   - **En los tests:** `new E2EDesk({})` usa una carpeta temporal y la borra en `close()`; el reporter se prueba contra `startServer` en el puerto 0 (`new Reporter({ url })`, y `reporter.cwd` a una carpeta temporal).
+- **Las skills de la oficina** (`skills/`, `bin/skills.js`) las instala sólo `setup` (no `install.js`), una copia por agente: `~/.claude/skills` y `~/.agents/skills`.
+  - Una skill nueva en `skills/` (con su `SKILL.md`) se instala sola; no hay lista que mantener. `LEGACY` son sólo los nombres de antes de la marca.
+  - Con el plugin de Claude Code, el plugin trae las skills: `setup` borra las copias marcadas de `~/.claude/skills` y corre `claude plugin marketplace update` + `claude plugin update` (con `cli`; en los tests, `DEV_TEAM_OFFICE_SETUP_CLI=0` o un `run` falso).
 - **Los roles de los subagentes** salen de, en este orden:
   1. su `role:`;
   2. su nombre (`SUBAGENT_ROLES`);
