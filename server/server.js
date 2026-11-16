@@ -52,7 +52,7 @@ import { zoneInfo, systemZone } from '../public/clock.js';
 import { insideDir as inside, insideDir } from './paths.js';
 import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.24.0';
+export const VERSION = '0.24.1';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
 const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
@@ -602,7 +602,13 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   // ---------- HTTP ----------
 
   const info = () => ({ ok: true, name: 'dev-team-office', version: VERSION, pid: process.pid, uptime: Math.round((Date.now() - startedAt) / 1000), url: `http://${host}:${port}`, socket: socketPath, lang: getLanguage(), herdr: !!herdr?.available, mode, root: path.dirname(path.dirname(CLI)) });
-  const body = async (req) => JSON.parse((await readBody(req)) || '{}');
+  // the request's JSON: an empty body is `{}`, and a body that is not JSON fails here and becomes a 400
+  // in the handler's catch below (it already says what is wrong)
+  const body = async (req) => {
+    const raw = await readBody(req);
+    if (!raw) return {};
+    try { return JSON.parse(raw); } catch (err) { throw Object.assign(err, { status: 400 }); }
+  };
 
   const handler = (viaUnix) => async (req, res) => {
     const url = new URL(req.url, 'http://localhost');

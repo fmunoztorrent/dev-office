@@ -4,6 +4,14 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-11-16
+
+### Fixed
+
+- **The folders, on sight.** In ⚙ › Departments each project now shows its folder under its name (`~/Workspace/…`), and so does each artifact of ⚙ › Departments › Systems, both in its card and in the form's *pick its repo* select. The folder was only in the tooltip, so there was no way to tell two projects apart by the folder each one works in.
+- **Editing a department no longer waits for the WebSocket.** Saving or deleting one redraws the list from the API's answer, so the card, the selector at the top left and the form agree even if the `offices` message arrives late or is lost; deleting the department you were editing also clears its form.
+- The game's WebSocket handler no longer throws on a frame that is not JSON (`public/main.js`).
+
 ## [0.24.0] - 2026-11-16
 
 ### Added
