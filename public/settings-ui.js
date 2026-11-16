@@ -569,9 +569,9 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     ];
   }
 
-  // ------------------------------------------------------------ Systems (server/systems.js)
+  // ------------------------------------------------------------ Projects (server/systems.js)
 
-  const S = (k, v) => t(`settings.systems.${k}`, v);
+  const S = (k, v) => t(`settings.projects.${k}`, v);
   const KIND = (k) => t(`system.kinds.${k}`);
   const emptySystem = () => ({ id: null, name: '', office: here(), team: '', move: true, instructions: '', parts: [] });
 
