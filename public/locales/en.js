@@ -251,7 +251,7 @@ export default {
   },
   // the systems (server/systems.js): a product or business project and its artifacts
   system: {
-    artifact: 'Artifact {name} ({kind}) of the system {system}', uses: 'uses {list}', usedBy: 'used by {list}',
+    artifact: 'Artifact {name} ({kind}) of the project {system}', uses: 'uses {list}', usedBy: 'used by {list}',
     kinds: { frontend: 'frontend', mobile: 'mobile app', bff: 'BFF', backend: 'backend / core', worker: 'worker', library: 'library', data: 'data', infra: 'infrastructure', other: 'other' },
   },
   // the badge over each character: what they are doing, as small as it gets (server/humanize.js)
@@ -287,17 +287,17 @@ export default {
   // the analyst reviews a brief before it goes to work (server/clarify.js)
   ingest: { tooBig: 'too big (more than {mb} MB)', convert: 'to read {name} the office needs {tool} installed (or ask an agent to convert it: ✨ Ask an agent)', format: 'the archive does not read .{ext} files (Markdown, text, CSV, JSON, HTML, PDF or Word)', empty: '{name} has no text', url: 'that is not an http(s) address', fetch: 'could not download it: {error}' },
   // the settings as a JSON file (server/settings-io.js): what could not be imported
-  settingsIo: { skill: 'Skill {name}', tool: 'Tool {name}', expert: 'Expert in “{skill}”', resource: 'Infrastructure {name}', system: 'System {name}', systemParts: 'Artifacts of {name} without their repo here: {parts}', department: 'Department {name}', characters: 'Characters of {name}', pref: 'Setting {key}', project: 'Project {name}', component: 'Component {name} of {project}', instructions: 'Instructions of {path}' },
+  settingsIo: { skill: 'Skill {name}', tool: 'Tool {name}', expert: 'Expert in “{skill}”', resource: 'Infrastructure {name}', system: 'Project {name}', systemParts: 'Artifacts of {name} without their repo here: {parts}', department: 'Department {name}', characters: 'Characters of {name}', pref: 'Setting {key}', project: 'Repository {name}', component: 'Component {name} of {project}', instructions: 'Instructions of {path}' },
   // a directive's impact map (server/components.js)
   impact: {
     ask: 'Does "{what}" exist? In which project and folder, or must it be created?', none: 'I could not tell which departments or projects it touches: choose them or name them.', unknownHead: 'It names things that are not on the map:',
-    why: { named: 'it names it', chosen: 'you chose it', part: 'it names one of its components', department: 'it names its department', system: 'it is part of the system {via}', uses: 'it uses {via}, which changes', resource: 'it uses {via}, which it names', model: 'the analysis says so' },
-    newDesc: 'new (a directive asked for it)', needAnswers: 'Before it goes, tell me what {what} is: whether it exists and where, whether it must be created, or whether it is a new department.', badAnswer: 'What is "{what}"? Answer: it exists, create it, a separate repo, a new repo, infrastructure, a new department, or not part of the system.', deptEmpty: '{names} was created, but it has no projects yet: add one (⚙ › Departments) and send the directive again.',
+    why: { named: 'it names it', chosen: 'you chose it', part: 'it names one of its components', department: 'it names its department', system: 'it is part of the project {via}', uses: 'it uses {via}, which changes', resource: 'it uses {via}, which it names', model: 'the analysis says so' },
+    newDesc: 'new (a directive asked for it)', needAnswers: 'Before it goes, tell me what {what} is: whether it exists and where, whether it must be created, or whether it is a new department.', badAnswer: 'What is "{what}"? Answer: it exists, create it, a separate repo, a new repo, infrastructure, a new department, or not part of the project.', deptEmpty: '{names} was created, but it has no projects yet: add one (⚙ › Departments) and send the directive again.',
     askInfra: '"{what}" ({kind}): does it exist already, and where? Or must it be created, and by whom?', whoCreates: 'Which project creates "{what}"? Pick one.', needWhere: 'Where is "{what}"? Write its folder or its repository’s URL.', noFolder: 'The folder {path} does not exist', repoExists: 'The folder {path} exists and is not empty: if it is a repo already, answer “It is a separate repo”.',
     ui: {
       tree: 'The repos it touches', component: 'component', expand: '⤢ See the detail', graphTitle: '🗺 The impact in detail', task: 'The order', unknown: '❓ Not on the map', dept: '{n} repo(s)',
       thinking: '🧠 {model} is analyzing the order…', thought: '🧠 Analyzed with {model} ({s} s)', thinkFailed: '🧠 The analysis by {model} did not come ({error}): the map by words stays.', thinkOff: 'For a finer analysis (how each repo is touched and what is missing), choose a model in ⚙ › General › 🧠 Intelligence.', rethink: '🧠 Analyze again',
-      why: 'Why', how: 'How it is touched', components: 'Components', infra: 'Infrastructure', stack: 'Uses', system: 'System', path: 'Folder', answerBelow: 'Not on the map: answer it below.', summary: 'The analysis', usedBy: 'Used by', where: 'Where',
+      why: 'Why', how: 'How it is touched', components: 'Components', infra: 'Infrastructure', stack: 'Uses', system: 'Project', path: 'Folder', answerBelow: 'Not on the map: answer it below.', summary: 'The analysis', usedBy: 'Used by', where: 'Where',
       level: { high: 'high impact', medium: 'medium impact', low: 'low impact' },
       legend: { impacted: 'touched', reached: 'uses something that changes', dependency: 'dependency', new: 'to create', unknown: 'not on the map' },
       zoomIn: 'Zoom in', zoomOut: 'Zoom out', fit: 'Fit', count: '{n} node(s) · {e} link(s)', empty: 'Nothing to draw yet: write the order and see its impact.',
@@ -351,7 +351,7 @@ export default {
   // the instructions on top of a brief (server/guides.js)
   guide: {
     company: 'The company’s standards (the CTO’s):', 
-    department: 'Instructions of the department «{name}»:', project: 'Instructions of the project «{name}»:', system: 'Instructions of the system «{name}»:',
+    department: 'Instructions of the department «{name}»:', project: 'Instructions of the project «{name}»:', system: 'Instructions of the project «{name}»:',
     autonomous: 'Autonomous mode: work on it to the end on your own (plan, implement, test and check it; use subagents if it helps). Ask only what only the PO can answer, with your question tool; otherwise make reasonable assumptions and note them.',
   },
 
@@ -394,7 +394,7 @@ export default {
       markMet: 'It is met (your mark stays)', markUnmet: 'It is not met', byYou: 'you',
       criteriaPh: 'One criterion per line · “text :: command that checks it”', stepPh: 'What has to be done in this step?', stepCriteria: 'Its success criteria', stepN: 'Step {n}', removeStep: 'Remove the step',
       saved: 'Saved.', created: 'Loop created: its first step goes now (if the project is idle).', editTitle: 'Change “{name}”', newTitle: 'New loop',
-      noProjects: 'This department has no registered projects (⚙ › Agents).', name: 'Name', project: 'Project', every: 'Every (min)', triesLabel: 'Tries',
+      noProjects: 'This department has no registered repositories (⚙ › Repositories).', name: 'Name', project: 'Project', every: 'Every (min)', triesLabel: 'Tries',
       addStepBtn: '＋ Step', cancel: 'Cancel', save: 'Save', create: '🔁 Create the loop',
     },
     minuteTitle: 'Loop “{name}”', minuteProject: 'Project: {project}', minuteTries: '{n} tries',
@@ -459,7 +459,7 @@ export default {
     minuteTitle: 'Minutes: {title}', minuteAsked: 'Asked by: {who}', minuteParts: 'How it ended in each project:',
     log: { created: '🏛 Directive "{title}" to {n} project(s): {offices}', department: '🏛 New department: {name}', ended: '🏛 Directive "{title}": {status} ({done}/{total})' },
     ui: {
-      systems: 'Systems (their artifacts go in order):', handoffLeft: 'It left its handoff for the ones that use it',
+      systems: 'Projects (their artifacts go in order):', handoffLeft: 'It left its handoff for the ones that use it',
       company: 'The company · last 7 days',
       health: { ok: 'healthy', warn: 'watch it', bad: 'needs you' },
       co: {
@@ -467,10 +467,10 @@ export default {
         waiting: '✋ waiting {min} min', errors: '{n} errors/h', context: 'context {pct}%', fine: 'all good', companyAutonomy: 'the company’s', flow: '{n} ({done} done)', lead: '{min} min',
       },
       title: '🏛 Directives', text: 'What must they do?', placeholder: 'One order for several offices or projects: "Every API exposes /health"',
-      scope: 'Who', all: 'all its projects ({n})', none: 'no registered projects', noAgents: 'Register each department’s projects in ⚙ › Departments (or ⚙ › Agents) to give them directives.',
+      scope: 'Who', all: 'all its projects ({n})', none: 'no registered projects', noAgents: 'Register each department’s repositories in ⚙ › Departments (or ⚙ › Repositories) to give them directives.',
       mapBtn: '🗺 See the impact', mapNote: 'It touches {n} project(s) in {d} department(s): check who gets it (the checked ones) and answer what is not on the map.', answerAll: 'Answer what each thing that is not on the map is (and in which project, if it exists or must be created)',
-      ans: { pick: '— what is it? —', exists: 'It exists, in the project…', create: 'Create it, in the project…', repo: 'It is a separate repo, at…', newRepo: 'It is a new repo: create it at…', resource: 'It is infrastructure (a service, an API…)', department: 'It is a new department', ignore: 'It is not part of the system' }, ansProject: 'project', ansPath: 'folder (optional)', ansDept: 'department name',
-      infraAns: { pick: '— does it exist? —', exists: 'It exists…', create: 'Create it, by…', ignore: 'It is not part of the system' }, ansWhere: 'its folder or the repo’s URL', ansNewPath: 'the new folder (full path)', ansLocation: 'where it lives (account, cluster, URL…)', ansUsedBy: '— who uses it (optional) —', ansWho: '— which project creates it —', ansHarness: 'agent', ansOffice: 'department', ansKind: 'what it is', ansHow: 'how',
+      ans: { pick: '— what is it? —', exists: 'It exists, in the project…', create: 'Create it, in the project…', repo: 'It is a separate repo, at…', newRepo: 'It is a new repo: create it at…', resource: 'It is infrastructure (a service, an API…)', department: 'It is a new department', ignore: 'It is not part of the project' }, ansProject: 'project', ansPath: 'folder (optional)', ansDept: 'department name',
+      infraAns: { pick: '— does it exist? —', exists: 'It exists…', create: 'Create it, by…', ignore: 'It is not part of the project' }, ansWhere: 'its folder or the repo’s URL', ansNewPath: 'the new folder (full path)', ansLocation: 'where it lives (account, cluster, URL…)', ansUsedBy: '— who uses it (optional) —', ansWho: '— which project creates it —', ansHarness: 'agent', ansOffice: 'department', ansKind: 'what it is', ansHow: 'how',
       send: '▶ Make it happen!', recent: 'The latest', empty: 'No directives yet.', pick: 'Pick at least one project', write: 'Write the directive',
       sent: 'Directive sent to {n} project(s)', stop: '⏹ Stop', progress: '{done} of {total}', by: 'by {who}',
       deptPh: 'A department that does not exist yet…', deptAdd: '＋ New department', deptName: 'Write the new department’s name', deptCreated: 'Department “{name}” created: add its projects, people and instructions in ⚙ › Departments.',
@@ -498,7 +498,7 @@ export default {
       tags: 'Tags', office: 'For', company: 'the whole company', command: 'Command (a local MCP server)', args: 'Arguments', url: 'or URL (a remote MCP server)',
       install: 'Install in', installGo: '⬇ Install', installHint: 'It is written in each project’s folder, in its agent’s format (Claude Code: .claude/; Pi, OpenCode and Codex: .agents/ or their MCP config).',
       uses: '{n} read(s)', by: 'by {who}', saved: 'Saved', removed: 'Deleted', describe: 'What do you need?', describePh: 'A skill to deploy to staging with our pipeline…', agent: 'Agent',
-      asked: 'You asked {agent}: it will save it in the archive when it is done', noTargets: 'Register an agent in ⚙ › Agents to ask it',
+      asked: 'You asked {agent}: it will save it in the archive when it is done', noTargets: 'Register a repository in ⚙ › Repositories to ask it',
       termField: 'Term', definition: 'Definition (Markdown)', synonyms: 'Synonyms (comma-separated)', project: 'Only for the project', anyProject: 'any project', validUntil: 'Valid until', expired: 'expired', origin: 'from {origin}',
       index: '🧠 {n} chunk(s) indexed · {e} with embedding', chunks: 'How it was indexed', download: '⬇ .md',
       import: '📥 Load', importTitle: 'Load documents', importHint: 'Markdown, text, CSV, JSON, HTML, PDF or Word (PDF and Word need pdftotext or pandoc on this machine). Their readable text is kept, and it is indexed for the agents.',
@@ -603,15 +603,15 @@ export default {
   brief: {
     models: 'Models', ownModel: "The agent's own model", profileOpen: 'The open session keeps its model: the profile counts for a new session or for a pipeline\'s stages.',
     title: 'New brief', close: 'esc ✕', agent: 'Agent', pipeline: 'Pipeline', session: 'Session', prompt: 'Prompt',
-    noAgent: 'none: register one in ⚙ › Agents', noAgentWeb: 'No agent: register one in ⚙ › Agents',
-    registerHint: 'Register an agent with its full path (c › Agents): the prompt starts the pipeline of its harness.',
-    registerHintWeb: 'Register an agent with its full path in ⚙ › Agents: the prompt starts the pipeline of its harness.',
+    noAgent: 'none: register one in ⚙ › Repositories', noAgentWeb: 'No repository: register one in ⚙ › Repositories',
+    registerHint: 'Register a repository with its full path (c › Repositories): the prompt starts the pipeline of its harness.',
+    registerHintWeb: 'Register a repository with its full path in ⚙ › Repositories: the prompt starts the pipeline of its harness.',
     placeholder: 'What do you need the team to do?', stages: 'Stages (run by {who})', bySession: 'the agent session', byHarness: 'the agent harness',
     more: '… and {n} more', gate: '⚙ {run} must {expect}{loop}', pass: 'pass', fail: 'fail', loop: ' · otherwise back to {goto} (×{max})',
     keyField: 'field', keyCycle: 'change', go: '▶ Get to work!', cancel: 'cancel', send: '⌘↵ to send', cancelBtn: 'Cancel',
     newSession: 'New {agent} session in {dir}', open: '● open', unregistered: '(unregistered)',
-    systems: 'Systems', systemEntry: 'To its artifacts, in order', systemDesc: 'Each artifact gets its part, in order ({order}): one goes when the ones it uses are done, with their handoff.', systemSession: 'One session per artifact ({n}), in order',
-    pRegister: 'Register an agent in ⚙ › Agents (its full path), or open one with its integration', pWrite: 'Write the prompt',
+    systems: 'Projects', systemEntry: 'To its artifacts, in order', systemDesc: 'Each artifact gets its part, in order ({order}): one goes when the ones it uses are done, with their handoff.', systemSession: 'One session per artifact ({n}), in order',
+    pRegister: 'Register a repository in ⚙ › Repositories (its full path), or open one with its integration', pWrite: 'Write the prompt',
     pNoPath: '{path} does not exist', pIssues: 'The pipeline has errors: {issue}', pNeedsSession: '“{label}” runs in an open session: open {agent} in {path}',
     pNotInstalled: 'Cannot find {agent} installed (its CLI is not in the PATH)', failed: 'Could not: {error}',
   },
@@ -884,7 +884,7 @@ API: docs/api.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
   },
   btw: {
     empty: 'btw what? Write the question after btw', busy: 'The agent on duty is still answering the previous question',
-    noAgent: 'No agent on duty in this office: open a session or register a project (⚙ › Agents)',
+    noAgent: 'No agent on duty in this office: open a session or register a repository (⚙ › Repositories)',
     timeout: 'It took too long to answer', noAnswer: 'The agent did not answer (exit {code})',
     ctxOffice: 'Office (team/domain): {office}', ctxTask: 'Current task: {task}', ctxTurn: 'On duty now: {role}', ctxRecent: 'Latest activity:',
     ctxProject: 'Project: {project} ({dir})', ctxRole: 'The question is for {who}, of the team: answer as them, about what they are doing in this project and its current task.',

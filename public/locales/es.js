@@ -251,7 +251,7 @@ export default {
   },
   // the systems (server/systems.js): a product or business project and its artifacts
   system: {
-    artifact: 'Artefacto {name} ({kind}) del sistema {system}', uses: 'usa {list}', usedBy: 'lo usan {list}',
+    artifact: 'Artefacto {name} ({kind}) del proyecto {system}', uses: 'usa {list}', usedBy: 'lo usan {list}',
     kinds: { frontend: 'frontend', mobile: 'app móvil', bff: 'BFF', backend: 'backend / core', worker: 'worker', library: 'librería', data: 'datos', infra: 'infraestructura', other: 'otro' },
   },
   // the badge over each character: what they are doing, as small as it gets (server/humanize.js)
@@ -287,17 +287,17 @@ export default {
   // la analista revisa un encargo antes de que pase a trabajo (server/clarify.js)
   ingest: { tooBig: 'demasiado grande (más de {mb} MB)', convert: 'para leer {name} la oficina necesita {tool} instalado (o pídele a un agente que lo convierta: ✨ Pedírselo a un agente)', format: 'el archivo no lee archivos .{ext} (Markdown, texto, CSV, JSON, HTML, PDF o Word)', empty: '{name} no tiene texto', url: 'eso no es una dirección http(s)', fetch: 'no se pudo bajar: {error}' },
   // los ajustes como archivo JSON (server/settings-io.js): qué no se pudo importar
-  settingsIo: { skill: 'Skill {name}', tool: 'Herramienta {name}', expert: 'Experto en «{skill}»', resource: 'Infraestructura {name}', system: 'Sistema {name}', systemParts: 'Artefactos de {name} sin su repo aquí: {parts}', department: 'Departamento {name}', characters: 'Personajes de {name}', pref: 'Ajuste {key}', project: 'Proyecto {name}', component: 'Componente {name} de {project}', instructions: 'Indicaciones de {path}' },
+  settingsIo: { skill: 'Skill {name}', tool: 'Herramienta {name}', expert: 'Experto en «{skill}»', resource: 'Infraestructura {name}', system: 'Proyecto {name}', systemParts: 'Artefactos de {name} sin su repo aquí: {parts}', department: 'Departamento {name}', characters: 'Personajes de {name}', pref: 'Ajuste {key}', project: 'Repositorio {name}', component: 'Componente {name} de {project}', instructions: 'Indicaciones de {path}' },
   // el mapa de impacto de una directiva (server/components.js)
   impact: {
     ask: '¿Existe «{what}»? ¿En qué proyecto y carpeta está, o hay que crearlo?', none: 'No identifiqué qué departamentos ni proyectos toca: elígelos o nómbralos.', unknownHead: 'Nombra cosas que no están en el mapa:',
-    why: { named: 'lo nombra', chosen: 'lo elegiste', part: 'nombra un componente suyo', department: 'nombra su departamento', system: 'es parte del sistema {via}', uses: 'usa {via}, que cambia', resource: 'usa {via}, que nombra', model: 'lo dice el análisis' },
-    newDesc: 'nuevo (lo pidió una directiva)', needAnswers: 'Antes de enviarla, dime qué es {what}: si existe y dónde, si hay que crearlo o si es un departamento nuevo.', badAnswer: '¿Qué es «{what}»? Contesta: existe, crearlo, un repo aparte, un repo nuevo, infraestructura, departamento nuevo o no es parte del sistema.', deptEmpty: 'Se creó {names}, pero todavía no tiene proyectos: súmale uno (⚙ › Departamentos) y vuelve a enviar la directiva.',
+    why: { named: 'lo nombra', chosen: 'lo elegiste', part: 'nombra un componente suyo', department: 'nombra su departamento', system: 'es parte del proyecto {via}', uses: 'usa {via}, que cambia', resource: 'usa {via}, que nombra', model: 'lo dice el análisis' },
+    newDesc: 'nuevo (lo pidió una directiva)', needAnswers: 'Antes de enviarla, dime qué es {what}: si existe y dónde, si hay que crearlo o si es un departamento nuevo.', badAnswer: '¿Qué es «{what}»? Contesta: existe, crearlo, un repo aparte, un repo nuevo, infraestructura, departamento nuevo o no es parte del proyecto.', deptEmpty: 'Se creó {names}, pero todavía no tiene proyectos: súmale uno (⚙ › Departamentos) y vuelve a enviar la directiva.',
     askInfra: '«{what}» ({kind}): ¿ya existe, y dónde? ¿O hay que crearla, y quién?', whoCreates: '¿Qué proyecto crea «{what}»? Elige uno.', needWhere: '¿Dónde está «{what}»? Escribe su carpeta o la URL de su repositorio.', noFolder: 'No existe la carpeta {path}', repoExists: 'La carpeta {path} ya existe y no está vacía: si ya es un repo, contesta «Es un repo aparte».',
     ui: {
       tree: 'Los repos que toca', component: 'componente', expand: '⤢ Ver el detalle', graphTitle: '🗺 El impacto en detalle', task: 'El pedido', unknown: '❓ Sin mapear', dept: '{n} repo(s)',
       thinking: '🧠 {model} analiza el pedido…', thought: '🧠 Analizado con {model} ({s} s)', thinkFailed: '🧠 El análisis de {model} no llegó ({error}): queda el mapa por palabras.', thinkOff: 'Para un análisis más fino (cómo toca cada repo y qué falta), elige un modelo en ⚙ › General › 🧠 Inteligencia.', rethink: '🧠 Analizar de nuevo',
-      why: 'Por qué', how: 'Cómo lo toca', components: 'Componentes', infra: 'Infraestructura', stack: 'Usa', system: 'Sistema', path: 'Carpeta', answerBelow: 'Sin mapear: contéstalo abajo.', summary: 'El análisis', usedBy: 'La usan', where: 'Dónde',
+      why: 'Por qué', how: 'Cómo lo toca', components: 'Componentes', infra: 'Infraestructura', stack: 'Usa', system: 'Proyecto', path: 'Carpeta', answerBelow: 'Sin mapear: contéstalo abajo.', summary: 'El análisis', usedBy: 'La usan', where: 'Dónde',
       level: { high: 'impacto alto', medium: 'impacto medio', low: 'impacto bajo' },
       legend: { impacted: 'lo toca', reached: 'usa algo que cambia', dependency: 'dependencia', new: 'por crear', unknown: 'sin mapear' },
       zoomIn: 'Acercar', zoomOut: 'Alejar', fit: 'Ajustar', count: '{n} nodo(s) · {e} relación(es)', empty: 'Todavía no hay nada que dibujar: escribe el pedido y mira su impacto.',
@@ -351,7 +351,7 @@ export default {
   // las indicaciones arriba de un encargo (server/guides.js)
   guide: {
     company: 'Estándares de la empresa (los del CTO):', 
-    department: 'Indicaciones del departamento «{name}»:', project: 'Indicaciones del proyecto «{name}»:', system: 'Indicaciones del sistema «{name}»:',
+    department: 'Indicaciones del departamento «{name}»:', project: 'Indicaciones del proyecto «{name}»:', system: 'Indicaciones del proyecto «{name}»:',
     autonomous: 'Modo autónomo: trabájalo hasta terminar por tu cuenta (planifica, implementa, prueba y verifica; usa subagentes si conviene). Pregunta sólo lo que únicamente la PO puede responder, con tu herramienta de preguntas; si no, toma supuestos razonables y anótalos.',
   },
 
@@ -394,7 +394,7 @@ export default {
       markMet: 'Se cumple (tu marca queda)', markUnmet: 'No se cumple', byYou: 'tú',
       criteriaPh: 'Un criterio por línea · «texto :: comando que lo verifica»', stepPh: '¿Qué hay que hacer en este paso?', stepCriteria: 'Sus criterios de éxito', stepN: 'Paso {n}', removeStep: 'Quitar el paso',
       saved: 'Guardado.', created: 'Loop creado: su primer paso va ahora (si el proyecto está libre).', editTitle: 'Cambiar «{name}»', newTitle: 'Nuevo loop',
-      noProjects: 'Este departamento no tiene proyectos registrados (⚙ › Agentes).', name: 'Nombre', project: 'Proyecto', every: 'Cada (min)', triesLabel: 'Intentos',
+      noProjects: 'Este departamento no tiene repositorios registrados (⚙ › Repositorios).', name: 'Nombre', project: 'Proyecto', every: 'Cada (min)', triesLabel: 'Intentos',
       addStepBtn: '＋ Paso', cancel: 'Cancelar', save: 'Guardar', create: '🔁 Crear el loop',
     },
     minuteTitle: 'Loop «{name}»', minuteProject: 'Proyecto: {project}', minuteTries: '{n} intentos',
@@ -459,7 +459,7 @@ export default {
     minuteTitle: 'Acta: {title}', minuteAsked: 'Pedido por: {who}', minuteParts: 'Cómo terminó en cada proyecto:',
     log: { created: '🏛 Directiva «{title}» a {n} proyecto(s): {offices}', department: '🏛 Nuevo departamento: {name}', ended: '🏛 Directiva «{title}»: {status} ({done}/{total})' },
     ui: {
-      systems: 'Sistemas (sus artefactos van en orden):', handoffLeft: 'Dejó su traspaso para los que lo usan',
+      systems: 'Proyectos (sus artefactos van en orden):', handoffLeft: 'Dejó su traspaso para los que lo usan',
       company: 'La empresa · últimos 7 días',
       health: { ok: 'sana', warn: 'atenta', bad: 'te necesita' },
       co: {
@@ -467,10 +467,10 @@ export default {
         waiting: '✋ espera hace {min} min', errors: '{n} errores/h', context: 'contexto {pct}%', fine: 'todo bien', companyAutonomy: 'la de la empresa', flow: '{n} ({done} hechos)', lead: '{min} min',
       },
       title: '🏛 Directivas', text: '¿Qué tienen que hacer?', placeholder: 'Una orden para varias oficinas o proyectos: «Que todas las APIs expongan /health»',
-      scope: 'A quién', all: 'todos sus proyectos ({n})', none: 'sin proyectos registrados', noAgents: 'Registra los proyectos de cada departamento en ⚙ › Departamentos (o ⚙ › Agentes) para darles directivas.',
+      scope: 'A quién', all: 'todos sus proyectos ({n})', none: 'sin proyectos registrados', noAgents: 'Registra los repositorios de cada departamento en ⚙ › Departamentos (o ⚙ › Repositorios) para darles directivas.',
       mapBtn: '🗺 Ver el impacto', mapNote: 'Toca {n} proyecto(s) de {d} departamento(s): revisa a quién va (lo marcado) y contesta lo que no está en el mapa.', answerAll: 'Contesta qué es cada cosa que no está en el mapa (y en qué proyecto, si existe o hay que crearla)',
-      ans: { pick: '— ¿qué es? —', exists: 'Existe, en el proyecto…', create: 'Hay que crearlo, en el proyecto…', repo: 'Es un repo aparte, en…', newRepo: 'Es un repo nuevo: crearlo en…', resource: 'Es infraestructura (un servicio, una API…)', department: 'Es un departamento nuevo', ignore: 'No es parte del sistema' }, ansProject: 'proyecto', ansPath: 'carpeta (opcional)', ansDept: 'nombre del departamento',
-      infraAns: { pick: '— ¿existe? —', exists: 'Ya existe…', create: 'Hay que crearla, la crea…', ignore: 'No es parte del sistema' }, ansWhere: 'su carpeta o la URL del repo', ansNewPath: 'la carpeta nueva (ruta completa)', ansLocation: 'dónde vive (cuenta, cluster, URL…)', ansUsedBy: '— quién la usa (opcional) —', ansWho: '— qué proyecto la crea —', ansHarness: 'agente', ansOffice: 'departamento', ansKind: 'qué es', ansHow: 'cómo',
+      ans: { pick: '— ¿qué es? —', exists: 'Existe, en el proyecto…', create: 'Hay que crearlo, en el proyecto…', repo: 'Es un repo aparte, en…', newRepo: 'Es un repo nuevo: crearlo en…', resource: 'Es infraestructura (un servicio, una API…)', department: 'Es un departamento nuevo', ignore: 'No es parte del proyecto' }, ansProject: 'proyecto', ansPath: 'carpeta (opcional)', ansDept: 'nombre del departamento',
+      infraAns: { pick: '— ¿existe? —', exists: 'Ya existe…', create: 'Hay que crearla, la crea…', ignore: 'No es parte del proyecto' }, ansWhere: 'su carpeta o la URL del repo', ansNewPath: 'la carpeta nueva (ruta completa)', ansLocation: 'dónde vive (cuenta, cluster, URL…)', ansUsedBy: '— quién la usa (opcional) —', ansWho: '— qué proyecto la crea —', ansHarness: 'agente', ansOffice: 'departamento', ansKind: 'qué es', ansHow: 'cómo',
       send: '▶ ¡Que lo hagan!', recent: 'Las últimas', empty: 'Todavía no hay directivas.', pick: 'Elige al menos un proyecto', write: 'Escribe la directiva',
       sent: 'Directiva enviada a {n} proyecto(s)', stop: '⏹ Detener', progress: '{done} de {total}', by: 'por {who}',
       deptPh: 'Un departamento que todavía no existe…', deptAdd: '＋ Nuevo departamento', deptName: 'Escribe el nombre del departamento nuevo', deptCreated: 'Departamento «{name}» creado: agrega sus proyectos, su personal y sus indicaciones en ⚙ › Departamentos.',
@@ -498,7 +498,7 @@ export default {
       tags: 'Etiquetas', office: 'Para', company: 'toda la empresa', command: 'Comando (servidor MCP local)', args: 'Argumentos', url: 'o URL (servidor MCP remoto)',
       install: 'Instalar en', installGo: '⬇ Instalar', installHint: 'Se escribe en la carpeta de cada proyecto, en el formato de su agente (Claude Code: .claude/; Pi, OpenCode y Codex: .agents/ o su config MCP).',
       uses: '{n} lectura(s)', by: 'por {who}', saved: 'Guardado', removed: 'Eliminado', describe: '¿Qué necesitas?', describePh: 'Una skill para desplegar a staging con nuestro pipeline…', agent: 'Agente',
-      asked: 'Se lo pediste a {agent}: lo guardará en el archivo cuando termine', noTargets: 'Registra un agente en ⚙ › Agentes para pedírselo',
+      asked: 'Se lo pediste a {agent}: lo guardará en el archivo cuando termine', noTargets: 'Registra un repositorio en ⚙ › Repositorios para pedírselo',
       termField: 'Término', definition: 'Definición (Markdown)', synonyms: 'Sinónimos (separados por coma)', project: 'Sólo para el proyecto', anyProject: 'cualquier proyecto', validUntil: 'Vigente hasta', expired: 'vencido', origin: 'de {origin}',
       index: '🧠 {n} fragmento(s) indexado(s) · {e} con embedding', chunks: 'Cómo se indexó', download: '⬇ .md',
       import: '📥 Cargar', importTitle: 'Cargar documentos', importHint: 'Markdown, texto, CSV, JSON, HTML, PDF o Word (PDF y Word necesitan pdftotext o pandoc en esta máquina). Se guarda su texto legible y se indexa para los agentes.',
@@ -603,15 +603,15 @@ export default {
   brief: {
     models: 'Modelos', ownModel: 'El modelo del agente', profileOpen: 'La sesión abierta sigue con su modelo: el perfil cuenta para una sesión nueva o para las etapas de un pipeline.',
     title: 'Nuevo encargo', close: 'esc ✕', agent: 'Agente', pipeline: 'Pipeline', session: 'Sesión', prompt: 'Prompt',
-    noAgent: 'ninguno: regístralo en ⚙ › Agentes', noAgentWeb: 'Ningún agente: regístralo en ⚙ › Agentes',
-    registerHint: 'Registra un agente con su ruta completa (c › Agentes): el prompt arranca el pipeline de su harness.',
-    registerHintWeb: 'Registra un agente con su ruta completa en ⚙ › Agentes: el prompt arranca el pipeline de su harness.',
+    noAgent: 'ninguno: regístralo en ⚙ › Repositorios', noAgentWeb: 'Ningún repositorio: regístralo en ⚙ › Repositorios',
+    registerHint: 'Registra un repositorio con su ruta completa (c › Repositorios): el prompt arranca el pipeline de su harness.',
+    registerHintWeb: 'Registra un repositorio con su ruta completa en ⚙ › Repositorios: el prompt arranca el pipeline de su harness.',
     placeholder: '¿Qué necesitas que haga el equipo?', stages: 'Etapas (las corre {who})', bySession: 'la sesión del agente', byHarness: 'el harness del agente',
     more: '… y {n} más', gate: '⚙ {run} debe {expect}{loop}', pass: 'pasar', fail: 'fallar', loop: ' · si no, vuelve a {goto} (×{max})',
     keyField: 'campo', keyCycle: 'cambia', go: '▶ ¡A trabajar!', cancel: 'cancelar', send: '⌘↵ para enviar', cancelBtn: 'Cancelar',
     newSession: 'Sesión nueva de {agent} en {dir}', open: '● abierta', unregistered: '(sin registrar)',
-    systems: 'Sistemas', systemEntry: 'A sus artefactos, en orden', systemDesc: 'Cada artefacto recibe su parte, en orden ({order}): uno parte cuando terminan los que usa, con el traspaso de ellos.', systemSession: 'Una sesión por artefacto ({n}), en orden',
-    pRegister: 'Registra un agente en ⚙ › Agentes (su ruta completa), o abre uno con su integración', pWrite: 'Escribe el prompt',
+    systems: 'Proyectos', systemEntry: 'A sus artefactos, en orden', systemDesc: 'Cada artefacto recibe su parte, en orden ({order}): uno parte cuando terminan los que usa, con el traspaso de ellos.', systemSession: 'Una sesión por artefacto ({n}), en orden',
+    pRegister: 'Registra un repositorio en ⚙ › Repositorios (su ruta completa), o abre uno con su integración', pWrite: 'Escribe el prompt',
     pNoPath: 'No existe {path}', pIssues: 'El pipeline tiene errores: {issue}', pNeedsSession: '«{label}» lo corre una sesión abierta: abre {agent} en {path}',
     pNotInstalled: 'No encuentro {agent} instalado (su CLI no está en el PATH)', failed: 'No se pudo: {error}',
   },
@@ -884,7 +884,7 @@ API: docs/api.es.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
   },
   btw: {
     empty: '¿btw qué? Escribe la pregunta después de btw', busy: 'El agente de turno todavía está contestando la pregunta anterior',
-    noAgent: 'No hay agente de turno en esta oficina: abre una sesión o registra un proyecto (⚙ › Agentes)',
+    noAgent: 'No hay agente de turno en esta oficina: abre una sesión o registra un repositorio (⚙ › Repositorios)',
     timeout: 'Tardó demasiado en contestar', noAnswer: 'El agente no contestó (salida {code})',
     ctxOffice: 'Oficina (equipo/dominio): {office}', ctxTask: 'Tarea actual: {task}', ctxTurn: 'De turno ahora: {role}', ctxRecent: 'Lo último que pasó:',
     ctxProject: 'Proyecto: {project} ({dir})', ctxRole: 'La pregunta es para {who}, del equipo: responde como esa persona, sobre lo que está haciendo en este proyecto y su tarea en curso.',
