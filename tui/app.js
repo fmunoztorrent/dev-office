@@ -30,7 +30,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
       herdr: null,               // the herdr panes the office follows
       tasks: { tasks: [], agents: [], launchers: [], defaultCwd: '' },
       pipelines: [],
-      targets: [], // registered agents (⚙ › Agents) and open sessions, with what their harness brings
+      targets: [], // registered agents (⚙ › Repositories) and open sessions, with what their harness brings
       systems: [], // the systems (a product and its artifacts): also a brief's targets
       brief: null, // the whiteboard dialog while it is open
       settings: null, // ⚙ Settings while open
@@ -113,7 +113,7 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
     }
 
     // ---- "New brief" dialog (t, or click on the whiteboard) ----
-    /** @param agentId opens the dialog with that agent chosen (from ⚙ › Agents) */
+    /** @param agentId opens the dialog with that agent chosen (from ⚙ › Repositories) */
     function openBrief(agentId) {
       const i = agentId ? briefTargetList(model.targets, model.systems).findIndex((t) => t.id === agentId) : -1;
       model.brief = { field: 'task', sel: { target: i >= 0 ? i : defaultTarget(model.targets, sessions.values()), entry: 0, session: -1 }, text: '', error: '' };

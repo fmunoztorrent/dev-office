@@ -4,7 +4,7 @@
 // - To an open session: Pi and OpenCode connect to the office (WebSocket, `register`) and
 //   receive the task instantly. Claude Code has no such channel: the task is queued and its
 //   `Stop` hook delivers it when Claude ends the current turn.
-// - A new session of a registered agent (⚙ › Agents, with its path): inside herdr, the office
+// - A new session of a registered agent (⚙ › Repositories, with its path): inside herdr, the office
 //   opens the agent in a new pane (interactive, in sight) and sends it the prompt; outside herdr,
 //   it opens its CLI in the background in that path (`claude -p`, `opencode run`, `pi -p`) with the
 //   prompt or the command that starts its harness's pipeline. It orchestrates nothing: the harness

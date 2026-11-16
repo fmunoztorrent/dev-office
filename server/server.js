@@ -67,7 +67,7 @@ export function defaultSocketPath() {
 }
 
 // A task requested through the API does not choose an executable or arguments: only a registered
-// agent (⚙ › Agents) defines that, and it is used when sending it a prompt (/v1/agents/:id/prompt).
+// agent (⚙ › Repositories) defines that, and it is used when sending it a prompt (/v1/agents/:id/prompt).
 const publicTask = ({ launch, meta, ...task } = {}) => task;
 
 class HttpError extends Error {
@@ -754,7 +754,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
           return json(res, 200, { ok: true, role, appearance: r.appearance[role] || {} });
         }
       }
-      // A project folder's instructions (also with each agent of ⚙ › Agents): { path, instructions }
+      // A project folder's instructions (also with each agent of ⚙ › Repositories): { path, instructions }
       if (req.method === 'PUT' && p === '/v1/projects/instructions') {
         const b = await body(req);
         const out = store.setProjectInstructions(b.path, b.instructions);
