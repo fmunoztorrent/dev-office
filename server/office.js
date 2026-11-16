@@ -236,7 +236,7 @@ export class Office extends EventEmitter {
       case 'subagent_start':
         return this.#startSub(s, ev, { desc: r.text, agentType: r.agentType, agentId: r.agentId, fromHook: true, role });
       case 'subagent_end':
-        return this.#endSub(s, ev, { agentId: r.agentId, toolUseId: r.toolUseId, fromHook: !r.toolUseId });
+        return this.#endSub(s, ev, { agentId: r.agentId, toolUseId: r.toolUseId, subId: r.subId, fromHook: !r.toolUseId && !r.subId });
       case 'task':
         // the scope line the office puts before a brief (tasks.js) is not part of the request
         if (typeof r.text === 'string') r.text = unguided(r.text); // the 📁 scope and the 📋 instructions are the office's
@@ -381,8 +381,8 @@ export class Office extends EventEmitter {
     return { ...ev, kind: 'subagent_start', role: sub.role, subId: sub.id, agentType: sub.agentType, text: sub.desc, badge: clip(`👥 ${clip(sub.agentType || sub.desc, 12)}`, 24), ...(sub.phase ? { phase: sub.phase } : {}), ...(task ? { task: excerpt(task, { max: 600, lines: 8, head: true }) } : {}) };
   }
 
-  #endSub(s, ev, { agentId, toolUseId, desc, fromHook, output }) {
-    let sub = s.subagents.find((x) => (agentId && x.agentId === agentId) || (toolUseId && x.toolUseId === toolUseId));
+  #endSub(s, ev, { agentId, toolUseId, subId, desc, fromHook, output }) {
+    let sub = s.subagents.find((x) => (subId && x.id === subId) || (agentId && x.agentId === agentId) || (toolUseId && x.toolUseId === toolUseId));
     if (sub && !sub.open) return null; // the other event of the pair already closed it
     const open = s.subagents.filter((x) => x.open);
     if (!sub && !fromHook) sub = open.find((x) => desc && x.desc === clip(desc, 120)) || open[0];
@@ -441,6 +441,14 @@ export class Office extends EventEmitter {
   setAgentRoles(sessionId, map = {}) {
     const s = this.#session(sessionId, 'generic');
     s.agentRoles = Object.fromEntries(Object.entries(map).map(([k, v]) => [k.toLowerCase(), v]));
+  }
+
+  /**
+   * A session's subagent, by the id its events carry. Its `child` is the process of one that runs on
+   * its own (Pi's): when that process is gone, the subagent is over even if it never said so.
+   */
+  subagentOf(sessionId, subId) {
+    return this.sessions.get(sessionId)?.subagents.find((x) => x.id === subId) || null;
   }
 
   sessionSummary(id) {

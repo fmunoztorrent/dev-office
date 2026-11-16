@@ -575,7 +575,7 @@ function renderWeather() {
   const temp = Number.isFinite(w.temp) ? `${Math.round(w.temp)}°` : '';
   const el = $('wx');
   el.hidden = false;
-  el.textContent = `${icon} ${temp}`;
+  el.textContent = icon; // just the icon: the temperature is in its tooltip
   const place = w.place || office?.place?.name || office?.city || t('ui.here');
   const country = office?.country ? `, ${countryName(office.country, getLanguage())}` : '';
   const where = w.source === 'open-meteo' ? t('ui.weatherReal', { place: `${place}${country}` }) : `${t('ui.weatherSim')} · ${place}${country}`;

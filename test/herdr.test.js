@@ -249,10 +249,12 @@ test('dentro de herdr, cada subagente en su pane: bajo el del agente, uno al lad
     await server.subPanes.sweep(Date.now() + 9000);
     assert.ok(!fake.panes.has(qa), 'se cerró');
     assert.equal(server.subPanes.list().length, 1);
-    // if the user closes one by hand, the office lets it go
+    // if the user closes one by hand, the office lets it go (once it has been quiet for a while)
     const be = server.subPanes.list()[0].pane;
     fake.panes.delete(be);
-    await until(() => server.subPanes.list().length === 0);
+    await until(() => server.subPanes.list()[0]?.goneAt);
+    await server.subPanes.sweep(Date.now() + 9000);
+    assert.equal(server.subPanes.list().length, 0);
 
     // turned off in ⚙: subagents no longer open panes
     server.setPrefs({ herdr: { subagents: false } });
@@ -260,6 +262,44 @@ test('dentro de herdr, cada subagente en su pane: bajo el del agente, uno al lad
     await sleep(60);
     assert.equal(splits().length, 2);
     assert.equal(server.subPanes.list().length, 0);
+  } finally {
+    await server.close();
+  }
+});
+
+test('un subagente que nunca avisa que terminó: su pane ya no está, o su proceso se fue, y la oficina lo da por terminado', async () => {
+  const fake = fakeHerdr();
+  fake.panes.set('w1:p2', { pane_id: 'w1:p2', workspace_id: 'w1', cwd: '/proyectos/tienda', agent: 'pi', agent_status: 'working' });
+  const herdr = new Herdr({ env: ENV, run: fake.run, every: 30 });
+  const server = await startServer({ port: 0, socket: null, db: openStore(':memory:'), weather: false, herdr });
+  const pi = (e) => server.company.ingest('pi', { session: 'pi-1', cwd: '/proyectos/tienda', pane: 'w1:p2', ...e });
+  const office = () => server.company.get('main');
+  const sub = (id) => office().sessions.get('pi-1').subagents.find((x) => x.id === id);
+  try {
+    pi({ kind: 'session_start' });
+    pi({ kind: 'tool_start', tool: 'subagent_run', toolUseId: 'c1', input: { agent: 'ex-qa', label: 'RED: tests que fallen', task: 'Escribe tests que fallen' } });
+    await until(() => server.subPanes.list().find((x) => x.pane));
+    const qa = server.subPanes.list()[0].pane;
+    assert.equal(sub('c1').open, true);
+
+    // the harness lost its end (its pane went away before it recorded the result): the pane is gone
+    fake.panes.delete(qa);
+    await until(() => server.subPanes.list()[0]?.goneAt);
+    await server.subPanes.sweep(Date.now() + 9000);
+    assert.equal(server.subPanes.list().length, 0);
+    assert.equal(sub('c1').open, false, 'la oficina ya no lo tiene trabajando');
+    assert.ok(office().log.some((e) => e.kind === 'subagent_end' && e.subId === 'c1'), 'y queda en la bitácora');
+
+    // and the other way: the pane is still there, but the subagent's own process is gone
+    pi({ kind: 'tool_start', tool: 'subagent_run', toolUseId: 'c2', input: { agent: 'ex-backend', label: 'Implementa shipping', task: 'Implementa shipping()' } });
+    await until(() => server.subPanes.list().find((x) => x.pane));
+    const be = server.subPanes.list()[0].pane;
+    pi({ kind: 'thinking', child: '999999' }); // a libre subagent: it reports its own pid, and this one is not running
+    assert.equal(String(sub('c2').child), '999999');
+    await server.subPanes.sweep(Date.now() + 9000);
+    assert.equal(server.subPanes.list().length, 0);
+    assert.ok(!fake.panes.has(be), 'se cerró su pane');
+    assert.equal(sub('c2').open, false);
   } finally {
     await server.close();
   }
@@ -317,7 +357,7 @@ test('herdr: el prompt pide confirmación y el error de herdr conserva su códig
 test('herdr: un prompt estancado se confirma con agent get y se reenvía una sola vez (agente de herdr)', async () => {
   let prompts = 0;
   const stall = () => { throw Object.assign(new Error('no hubo actividad'), { code: 'agent_prompt_stalled' }); };
-  const fake = fakeHerdr({ onPrompt: (target, text, { ok }) => (++prompts === 1 ? stall() : ok()) });
+  const fake = fakeHerdr({ onPrompt: (_target, _text, { ok }) => (++prompts === 1 ? stall() : ok()) });
   const herdr = new Herdr({ env: ENV, run: fake.run });
   const { name } = await herdr.launchAgent({ harness: 'claude-code', cwd: '/x', prompt: 'hola' });
   assert.equal(prompts, 2, 'un solo reintento');
@@ -329,7 +369,7 @@ test('herdr: un prompt estancado se confirma con agent get y se reenvía una sol
 test('herdr: el mismo reintento con un ejecutable propio (bin)', async () => {
   let prompts = 0;
   const stall = () => { throw Object.assign(new Error('no hubo actividad'), { code: 'agent_prompt_stalled' }); };
-  const fake = fakeHerdr({ onPrompt: (target, text, { ok }) => (++prompts === 1 ? stall() : ok()) });
+  const fake = fakeHerdr({ onPrompt: (_target, _text, { ok }) => (++prompts === 1 ? stall() : ok()) });
   const herdr = new Herdr({ env: ENV, run: fake.run });
   const { pane } = await herdr.launchAgent({ harness: 'pi', cwd: '/x', bin: '/opt/pi', prompt: 'hola' });
   assert.equal(prompts, 2);
@@ -370,7 +410,7 @@ test('herdr: un agente bloqueado (agent_blocked) no se reintenta', async () => {
 test('herdr: un pane ocupado (agent_pane_busy) se des-trackea y se reintenta en un pane nuevo', async () => {
   let starts = 0;
   const fake = fakeHerdr({
-    onStart: (pane, kind, { ok }) => {
+    onStart: (_pane, _kind, { ok }) => {
       starts++;
       if (starts === 1) throw Object.assign(new Error('el pane está ocupado'), { code: 'agent_pane_busy' });
       return ok();

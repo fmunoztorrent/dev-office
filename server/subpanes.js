@@ -7,6 +7,11 @@
 // The pane closes by itself once the subagent finished and stopped reporting (a few seconds later,
 // so you can read how it ended). If the agent is not running in herdr, the panes open below the
 // office's.
+//
+// A subagent does not always say it ended: its harness may lose the end (a pane that disappears
+// before the harness records the result, a child that dies without reporting). The office does not
+// wait 30 minutes for that: a pane that is not there anymore, or a subagent whose own process is
+// gone, is over, and the office is told so it stops waiting for it.
 
 import { clip } from './roles.js';
 import { quote } from './herdr.js';
@@ -22,9 +27,10 @@ export class SubPanes {
    * @param enabled  () => is it on? (⚙ › herdr › Each subagent in its pane)
    * @param who      (office, role) => the character's name (for the pane title)
    * @param linger   how long it stays open after the subagent stopped reporting (ms)
+   * @param onEnded  (entry, why) => the subagent is over without having said so ('pane', 'process', 'stale')
    */
-  constructor({ herdr, company, command, env = () => ({}), enabled = () => true, who = () => '', linger = 8000, every = 2000, stale = 30 * 60_000, log = () => {} }) {
-    Object.assign(this, { herdr, company, command, env, enabled, who, linger, stale, log });
+  constructor({ herdr, company, command, env = () => ({}), enabled = () => true, who = () => '', linger = 8000, every = 2000, stale = 30 * 60_000, onEnded = () => {}, log = () => {} }) {
+    Object.assign(this, { herdr, company, command, env, enabled, who, linger, stale, onEnded, log });
     this.open = new Map(); // `${session}\n${subId}` → { pane, office, session, subId, role, parent, endedAt, lastAt, opening }
     this.queue = Promise.resolve();
     this.timer = setInterval(() => this.sweep(), every);
@@ -77,28 +83,50 @@ export class SubPanes {
         const { pane } = await this.herdr.launchCommand({ ...base, ...where });
         entry.pane = pane;
         entry.parent = parent;
+        entry.title = title;
         return pane;
       } catch (err) { last = err; }
     }
     throw last;
   }
 
-  /** Closes the panes of subagents that already finished (or have not reported for a long time). */
+  /**
+   * Closes the panes of subagents that already finished (or have not reported for a long time), and
+   * of the ones that are over without having said so: its pane is gone, or the subagent's own
+   * process ended. Those are also told to the office (`onEnded`), which would otherwise keep it
+   * working forever.
+   */
   async sweep(now = Date.now()) {
-    for (const [key, e] of this.open) {
+    for (const [key, e] of [...this.open]) {
       if (!e.pane || e.closing) continue;
-      const done = e.endedAt && now - e.lastAt >= this.linger;
-      if (!done && now - e.lastAt < this.stale) continue;
+      const quiet = now - e.lastAt >= this.linger; // it stopped reporting
+      let why = null;
+      if (e.endedAt) why = 'end'; // it said so: the normal way
+      else if (e.goneAt) why = 'pane';
+      else if (this.#over(e)) why = 'process';
+      if (!(quiet && why) && now - e.lastAt < this.stale) continue;
       e.closing = true;
       this.open.delete(key);
       await this.herdr.closePane(e.pane).catch(() => {});
+      if (why !== 'end') this.onEnded(e, why || 'stale');
     }
   }
 
-  /** The user closed the pane by hand. */
-  forget(pane) {
-    for (const [key, e] of this.open) if (e.pane === pane) this.open.delete(key);
+  /**
+   * Is the subagent's own process gone? Pi's subagents run as processes of their own and report their
+   * pid: if it is not there anymore, the subagent is over even if it never sent its end.
+   */
+  #over(e) {
+    const child = this.company.get?.(e.office)?.subagentOf?.(e.session, e.subId)?.child;
+    const pid = Number(child);
+    if (!Number.isInteger(pid) || pid <= 0) return false;
+    try { process.kill(pid, 0); return false; } catch (err) { return err.code === 'ESRCH'; }
   }
 
-  list() { return [...this.open.values()].map(({ opening, ...e }) => e); }
+  /** Its pane is not there anymore (whoever opened it closed it, or it went with its process). */
+  forget(pane) {
+    for (const e of this.open.values()) if (e.pane === pane && !e.goneAt) e.goneAt = Date.now();
+  }
+
+  list() { return [...this.open.values()].map(({ opening: _opening, ...e }) => e); }
 }
