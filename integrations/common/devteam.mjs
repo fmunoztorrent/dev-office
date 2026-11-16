@@ -19,6 +19,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 export const CONFIG_DIR = '.devteam';
 export const ROLE_IDS = ['po', 'analyst', 'manager', 'tl', 'qa', 'backend', 'frontend', 'designer'];
@@ -787,6 +788,27 @@ export function claudeChild({ prompt, model, agent, cwd, env = {}, bin, args }) 
       resolve({ ok: code === 0, output: code === 0 ? result : clip(`${result}\n${tail.join('')}`, 2000) });
     });
   });
+}
+
+// ------------------------------------------------------------------ the e2e tests, watched
+
+/**
+ * The office's Playwright reporter (integrations/playwright/reporter.cjs): installed next to this
+ * library (~/.dev-team-office/lib/playwright-reporter.cjs), or in the checkout. null if it is not there.
+ */
+export function e2eReporter() {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  for (const f of [process.env.DEV_TEAM_OFFICE_E2E_REPORTER, path.join(here, 'playwright-reporter.cjs'), path.join(here, '..', 'playwright', 'reporter.cjs')]) if (f && fs.existsSync(f)) return f;
+  return null;
+}
+
+/**
+ * The environment that lets the office watch a Playwright run: $PW_TEST_REPORTER (Playwright adds that
+ * reporter to the project's own), unless someone already set one. {} if there is no reporter.
+ */
+export function e2eEnv(env = process.env) {
+  const reporter = e2eReporter();
+  return reporter && !env.PW_TEST_REPORTER ? { PW_TEST_REPORTER: reporter } : {};
 }
 
 /** Sends in order: the office's events tell a story (phase → tools → end). */

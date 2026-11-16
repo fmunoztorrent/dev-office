@@ -142,6 +142,7 @@ A question written on a character's sheet in the browser ("who is on the tests?"
 | `dev-team-office pane … -- <command>` | Inside herdr: an activity in another pane |
 | `dev-team-office follow --session <s> --sub <id>` | What a subagent is doing, live (the office opens it by itself in its pane) |
 | `dev-team-office btw "…"` | A side question |
+| `dev-team-office e2e -- <command>` | Runs your end-to-end tests (Playwright) with the office watching: its screen shows each test and its steps live, and the movie of each one (with Playwright's own command, the trace goes on by itself) |
 | `dev-team-office send <kind> …` | Sends an event by hand (for testing) |
 | `dev-team-office demo [--pi]` | A sample session |
 | `dev-team-office config [key] [value]` | The settings: `lang`, `timezone`, `city <city>\|zone`, `weather`, `herdr.*`, `log.life`, `view.office`, `view.mode flat\|iso` |
@@ -156,4 +157,4 @@ A question written on a character's sheet in the browser ("who is on the tests?"
 | Monitor | `o` browser · `g` game · `←→` office · `r` answer the agent's question · `1`–`9`/`l` a service's logs · `q` quit |
 | Log | `g` game · `o` browser · `h` help · `q` close |
 | Game (terminal) | `t` brief · click the whiteboard: its tasks (with tickets) or a brief · `c` settings · `o` office · `a` activity · `tab`/arrows pick · `m` message · `b` btw · `s` greet · `x` cancel · `l` services (or click the rack) · `d`/`p` demos · `r` restart · `q` back |
-| Game (browser) | `t` brief (on the executive floor, a directive; in the archive, a new entry) · `c` settings · `o` next floor · `PgUp`/`PgDn` floor up or down · `a` activity · `w` work (the task, pipelines, tasks, demos and the team) · `d` the daily now (what is new since the last one; on the executive floor, the company's) · `f` full screen · `v` front or top-down view · `l` services (or click the rack) · `i` loops (or the 🔁 chip) · `r` answer the agent's question (or the ✋ chip) · `esc` close |
+| Game (browser) | `t` brief (on the executive floor, a directive; in the archive, a new entry) · `c` settings · `o` next floor · `PgUp`/`PgDn` floor up or down · `a` activity · `w` work (the task, pipelines, tasks, demos and the team) · `d` the daily now (what is new since the last one; on the executive floor, the company's) · `f` full screen · `v` front or top-down view · `l` services (or click the rack) · `i` loops (or the 🔁 chip) · `e` the e2e tests (or click their screen) · `r` answer the agent's question (or the ✋ chip) · `esc` close |

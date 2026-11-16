@@ -4,6 +4,15 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-11-16
+
+### Added
+
+- **E2E tests, watched as they run.** When an agent runs Playwright tests, a small screen shows up in the game's bottom right corner: how the run is going (passed, failed, running), the test and step it is on, and the browser's last frame, **LIVE** while it runs. Click it (or `e`) and it expands into a player: the run's tests; each one's **movie** from its trace, with a dot where it clicked or typed, the action's caption, a timeline with a mark per action (red, the one that failed), play/pause and speed; its **steps** with their timing and the error where it happened (click one to go there); its **video** and **screenshots**. It follows the live test until you pick another. QA does the run in the game (announces it, shakes when a test fails, celebrates or gets stuck at the end), and the log says it.
+- **The office's Playwright reporter** (`integrations/playwright/reporter.cjs`, installed as `~/.dev-team-office/lib/playwright-reporter.cjs`): every agent's session gets it in `$PW_TEST_REPORTER` (Claude Code through its session's environment, Pi and OpenCode from their extensions, the sessions the office launches too), and Playwright adds it next to the project's own reporters. It prints nothing, sends in batches with a short limit and gives up quietly if the office is not running.
+- **`dev-team-office e2e -- <command>`** runs your tests with the office watching, and turns the trace on for Playwright's own command.
+- `POST|GET /v1/e2e`, `GET|DELETE /v1/e2e/<run>`, `GET /v1/e2e/<run>/<test>/(frame/<i>|video|shot/<i>)`; WebSocket `{ type: "e2e", runs }`; events `kind: "e2e"`. The office reads only files inside the run's folder, copies them before the next run clears them and keeps the last 6 runs.
+
 ## [0.23.0] - 2026-11-15
 
 ### Added
@@ -338,7 +347,8 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.20.0...v0.21.0

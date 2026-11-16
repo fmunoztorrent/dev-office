@@ -43,6 +43,7 @@ export function activityLine(ev) {
     case 'standup': text = t('events.standup', { text: ev.text || '' }); break;
     // a project's loop (server/loops.js): its text already says what happened
     case 'loop': tone = ev.ok === false ? 'warn' : ['passed', 'done'].includes(ev.phase) ? 'ok' : ev.phase === 'report' ? 'dim' : undefined; break;
+    case 'e2e': tone = ev.ok === false ? 'warn' : ev.phase === 'end' ? 'ok' : undefined; break;
     case 'btw':
       text = ev.phase === 'ask' ? `❓ btw: ${ev.text}` : ev.phase === 'answer' ? `💡 ${ev.text}` : `✖ btw: ${ev.text}`;
       tone = ev.phase === 'failed' ? 'err' : ev.phase === 'answer' ? 'ok' : undefined;

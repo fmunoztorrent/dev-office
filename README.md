@@ -313,6 +313,17 @@ The executive floor is dressed for it: a walnut parquet, a Persian rug under the
 
 Click the shelves, the skills rack or the connectors' patch panel to open it (or `t` there). The terminal monitor shows the directives running and how many entries the archive keeps; its log tells what happens on both floors.
 
+## E2E tests: watch them as they run
+
+When an agent runs **Playwright** tests, a **small screen** shows up in the game's bottom right corner: the project, how the run is going (✓ passed, ✗ failed, ◌ running, of how many), the test and the step it is on (*agregar al carrito › Click*), and the last frame of the browser, with **LIVE** while it runs. QA does it in the game: they announce the run, shake when a test fails and celebrate (or get stuck) when it ends. Click the screen (or press `e`) and it **expands**:
+
+- **the run's tests**, each with how it ended and how long it took; it follows the live one until you pick another (▶ Follow live takes you back);
+- **its movie**, taken from its trace: the browser's frames, with **a dot where it clicked or typed**, the action's caption (`Click · getByRole('button', { name: 'Pagar' })`), a timeline with a mark per action (red, the one that failed), play/pause and speed;
+- **its steps** (navigate, fill, click, expect, your `test.step`s), with their timing and **the error where it happened**; click one to go to that moment;
+- **its video** and **its screenshots**, when the config records them.
+
+Nothing to set up: `setup` installs the office's Playwright reporter and every agent's session gets it (`$PW_TEST_REPORTER`, which Playwright adds **next to** the project's reporters, never instead of them). It never gets in the way of the tests: it prints nothing, and if the office is not running it stops trying. The movie needs the trace: run `npx playwright test --trace=on`, or **`dev-team-office e2e -- npx playwright test`**, which turns it on for you (a script like `npm run e2e` goes as it is: its config decides). The office reads only files inside the folder where the tests run, copies them before the next run clears them, and keeps the last 6 runs. Other runners (Cypress, Selenium) are not watched yet. API in [docs/api.md](docs/api.md#e2e-tests-watched).
+
 ## herdr: the agent in a pane, and each subagent in its own
 
 The full flow, inside herdr:
@@ -526,6 +537,8 @@ server/compact.js       auto-compaction: past your limit, the agent is asked to 
 server/mine.js          yours: private skills (in your personal folders) and your own tools (run through the MCP)
 server/loops.js         a project's loop: steps with success criteria, worked through one after the other at an interval
 server/experts.js       the subject matter experts: who knows each skill, and which skill an agent's tool uses
+server/e2e.js           the e2e tests, watched: what the Playwright reporter tells, each test's trace as frames and actions
+server/zip.js           a small ZIP reader (a Playwright trace)
 server/resources.js     the infrastructure: what each repo's folder says it uses, what an order names of it, and what is on the map
 server/intelligence.js  the model the office leans on (one of your agents, the Claude API, an OpenAI-compatible API or Ollama): an order's impact
 server/ws.js            dependency-free WebSocket (RFC 6455)
@@ -557,6 +570,7 @@ public/themes.js        the graphic themes: the anime cast (all women), its hair
 public/anime.js         the anime theme's people, drawn with vector strokes (the game's views and the portraits)
 public/renderers.js     the renderers' registry (another one, a 3D one, draws the same scene); renderers/plan.js, the reference
 public/loops-ui.js      the loops' dialog
+public/e2e-ui.js        the e2e tests' mini screen over the game and the expanded player
 public/impact.js        an order's impact as pictures, without the DOM: the tree of its repos and the graph of everything it touches, laid out
 public/impact-ui.js     the tree (with its bubbles), the graph's dialog and the questions about what is not on the map
 public/floors.js        the two shared floors on canvas (the executive one and the archive): their scenes and people
@@ -570,6 +584,7 @@ tui/follow.js           a subagent's pane inside herdr: what it is doing, live
 tui/monitor.js          the activity monitor (inside herdr): figures, each agent and its subagents, the team and the log
 examples/tienda/        sample project with a team, pipelines and agents
 integrations/common/    the agent-side library: project, pipelines, gates (used by all of them)
+integrations/playwright/ the office's Playwright reporter (its e2e tests, live)
 integrations/           Claude Code (hook), Codex (hook), OpenCode (plugin), Pi (extension)
 skills/                 the skills (any harness): events by role and configuring a harness
 .claude-plugin/         the Claude Code plugin and marketplace

@@ -6,7 +6,9 @@
 // file with `node`). It receives the hook's JSON on stdin.
 //
 // - Forwards every event to the office.
-// - SessionStart / UserPromptSubmit: announces the project and its pipelines (.devteam/).
+// - SessionStart / UserPromptSubmit: announces the project and its pipelines (.devteam/). On SessionStart
+//   it also gives the session's commands the office's Playwright reporter ($PW_TEST_REPORTER, through
+//   CLAUDE_ENV_FILE): its end-to-end tests show live in the office.
 // - Stop: if a pipeline is running in this session, the stage that just finished is closed
 //   (its summary is the transcript's last reply), its gate runs and the next one is decided.
 //   If it has to continue, it prints {"decision":"block","reason":"<stage prompt>"}
@@ -138,6 +140,15 @@ async function main() {
 
   const lib = await loadLib();
   if (!lib) return;
+  if (event === 'SessionStart' && process.env.CLAUDE_ENV_FILE) {
+    // the session's commands get the office's Playwright reporter: its e2e tests show live in the office
+    try {
+      const env = lib.e2eEnv?.() || {};
+      const file = process.env.CLAUDE_ENV_FILE;
+      const had = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+      if (env.PW_TEST_REPORTER && !had.includes('PW_TEST_REPORTER=')) fs.appendFileSync(file, `export PW_TEST_REPORTER='${env.PW_TEST_REPORTER.replace(/'/g, "'\\''")}'\n`);
+    } catch { /* never in the way of the session */ }
+  }
   if (event === 'SessionStart' || event === 'UserPromptSubmit') {
     const project = lib.loadProject(input.cwd);
     if (project.hasConfig) await post('/v1/agents/announce', { agent: 'claude-code', session, cwd: input.cwd, project: lib.catalogEntry(project), ...OFFICE_OF });

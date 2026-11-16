@@ -172,3 +172,24 @@ test('el hook manda cuánto contexto lleva la sesión (del transcript) y sigue s
     await server.close();
   }
 });
+
+test('al empezar la sesión, el hook le da a sus comandos el reporter de Playwright de la oficina (una vez, y nunca encima de otro)', async () => {
+  const ctx = setup();
+  const envFile = path.join(ctx.home, 'claude-env.sh');
+  const run = (extra = {}) => new Promise((resolve) => {
+    const { PW_TEST_REPORTER: _drop, ...env } = process.env;
+    const child = spawn(process.execPath, [HOOK], { env: { ...env, HOME: ctx.home, DEV_TEAM_OFFICE_URL: 'http://127.0.0.1:9', CLAUDE_ENV_FILE: envFile, ...extra }, stdio: ['pipe', 'pipe', 'pipe'] });
+    let out = '';
+    child.stdout.on('data', (d) => { out += d; });
+    child.on('close', (code) => resolve({ code, out }));
+    child.stdin.end(JSON.stringify({ session_id: 'c9', cwd: ctx.project, hook_event_name: 'SessionStart', source: 'startup' }));
+  });
+  assert.deepEqual(await run(), { code: 0, out: '' });
+  assert.deepEqual(await run(), { code: 0, out: '' });
+  const lines = fs.readFileSync(envFile, 'utf8').trim().split('\n');
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /^export PW_TEST_REPORTER='.+reporter\.cjs'$/);
+  fs.rmSync(envFile);
+  await run({ PW_TEST_REPORTER: '/su/propio/reporter.js' });
+  assert.equal(fs.existsSync(envFile), false, 'si ya tiene uno, no se toca');
+});

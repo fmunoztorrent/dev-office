@@ -63,6 +63,9 @@ const unwrap = (res) => {
 export const DevTeamOffice = async ({ client, directory }) => {
   // a side question (btw) launched by the office: it is not the team's work, it is not reported
   if (process.env.DEV_TEAM_OFFICE_BTW) return {};
+  // its Playwright runs tell the office what they do (the e2e screen): the commands OpenCode runs inherit it
+  const reporter = path.join(os.homedir(), '.dev-team-office', 'lib', 'playwright-reporter.cjs');
+  if (!process.env.PW_TEST_REPORTER && fs.existsSync(reporter)) process.env.PW_TEST_REPORTER = reporter;
   const cwd = directory;
   let lib = null;
   let lastSession = null;

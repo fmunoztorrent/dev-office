@@ -148,6 +148,7 @@ Una pregunta escrita en la ficha de un personaje en el navegador («¿quién est
 | `dev-team-office pane … -- <comando>` | Dentro de herdr: una actividad en otro pane |
 | `dev-team-office follow --session <s> --sub <id>` | Lo que hace un subagente, en vivo (la oficina lo abre sola en su pane) |
 | `dev-team-office btw "…"` | Una pregunta al margen |
+| `dev-team-office e2e -- <comando>` | Corre tus pruebas end-to-end (Playwright) con la oficina mirando: su pantalla muestra cada prueba y sus pasos en vivo, y la película de cada una (con el comando de Playwright, la traza se enciende sola) |
 | `dev-team-office send <kind> …` | Manda un evento a mano (para probar) |
 | `dev-team-office demo [--pi]` | Una sesión de ejemplo |
 | `dev-team-office config [clave] [valor]` | Los ajustes: `lang`, `timezone`, `city <ciudad>\|zone`, `weather`, `herdr.*`, `log.life`, `view.office`, `view.mode flat\|iso` |
@@ -162,4 +163,4 @@ Una pregunta escrita en la ficha de un personaje en el navegador («¿quién est
 | Monitor | `o` navegador · `g` juego · `←→` oficina · `r` responder la pregunta del agente · `1`–`9`/`l` los logs de un servicio · `q` salir |
 | Bitácora | `g` juego · `o` navegador · `h` ayuda · `q` cerrar |
 | Juego (terminal) | `t` encargo · clic en la pizarra: sus tareas (con tickets) o un encargo · `c` ajustes · `o` oficina · `a` actividad · `tab`/flechas elegir · `m` mensaje · `b` btw · `s` saludar · `x` cancelar · `l` servicios (o clic en el rack) · `d`/`p` demos · `r` reiniciar · `q` volver |
-| Juego (navegador) | `t` encargo (en la dirección, una directiva; en el archivo, una entrada nueva) · `c` ajustes · `o` piso siguiente · `RePág`/`AvPág` subir o bajar de piso · `a` actividad · `w` trabajo (la tarea, los pipelines, los encargos, las demos y el equipo) · `d` la daily ahora (lo nuevo desde la anterior; en la dirección, la de la empresa) · `f` pantalla completa · `v` vista frontal o cenital · `l` servicios (o clic en el rack) · `i` loops (o el chip 🔁) · `r` responder la pregunta del agente (o el chip ✋) · `esc` cerrar |
+| Juego (navegador) | `t` encargo (en la dirección, una directiva; en el archivo, una entrada nueva) · `c` ajustes · `o` piso siguiente · `RePág`/`AvPág` subir o bajar de piso · `a` actividad · `w` trabajo (la tarea, los pipelines, los encargos, las demos y el equipo) · `d` la daily ahora (lo nuevo desde la anterior; en la dirección, la de la empresa) · `f` pantalla completa · `v` vista frontal o cenital · `l` servicios (o clic en el rack) · `i` loops (o el chip 🔁) · `e` las pruebas e2e (o clic en su pantalla) · `r` responder la pregunta del agente (o el chip ✋) · `esc` cerrar |

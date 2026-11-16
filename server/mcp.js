@@ -33,6 +33,7 @@ The company has two shared floors. The archive keeps what the company knows: bef
 A company groups its repos in systems (a product: "Payments" = its core, its bff and its web; list_systems): a brief whose header says other artifacts use yours goes before theirs, so when you finish, call handoff with what they need to know (what changed in what you expose). A brief that carries "What X left" is the handoff of an artifact you use: build on it.
 When a brief asks you to create infrastructure (🆕 a queue, a topic, a database, a scheduler…), declare it with declare_resource once it exists, so the company's map knows where it lives and who uses it.
 A brief that starts with 🔁 is a step of a project loop: it lists its success criteria, numbered. Before you end, check each one for real and report all of them with loop_report; the loop moves on only when every criterion is met.
+Your Playwright end-to-end tests show live in the office (each test, its steps and the browser's frames): run them with the trace on (\`npx playwright test --trace=on\`, or \`dev-team-office e2e -- <command>\`) so the user can watch the movie of each one.
 The user may have their own tools (small programs they defined in the office): they show up as my_<name> tools; list_my_tools lists them and run_my_tool runs one by name. Use them when they fit what you are doing: they are what the user wants used for that.
 If the office is not running, office_start opens it; office_status gives its URL. Reporting is best effort: never stop or retry your real work because the office is offline.`;
 

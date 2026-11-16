@@ -35,6 +35,8 @@ test('install([pi]): copia la librería, el skill genérico y la extensión, y l
   assert.equal(res.ok, true);
   assert.ok(fs.existsSync(LIB));
   assert.ok(fs.existsSync(path.join(HOME, '.pi', 'agent', 'extensions', 'dev-team-office.ts')));
+  // the Playwright reporter, next to the library: the e2e tests of every agent show in the office
+  assert.ok(fs.existsSync(path.join(HOME, '.dev-team-office', 'lib', 'playwright-reporter.cjs')));
   assert.ok(fs.existsSync(path.join(CONFIG_SKILL, 'SKILL.md')));
   // lines announces the configuration skill (by its path, not by the translated text)
   assert.ok(res.lines.some((l) => l.includes('dev-team-office-config')), res.lines.join('\n'));

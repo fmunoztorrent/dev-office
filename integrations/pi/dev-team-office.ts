@@ -153,6 +153,9 @@ function resultText(event: any, head = false) {
 export default function (pi: ExtensionAPI) {
   // a side question (btw) launched by the office: it is not the team's work, it is not reported
   if (process.env.DEV_TEAM_OFFICE_BTW) return;
+  // its Playwright runs tell the office what they do (the e2e screen): the commands Pi runs inherit it
+  const reporter = path.join(os.homedir(), '.dev-team-office', 'lib', 'playwright-reporter.cjs');
+  if (!process.env.PW_TEST_REPORTER && fs.existsSync(reporter)) process.env.PW_TEST_REPORTER = reporter;
   // A subagent of this session: Pi's subagents (gentle-pi, pi-subagents…) are other `pi`s that
   // inherit the environment and load this same extension. They are recognized because the session
   // already has an owner (another process): they report to the parent's session marked with `child`,

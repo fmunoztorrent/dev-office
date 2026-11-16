@@ -280,6 +280,23 @@ A loop works one registered project through its steps, one after the other, and 
 - **Results:** `by: "agent"` (MCP), `"output"` (the `✅ n` / `❌ n — why` lines at the end of a background session's answer) or `"you"`. Each new round forgets the agent's, keeps yours.
 - **Events:** `kind: "loop"` (`phase`: `created`, `start`, `retry`, `verify`, `report`, `passed`, `skipped`, `blocked`, `failed`, `done`), from the manager; over WebSocket, `{ type: "loops", loops }`. A finished loop's minutes go to the archive (`kind: "minute"`, tag `loop`).
 
+## E2E tests, watched
+
+What a Playwright run is doing (server/e2e.js), told by the office's reporter (integrations/playwright/reporter.cjs, installed as `~/.dev-team-office/lib/playwright-reporter.cjs`; every agent's session gets it in `$PW_TEST_REPORTER`). The office runs nothing: it shows.
+
+| Method | Path | Body |
+|---|---|---|
+| `POST` | `/v1/e2e` | `{ run, cwd, events: [{ type: "begin", total, version, projects: [{ name, outputDir, trace, video }] } \| { type: "test", test, title, file, line, project, retry } \| { type: "step", test, title, category ("pw:api", "expect", "test.step"), depth, at, duration, error } \| { type: "testEnd", test, status, duration, error, attachments: [{ name, contentType, path }] } \| { type: "end", status, duration }] }`: what the reporter tells, in batches and in order |
+| `GET` | `/v1/e2e` | `{ runs: [{ id, project, office, cwd, status, startedAt, endedAt, total, counts: { passed, failed, skipped, running }, trace, video, current: { test, title, step } \| null, last: { test, title, frame \| video } \| null }] }`, the newest first |
+| `GET` · `DELETE` | `/v1/e2e/<run>` | The run with its tests: `tests: [{ idx, title, file, line, project, retry, status, duration, error, steps, actions: [{ title, subtitle, category, depth, start, end, error, point: { x, y } \| null }], start, end, frames: [{ t, w, h, url }], video, shots }]` · forget it (and its files) |
+| `GET` | `/v1/e2e/<run>/<test>/frame/<i>` · `video` · `shot/<i>` | A frame of its movie (JPEG), its video (WebM), a screenshot (PNG) |
+
+- **The movie** comes from each test's trace (`trace.zip`): its screencast frames (at most 240 per test, thinned evenly), and its actions from the runner's steps (`test.trace`; without it, the browser's calls), each with where it clicked or typed (`point`, in the page's pixels, the same as the frames' `w`×`h`). Times are the trace's clock (ms).
+- **Only inside the run's folder:** an attachment outside `cwd` is not read. The trace, the video (up to 80 MB) and up to 5 screenshots are copied when the test ends (the next run clears them), next to the database (`e2e-runs/`); the last 6 runs stay, in memory until the office restarts.
+- A run that stops telling for 10 minutes without its `end` is `interrupted`.
+- **Events:** `kind: "e2e"` (`phase`: `start`, `fail`, `end`, with `ok`), QA's; over WebSocket, `{ type: "e2e", runs }`, and the state (`/v1/state`) carries `e2e`.
+- **`dev-team-office e2e -- <command>`** runs the command with the reporter and the office's URL, adding `--trace=on` to Playwright's own command (`npx playwright test`, `pnpm exec playwright test`, `node …/playwright/cli.js test`) when it says nothing about the trace.
+
 ## Experts: who knows a skill
 
 The subject matter experts (server/experts.js): a character associated by hand with a skill. When an agent uses that skill, its event is the expert's (`role: "sme"`, `expert: { id, name, title, skill, shirt }`, badge `🎓 <skill>`) and the game brings them up the elevator until the turn ends.

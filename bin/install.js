@@ -83,6 +83,8 @@ export function install(which = [], { all = true } = {}) {
   const unknown = names.filter((n) => !TARGETS[n]);
   if (unknown.length) return { ok: false, error: t('install.unknown', { names: unknown.join(', ') }) };
   const lib = copy('common/devteam.mjs', path.join(OFFICE_DIR, 'lib', 'devteam.mjs'));
+  // the Playwright reporter, next to the library: the agents' e2e tests show live in the office
+  copy('playwright/reporter.cjs', path.join(OFFICE_DIR, 'lib', 'playwright-reporter.cjs'));
   const lines = [t('install.lib', { path: tilde(lib) }), ...installSkills()];
   for (const n of names) lines.push(...TARGETS[n]());
   return { ok: true, lines };

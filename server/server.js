@@ -35,6 +35,7 @@ import { DirectiveDesk } from './directives.js';
 import { LoopDesk } from './loops.js';
 import { expertOfTool, knownSkills } from './experts.js';
 import { Intelligence } from './intelligence.js';
+import { E2EDesk } from './e2e.js';
 import { knownResources, RESOURCE_KINDS } from './resources.js';
 import { openStore, dbFile, MAIN_OFFICE } from './store.js';
 import { Weather, findPlaces } from './weather.js';
@@ -51,7 +52,7 @@ import { zoneInfo, systemZone } from '../public/clock.js';
 import { insideDir as inside, insideDir } from './paths.js';
 import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.23.0';
+export const VERSION = '0.24.0';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
 const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
@@ -87,7 +88,7 @@ class HttpError extends Error {
  *                 says it, so `update` knows whether it can bring the office back by itself
  * @returns {Promise<{company, office, url, socket, command, handleMessage, close, …}>}
  */
-export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {}, clarify: clarifyOpt = {}, rag: ragOpt = {}, standup: standupOpt = {}, mine: mineOpt = {}, loops: loopsOpt = {}, intelligence: intelOpt = {}, mode = 'terminal', outdatedAfter = 3000 } = {}) {
+export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {}, clarify: clarifyOpt = {}, rag: ragOpt = {}, standup: standupOpt = {}, mine: mineOpt = {}, loops: loopsOpt = {}, intelligence: intelOpt = {}, e2e: e2eOpt = {}, mode = 'terminal', outdatedAfter = 3000 } = {}) {
   const ownStore = !db || typeof db === 'string';
   const store = ownStore ? openStore(db || dbFile()) : db; // oficinas, agentes, ajustes e historial
   setLanguage(store.getPrefs().lang);
@@ -176,6 +177,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   // the projects' loops: steps with success criteria, worked through on their own (server/loops.js)
   const { autostart: loopsStart = true, ...loopsRest } = loopsOpt;
   const loops = new LoopDesk({ store, registry, hub, pipelines, company, archive, ...loopsRest });
+  // the end-to-end tests, watched (server/e2e.js): what the Playwright reporter tells, with its traces
+  const e2e = new E2EDesk({ store, company, dir: e2eOpt.dir || (store.file && store.file !== ':memory:' ? path.join(path.dirname(store.file), 'e2e-runs') : null), ...e2eOpt });
   if (loopsStart) loops.start();
   // the systems (server/systems.js), as the viewers see them: their order, their team and each artifact's repo
   const systemsPublic = () => {
@@ -260,7 +263,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       appearance: store.getAppearance(id), weather: weatherOf(id)?.current || null,
       office: company.info(id), offices: company.list(), prefs: prefs(), herdr: herdr ? herdr.status() : { available: false, panes: [] },
       asks: asks.list(id, 10), clarifications: clarify.list(id), services: services.list(id), prompts: promptsOf(id),
-      directives: directives.list(), archive: archive.snapshot(), overview: overview(), systems: systemsPublic(), loops: loops.list(), experts: store.listExperts(),
+      directives: directives.list(), archive: archive.snapshot(), overview: overview(), systems: systemsPublic(), loops: loops.list(), experts: store.listExperts(), e2e: e2e.list(),
     };
   };
 
@@ -971,6 +974,22 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         if (out.ok) expertsChanged();
         return json(res, out.ok ? 200 : out.status || 400, out);
       }
+      // the end-to-end tests (server/e2e.js): the Playwright reporter tells; the screen asks
+      if (req.method === 'POST' && p === '/v1/e2e') {
+        const out = e2e.receive(await body(req));
+        return json(res, out.ok ? 200 : 400, out);
+      }
+      if (req.method === 'GET' && p === '/v1/e2e') return json(res, 200, { ok: true, runs: e2e.list() });
+      if ((m = p.match(/^\/v1\/e2e\/([\w.-]+)$/))) {
+        if (req.method === 'GET') { const run = e2e.get(m[1]); return run ? json(res, 200, { ok: true, run }) : json(res, 404, { ok: false, error: t('e2e.unknown') }); }
+        if (req.method === 'DELETE') { const out = e2e.remove(m[1]); return json(res, out.ok ? 200 : out.status || 400, out); }
+      }
+      if (req.method === 'GET' && (m = p.match(/^\/v1\/e2e\/([\w.-]+)\/(\d+)\/(frame|video|shot)(?:\/(\d+))?$/))) {
+        const f = e2e.file(m[1], m[2], m[3], m[4] ?? 0);
+        if (!f) return json(res, 404, { ok: false, error: t('e2e.unknown') });
+        res.writeHead(200, { 'content-type': f.type, 'content-length': fs.statSync(f.path).size, 'cache-control': 'private, max-age=3600' });
+        return fs.createReadStream(f.path).pipe(res);
+      }
       // the projects' loops (server/loops.js): steps with success criteria, one after the other
       if (req.method === 'GET' && p === '/v1/loops') return json(res, 200, { ok: true, loops: loops.list() });
       if (req.method === 'POST' && p === '/v1/loops') {
@@ -1142,6 +1161,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   // a loop looks at whether its project is working or idle (server/loops.js)
   company.on('event', (id, event, session) => loops.onEvent(id, event, session));
   loops.on('change', (list) => broadcast({ type: 'loops', loops: list }));
+  e2e.on('change', (runs) => broadcast({ type: 'e2e', runs }));
   bus.on('experts', () => broadcast({ type: 'experts', experts: store.listExperts() }));
   company.on('reset', (id) => toOffice(id, { type: 'snapshot', state: fullState(id) }));
   services.on('change', (id) => toOffice(id, { type: 'services', services: services.list(id), office: id }));
@@ -1248,6 +1268,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     mine,
     directives,
     loops,
+    e2e,
     overview,
     bus,
     herdr,
@@ -1272,6 +1293,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       stopDemo?.();
       standup.stop();
       loops.stop();
+      e2e.close();
       indexer.stop();
       clearTimeout(overviewTimer);
       for (const w of weathers.values()) w.stop();

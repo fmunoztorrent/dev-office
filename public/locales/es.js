@@ -304,6 +304,20 @@ export default {
       briefBtn: '🗺 Impacto', briefNote: 'También toca {list}: para mandárselo a todos, conviértelo en directiva.', toDirective: '🏛 Hacerlo directiva', briefAnswered: 'Lo que contestaste quedó en el mapa y va arriba del encargo.',
     },
   },
+  // las pruebas end-to-end, miradas (server/e2e.js, public/e2e-ui.js)
+  e2e: {
+    bad: 'eso no es un aviso del reporter de Playwright de la oficina', unknown: 'no hay esa corrida de pruebas e2e',
+    log: { start: '🎭 Corriendo {n} prueba(s) e2e de {project}', fail: '✗ Falló «{title}»', end: '🎭 e2e: {passed} ✓ · {failed} ✗ ({s} s)' },
+    ui: {
+      title: 'E2E', dialog: '🎭 Pruebas end-to-end', runs: 'La corrida', follow: '▶ Seguir en vivo', dismiss: 'Ocultar', expand: 'Ver las pruebas (e)',
+      live: 'EN VIVO', waitingFrames: 'La película de cada prueba llega cuando termina…', noFrames: 'Sin película (sin traza)', allPassed: 'Pasaron todas', ended: 'Terminó: {n} fallaron',
+      status: { running: 'corriendo', passed: 'pasaron', failed: 'fallaron', interrupted: 'interrumpida', timedout: 'se pasó del tiempo' },
+      retry: 'reintento {n}', movie: 'Película', video: 'Video', restart: 'Al inicio', play: 'Reproducir o pausar', seek: 'Ir a un momento', speed: 'Velocidad',
+      runningNoMovie: 'La prueba está corriendo: sus pasos llegan en vivo, y su película cuando termine.', noMovie: 'Esta prueba no dejó película.',
+      traceHint: 'Para ver la película de cada prueba, corre Playwright con --trace=on (o con «dev-team-office e2e -- npx playwright test»).',
+      shots: 'Capturas', shot: 'captura', noSteps: 'Todavía sin pasos.', none: 'Elige una prueba.',
+    },
+  },
   // la infraestructura en el mapa (server/resources.js)
   infra: {
     kinds: { queue: 'cola', topic: 'tópico', database: 'base de datos', cache: 'caché', storage: 'almacenamiento', service: 'servicio', api: 'API de terceros', scheduler: 'scheduler', repo: 'repositorio', other: 'otro' },
@@ -796,6 +810,10 @@ Uso:
   dev-team-office daily [--office <id>] [--all]
                                   La daily a pedido, para saber lo último: qué hizo cada uno desde la última daily y en
                                   qué está ahora (en el juego se juntan en la mesa). --all: la de toda la empresa.
+  dev-team-office e2e -- <comando>
+                                  Corre tus pruebas end-to-end (Playwright) con la oficina mirando: cada prueba y cada
+                                  paso en vivo, y al terminar su película (la traza, encendida si el comando es
+                                  «playwright test»). Ej.: dev-team-office e2e -- npx playwright test
   dev-team-office team [--from <packsRoot>]
                                   Los equipos empaquetados (packs de agentes instalables) y sus roles.
   dev-team-office team install <team> --agent <cli> [--project <dir>] [--from <packsRoot>]
@@ -822,6 +840,7 @@ API: docs/api.es.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
     needsTty: 'El juego necesita una terminal interactiva. Sin ella: dev-team-office serve',
     portBusyOther: 'El puerto {port} está ocupado por otro programa. Usa --port <n>.',
     portBusy: 'El puerto {port} ya está en uso. ¿Otra oficina corriendo? Prueba: dev-team-office status',
+    e2eUsage: 'Uso: dev-team-office e2e -- <comando> (por ejemplo: dev-team-office e2e -- npx playwright test)', e2eNoReporter: 'No encuentro el reporter de Playwright de la oficina: corre dev-team-office setup', e2eNoOffice: 'La oficina no está abierta en {base}: las pruebas corren igual, pero nadie las va a ver.',
     noOffice: 'No hay ninguna oficina en {base}.', noOfficeOpen: 'No hay ninguna oficina en {base}. Ábrela con: dev-team-office',
     status: 'dev-team-office {version} (pid {pid}, {uptime}s)\n  HTTP/WS: {url}\n  socket:  {socket}', noSocket: '(sin socket Unix)',
     demoRunning: 'Demo en marcha.', couldNot: 'No se pudo: {error}', noAnswer: 'sin respuesta',

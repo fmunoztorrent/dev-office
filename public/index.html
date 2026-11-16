@@ -107,6 +107,8 @@
           <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><path fill-rule="evenodd" d="M1 2h10v7H5l-3 3V9H1zM2 3v5h1v1.6L4.6 8H10V3z"/><path d="M12 5h3v7h-1v3l-3-3H6v-2h1v1h4.4L13 12.6V11h1V6h-2z"/><rect x="4" y="5" width="4" height="1"/></g></svg>
         </button>
       </div>
+      <!-- the e2e tests an agent runs: a small monitor with the browser under test (e2e-ui.js); a click expands it -->
+      <div id="e2e-mini" class="e2e-mini" hidden role="button" tabindex="0"></div>
       <!-- the activity: a log you read, light, over the office -->
       <section id="feed" class="feed" hidden data-i18n-aria="ui.feed">
         <header class="feed-head">
@@ -243,6 +245,23 @@
       <div id="ig-legend" class="ig-legend"></div>
       <div class="imp-g-scroll"></div>
       <footer class="brief-foot"><span id="ig-count" class="muted"></span></footer>
+    </div>
+  </dialog>
+
+  <!-- The e2e tests, expanded: the run's tests and the chosen one's movie, actions, video and error (e2e-ui.js). -->
+  <dialog id="e2e" class="brief e2e-dlg" aria-labelledby="e2e-title">
+    <div class="e2e-card">
+      <header class="brief-head">
+        <span class="pin" aria-hidden="true"></span>
+        <h2 id="e2e-title" data-i18n="e2e.ui.dialog">🎭 End-to-end tests</h2>
+        <select id="e2e-runs" data-i18n-aria="e2e.ui.runs"></select>
+        <button type="button" class="brief-x" id="e2e-close" data-i18n-aria="settings.close">✕</button>
+      </header>
+      <div class="e2e-bar"><span id="e2e-sum"></span><button type="button" class="fl-mini" id="e2e-follow" data-i18n="e2e.ui.follow" hidden>▶ Follow live</button></div>
+      <div class="e2e-panes">
+        <ol id="e2e-tests" class="e2e-tests"></ol>
+        <section id="e2e-view" class="e2e-view"></section>
+      </div>
     </div>
   </dialog>
 

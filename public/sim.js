@@ -1035,6 +1035,17 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         if (ev.phase !== 'report') banner = { text: ev.text, tone: ev.ok === false ? 'warn' : 'chat', until: now + (ev.ok === false ? 15_000 : 6000) };
         if (a && !a.hidden && !a.lunch && ['passed', 'blocked', 'done'].includes(ev.phase)) a.say(short(ev.text.replace(/^\S+\s/, ''), 90), 3500);
         break;
+      case 'e2e':
+        // the project's end-to-end tests (server/e2e.js): QA runs them, cheers when they pass, frowns at a failure
+        if (!a || a.hidden) break;
+        if (ev.phase === 'start') { work(a, ev.text, 'working', 9000); a.tag = { text: ev.badge || '🎭 e2e', session: null, until: now + TAG_MS }; }
+        else if (ev.phase === 'fail') { a.shakeUntil = now + 900; if (!a.lunch) a.say(short(ev.text, 80), 3500); }
+        else {
+          a.tag = null;
+          if (ev.ok === false) { a.setState('blocked', 6000); if (!a.lunch) a.say(short(ev.text, 80), 4000); }
+          else { a.jumpUntil = now + 1200; a.setState('done', 5000); if (!a.lunch) a.say(short(ev.text, 80), 3500); }
+        }
+        break;
       case 'dispatch':
         // A brief sent from the office: it is a new requirement for the team.
         banner = { text: `📨 ${ev.text}`, tone: 'chat', until: now + 6000 };

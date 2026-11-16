@@ -313,6 +313,17 @@ El piso de la dirección está vestido para eso: parquet de nogal, una alfombra 
 
 Haz clic en las estanterías, el rack de skills o el panel de conectores para abrirlo (o `t` ahí). El monitor de la terminal muestra las directivas en curso y cuántas entradas guarda el archivo; su bitácora cuenta lo que pasa en los dos pisos.
 
+## Pruebas E2E: míralas mientras corren
+
+Cuando un agente corre pruebas de **Playwright**, aparece una **pantallita** en la esquina de abajo a la derecha del juego: el proyecto, cómo va la corrida (✓ pasaron, ✗ fallaron, ◌ corriendo, de cuántas), la prueba y el paso en que va (*agregar al carrito › Click*) y el último cuadro del navegador, con **EN VIVO** mientras corre. QA lo hace en el juego: anuncia la corrida, se sacude cuando una prueba falla y celebra (o se traba) al terminar. Haz clic en la pantalla (o aprieta `e`) y se **expande**:
+
+- **las pruebas de la corrida**, cada una con cómo terminó y cuánto tardó; sigue a la que corre hasta que eliges otra (▶ Seguir en vivo te devuelve);
+- **su película**, sacada de su traza: los cuadros del navegador, con **un punto donde hizo clic o escribió**, la leyenda de la acción (`Click · getByRole('button', { name: 'Pagar' })`), una línea de tiempo con una marca por acción (roja, la que falló), reproducir o pausar y la velocidad;
+- **sus pasos** (navegar, llenar, clic, expect, tus `test.step`), con su tiempo y **el error donde ocurrió**; haz clic en uno para ir a ese momento;
+- **su video** y **sus capturas**, cuando la configuración los graba.
+
+No hay nada que configurar: `setup` instala el reporter de Playwright de la oficina y la sesión de cada agente lo recibe (`$PW_TEST_REPORTER`, que Playwright agrega **junto a** los reporters del proyecto, nunca en su lugar). Nunca les estorba a las pruebas: no imprime nada, y si la oficina no está corriendo deja de intentarlo. La película necesita la traza: corre `npx playwright test --trace=on`, o **`dev-team-office e2e -- npx playwright test`**, que la enciende por ti (un script como `npm run e2e` va como es: decide su configuración). La oficina sólo lee archivos dentro de la carpeta donde corren las pruebas, los copia antes de que la próxima corrida los borre y guarda las últimas 6 corridas. Otros runners (Cypress, Selenium) todavía no se miran. La API, en [docs/api.es.md](docs/api.es.md#pruebas-e2e-miradas).
+
 ## herdr: el agente en un pane, y cada subagente en el suyo
 
 El flujo completo, dentro de herdr:
@@ -525,6 +536,8 @@ server/compact.js       la autocompactación: pasado tu tope, se le pide al agen
 server/mine.js          lo tuyo: skills privadas (en tus carpetas personales) y tus herramientas (las corre el MCP)
 server/loops.js         el loop de un proyecto: pasos con criterios de éxito, uno tras otro, cada cierto intervalo
 server/experts.js       los expertos (SME): quién sabe de cada skill, y qué skill usa una herramienta del agente
+server/e2e.js           las pruebas e2e, miradas: lo que cuenta el reporter de Playwright, la traza de cada prueba hecha cuadros y acciones
+server/zip.js           un lector de ZIP chico (una traza de Playwright)
 server/resources.js     la infraestructura: lo que la carpeta de cada repo dice que usa, lo que un pedido nombra de ella y lo que está en el mapa
 server/intelligence.js  el modelo en que se apoya la oficina (uno de tus agentes, la API de Claude, una API compatible con OpenAI u Ollama): el impacto de un pedido
 server/ws.js            WebSocket sin dependencias (RFC 6455)
@@ -562,6 +575,7 @@ public/themes.js        los temas gráficos: el elenco anime (todas mujeres), su
 public/anime.js         la gente del tema anime, dibujada con trazos vectoriales (las vistas del juego y los retratos)
 public/renderers.js     el registro de renderers (otro, uno en 3D, dibuja la misma escena); renderers/plan.js, el de referencia
 public/loops-ui.js      el diálogo de los loops
+public/e2e-ui.js        la mini pantalla de las pruebas e2e sobre el juego y el reproductor expandido
 public/impact.js        el impacto de un pedido como dibujo, sin el DOM: el árbol de sus repos y el grafo de todo lo que toca, ya ubicados
 public/impact-ui.js     el árbol (con sus burbujas), el diálogo del grafo y las preguntas sobre lo que no está en el mapa
 public/floors.js        los dos pisos compartidos en canvas (la dirección y el archivo): sus escenas y su gente
@@ -569,6 +583,7 @@ public/compact.js       el tope de la autocompactación en tokens (lo comparten 
 public/floors-ui.js     sus diálogos: las directivas y el archivo
 public/iso.js           la cámara isométrica de la vista cenital (piso, paredes y sprites con transformaciones afines)
 integrations/common/    la librería del lado del agente: proyecto, pipelines, gates (la usan todas)
+integrations/playwright/ el reporter de Playwright de la oficina (sus pruebas e2e, en vivo)
 integrations/           Claude Code (hook), Codex (hook), OpenCode (plugin), Pi (extensión)
 skills/                 los skills (cualquier harness): eventos por rol y configurar un harness
 .claude-plugin/         el plugin y el marketplace de Claude Code

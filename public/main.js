@@ -9,6 +9,7 @@ import { createPrompts } from './prompts-ui.js';
 import { createDirectivesUi, createArchiveUi } from './floors-ui.js';
 import { createLoops } from './loops-ui.js';
 import { renderImpact, impactQuestions } from './impact-ui.js';
+import { createE2E } from './e2e-ui.js';
 import './renderers/plan.js'; // the reference renderer (public/scene.js): ?renderer=plan
 import { drawSprite } from './sprite.js';
 import { season, isSouth, daylight, weatherIcon } from './sky.js';
@@ -117,6 +118,7 @@ function connect() {
       systems = st.systems || [];
       onTargets(st.targets);
       onLoops(st.loops || []);
+      e2eUi.update(st.e2e || []);
       setExperts(st.experts || []);
       onServices(st.services || []);
       onPrompts(st.prompts || []);
@@ -135,6 +137,7 @@ function connect() {
     if (msg.type === 'targets') onTargets(msg.targets);
     if (msg.type === 'systems') { systems = msg.systems || []; if ($('brief').open) renderBrief(); }
     if (msg.type === 'loops') onLoops(msg.loops);
+    if (msg.type === 'e2e') e2eUi.update(msg.runs);
     if (msg.type === 'experts') { setExperts(msg.experts); settings?.expertsChanged?.(msg.experts); }
     if (msg.type === 'services' && msg.office === office?.id) onServices(msg.services);
     if (msg.type === 'prompts' && msg.office === office?.id) onPrompts(msg.prompts);
@@ -175,6 +178,9 @@ function renderServicesChip() {
 $('svc-chip').onclick = () => servicesUi.open();
 
 // ---------------------------------------------------------------- the projects' loops
+
+// the e2e tests an agent runs (server/e2e.js): the mini screen and its expanded player
+const e2eUi = createE2E();
 
 const loopsUi = createLoops({
   getLoops: () => loops,
@@ -1307,6 +1313,7 @@ document.addEventListener('keydown', (e) => {
   else if (k === 'o') { e.preventDefault(); nextOffice(); }
   else if (k === 'l') { e.preventDefault(); servicesUi.open(); }
   else if (k === 'i') { e.preventDefault(); loopsUi.open(); }
+  else if (k === 'e' && e2eUi.any) { e.preventDefault(); e2eUi.open(); }
   else if (k === 'r') { if (promptsUi.open()) e.preventDefault(); }
 });
 

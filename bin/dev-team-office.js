@@ -714,6 +714,23 @@ async function cmdDaily() {
   console.log(out.text.replace(/\*\*/g, ''));
 }
 
+// `dev-team-office e2e -- <command>`: the end-to-end tests with the office watching: its Playwright
+// reporter in their environment, and the trace on when the command is Playwright's (server/e2e.js).
+async function cmdE2e() {
+  const cmd = args.rest.length ? args.rest : args._.slice(1);
+  if (!cmd.length) fail(t('cli.e2eUsage'));
+  const { e2eReporter } = await import('../integrations/common/devteam.mjs');
+  const { e2eCommand } = await import('../server/e2e.js');
+  const reporter = e2eReporter();
+  if (!reporter) fail(t('cli.e2eNoReporter'));
+  if (!(await runningOffice())) console.error(t('cli.e2eNoOffice', { base }));
+  const argv = e2eCommand(cmd);
+  const { spawn } = await import('node:child_process');
+  const child = spawn(argv[0], argv.slice(1), { stdio: 'inherit', shell: process.platform === 'win32', env: { ...process.env, PW_TEST_REPORTER: reporter, DEV_TEAM_OFFICE_URL: base } });
+  child.on('error', (err) => fail(err.message));
+  child.on('exit', (code, signal) => process.exit(signal ? 1 : code ?? 0));
+}
+
 // The MCP server (stdio): Claude Code, Codex, OpenCode, Gemini or Cursor register it via `setup`.
 async function cmdMcp() {
   const { runMcp, startOfficeDetached } = await import('../server/mcp.js');
@@ -733,7 +750,7 @@ if (args.version) { console.log(VERSION); process.exit(0); }
 const commands = {
   open: () => cmdOpen({ game: !!args.game }), game: () => cmdOpen({ game: true }), monitor: () => cmdOpen(), serve: cmdServe, start: cmdStart, stop: cmdStop, restart: () => (args['if-outdated'] || args['if-running'] ? cmdRefresh() : cmdRestart()), watch: () => cmdWatch(args._[1]), status: cmdStatus,
   demo: cmdDemo, send: cmdSend, task: cmdTask, tasks: cmdTasks, install: cmdSetup, setup: cmdSetup, uninstall: cmdUninstall, doctor: cmdDoctor, update: cmdUpdate, agents: cmdAgents, offices: cmdOffices, departments: cmdOffices, character: cmdCharacter, config: cmdConfig,
-  pane: cmdPane, follow: cmdFollow, join: cmdJoin, prompt: cmdPrompt, team: cmdTeam, mcp: cmdMcp, btw: cmdBtw, daily: cmdDaily, standup: cmdDaily, settings: cmdSettings, help: () => console.log(HELP()),
+  pane: cmdPane, follow: cmdFollow, join: cmdJoin, prompt: cmdPrompt, team: cmdTeam, mcp: cmdMcp, btw: cmdBtw, daily: cmdDaily, standup: cmdDaily, e2e: cmdE2e, settings: cmdSettings, help: () => console.log(HELP()),
 };
 const cmd = commands[args._[0] || 'open'];
 if (!cmd) fail(`${t('cli.unknownCommand', { cmd: args._[0] })}\n\n${HELP()}`);

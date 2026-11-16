@@ -40,6 +40,9 @@ node <skill-folder>/office-event.mjs done "summary"
    count (`"14/14"`).
 5. **Blocked**: `phase <role> blocked "why"`. If you need the user, send `wait "question"` and ask.
 6. **When you finish**, send `done "summary"`.
+7. **End-to-end tests (Playwright)** show live in the office by themselves: each test, its steps and the
+   browser's frames. Run them with the trace on (`npx playwright test --trace=on`, or
+   `dev-team-office e2e -- <command>`) so the user can watch the movie of each test.
 
 ## Roles and phases
 

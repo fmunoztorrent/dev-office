@@ -304,6 +304,20 @@ export default {
       briefBtn: '🗺 Impact', briefNote: 'It also touches {list}: to send it to all of them, make it a directive.', toDirective: '🏛 Make it a directive', briefAnswered: 'What you answered is on the map now and goes on top of the brief.',
     },
   },
+  // the end-to-end tests, watched (server/e2e.js, public/e2e-ui.js)
+  e2e: {
+    bad: 'that is not a message from the office’s Playwright reporter', unknown: 'no such e2e test run',
+    log: { start: '🎭 Running {n} e2e test(s) of {project}', fail: '✗ “{title}” failed', end: '🎭 e2e: {passed} ✓ · {failed} ✗ ({s} s)' },
+    ui: {
+      title: 'E2E', dialog: '🎭 End-to-end tests', runs: 'The run', follow: '▶ Follow live', dismiss: 'Hide', expand: 'See the tests (e)',
+      live: 'LIVE', waitingFrames: 'Each test’s movie arrives when it ends…', noFrames: 'No movie (no trace)', allPassed: 'All passed', ended: 'Ended: {n} failed',
+      status: { running: 'running', passed: 'passed', failed: 'failed', interrupted: 'interrupted', timedout: 'timed out' },
+      retry: 'retry {n}', movie: 'Movie', video: 'Video', restart: 'To the start', play: 'Play or pause', seek: 'Go to a moment', speed: 'Speed',
+      runningNoMovie: 'The test is running: its steps arrive live, and its movie when it ends.', noMovie: 'This test left no movie.',
+      traceHint: 'To see each test’s movie, run Playwright with --trace=on (or with “dev-team-office e2e -- npx playwright test”).',
+      shots: 'Screenshots', shot: 'screenshot', noSteps: 'No steps yet.', none: 'Pick a test.',
+    },
+  },
   // the infrastructure on the map (server/resources.js)
   infra: {
     kinds: { queue: 'queue', topic: 'topic', database: 'database', cache: 'cache', storage: 'storage', service: 'service', api: 'third-party API', scheduler: 'scheduler', repo: 'repository', other: 'other' },
@@ -796,6 +810,10 @@ Usage:
   dev-team-office daily [--office <id>] [--all]
                                   The daily on demand, to be told the latest: what each one did since the last daily
                                   and what they are on now (in the game they gather at the table). --all: the company's.
+  dev-team-office e2e -- <command>
+                                  Runs your end-to-end tests (Playwright) with the office watching: each test and each
+                                  step live, and when it ends its movie (the trace, on when the command is
+                                  "playwright test"). E.g.: dev-team-office e2e -- npx playwright test
   dev-team-office team [--from <packsRoot>]
                                   The shipped teams (installable agent packs) and their roles.
   dev-team-office team install <team> --agent <cli> [--project <dir>] [--from <packsRoot>]
@@ -822,6 +840,7 @@ API: docs/api.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
     needsTty: 'The game needs an interactive terminal. Without one: dev-team-office serve',
     portBusyOther: 'Port {port} is taken by another program. Use --port <n>.',
     portBusy: 'Port {port} is already in use. Another office running? Try: dev-team-office status',
+    e2eUsage: 'Usage: dev-team-office e2e -- <command> (for example: dev-team-office e2e -- npx playwright test)', e2eNoReporter: 'I cannot find the office’s Playwright reporter: run dev-team-office setup', e2eNoOffice: 'The office is not open at {base}: the tests run anyway, but nobody will watch them.',
     noOffice: 'There is no office at {base}.', noOfficeOpen: 'There is no office at {base}. Start it with: dev-team-office',
     status: 'dev-team-office {version} (pid {pid}, {uptime}s)\n  HTTP/WS: {url}\n  socket:  {socket}', noSocket: '(no Unix socket)',
     demoRunning: 'Demo running.', couldNot: 'Could not: {error}', noAnswer: 'no answer',

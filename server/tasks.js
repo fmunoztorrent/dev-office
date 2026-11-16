@@ -19,7 +19,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { clip } from './roles.js';
 import { sanitizeProject } from './pipeline.js';
-import { agentCommand, modelArgs, HARNESSES, which } from '../integrations/common/devteam.mjs';
+import { agentCommand, modelArgs, HARNESSES, which, e2eEnv } from '../integrations/common/devteam.mjs';
 import { guideFor, guideText, autonomyOf, GUIDE_MARK } from './guides.js';
 import { contextBlock } from './rag.js';
 import { t as tr } from '../public/i18n.js';
@@ -29,10 +29,12 @@ import { claudeCompactEnv } from './compact.js';
 export const AGENT_LABEL = { 'claude-code': 'Claude Code', opencode: 'OpenCode', pi: 'Pi' };
 /**
  * The environment of an agent the office launches: its own, plus the Node the office runs with on the
- * PATH (a CLI written in Node, like pi, starts even if the office was opened without Node on the PATH).
+ * PATH (a CLI written in Node, like pi, starts even if the office was opened without Node on the PATH),
+ * and the office's Playwright reporter ($PW_TEST_REPORTER), so its end-to-end tests show live.
  */
 export function childEnv(extra = {}) {
-  const env = { ...process.env, ...extra };
+  // its Playwright runs tell the office what they do (the e2e screen: server/e2e.js)
+  const env = { ...process.env, ...e2eEnv(), ...extra };
   // the "Pi session with an owner" mark: if the office was opened from a Pi, what it launches is not its subagent
   delete env.DEV_TEAM_OFFICE_PI_PID;
   const dir = path.dirname(process.execPath);

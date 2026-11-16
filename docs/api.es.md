@@ -280,6 +280,23 @@ Un loop trabaja un proyecto registrado con sus pasos, uno tras otro, y avanza s�
 - **Resultados:** `by: "agent"` (MCP), `"output"` (las líneas `✅ n` / `❌ n — por qué` al final de la respuesta de una sesión en segundo plano) o `"you"`. Cada ronda nueva olvida los del agente y conserva los tuyos.
 - **Eventos:** `kind: "loop"` (`phase`: `created`, `start`, `retry`, `verify`, `report`, `passed`, `skipped`, `blocked`, `failed`, `done`), del manager; por WebSocket, `{ type: "loops", loops }`. El acta de un loop terminado va al archivo (`kind: "minute"`, etiqueta `loop`).
 
+## Pruebas E2E, miradas
+
+Lo que está haciendo una corrida de Playwright (server/e2e.js), contado por el reporter de la oficina (integrations/playwright/reporter.cjs, instalado como `~/.dev-team-office/lib/playwright-reporter.cjs`; la sesión de cada agente lo recibe en `$PW_TEST_REPORTER`). La oficina no corre nada: muestra.
+
+| Método | Ruta | Cuerpo |
+|---|---|---|
+| `POST` | `/v1/e2e` | `{ run, cwd, events: [{ type: "begin", total, version, projects: [{ name, outputDir, trace, video }] } \| { type: "test", test, title, file, line, project, retry } \| { type: "step", test, title, category ("pw:api", "expect", "test.step"), depth, at, duration, error } \| { type: "testEnd", test, status, duration, error, attachments: [{ name, contentType, path }] } \| { type: "end", status, duration }] }`: lo que cuenta el reporter, por tandas y en orden |
+| `GET` | `/v1/e2e` | `{ runs: [{ id, project, office, cwd, status, startedAt, endedAt, total, counts: { passed, failed, skipped, running }, trace, video, current: { test, title, step } \| null, last: { test, title, frame \| video } \| null }] }`, la más nueva primero |
+| `GET` · `DELETE` | `/v1/e2e/<corrida>` | La corrida con sus pruebas: `tests: [{ idx, title, file, line, project, retry, status, duration, error, steps, actions: [{ title, subtitle, category, depth, start, end, error, point: { x, y } \| null }], start, end, frames: [{ t, w, h, url }], video, shots }]` · olvidarla (y sus archivos) |
+| `GET` | `/v1/e2e/<corrida>/<prueba>/frame/<i>` · `video` · `shot/<i>` | Un cuadro de su película (JPEG), su video (WebM), una captura (PNG) |
+
+- **La película** sale de la traza de cada prueba (`trace.zip`): sus cuadros del screencast (a lo más 240 por prueba, raleados parejo) y sus acciones de los pasos del runner (`test.trace`; sin él, las llamadas del navegador), cada una con dónde hizo clic o escribió (`point`, en los píxeles de la página, los mismos del `w`×`h` de los cuadros). Los tiempos son el reloj de la traza (ms).
+- **Sólo dentro de la carpeta de la corrida:** un adjunto fuera de `cwd` no se lee. La traza, el video (hasta 80 MB) y hasta 5 capturas se copian cuando termina la prueba (la próxima corrida los borra), junto a la base (`e2e-runs/`); quedan las últimas 6 corridas, en memoria hasta que la oficina se reinicia.
+- Una corrida que deja de contar 10 minutos sin su `end` queda `interrupted`.
+- **Eventos:** `kind: "e2e"` (`phase`: `start`, `fail`, `end`, con `ok`), de QA; por WebSocket, `{ type: "e2e", runs }`, y el estado (`/v1/state`) trae `e2e`.
+- **`dev-team-office e2e -- <comando>`** corre el comando con el reporter y la URL de la oficina, y le agrega `--trace=on` al comando de Playwright (`npx playwright test`, `pnpm exec playwright test`, `node …/playwright/cli.js test`) cuando no dice nada de la traza.
+
 ## Expertos: quién sabe de una skill
 
 Los expertos (SME, server/experts.js): un personaje asociado a mano a una skill. Cuando un agente usa esa skill, su evento es del experto (`role: "sme"`, `expert: { id, name, title, skill, shirt }`, badge `🎓 <skill>`) y el juego lo hace subir por el ascensor hasta que termina el turno.

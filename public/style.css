@@ -835,3 +835,85 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
 .s-res { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
 .s-res li { display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; padding: 4px 6px; background: #fff; box-shadow: 0 0 0 2px var(--ink); }
 .s-res .s-x { margin-left: auto; border: 0; background: none; cursor: pointer; color: #9a3b3b; }
+
+/* ---------- the e2e tests: the mini monitor over the game and the expanded player (e2e-ui.js) ---------- */
+.e2e-mini {
+  position: absolute; right: 1.4cqi; bottom: 1.4cqi; z-index: 4; width: min(300px, 46cqi); padding: 6px; cursor: pointer;
+  color: #e8e9f1; background: #11131f; box-shadow: 0 0 0 3px #0b0c14, 0 0 0 5px #3a3f58, 5px 5px 0 4px #0008;
+  font: 13px/1.3 "Space Grotesk", sans-serif; display: grid; gap: 4px;
+}
+.e2e-mini[hidden] { display: none; }
+.e2e-mini:hover, .e2e-mini:focus-visible { box-shadow: 0 0 0 3px #0b0c14, 0 0 0 5px var(--accent), 5px 5px 0 4px #0008; outline: none; }
+.e2e-mini[data-status="failed"] { box-shadow: 0 0 0 3px #0b0c14, 0 0 0 5px #ef476f, 5px 5px 0 4px #0008; }
+.e2e-mini-head { display: flex; gap: 6px; align-items: center; font: 17px/1 "VT323", monospace; }
+.e2e-mini-head b { color: var(--accent); }
+.e2e-proj { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #9095b0; }
+.e2e-x { background: none; border: 0; color: #9095b0; cursor: pointer; font: inherit; padding: 0 2px; }
+.e2e-pill { font: 14px/1 "VT323", monospace; padding: 2px 5px; background: #2b2d42; color: #ffd166; white-space: nowrap; }
+.e2e-pill.passed { color: #06d6a0; } .e2e-pill.failed, .e2e-pill.timedout { color: #ff6b8b; } .e2e-pill.interrupted { color: #adb5bd; }
+.e2e-mini-screen { position: relative; aspect-ratio: 16 / 9; background: #000; display: grid; place-items: center; overflow: hidden; }
+.e2e-mini-screen img { width: 100%; height: 100%; object-fit: contain; }
+.e2e-mini-empty { padding: 8px; color: #9095b0; font-size: 12px; text-align: center; }
+.e2e-live { position: absolute; top: 4px; left: 4px; padding: 1px 5px; background: #ef476f; color: #fff; font: 13px/1.1 "VT323", monospace; animation: e2e-blink 1.2s steps(2) infinite; }
+@keyframes e2e-blink { 50% { opacity: .55; } }
+.e2e-mini-now { min-height: 2.6em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: #c9cbe0; }
+.e2e-mini-now b { color: #fff; }
+.e2e-mini-counts { display: flex; gap: 10px; font: 16px/1 "VT323", monospace; }
+.e2e-mini-counts .ok { color: #06d6a0; } .e2e-mini-counts .bad { color: #ff6b8b; } .e2e-mini-counts .dim { color: #6c7090; }
+@media (prefers-reduced-motion: reduce) { .e2e-live { animation: none; } }
+/* expanded */
+.e2e-dlg { width: min(1180px, calc(100vw - 24px)); }
+.e2e-card { display: flex; flex-direction: column; max-height: calc(100vh - 32px); background: var(--paper); box-shadow: 0 0 0 3px var(--ink), 4px 4px 0 3px #00000040; }
+.e2e-card .brief-head h2 { flex: 1; }
+.e2e-card .brief-head select { max-width: 40%; font: 13px "Space Grotesk", sans-serif; }
+.e2e-bar { display: flex; gap: 10px; align-items: center; padding: 6px 14px; font-size: 13px; }
+.e2e-bar #e2e-sum { flex: 1; }
+.e2e-panes { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(200px, 280px) 1fr; gap: 10px; padding: 0 12px 12px; overflow: hidden; }
+.e2e-tests { list-style: none; margin: 0; padding: 2px; overflow-y: auto; display: grid; gap: 4px; align-content: start; }
+.e2e-test { width: 100%; display: grid; grid-template-columns: 18px 1fr auto; gap: 6px; align-items: start; text-align: left; padding: 6px; cursor: pointer; background: #fff; border: 0; box-shadow: 0 0 0 2px var(--ink); font: 13px "Space Grotesk", sans-serif; color: var(--ink); }
+.e2e-test.sel { box-shadow: 0 0 0 3px #9c2c3f; background: #fff8dc; }
+.e2e-test .e2e-ico { font-weight: 700; }
+.e2e-test.passed .e2e-ico { color: #2a7d5f; } .e2e-test.failed .e2e-ico, .e2e-test.timedOut .e2e-ico { color: #c1121f; } .e2e-test.running .e2e-ico { color: #b07d00; }
+.e2e-name { overflow-wrap: anywhere; } .e2e-name small { display: block; color: #6c757d; font-size: 11px; }
+.e2e-dur { color: #6c757d; font-size: 11px; white-space: nowrap; }
+.e2e-view { min-width: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.e2e-view > * { flex: none; }
+.e2e-stage { position: sticky; top: 0; z-index: 1; display: flex; flex-direction: column; gap: 8px; padding-bottom: 8px; background: var(--paper); }
+.e2e-test-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.e2e-test-head b { font-size: 15px; }
+.e2e-tabs { margin-left: auto; display: flex; gap: 4px; }
+.e2e-tabs button { font: 13px "Space Grotesk", sans-serif; padding: 2px 8px; cursor: pointer; color: var(--ink); background: #fff; border: 0; box-shadow: 0 0 0 2px var(--ink); }
+.e2e-tabs button[aria-pressed="true"] { background: var(--ink); color: #ffd166; }
+.e2e-screen { --ar: 1.7778; position: relative; align-self: center; width: min(100%, calc(46vh * var(--ar))); aspect-ratio: var(--ar); background: #000; box-shadow: 0 0 0 3px var(--ink); overflow: hidden; }
+.e2e-screen img, .e2e-screen video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.e2e-screen.empty { display: grid; place-items: center; }
+.e2e-screen.empty p { color: #c9cbe0; padding: 16px; text-align: center; font-size: 14px; }
+.e2e-dot { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: rgba(239, 71, 111, 0.45); box-shadow: 0 0 0 2px #ef476f, 0 0 12px #ef476f; pointer-events: none; }
+.e2e-dot[hidden] { display: none; }
+.e2e-caption { position: absolute; left: 6px; bottom: 6px; max-width: calc(100% - 12px); padding: 2px 6px; background: #000a; color: #fff; font: 12px "Space Grotesk", sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.e2e-caption:empty { display: none; }
+.e2e-controls { display: flex; gap: 8px; align-items: center; }
+.e2e-controls button { font: 16px/1 "Space Grotesk", sans-serif; min-width: 34px; padding: 5px 6px; cursor: pointer; color: var(--ink); background: #fff; border: 0; box-shadow: 0 0 0 2px var(--ink); }
+.e2e-controls select { width: auto; flex: none; padding: 4px 6px; }
+.e2e-track { position: relative; flex: 1; min-width: 80px; }
+.e2e-track input { width: 100%; accent-color: #9c2c3f; }
+.e2e-marks { position: absolute; left: 0; right: 0; top: -4px; height: 6px; pointer-events: none; }
+.e2e-mark { position: absolute; width: 2px; height: 6px; background: #2b2d42; }
+.e2e-mark.bad { background: #ef476f; width: 3px; }
+.e2e-time { font: 15px/1 "VT323", monospace; white-space: nowrap; }
+.e2e-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-size: 13px; }
+.e2e-step { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; padding: 3px 6px 3px calc(6px + var(--d, 0) * 14px); background: #fff; cursor: pointer; }
+.e2e-step.now { background: #fff3c4; box-shadow: inset 3px 0 0 #9c2c3f; }
+.e2e-step.bad { box-shadow: inset 3px 0 0 #ef476f; }
+.e2e-step code { font-size: 12px; color: #5b4fbf; background: #f1eefb; padding: 0 4px; overflow-wrap: anywhere; }
+.e2e-step .e2e-at { color: #6c757d; font: 13px "VT323", monospace; min-width: 4.5em; }
+.e2e-step pre, .e2e-error { flex-basis: 100%; margin: 4px 0 0; padding: 6px 8px; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.35 ui-monospace, monospace; color: #7a1020; background: #fde2e7; }
+.e2e-shots { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.e2e-shots img { height: 64px; box-shadow: 0 0 0 2px var(--ink); }
+@media (max-width: 720px) {
+  .e2e-panes { grid-template-columns: 1fr; overflow-y: auto; }
+  .e2e-tests { max-height: 30vh; }
+  /* a small game: the mini screen is only its header and its counts (tap it to see the tests) */
+  .e2e-mini { width: auto; max-width: 70cqi; font-size: 12px; }
+  .e2e-mini-screen, .e2e-mini-now { display: none; }
+}
