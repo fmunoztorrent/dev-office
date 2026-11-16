@@ -230,7 +230,7 @@ The same office can be seen in the browser at `http://127.0.0.1:4317`, **full sc
 
 One office instance is a **company**: you can keep adding **departments** — each one an office of the building (teams or domains: payments, web, platform…) — in **⚙ › Departments**, from the directive dialog on the executive floor, or with `dev-team-office departments add`. Each department has:
 
-- **its projects** (repositories, each with its agent: `--office` or the selector in ⚙ › Agents; the maintainer can also bring an existing project into it);
+- **its projects** (repositories, each with its agent: `--office` or the selector in ⚙ › Repositories; the maintainer can also bring an existing project into it);
 - **its instructions**: how to work there (conventions, what is never done, who to ask). They go on top of every brief, pipeline, directive and question to its projects, like a ChatGPT or Claude project's;
 - **its autonomy**: guided (the analyst reviews each brief and the agent asks you when in doubt), balanced (it reviews, then the agent works to the end) or autonomous (no review); otherwise the company's (⚙ › General › Autonomy);
 - **its people**: its characters (their own names, titles, personalities, styles and colors);
@@ -239,7 +239,7 @@ One office instance is a **company**: you can keep adding **departments** — ea
 
 **The company has its standards** (the CTO's, at the top of ⚙ › Departments): what every project of every department follows (conventions, security, how to document). They go first, before the department's and the project's instructions.
 
-**Each project has instructions too** (⚙ › Agents, `dev-team-office agents set <id> --instructions "…"`, or `update_project` over MCP), for every agent working in its folder: the commands, the conventions, what not to touch. A brief to that folder starts like this (the office takes this header out of the whiteboard's title):
+**Each project has instructions too** (⚙ › Repositories, `dev-team-office agents set <id> --instructions "…"`, or `update_project` over MCP), for every agent working in its folder: the commands, the conventions, what not to touch. A brief to that folder starts like this (the office takes this header out of the whiteboard's title):
 
 ```
 📁 Work only inside ~/shop: …
@@ -255,7 +255,7 @@ Add pagination to the orders list
 
 The interfaces show **one office at a time**: the one you pick in the selector at the **top left** (web and terminal; also with `o`). The choice is saved. The terminal log shows the activity of all of them.
 
-### Systems: a product and its artifacts
+### Projects: a product and its artifacts
 
 A company does not work in repos, it works in products: "Payments" is its **core**, its **BFF** and its **Next.js front**, maybe three repos. In **⚙ › Departments › Systems** each product is a **system**:
 
@@ -350,9 +350,9 @@ dev-team-office pane --agent claude --role tl --title review -- "Review the diff
 
 Outside herdr everything works as before (new agents run in the background). The office talks to herdr only through its CLI (`herdr pane split|run|list|rename|read|send-keys`, `herdr agent start|prompt`).
 
-## Agents: each one with its harness engineering
+## Repositories: each one with its agent (its harness engineering)
 
-An **agent** is a full path plus the CLI that serves it (Claude Code, OpenCode or Pi). It is registered in **⚙ › Agents** (or with `dev-team-office agents add`) and saved in the office's SQLite database. What that path brings belongs to the agent: its orchestrator, its subagents, its commands, its pipelines. The office **detects** it and, when sending it a prompt, starts **that** pipeline:
+A **repository** is a full path plus the agent (CLI) that serves it (Claude Code, OpenCode or Pi). It is registered in **⚙ › Repositories** (or with `dev-team-office agents add`) and saved in the office's SQLite database. What that path brings belongs to the agent: its orchestrator, its subagents, its commands, its pipelines. The office **detects** it and, when sending it a prompt, starts **that** pipeline:
 
 | What the path brings | Pipelines it offers | How it starts |
 |---|---|---|
@@ -401,7 +401,7 @@ Clicking the office's whiteboard, in the terminal or on the web (in the terminal
 
 The brief goes with its scope in front: the agent works **only inside its project's folder**, and only on what was asked (OpenCode also gets it as a rule: reading or changing files outside the folder is denied). The **stay-focused** skill, which `setup` installs, says the same to any agent.
 
-Before sending, the dialog shows the pipeline's stages and which character does each one. **✉ Send prompt** in ⚙ › Agents opens it with that agent already chosen.
+Before sending, the dialog shows the pipeline's stages and which character does each one. **✉ Send prompt** in ⚙ › Repositories opens it with that agent already chosen.
 
 **🗺 Impact** sizes the brief before it goes, like a directive: the tree of the repos it touches (⤢ the graph), the model's analysis if there is one, and the questions about what is not on the map. Your answers go on the map when you send it, and what they say goes on top of the brief. If it touches other repos too, **🏛 Make it a directive** takes it to the executive floor with the text already written.
 
@@ -424,7 +424,7 @@ Full format in [docs/pipelines.md](docs/pipelines.md) and an example in [`exampl
 | **Claude Code** (existing session) | Queued. Its `Stop` hook delivers it when Claude ends the current turn, and Claude carries on with it. Claude Code does not allow injecting messages into an interactive session from outside: if the session is waiting for your message, the task arrives when the next turn ends |
 | **New session** of a registered agent | Inside herdr, in a new (interactive) pane. Outside, the office opens `claude -p`, `opencode run` or `pi -p` in its path. Its hooks or plugins report the work like any other session |
 
-A `claude -p` launched this way uses `--permission-mode acceptEdits` (it edits files without asking and denies anything else that needs permission), unless the agent has its own arguments in ⚙ › Agents › Advanced.
+A `claude -p` launched this way uses `--permission-mode acceptEdits` (it edits files without asking and denies anything else that needs permission), unless the agent has its own arguments in ⚙ › Repositories › Advanced.
 
 From the CLI: `dev-team-office task "Add pagination" --agent pi` for a direct task. Without arguments it shows who can receive one.
 
@@ -436,7 +436,7 @@ The office's gear (top right, on the web and in the terminal; also with `c`):
 |---|---|
 | General | **Your settings as a JSON file:** ⬇ Export / ⬆ Import what is yours (the general settings, the departments with their instructions, autonomy and characters, the projects with their instructions and components, your skills and tools, the experts), to keep them or take them to another machine; not the history or the archive (also `dev-team-office settings export|import`). **Style** (pixel art, or anime: a team of women), **Language** (English by default, or Spanish: it changes everything live, on the web, in the terminal and in the log), the company's **time zone** (search by typing the city, the region or the country) and its **city** (among the cities of that zone's country), real or simulated weather, office life in the log, the **office view** (front or isometric top-down), herdr: agents in panes, each subagent in its pane, which way the pane opens and which agent opens at start, and **🧠 Intelligence**: the model that sizes an order's impact (none, one of your agents, the Claude API, an OpenAI-compatible API or Ollama), with 🧪 to try it |
 | Departments | The departments maintainer: each department (an office) with its **instructions**, its **projects** (each one with **its folder on sight**; ＋ a new one, or bring an existing one into it), its **people** (👥 edit its characters), its time zone and its city for the weather; view, edit and delete (its projects move to the main one). Also the **systems** and the **🗄 infrastructure**: queues, topics, databases, third-party APIs, schedulers… with what they run on, where they live and which project uses them (and what each repo's folder says it uses) |
-| Agents | The maintainer: add (full path + CLI + department; it detects its harness as you type it), the **project's instructions**, edit, delete and ✉ send it a prompt. Also the open sessions that are not registered |
+| Repositories | The maintainer: add (full path + the agent that serves it + department; it detects its harness as you type it), the **repository's instructions**, edit, delete and ✉ send it a prompt. Also the open sessions that are not registered |
 | Mine | **What is yours, not the company's.** **My skills:** private skills (what it does and when to use it, and its instructions), installed in your personal folder of each agent (`~/.claude/skills`, `~/.agents/skills`), never in a repo; turning one off takes it out. **My tools:** small programs of yours for concrete jobs (a script in sh, bash, node or python3, with its parameters, a time limit and who uses it in the game): your agents see each one as the MCP tool `my_<name>` and run it in the folder they work in. Neither goes to the archive or the briefs, and both travel in your settings file. Agents cannot create them: only you |
 | Characters | Name, title, **sex** (their face, their default look and how the texts about them are written: *Diseñadora*/*Diseñador*), **personality** (chatty, focused, anxious, calm or dreamer: how often they chat, take breaks, doubt, watch TV or daydream), **style** (how they answer you, like Claude's: normal, concise, explanatory, teacher or formal), colors with a palette and a free picker (skin, hair, shirt, pants), long hair, beard and glasses of each character of the office you are watching. In the terminal, ◂ ▸ go through each palette and typing `#rrggbb` gives any other color. **⬇ Export / ⬆ Import:** a character as a JSON file, to share them (also `dev-team-office character export|import` and `GET|PUT /v1/characters/<role>`). **🎓 Experts:** the subject matter experts, each one with their skill, what they know about and their look (the whole company's) |
 
@@ -445,7 +445,7 @@ The office's gear (top right, on the web and in the terminal; also with `c`):
 Everything is saved in an **SQLite** database (also from the CLI: `dev-team-office config`, `dev-team-office offices`): `~/.dev-team-office/office.db`, or the path in `DEV_TEAM_OFFICE_DB`. It uses `node:sqlite`, so there are no native dependencies, and the file has `0600` permissions. Its main tables:
 
 - `offices`: the company's departments (offices), with their instructions;
-- `agents`: the registered agents (with their office);
+- `agents`: the registered repositories (each with its agent and office);
 - `projects`: each project folder's instructions;
 - `settings`: the general settings (`prefs`: language, time zone, weather, herdr, log and the office being watched) and each office's appearance;
 - `prompts`: the history of what you sent them and how it ended;
@@ -550,7 +550,7 @@ server/office.js        state: sessions, todos, subagents, turns, log
 server/roles.js         which character stands for each tool/file/command
 server/tasks.js         tasks for the agents: registration, queue, delivery and new sessions of a registered agent
 server/pipeline.js      pipelines: relay between the whiteboard and the agent session that runs them
-server/store.js         the SQLite database: offices, registered agents, settings (language, zone, herdr…), appearance and history
+server/store.js         the SQLite database: offices, registered repositories, settings (language, zone, herdr…), appearance and history
 server/company.js       the company: the offices and which one each event goes to (by office, session, pane or path)
 server/herdr.js         herdr: the agents and their activities in panes (through its CLI), and what happens to those panes
 server/subpanes.js      herdr: one pane per subagent (opens `dev-team-office follow` and closes it when it finishes)

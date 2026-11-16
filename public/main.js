@@ -26,7 +26,7 @@ let selected = null;
 let ws;
 let tasks = { tasks: [], agents: [], launchers: [], defaultCwd: '' };
 let runs = [];
-let targets = []; // registered agents (⚙ › Agents) and open sessions, with what their harness brings
+let targets = []; // registered agents (⚙ › Repositories) and open sessions, with what their harness brings
 let systems = []; // the systems (a product and its artifacts: server/systems.js), also a brief's targets
 let offices = []; // the company's offices (the selector, top left)
 let office = null; // the one being watched: { id, name, timezone, country, city, … }
@@ -1095,7 +1095,7 @@ function onTargets(list) {
   settings.refresh?.();
 }
 
-/** @param agentId opens the dialog with that agent chosen (from ⚙ › Agents) */
+/** @param agentId opens the dialog with that agent chosen (from ⚙ › Repositories) */
 // what a brief can go to: the agents, and the systems (🧩: their artifacts, in order)
 const briefTargets = () => [...targets, ...systemTargets(systems)];
 

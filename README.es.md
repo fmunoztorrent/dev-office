@@ -230,7 +230,7 @@ La misma oficina se puede ver en el navegador en `http://127.0.0.1:4317`, **a pa
 
 Una instancia de la oficina es una **empresa**: le puedes ir agregando **departamentos** —cada uno una oficina del edificio (equipos o dominios: pagos, web, plataforma…)— en **⚙ › Departamentos**, desde el diálogo de directivas en la dirección, o con `dev-team-office departments add`. Cada departamento tiene:
 
-- **sus proyectos** (repositorios, cada uno con su agente: `--office` o el selector en ⚙ › Agentes; el mantenedor también puede traer un proyecto que ya existe);
+- **sus proyectos** (repositorios, cada uno con su agente: `--office` o el selector en ⚙ › Repositorios; el mantenedor también puede traer un proyecto que ya existe);
 - **sus indicaciones**: cómo se trabaja ahí (convenciones, lo que nunca se hace, a quién preguntar). Van arriba de cada encargo, pipeline, directiva y pregunta a sus proyectos, como las de un proyecto de ChatGPT o Claude;
 - **su autonomía**: guiada (la analista revisa cada encargo y el agente te pregunta cuando tiene dudas), equilibrada (revisa y después el agente trabaja hasta terminar) o autónoma (sin revisión); si no, la de la empresa (⚙ › General › Autonomía);
 - **su personal**: sus personajes (nombres, cargos, personalidades, estilos y colores propios);
@@ -239,7 +239,7 @@ Una instancia de la oficina es una **empresa**: le puedes ir agregando **departa
 
 **La empresa tiene sus estándares** (los del CTO, arriba en ⚙ › Departamentos): lo que siguen todos los proyectos de todos los departamentos (convenciones, seguridad, cómo documentar). Van primero, antes de las indicaciones del departamento y del proyecto.
 
-**Cada proyecto también tiene sus indicaciones** (⚙ › Agentes, `dev-team-office agents set <id> --instructions "…"` o `update_project` por MCP), para todos los agentes que trabajan en su carpeta: los comandos, las convenciones, lo que no se toca. Un encargo a esa carpeta empieza así (la oficina saca esa cabecera del título de la pizarra):
+**Cada proyecto también tiene sus indicaciones** (⚙ › Repositorios, `dev-team-office agents set <id> --instructions "…"` o `update_project` por MCP), para todos los agentes que trabajan en su carpeta: los comandos, las convenciones, lo que no se toca. Un encargo a esa carpeta empieza así (la oficina saca esa cabecera del título de la pizarra):
 
 ```
 📁 Trabaja sólo dentro de ~/tienda: …
@@ -255,9 +255,9 @@ Agrega paginación a la lista de pedidos
 
 Las interfaces muestran **una oficina a la vez**: la que eliges en el selector de **arriba a la izquierda** (la web y la terminal; también con `o`). La elección queda guardada. La bitácora de la terminal muestra la actividad de todas.
 
-### Sistemas: un producto y sus artefactos
+### Proyectos: un producto y sus artefactos
 
-Una empresa no trabaja en repos, trabaja en productos: «Pagos» es su **core**, su **BFF** y su **front en Next.js**, quizás tres repos. En **⚙ › Departamentos › Sistemas** cada producto es un **sistema**:
+Una empresa no trabaja en repos, trabaja en productos: «Pagos» es su **core**, su **BFF** y su **front en Next.js**, quizás tres repos. En **⚙ › Departamentos › Proyectos** cada producto es un **proyecto**:
 
 - **sus artefactos:** cada uno es un repo registrado, o un componente de uno (el `apps/web` de un monorepo), **con su carpeta a la vista** (`~/code/pagos-core`, `~/code/monorepo/apps/web`), con **su tipo** (frontend, app móvil, BFF, backend/core, worker, librería, datos, infraestructura: se detecta de su carpeta, o el que digas) y **lo que usa** (el BFF usa el core; el front, el BFF). **↻ Proponer** llena las dos cosas;
 - **su equipo:** el departamento que responde por él, o **un equipo propio** (un departamento nuevo, y sus repos se van a él): si cada proyecto tiene su squad, cada uno tiene su piso y su gente. Un repo tiene un departamento dueño (su gente hace su trabajo), pero puede ser artefacto de sistemas de otros departamentos: un core **compartido**;
@@ -350,9 +350,9 @@ dev-team-office pane --agent claude --role tl --title review -- "Revisa el diff 
 
 Fuera de herdr todo funciona como antes (los agentes nuevos corren en segundo plano). La oficina habla con herdr sólo por su CLI (`herdr pane split|run|list|rename|read|send-keys`, `herdr agent start|prompt`).
 
-## Agentes: cada uno con su harness engineering
+## Repositorios: cada uno con su agente (su harness engineering)
 
-Un **agente** es una ruta completa más el CLI que la atiende (Claude Code, OpenCode o Pi). Se registra en **⚙ › Agentes** (o con `dev-team-office agents add`) y se guarda en la base SQLite de la oficina. Lo que trae esa ruta es del agente: su orquestador, sus subagentes, sus comandos, sus pipelines. La oficina lo **detecta** y, al mandarle un prompt, arranca **ese** pipeline:
+Un **repositorio** es una ruta completa más el agente (CLI) que la atiende (Claude Code, OpenCode o Pi). Se registra en **⚙ › Repositorios** (o con `dev-team-office agents add`) y se guarda en la base SQLite de la oficina. Lo que trae esa ruta es del agente: su orquestador, sus subagentes, sus comandos, sus pipelines. La oficina lo **detecta** y, al mandarle un prompt, arranca **ese** pipeline:
 
 | Lo que trae la ruta | Pipelines que ofrece | Cómo se arranca |
 |---|---|---|
@@ -401,7 +401,7 @@ Al hacer clic en la pizarra de la oficina, en la terminal o en la web (en la ter
 
 El encargo va con su alcance delante: el agente trabaja **sólo dentro de la carpeta de su proyecto**, y sólo en lo que se pidió (a OpenCode además le llega como regla: leer o cambiar archivos fuera de la carpeta se le niega). El skill **stay-focused**, que instala `setup`, le dice lo mismo a cualquier agente.
 
-Antes de enviar, el diálogo muestra las etapas del pipeline y qué personaje hace cada una. Con **✉ Enviar prompt** en ⚙ › Agentes se abre con ese agente ya elegido.
+Antes de enviar, el diálogo muestra las etapas del pipeline y qué personaje hace cada una. Con **✉ Enviar prompt** en ⚙ › Repositorios se abre con ese agente ya elegido.
 
 **🗺 Impacto** dimensiona el encargo antes de que salga, como una directiva: el árbol de los repos que toca (⤢ el grafo), el análisis del modelo si hay uno, y las preguntas sobre lo que no está en el mapa. Tus respuestas quedan en el mapa al enviarlo, y lo que dicen va arriba del encargo. Si también toca otros repos, **🏛 Hacerlo directiva** lo lleva a la dirección con el texto ya escrito.
 
@@ -424,7 +424,7 @@ Formato completo en [docs/pipelines.es.md](docs/pipelines.es.md) y un ejemplo en
 | **Claude Code** (sesión existente) | En cola. La entrega su hook `Stop` cuando Claude termina el turno en curso, y Claude sigue con ella. Claude Code no permite inyectar mensajes en una sesión interactiva desde fuera: si la sesión está esperando tu mensaje, la tarea llega al terminar el siguiente turno |
 | **Sesión nueva** de un agente registrado | Dentro de herdr, en un pane nuevo (interactivo). Fuera, la oficina abre `claude -p`, `opencode run` o `pi -p` en su ruta. Sus hooks o plugins reportan el trabajo como en cualquier sesión |
 
-`claude -p` lanzado así usa `--permission-mode acceptEdits` (edita archivos sin preguntar y deniega lo demás que necesite permiso), salvo que el agente tenga sus propios argumentos en ⚙ › Agentes › Avanzado.
+`claude -p` lanzado así usa `--permission-mode acceptEdits` (edita archivos sin preguntar y deniega lo demás que necesite permiso), salvo que el agente tenga sus propios argumentos en ⚙ › Repositorios › Avanzado.
 
 Desde la CLI: `dev-team-office task "Agrega paginación" --agent pi` para una tarea directa. Sin argumentos muestra a quién se le puede enviar.
 
@@ -436,7 +436,7 @@ El engranaje de la oficina (arriba a la derecha, en la web y en la terminal; tam
 |---|---|
 | General | **Tus ajustes como archivo JSON:** ⬇ Exportar / ⬆ Importar lo que es tuyo (los ajustes generales, los departamentos con sus indicaciones, autonomía y personajes, los proyectos con sus indicaciones y componentes, tus skills y tus herramientas, los expertos), para guardarlos o llevarlos a otra máquina; no el historial ni el archivo (también `dev-team-office settings export|import`). **Estilo** (pixel art, o anime: un equipo de mujeres), **Idioma** (inglés por defecto, o español: cambia todo en vivo, en la web, la terminal y la bitácora), **zona horaria** de la empresa (se busca escribiendo la ciudad, la región o el país) y su **ciudad** (entre las ciudades del país de esa zona), clima real o simulado, la vida de la oficina en la bitácora, la **vista de la oficina** (frontal o cenital isométrica), herdr: agentes en panes, cada subagente en su pane, hacia dónde se abre el pane y qué agente se abre al empezar, y **🧠 Inteligencia**: el modelo que dimensiona el impacto de un pedido (ninguno, uno de tus agentes, la API de Claude, una API compatible con OpenAI u Ollama), con 🧪 para probarlo |
 | Departamentos | El mantenedor de departamentos: cada departamento (una oficina) con sus **indicaciones**, sus **proyectos** (cada uno **con su carpeta a la vista**; ＋ uno nuevo, o traer uno que ya existe), su **personal** (👥 editar sus personajes), su zona horaria y su ciudad para el clima; ver, editar y eliminar (sus proyectos pasan al principal). También los **sistemas** y la **🗄 infraestructura**: colas, tópicos, bases de datos, APIs de terceros, schedulers… con sobre qué corren, dónde viven y qué proyecto los usa (y lo que la carpeta de cada repo dice que usa) |
-| Agentes | El mantenedor: agregar (ruta completa + CLI + departamento; detecta su harness al escribirla), las **indicaciones del proyecto**, editar, eliminar y ✉ enviarle un prompt. También las sesiones abiertas sin registrar |
+| Repositorios | El mantenedor: agregar (ruta completa + el agente que la atiende + departamento; detecta su harness al escribirla), las **indicaciones del repositorio**, editar, eliminar y ✉ enviarle un prompt. También las sesiones abiertas sin registrar |
 | Mío | **Lo tuyo, no de la empresa.** **Mis skills:** skills privadas (qué hace y cuándo usarla, y sus instrucciones), instaladas en tu carpeta personal de cada agente (`~/.claude/skills`, `~/.agents/skills`), nunca en un repo; apagarla la saca de ahí. **Mis herramientas:** programas chicos tuyos para tareas concretas (un script en sh, bash, node o python3, con sus parámetros, un tope de tiempo y quién la usa en el juego): tus agentes ven cada una como la herramienta MCP `my_<nombre>` y la corren en la carpeta en la que trabajan. Ninguna va al archivo ni a los encargos, y las dos viajan en tu archivo de ajustes. Los agentes no pueden crearlas: sólo tú |
 | Personajes | Nombre, cargo, **sexo** (su cara, su aspecto por defecto y cómo se escriben los textos sobre esa persona: *Diseñadora*/*Diseñador*), **personalidad** (conversador, concentrado, ansioso, tranquilo o soñador: cuánto conversa, se toma pausas, duda, ve tele o sueña despierto), **estilo** (cómo te contesta, como los de Claude: normal, conciso, explicativo, enseñador o formal), colores con paleta y selector libre (piel, pelo, camisa, pantalón), pelo largo, barba y lentes de cada personaje de la oficina que estás mirando. En la terminal, ◂ ▸ recorren cada paleta y escribir `#rrggbb` da cualquier otro color. **⬇ Exportar / ⬆ Importar:** un personaje como archivo JSON, para compartirlo (también `dev-team-office character export|import` y `GET|PUT /v1/characters/<rol>`). **🎓 Expertos:** los expertos (SME), cada uno con su skill, de qué sabe y su aspecto (de toda la empresa) |
 
@@ -445,7 +445,7 @@ El engranaje de la oficina (arriba a la derecha, en la web y en la terminal; tam
 Todo se guarda en una base **SQLite** (también desde la CLI: `dev-team-office config`, `dev-team-office offices`): `~/.dev-team-office/office.db`, o la ruta de `DEV_TEAM_OFFICE_DB`. Usa `node:sqlite`, así que no hay dependencias nativas, y el archivo tiene permisos `0600`. Sus tablas principales:
 
 - `offices`: los departamentos (oficinas) de la empresa, con sus indicaciones;
-- `agents`: los agentes registrados (con su oficina);
+- `agents`: los repositorios registrados (cada uno con su agente y departamento);
 - `projects`: las indicaciones de la carpeta de cada proyecto;
 - `settings`: los ajustes generales (`prefs`: idioma, zona horaria, clima, herdr, bitácora y la oficina que se mira) y la apariencia de cada oficina;
 - `prompts`: el historial de lo que les mandaste y cómo terminó;
@@ -549,7 +549,7 @@ server/office.js        estado: sesiones, todos, subagentes, turnos, bitácora
 server/roles.js         qué personaje representa cada herramienta/archivo/comando
 server/tasks.js         tareas hacia los agentes: registro, cola, entrega y sesiones nuevas de un agente registrado
 server/pipeline.js      pipelines: relay entre la pizarra y la sesión de agente que los ejecuta
-server/store.js         la base SQLite: oficinas, agentes registrados, ajustes (idioma, zona, herdr…), apariencia e historial
+server/store.js         la base SQLite: oficinas, repositorios registrados, ajustes (idioma, zona, herdr…), apariencia e historial
 server/company.js       la empresa: las oficinas y a cuál va cada evento (por oficina, sesión, pane o ruta)
 server/herdr.js         herdr: los agentes y sus actividades en panes (por su CLI), y lo que pasa con esos panes
 server/subpanes.js      herdr: un pane por subagente (abre `dev-team-office follow` y lo cierra cuando termina)

@@ -1,8 +1,8 @@
 // ⚙ Settings in the terminal: a form over the cork board, with the same tabs as the web.
 //   General      language, time zone and city, real weather, herdr (agents in panes) and the log
 //   Offices      the company's offices: name, time zone and city; view, edit, delete
-//   Agents       the maintainer: add (full path + CLI + office), delete and send it a prompt;
-//                shows what each one's harness brings
+//   Repositories the maintainer: add (full path + the agent that serves it + its department),
+//                delete and send it a prompt; shows what each one's harness brings
 //   Characters   name, title, colors and features of the characters of the office being watched
 // Everything is saved in the SQLite database (through the office's API).
 // Keys: ↑↓/tab field · ◂▸ change · typing edits · Enter action · ctrl+s save · esc close
@@ -15,7 +15,7 @@ import { hex, fit, strWidth } from './screen.js';
 
 const ROLES = ['po', 'analyst', 'manager', 'tl', 'qa', 'backend', 'frontend', 'designer', 'devops', 'security']; // the last two: the visiting specialists
 const HARNESS_NAME = { pi: 'Pi', 'claude-code': 'Claude Code', opencode: 'OpenCode', codex: 'Codex' };
-const TABS = ['general', 'offices', 'agents', 'look'];
+const TABS = ['general', 'offices', 'repos', 'look'];
 const C = Object.fromEntries(Object.entries({
   cork: '#b9895a', corkDot: '#8f6640', paper: '#fdfcf6', ink: '#2b2d42', soft: '#6c757d', pin: '#ef476f', shadow: '#0a0b14',
   accent: '#ffd166', ok: '#2a9d8f', err: '#c1121f', field: '#ebe6d6', warn: '#9b5d1d',
@@ -87,20 +87,20 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
     onSaved?.();
   }
 
-  // ---------------------------------------------------------------- agentes
+  // ---------------------------------------------------------------- repositorios
 
-  async function addAgent() {
+  async function addRepo() {
     const r = await api('POST', '/v1/agents', s.form);
     if (!r.ok) return say(r.error);
-    say(t('settings.agents.added', { name: r.agent.name }), true);
+    say(t('settings.repos.added', { name: r.agent.name }), true);
     s.form = { path: '', harness: 'claude-code', name: '', office: office() };
     await loadAgents();
   }
 
-  async function removeAgent(a) {
+  async function removeRepo(a) {
     const r = await api('DELETE', `/v1/agents/${encodeURIComponent(a.id)}`);
     if (!r.ok) return say(r.error);
-    say(t('settings.agents.removed', { name: a.name }), true);
+    say(t('settings.repos.removed', { name: a.name }), true);
     await loadAgents();
   }
 
@@ -206,7 +206,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
       f.push({ type: 'info', text: `  ${t('settings.offices.hint')}` });
       for (const o of s.offices) {
         const own = o.ownTimezone ? tzLabel(o.timezone) : t('settings.offices.inherit', { tz: o.timezone });
-        f.push({ type: 'info', text: `  ${o.name}${o.id === 'main' ? ` (${t('settings.offices.main')})` : ''} · ${own}${o.place?.name ? ` · 📍 ${o.place.name}` : ''} · ${t('settings.offices.agents', { n: o.agents })}${o.id === office() ? `  ${t('settings.offices.viewing')}` : ''}`, color: C.ink });
+        f.push({ type: 'info', text: `  ${o.name}${o.id === 'main' ? ` (${t('settings.offices.main')})` : ''} · ${own}${o.place?.name ? ` · 📍 ${o.place.name}` : ''} · ${t('settings.offices.reposCount', { n: o.agents })}${o.id === office() ? `  ${t('settings.offices.viewing')}` : ''}`, color: C.ink });
         if (o.id !== office()) f.push({ type: 'action', label: '', value: () => `👁 ${t('settings.offices.view')} ${o.name}`, run: () => onView?.(o.id) });
         f.push({ type: 'action', label: '', value: () => `✎ ${t('settings.offices.edit')} ${o.name}`, run: () => { s.officeForm = { ...emptyOffice(), id: o.id, name: o.custom ? o.name : '', timezone: o.ownTimezone, location: o.location || '', instructions: o.instructions || '' }; s.focus = 0; } });
         if (o.id !== 'main') f.push({ type: 'action', label: '', value: () => `✕ ${t('settings.offices.delete')} ${o.name}`, run: () => deleteOffice(o) });
@@ -224,29 +224,29 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
       f.push({ type: 'text', label: t('settings.offices.instructions'), value: () => of.instructions, placeholder: () => t('settings.offices.instructionsPh'), edit: (v) => { of.instructions = v.slice(0, 4000); } });
       f.push({ type: 'action', label: '', value: () => (of.id ? t('settings.offices.saveChanges') : t('settings.offices.add')), run: () => saveOffice() });
       if (of.id) f.push({ type: 'action', label: '', value: () => t('settings.offices.cancel'), run: () => { s.officeForm = emptyOffice(); } });
-    } else if (s.tab === 'agents') {
+    } else if (s.tab === 'repos') {
       const registered = s.targets.filter((x) => x.registered);
       const loose = s.targets.filter((x) => !x.registered);
       const officeName = (id) => s.offices.find((o) => o.id === id)?.name || id;
-      f.push({ type: 'heading', text: t('settings.agents.registered') });
-      if (!registered.length) f.push({ type: 'info', text: `  ${t('settings.agents.none')}` });
+      f.push({ type: 'heading', text: t('settings.repos.registered') });
+      if (!registered.length) f.push({ type: 'info', text: `  ${t('settings.repos.none')}` });
       for (const a of registered) {
-        const flags = [a.sessions.some((x) => x.live) && t('settings.agents.open'), !a.exists && t('settings.agents.missing'), a.exists && !a.available && t('settings.agents.notInstalled')].filter(Boolean).join(' ');
+        const flags = [a.sessions.some((x) => x.live) && t('settings.repos.open'), !a.exists && t('settings.repos.missing'), a.exists && !a.available && t('settings.repos.notInstalled')].filter(Boolean).join(' ');
         f.push({ type: 'info', text: `  ${a.name} · ${HARNESS_NAME[a.harness]}${a.kinds.length ? ` · ${a.kinds.join(' + ')}` : ''}${s.offices.length > 1 ? ` · 🏢 ${officeName(a.office)}` : ''} ${flags}`, color: C.ink });
         f.push({ type: 'info', text: `    ${tilde(a.path)} · ${a.entries.map((e) => e.label).join(', ')}` });
-        f.push({ type: 'action', label: '', value: () => t('settings.agents.promptTo', { name: a.name }), run: () => onPrompt?.(a.id) });
-        f.push({ type: 'action', label: '', value: () => t('settings.agents.removeOne', { name: a.name }), run: () => removeAgent(a) });
+        f.push({ type: 'action', label: '', value: () => t('settings.repos.promptTo', { name: a.name }), run: () => onPrompt?.(a.id) });
+        f.push({ type: 'action', label: '', value: () => t('settings.repos.removeOne', { name: a.name }), run: () => removeRepo(a) });
       }
-      f.push({ type: 'heading', text: t('settings.agents.add') });
-      f.push({ type: 'text', label: t('settings.agents.path'), value: () => s.form.path, placeholder: t('settings.agents.pathPh'), edit: (v) => { s.form.path = v; } });
-      f.push({ type: 'select', label: t('settings.agents.agent'), value: () => HARNESS_NAME[s.form.harness], cycle: (d) => { s.form.harness = cycle(HARNESS_IDS, s.form.harness, d); } });
-      f.push({ type: 'text', label: t('settings.agents.name'), value: () => s.form.name, placeholder: t('settings.agents.namePh'), edit: (v) => { s.form.name = v.slice(0, 40); } });
-      f.push({ type: 'text', label: t('settings.agents.instructions'), value: () => s.form.instructions || '', placeholder: t('settings.agents.instructionsPh'), edit: (v) => { s.form.instructions = v.slice(0, 4000); } });
-      if (s.offices.length > 1) f.push({ type: 'select', label: t('settings.agents.office'), value: () => officeName(s.form.office), cycle: (d) => { s.form.office = cycle(s.offices.map((o) => o.id), s.form.office, d); } });
-      f.push({ type: 'action', label: '', value: () => t('settings.agents.addBtn'), run: () => addAgent() });
-      f.push({ type: 'action', label: '', value: () => t('settings.agents.cancel'), run: () => { s.form = { path: '', harness: 'claude-code', name: '', office: office() }; } });
+      f.push({ type: 'heading', text: t('settings.repos.add') });
+      f.push({ type: 'text', label: t('settings.repos.path'), value: () => s.form.path, placeholder: t('settings.repos.pathPh'), edit: (v) => { s.form.path = v; } });
+      f.push({ type: 'select', label: t('settings.repos.agent'), value: () => HARNESS_NAME[s.form.harness], cycle: (d) => { s.form.harness = cycle(HARNESS_IDS, s.form.harness, d); } });
+      f.push({ type: 'text', label: t('settings.repos.name'), value: () => s.form.name, placeholder: t('settings.repos.namePh'), edit: (v) => { s.form.name = v.slice(0, 40); } });
+      f.push({ type: 'text', label: t('settings.repos.instructions'), value: () => s.form.instructions || '', placeholder: t('settings.repos.instructionsPh'), edit: (v) => { s.form.instructions = v.slice(0, 4000); } });
+      if (s.offices.length > 1) f.push({ type: 'select', label: t('settings.repos.office'), value: () => officeName(s.form.office), cycle: (d) => { s.form.office = cycle(s.offices.map((o) => o.id), s.form.office, d); } });
+      f.push({ type: 'action', label: '', value: () => t('settings.repos.addBtn'), run: () => addRepo() });
+      f.push({ type: 'action', label: '', value: () => t('settings.repos.cancel'), run: () => { s.form = { path: '', harness: 'claude-code', name: '', office: office() }; } });
       if (loose.length) {
-        f.push({ type: 'heading', text: t('settings.agents.loose') });
+        f.push({ type: 'heading', text: t('settings.repos.loose') });
         for (const a of loose) f.push({ type: 'info', text: `  ${HARNESS_NAME[a.harness] || a.harness} · ${tilde(a.path)}${a.kinds.length ? ` · ${a.kinds.join(' + ')}` : ''}` });
       }
     } else if (s.tab === 'look') {
@@ -288,7 +288,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
 
   async function save() {
     if (!s.data) return;
-    if (s.tab === 'agents') return addAgent();
+    if (s.tab === 'repos') return addRepo();
     if (s.tab === 'offices') return saveOffice();
     if (s.tab !== 'look') return;
     const appearance = {};

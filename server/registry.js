@@ -2,7 +2,7 @@
 // backend with its own "harness engineering" (Errementari, gentle-pi, commands, .devteam/
 // pipelines…) and it is THAT harness that runs the pipeline.
 //
-// - Registered (⚙ › Agents, the maintainer): a full path + the CLI that serves it (Claude
+// - Registered (⚙ › Repositories, the maintainer): a full path + the CLI that serves it (Claude
 //   Code, OpenCode, Pi). Saved in the SQLite database (server/store.js).
 // - Connected: any open agent session (Pi/OpenCode over WebSocket, Claude Code through its
 //   hook), even if its path is not registered.

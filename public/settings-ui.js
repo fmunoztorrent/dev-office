@@ -1,9 +1,9 @@
 // ⚙ Settings in the web view. The office is the frontend and keeps its own data in its SQLite database:
 //   General      game language, the company's time zone and city, real weather, herdr and the log
 //   Offices      the company's offices (teams or domains): name, time zone and city
-//   Agents       the maintainer: each agent is a full path + the CLI that serves it + its
-//                office. What its harness brings (Errementari, commands, prompts, .devteam/) is
-//                detected, and a prompt sent from the whiteboard starts THAT pipeline.
+//   Repositories the maintainer: each repository is a full path + the agent (CLI) that serves it
+//                + its department. What that harness brings (Errementari, commands, prompts,
+//                .devteam/) is detected, and a prompt sent from the whiteboard starts THAT pipeline.
 //   Characters   how the characters of the office being watched look.
 //   Mine         what is yours, not the company's: your private skills and your own tools (server/mine.js).
 
@@ -139,7 +139,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     $('s-file').textContent = st.data ? t('settings.file', { file: tilde(st.data.office.file) }) : '';
     if (tab === 'general') { renderGeneral(); indexStatus(); }
     else if (tab === 'offices') { renderOffices(); loadProjects(); }
-    else if (tab === 'agents') renderAgents();
+    else if (tab === 'repos') { renderRepos(); loadProjects(); }
     else if (tab === 'models') { st.models = null; renderModels(); }
     else if (tab === 'mine') renderMine();
     else { st.looks = null; st.experts = null; renderLook(); loadExperts(); }
@@ -183,7 +183,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   /** Something new arrived (agents, offices, settings, the language…): the tab is redrawn. */
   function refresh(all = false) {
     if (!$('settings').open) return;
-    if (st.tab === 'agents') return renderList();
+    if (st.tab === 'repos') return renderList();
     if (all || st.tab === 'general' || st.tab === 'offices') show(st.tab);
   }
   /** The watched office's characters changed (another office chosen, or saved): Characters shows them. */
@@ -412,26 +412,22 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
           o.id === here() ? el('span', { class: 's-ok' }, O('viewing')) : null),
         el('div', { class: 'hint' }, `${o.place?.name ? `📍 ${o.place.name}` : ''}${o.ownTimezone ? '' : `${o.place?.name ? ' · ' : ''}${O('inherit', { tz: company })}`}`),
         o.instructions ? el('p', { class: 's-dept-text' }, o.instructions) : null,
-        // its projects: the repositories of the company that work for it
-        el('div', { class: 's-dept-k' }, `${O('projects')} (${mine.length})`),
+        // its repositories: each one with its agent and its components
+        el('div', { class: 's-dept-k' }, `${O('repos')} (${mine.length})`),
         el('div', { class: 's-entries' }, mine.length ? mine.map((a) => el('span', { title: a.instructions ? `📋 ${a.instructions}` : undefined },
           `${a.name} · ${HARNESS_NAME[a.harness] || a.harness}${a.instructions ? ' 📋' : ''}`,
-          el('div', { class: 's-path' }, tilde(a.path)))) : el('span', { class: 'hint' }, O('noProjects'))),
-        // the components of each project: what a directive can name (detected ones, and the ones you declare)
-        mine.length && st.components ? el('div', { class: 's-comps' }, mine.map((a) => componentsRow(a))) : null,
+          el('div', { class: 's-path' }, tilde(a.path)))) : el('span', { class: 'hint' }, O('noRepos'))),
         el('div', { class: 's-row' },
-          el('button', { type: 'button', class: 's-mini', onclick: () => { st.form = { ...emptyForm(), office: o.id }; show('agents'); } }, O('addProject')),
-          others.length ? el('select', { class: 's-mini', 'aria-label': O('moveHere'), onchange: async (e) => {
+          el('button', { type: 'button', class: 's-mini', onclick: () => { st.form = { ...emptyForm(), office: o.id }; show('repos'); } }, O('addRepo')),
+          others.length ? el('select', { class: 's-mini', 'aria-label': O('moveRepo'), onchange: async (e) => {
             if (!e.target.value) return;
             const r = await api('PUT', `/v1/agents/${encodeURIComponent(e.target.value)}`, { office: o.id });
             if (!r.ok) return msg(r.error);
             onSaved?.();
             loadProjects();
-          } }, option('', O('moveHere'), true), others.map((a) => option(a.id, `${a.name} · ${HARNESS_NAME[a.harness] || a.harness}`))) : null),
-        // its people: the characters of that office
+          } }, option('', O('moveRepo'), true), others.map((a) => option(a.id, `${a.name} · ${HARNESS_NAME[a.harness] || a.harness}`))) : null),
         el('div', { class: 's-row' },
           o.id !== here() ? el('button', { type: 'button', class: 's-mini', onclick: () => { onView?.(o.id); $('settings').close(); } }, `👁 ${O('view')}`) : null,
-          el('button', { type: 'button', class: 's-mini', onclick: () => { if (o.id !== here()) { st.pendingLook = true; onView?.(o.id); } show('look'); } }, `👥 ${O('editPeople')}`),
           el('button', { type: 'button', class: 's-mini', onclick: () => { st.office = { id: o.id, name: o.custom ? o.name : '', timezone: o.ownTimezone || '', location: o.location || '', instructions: o.instructions || '', autonomy: o.autonomy || '' }; renderOffices(); $('s-office-form')?.scrollIntoView({ block: 'nearest' }); } }, O('edit')),
           o.id !== 'main' ? el('button', { type: 'button', class: 's-mini danger', onclick: () => removeOffice(o) }, O('delete')) : null));
     });
@@ -490,7 +486,9 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     st.kindList = sys.ok ? sys.kinds : ['frontend', 'mobile', 'bff', 'backend', 'worker', 'library', 'data', 'infra', 'other'];
     // the infrastructure: the declared ones, and what each project's folder says it uses
     st.resources = map.ok ? map.resources || [] : [];
-    if (st.tab === 'offices' && $('settings').open) renderOffices();
+    if (!$('settings').open) return;
+    if (st.tab === 'offices') renderOffices();
+    else if (st.tab === 'repos') renderList();
   }
 
   /** A project's components: chips (the declared ones can be removed) and ＋ to declare one (name and folder). */
@@ -569,9 +567,9 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     ];
   }
 
-  // ------------------------------------------------------------ Systems (server/systems.js)
+  // ------------------------------------------------------------ Projects (server/systems.js)
 
-  const S = (k, v) => t(`settings.systems.${k}`, v);
+  const S = (k, v) => t(`settings.projects.${k}`, v);
   const KIND = (k) => t(`system.kinds.${k}`);
   const emptySystem = () => ({ id: null, name: '', office: here(), team: '', move: true, instructions: '', parts: [] });
 
@@ -689,12 +687,12 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     await reloadOffices();
   }
 
-  // ------------------------------------------------------------ Agents (the maintainer)
+  // ------------------------------------------------------------ Repositories (the maintainer)
 
-  const A = (k, v) => t(`settings.agents.${k}`, v);
+  const A = (k, v) => t(`settings.repos.${k}`, v);
 
-  function renderAgents() {
-    const panel = document.querySelector('[data-panel="agents"]');
+  function renderRepos() {
+    const panel = document.querySelector('[data-panel="repos"]');
     put(panel,
       el('p', { class: 'hint' }, A('hint')),
       el('div', { id: 's-agent-list', class: 's-agents' }),
@@ -722,6 +720,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         !a.exists ? el('span', { class: 's-bad' }, A('pathMissing')) : !a.available ? el('span', { class: 's-bad' }, A('cliMissing', { agent: HARNESS_NAME[a.harness] })) : null),
       el('div', { class: 'hint' }, tilde(a.path)),
       el('div', { class: 's-entries' }, a.entries.map((e) => el('span', { title: e.description || '' }, e.label))),
+      st.components ? componentsRow(a) : null,
       el('div', { class: 's-row' },
         el('button', { type: 'button', class: 's-mini', onclick: () => onPrompt?.(a.id) }, A('sendPrompt')),
         a.registered

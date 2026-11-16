@@ -2,7 +2,7 @@
 // of its harness (its pipeline, a command, the prompt as is), in which session, and the prompt. Shared
 // by the web view and the terminal.
 //
-// The office is the frontend: the agents are the ones registered in ⚙ › Agents (a full path) plus
+// The office is the frontend: the agents are the ones registered in ⚙ › Repositories (a full path) plus
 // the open sessions, and what each one offers comes from its own harness. A system (🧩, server/systems.js)
 // is a target too: its artifacts get the brief in the order of what each one uses (core → bff → web).
 

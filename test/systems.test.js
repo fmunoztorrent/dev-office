@@ -103,13 +103,13 @@ test('un encargo a un artefacto lleva quién es en su sistema, qué usa y quién
   const { store, bff, dirs } = payments();
   try {
     const head = guideText(guideFor(store, bff.path));
-    assert.match(head, /^🧩 Artefacto bff \(BFF\) del sistema Pagos · usa core · lo usan web$/m);
-    assert.match(head, /📋 Indicaciones del sistema «Pagos»:\n│ Los montos van en centavos\./);
+    assert.match(head, /^🧩 Artefacto bff \(BFF\) del proyecto Pagos · usa core · lo usan web$/m);
+    assert.match(head, /📋 Indicaciones del proyecto «Pagos»:\n│ Los montos van en centavos\./);
     // the folders it may read (what it uses), without changing them
     const brief = scoped('Agrega el endpoint de reembolsos', bff.path, head, [dirs.core]);
     assert.match(brief, new RegExp(`^📁 Trabaja sólo dentro de .*pagos-bff: no cambies archivos fuera de esa carpeta\\. Puedes leer, sin cambiar nada, .*pagos-core: lo que usa este artefacto`));
     assert.equal(unguided(brief), 'Agrega el endpoint de reembolsos', 'en la pizarra, sólo el pedido');
-    assert.equal(artifactLine({ name: 'S', parts: [{ name: 'x', kind: 'other' }] }, { name: 'x', kind: 'other' }), '🧩 Artefacto x (otro) del sistema S');
+    assert.equal(artifactLine({ name: 'S', parts: [{ name: 'x', kind: 'other' }] }, { name: 'x', kind: 'other' }), '🧩 Artefacto x (otro) del proyecto S');
   } finally { store.close(); }
 });
 

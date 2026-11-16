@@ -63,7 +63,7 @@ test('importar en otra oficina deja todo igual; lo que el archivo no trae se que
     const extra = b.store.createOffice({ name: 'Diseño' }).office;
     const out = await (await fetch(`${b.url}/v1/settings/import`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(file) })).json();
     assert.equal(out.ok, true, JSON.stringify(out));
-    assert.deepEqual(out.skipped.map((s) => s.what), ['Proyecto Lejos']);
+    assert.deepEqual(out.skipped.map((s) => s.what), ['Repositorio Lejos']);
     assert.match(out.skipped[0].error, /\/no\/existe\/aqui/);
     assert.equal(out.applied.projects, 1);
     assert.equal(out.applied.components, 1, 'los componentes que declaraste, también');
