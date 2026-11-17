@@ -21,7 +21,6 @@ Cómo le habla cada agente a la oficina, qué le instala `dev-team-office setup`
 
 Los hooks y el MCP apuntan a un lanzador estable (`~/.dev-team-office/bin/dev-team-office`) que recuerda qué Node usar, así funcionan también desde apps de escritorio con un PATH mínimo. Un hook nunca rompe a su agente: si la oficina está apagada, no hace nada. `--only codex,claude` conecta sólo esos; `--dry-run` muestra lo que haría.
 
-**Binario independiente** (no necesita Node; se compila con Deno): `npm run build` deja `dist/dev-team-office` (arm64; `npm run build:mac-x64` para Intel).
 
 Para conectar cualquier otro harness (o entender el contrato de roles), ver [docs/connect-a-harness.es.md](connect-a-harness.es.md). El servidor MCP está en [docs/mcp.es.md](mcp.es.md).
 

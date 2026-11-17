@@ -269,16 +269,23 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       result.textContent = r.ok ? G('intelOk', { model: r.model, s: Math.round((r.ms || 0) / 100) / 10 }) : G('intelFail', { error: r.error || '?' });
     } }, G('intelTest'));
     const on = c.provider !== 'off';
+    // what is missing for it to work (the key, the model, the agent's CLI), before you try it, and again
+    // after each change
+    const problem = el('p', { class: 's-bad', role: 'status' });
+    const recheck = () => api('GET', '/v1/intelligence').then((r) => { problem.textContent = r.ok && r.problemText ? `⚠ ${r.problemText}` : ''; });
+    const set = (patch, redraw = false) => setPref({ intelligence: patch }, { redraw }).then((r) => { if (r?.ok && !redraw) recheck(); });
+    if (on) recheck();
     return [
       el('label', { class: 'b-field' }, el('span', {}, G('intelProvider')),
-        el('select', { onchange: (e) => setPref({ intelligence: { provider: e.target.value } }) }, ['off', 'agent', 'anthropic', 'openai', 'ollama'].map((x) => option(x, G(`intel_${x}`), x === c.provider)))),
+        el('select', { onchange: (e) => set({ provider: e.target.value }, true) }, ['off', 'agent', 'anthropic', 'openai', 'ollama'].map((x) => option(x, G(`intel_${x}`), x === c.provider)))),
       c.provider === 'agent' ? el('label', { class: 'b-field' }, el('span', {}, G('intelHarness')),
-        el('select', { onchange: (e) => setPref({ intelligence: { harness: e.target.value } }) }, ['claude-code', 'codex', 'opencode', 'pi'].map((h) => option(h, HARNESS_NAME[h] || h, h === c.harness)))) : null,
-      on ? el('label', { class: 'b-field' }, el('span', {}, G('intelModel')), el('input', { type: 'text', value: c.model || '', placeholder: c.provider === 'agent' ? G('intelModelAgent') : PH[c.provider]?.[0] || '', onchange: (e) => setPref({ intelligence: { model: e.target.value } }) })) : null,
-      on && c.provider !== 'agent' ? el('label', { class: 'b-field' }, el('span', {}, G('intelUrl')), el('input', { type: 'text', value: c.url || '', placeholder: PH[c.provider]?.[1] || '', onchange: (e) => setPref({ intelligence: { url: e.target.value } }) })) : null,
-      on ? el('label', { class: 'b-field' }, el('span', {}, G('intelTimeout')), el('input', { type: 'number', class: 's-num', min: 10, max: 600, value: c.timeout || 120, onchange: (e) => setPref({ intelligence: { timeout: Number(e.target.value) || 120 } }) })) : null,
+        el('select', { onchange: (e) => set({ harness: e.target.value }) }, ['claude-code', 'codex', 'opencode', 'pi'].map((h) => option(h, HARNESS_NAME[h] || h, h === c.harness)))) : null,
+      on ? el('label', { class: 'b-field' }, el('span', {}, G('intelModel')), el('input', { type: 'text', value: c.model || '', placeholder: c.provider === 'agent' ? G('intelModelAgent') : PH[c.provider]?.[0] || '', onchange: (e) => set({ model: e.target.value }) })) : null,
+      on && c.provider !== 'agent' ? el('label', { class: 'b-field' }, el('span', {}, G('intelUrl')), el('input', { type: 'text', value: c.url || '', placeholder: PH[c.provider]?.[1] || '', onchange: (e) => set({ url: e.target.value }) })) : null,
+      on ? el('label', { class: 'b-field' }, el('span', {}, G('intelTimeout')), el('input', { type: 'number', class: 's-num', min: 10, max: 600, value: c.timeout || 120, onchange: (e) => set({ timeout: Number(e.target.value) || 120 }) })) : null,
       on ? el('p', { class: 'hint' }, G(c.provider === 'agent' ? 'intelAgentHint' : c.provider === 'anthropic' ? 'intelKeyAnthropic' : c.provider === 'openai' ? 'intelKeyOpenai' : 'intelOllamaHint')) : null,
       on ? el('div', { class: 's-row' }, test, result) : null,
+      on ? problem : null,
     ];
   }
 
@@ -296,7 +303,9 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     if (all) return show(st.tab);
     if (st.tab === 'repos') return loadProjects();
     if (st.tab === 'architecture') return arch.reload();
-    if (LIVE.has(st.tab)) show(st.tab);
+    if (LIVE.has(st.tab)) return show(st.tab);
+    // a change that alters the section: drawn again once the new settings are here
+    if (st.redraw?.tab === st.tab && JSON.stringify(prefs()) !== st.redraw.from) { st.redraw = null; show(st.tab); }
   }
   /** The watched office's characters changed (another office chosen, or saved): Characters shows them. */
   function appearanceChanged() {
@@ -308,11 +317,18 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
 
   // ------------------------------------------------------------ General
 
-  async function setPref(patch) {
+  /**
+   * Saves some general settings at once. `redraw`: the change alters what the section shows (another
+   * provider, embeddings, unit…), so it is drawn again when the new settings arrive over the WebSocket
+   * (refresh); the sections that are not LIVE are otherwise left alone, so nothing typed is lost.
+   */
+  async function setPref(patch, { redraw = false } = {}) {
+    if (redraw) st.redraw = { tab: st.tab, from: JSON.stringify(prefs()) };
     const r = await api('PUT', '/v1/settings', { prefs: patch });
-    if (!r.ok) return msg(r.error);
+    if (!r.ok) { st.redraw = null; msg(r.error); return r; }
     msg(t('settings.saved'), true);
     onSaved?.();
+    return r;
   }
 
   function renderGeneral() {
@@ -389,7 +405,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         check(p.archive?.push !== false, G('archivePush'), (e) => setPref({ archive: { push: e.target.checked } }))),
       card(G('cardEmbeddings'),
         el('label', { class: 'b-field' }, el('span', {}, G('embeddings')),
-          el('select', { onchange: (e) => setPref({ archive: { embeddings: e.target.value } }) }, ['off', 'ollama', 'openai'].map((x) => option(x, G(`embed_${x}`), x === (p.archive?.embeddings || 'off'))))),
+          el('select', { onchange: (e) => setPref({ archive: { embeddings: e.target.value } }, { redraw: true }) }, ['off', 'ollama', 'openai'].map((x) => option(x, G(`embed_${x}`), x === (p.archive?.embeddings || 'off'))))),
         p.archive?.embeddings && p.archive.embeddings !== 'off' ? [
           el('label', { class: 'b-field' }, el('span', {}, G('embedModel')), el('input', { type: 'text', value: p.archive.model || '', placeholder: p.archive.embeddings === 'ollama' ? 'nomic-embed-text' : 'text-embedding-3-small', onchange: (e) => setPref({ archive: { model: e.target.value } }) })),
           el('label', { class: 'b-field' }, el('span', {}, G('embedUrl')), el('input', { type: 'text', value: p.archive.url || '', placeholder: p.archive.embeddings === 'ollama' ? 'http://127.0.0.1:11434' : 'https://api.openai.com/v1', onchange: (e) => setPref({ archive: { url: e.target.value } }) })),
@@ -461,7 +477,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
           link(`${DOCS}#readme`, B('readme')), link(`${DOCS}/blob/main/docs/${getLanguage() === 'es' ? 'README.es.md' : 'README.md'}`, B('guides')),
           link(`${DOCS}/blob/main/CHANGELOG.md`, B('changelog')), link(`${DOCS}/issues/new/choose`, B('issue')))),
       card(B('keys'),
-        el('ul', { class: 'cfg-keys' }, ['t', 'a', 'w', 'd', 'c', 'v', 'o', 'l', 'i', 'e', 'f'].map((k) => el('li', {}, el('kbd', {}, k), ` ${B(`key.${k}`)}`)))));
+        el('ul', { class: 'cfg-keys' }, ['t', 'a', 'w', 'd', 'c', 'v', 'o', 'pg', 'r', 'l', 'i', 'e', 'f', 'esc'].map((k) => el('li', {}, el('kbd', {}, k === 'pg' ? B('pgKey') : k === 'esc' ? 'Esc' : k), ` ${B(`key.${k}`)}`)))));
   }
 
   /** The auto-compaction: on or off, and its limit (in thousands of tokens, or a share of the window). */
@@ -473,11 +489,11 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       setPref({ compact: { unit, at: unit === 'pct' ? n : n * 1000 } });
     };
     return [
-      check(c.auto, G('compactAuto'), (e) => setPref({ compact: { auto: e.target.checked } })),
+      check(c.auto, G('compactAuto'), (e) => setPref({ compact: { auto: e.target.checked } }, { redraw: true })),
       el('label', { class: 'b-field' }, el('span', {}, G('compactAt')),
         el('span', { class: 's-compact' },
           el('input', { id: 's-compact-at', type: 'number', class: 's-num', min: 10, max: pct ? 99 : 10000, step: pct ? 1 : 10, value: pct ? c.at : Math.round(c.at / 1000), onchange: save, disabled: c.auto ? undefined : true }),
-          el('select', { id: 's-compact-unit', 'aria-label': G('compactAt'), disabled: c.auto ? undefined : true, onchange: (e) => setPref({ compact: { unit: e.target.value } }) },
+          el('select', { id: 's-compact-unit', 'aria-label': G('compactAt'), disabled: c.auto ? undefined : true, onchange: (e) => setPref({ compact: { unit: e.target.value } }, { redraw: true }) },
             option('tokens', `k ${G('compact_tokens')}`, !pct), option('pct', G('compact_pct'), pct)))),
       el('p', { class: 'hint' }, G('compactHint')),
     ];
@@ -897,6 +913,9 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   async function saveSystem() {
     const f = st.system;
     const body = { name: f.name, office: f.office, instructions: f.instructions, parts: f.parts.filter((p) => p.project).map(({ name, project, component, path: sub, kind, uses }) => ({ name: name || project, project, component, path: sub, kind, uses })), ...(f.team === 'new' ? { team: 'new', move: f.move } : {}) };
+    // a new one never replaces another with its name (the API's POST updates the one with that name)
+    const same = (x) => String(x || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!f.id && (st.systems || []).some((x) => same(x.name) === same(f.name))) return msg(t('err.systemExists', { name: f.name.trim() }));
     const r = f.id ? await api('PUT', `/v1/systems/${encodeURIComponent(f.id)}`, body) : await api('POST', '/v1/systems', body);
     if (!r.ok) return msg(r.error);
     msg(r.office ? S('createdTeam', { name: r.system.name, team: r.office.name }) : S('saved', { name: r.system.name }), true);

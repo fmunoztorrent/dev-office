@@ -9,7 +9,7 @@ Everything you set up in the office lives in one place: the **settings area**. O
 - **The menu** on the left groups the sections. On a phone it becomes a picker at the top.
 - **The search** (top right) finds a section by its name, by what it is for or by the words of what it holds ("kafka", "tokens", "herdr"); Enter goes to the first one.
 - **Changes apply as you make them**, and the office uses them at once. Only **Characters** and **Models**, which you edit as a draft, have a **Save** button at the bottom.
-- The terminal game has its own, smaller settings (`c`), on the same data.
+- The terminal game has its own, smaller settings (`c`), on the same data: the everyday ones (language, zone and city, weather, the log, auto-compaction, herdr, the default model profile), the departments, the repositories and the characters. Its General tab gives this area's address for the rest.
 
 ## The sections
 
@@ -26,7 +26,7 @@ Everything you set up in the office lives in one place: the **settings area**. O
 | The agents | **Autonomy** | Whether the analyst reviews each brief before it becomes work, and whether the agents work to the end without stopping to ask. Each department can have its own level |
 | | **Context** | Auto-compaction: on or off, and the limit (in thousands of tokens, or a share of the window; 400k tokens by default) |
 | | **Models** | The model profiles: which model each role uses, for which harnesses, and the default profile |
-| | **Intelligence** | The model the office leans on to judge (today, an order's impact): none, one of your agents (read-only), the Claude API, an OpenAI-compatible API or Ollama, and **🧪 Try it**. Keys go in the environment, never in the database |
+| | **Intelligence** | The model the office leans on to judge (today, an order's impact): none, one of your agents (read-only), the Claude API, an OpenAI-compatible API or Ollama, and **🧪 Try it**. It warns when something is missing (the key, the model, the agent's CLI) before you try. Keys go in the environment, never in the database |
 | | **Archive** | Whether the archive's passages go on top of every brief, the search by meaning (embeddings, with Ollama or OpenAI) and the index (**↻ Index it again**) |
 | | **Terminal** | herdr: open the agent in a pane, each subagent in its own pane, which way panes open, and which agent opens at start |
 | The people | **Characters** | Each character of the office you are watching: name, title, sex, personality, style (how they answer you), colors, long hair, beard and glasses. **⬇ Export / ⬆ Import** a character as a JSON file |
@@ -35,11 +35,46 @@ Everything you set up in the office lives in one place: the **settings area**. O
 | System | **Backup** | **⬇ Export / ⬆ Import** your settings as a JSON file (also `dev-team-office settings export\|import`), and where the database is |
 | | **About** | The version that is running, its address, where it keeps its data, the docs and the game's keys |
 
-**What a settings file carries:** the general settings, the departments with their instructions, autonomy and characters, the repositories with their instructions and components, the projects, the infrastructure, your skills and tools, and the experts. Not the history or the archive. Importing merges piece by piece: what the file brings replaces what is here, the rest stays, and what cannot be brought (a repository whose folder is not on this machine) is listed.
+**What a settings file carries:** the general settings, the departments with their instructions, autonomy and characters, the repositories with their instructions and components, the projects, the infrastructure, your skills and tools, and the experts. Not the history, the loops or the archive. Importing merges piece by piece: what the file brings replaces what is here, the rest stays, and what cannot be brought (a repository whose folder is not on this machine) is listed.
 
 ## From the command line
 
-`dev-team-office config [key] [value]` reads and writes the general settings (`lang`, `timezone`, `city`, `weather`, `herdr.*`, `log.life`, `view.mode`…); `dev-team-office departments`, `agents`, `character` and `settings export|import` cover the rest. Every command: [the full CLI](usage.md#the-full-cli).
+`dev-team-office config` lists every general setting with its value; `dev-team-office config <key> <value>` changes one (from a terminal, also with the office running: it applies at once). On and off are `on`/`off`.
+
+| Key | Values |
+|---|---|
+| `lang` · `theme` | `en`\|`es` · `pixel`\|`anime` |
+| `timezone` · `city` | an IANA zone or `system` · a city of that zone's country, or `zone` (the zone's city) |
+| `weather` · `log.life` | `on`\|`off`: the real weather · office life in the terminal log |
+| `view.office` · `view.mode` · `view.floor` | the department you watch · `flat`\|`iso` · `office`\|`exec`\|`archive` |
+| `standards` · `capacity` | the company's standards (`-` empties them) · briefs a department takes at once from a directive (1–20) |
+| `autonomy.clarify` · `autonomy.autonomous` | `on`\|`off`: the analyst reviews each brief first · the agents work to the end without stopping to ask |
+| `compact.auto` · `compact.at` | `on`\|`off` · the limit: tokens (`400k`) or a share of the window (`80%`) |
+| `archive.push` · `archive.embeddings` · `archive.model` · `archive.url` | `on`\|`off` · `off`\|`ollama`\|`openai` · the embeddings' model and address |
+| `intelligence.provider` · `.harness` · `.model` · `.url` · `.timeout` | `off`\|`agent`\|`anthropic`\|`openai`\|`ollama` · the agent whose CLI it uses · its model · its address · seconds (10–600) |
+| `herdr.launch` · `herdr.subagents` · `herdr.direction` · `herdr.startAgent` | `on`\|`off` · `on`\|`off` · `right`\|`down` · `auto`\|`none`\|a repository's id |
+
+`dev-team-office departments`, `agents`, `character`, `architecture` and `settings export|import` cover the rest. Every command: [the full CLI](usage.md#the-full-cli).
+
+## Environment variables
+
+Everything above is kept in the database. These are read from the environment, when the office starts:
+
+| Variable | What for |
+|---|---|
+| `DEV_TEAM_OFFICE_PORT` · `DEV_TEAM_OFFICE_HOST` | The HTTP and WebSocket port (4317) and interface (`127.0.0.1`); also `--port`, `--host` |
+| `DEV_TEAM_OFFICE_SOCKET` | The Unix socket the integrations use (`~/.dev-team-office/office.sock`) |
+| `DEV_TEAM_OFFICE_DB` | The database file (`~/.dev-team-office/office.db`) |
+| `DEV_TEAM_OFFICE_LANG` | The language until one is saved in ⚙ (`en`, `es`) |
+| `DEV_TEAM_OFFICE_WEATHER=off` · `DEV_TEAM_OFFICE_LOCATION` | No real weather (nor the city search) · the city or `lat,lon` of the weather when ⚙ sets none (otherwise the zone's city) |
+| `DEV_TEAM_OFFICE_MODEL_KEY` | The key of the model in ⚙ › Intelligence (or `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) |
+| `DEV_TEAM_OFFICE_EMBED_KEY` | The key of the search by meaning with OpenAI (or `OPENAI_API_KEY`) |
+| `DEV_TEAM_OFFICE_CLAUDE_BIN` | Which `claude` the office launches |
+| `DEV_TEAM_OFFICE_URL` · `DEV_TEAM_OFFICE_OFFICE` | For an integration or a command: the office's address, and the department its events go to |
+| `DEV_TEAM_OFFICE_AUTOSTART=0` | Pi's extension does not start the office when a session opens (only `/office`) |
+| `DEV_TEAM_OFFICE_SETUP_CLI=0` | `setup` does not call the agents' CLIs (Claude Code's plugin update) |
+
+The installer has its own: [installation](installation.md#2-install). The office sets a few for the agents it launches (`DEV_TEAM_OFFICE_LAUNCHED`, `DEV_TEAM_OFFICE_SESSION`, `DEV_TEAM_OFFICE_BTW`…, and `PW_TEST_REPORTER` for the [E2E tests](e2e.md)): they are not for you to set.
 
 ## Where everything is kept
 
@@ -47,16 +82,20 @@ Everything you set up in the office lives in one place: the **settings area**. O
 
 Everything is saved in an **SQLite** database (also from the CLI: `dev-team-office config`, `dev-team-office offices`): `~/.dev-team-office/office.db`, or the path in `DEV_TEAM_OFFICE_DB`. It uses `node:sqlite`, so there are no native dependencies, and the file has `0600` permissions. Its main tables:
 
-- `offices`: the company's departments (offices), with their instructions;
-- `agents`: the registered repositories (each with its agent and office);
+- `offices`: the company's departments (offices), with their instructions and autonomy;
+- `agents`: the registered repositories (each with its agent and department);
 - `projects`: each project folder's instructions;
-- `settings`: the general settings (`prefs`: language, time zone, weather, herdr, log and the office being watched) and each office's appearance;
+- `components`: the components declared in each repository;
+- `settings`: the general settings (`prefs`: language, style, time zone and city, weather, view, model profiles, autonomy, standards, capacity, archive, auto-compaction, intelligence and herdr) and each department's characters;
 - `prompts`: the history of what you sent them and how it ended;
+- `asks`: the side questions (btw) and their answers;
+- `directives`: the executive floor's orders and how each part went;
+- `knowledge` (with `knowledge_chunks`, `knowledge_fts` and `knowledge_gaps`): the archive, its passages for the search, and the searches that found nothing;
 - `mine`: your private skills and your own tools;
-- `systems`: the systems and their artifacts;
+- `systems`: the projects and their artifacts;
 - `loops`: the projects' loops, their criteria and how each step goes;
 - `experts`: the subject matter experts and their skills;
-- `resources`: the infrastructure on the map (where it lives and which projects use it).
+- `resources`: the infrastructure on the map (where it lives and which repositories use it).
 
 Databases from earlier versions migrate by themselves (the main office is added). `DEV_TEAM_OFFICE_LANG=es` picks the language until one has been saved.
 

@@ -191,8 +191,13 @@ test('por la API: cómo está el modelo, probarlo y el plan con think (la direcc
   const call = (method, p, body) => fetch(`${server.url}${p}`, { method, headers: { 'content-type': 'application/json' }, body: body && JSON.stringify(body) }).then(async (r) => ({ status: r.status, body: await r.json() }));
   try {
     let r = await call('GET', '/v1/intelligence');
-    assert.deepEqual([r.body.enabled, r.body.model], [false, 'off']);
+    assert.deepEqual([r.body.enabled, r.body.model, r.body.problem, r.body.problemText], [false, 'off', null, null]);
     assert.equal((await call('POST', '/v1/intelligence/test', {})).status, 400);
+    // what is missing, said before trying it: the Claude API without its key (the env is empty)
+    await call('PUT', '/v1/settings', { prefs: { intelligence: { provider: 'anthropic', model: 'claude-x' } } });
+    r = await call('GET', '/v1/intelligence');
+    assert.equal(r.body.problem, 'key');
+    assert.match(r.body.problemText, /ANTHROPIC_API_KEY/);
     r = await call('PUT', '/v1/settings', { prefs: { intelligence: { provider: 'openai', url: 'http://fake.local/v1', model: 'm1', timeout: 30 } } });
     assert.ok(r.body.ok, r.body.error);
     assert.equal((await call('PUT', '/v1/settings', { prefs: { intelligence: { provider: 'oraculo' } } })).status, 400);

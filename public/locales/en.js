@@ -223,7 +223,7 @@ export default {
     todo: 'TO DO', doing: 'DOING', done: 'DONE',
     todoShort: 'to do {todo} · doing {doing} · done {done}',
     boardTip: '✎ click: new brief', boardTipTickets: '🔍 click: see the tasks',
-    cafe: 'CAFÉ', wc: 'WC', exit: 'EXIT', dining: 'DINING', menu: 'MENU', menuToday: ['soup', 'pasta', 'dessert'],
+    cafe: 'CAFÉ', wc: 'WC', exit: 'EXIT', dining: 'DINING', 
     tvBreaking: 'BREAKING', tvServer: 'SERVER', tvNews: 'NEWS', tvWeather: 'WEATHER',
     tvLive: 'LIVE: the team is working on “{title}”', tvQuiet: 'All quiet at the office',
     resize: 'Make the terminal bigger (at least 60×18) · q to quit',
@@ -266,7 +266,7 @@ export default {
     permission: 'Permission for {tool}', interrupted: 'Interrupted', turnEnd: 'ends the turn{text}',
     read: 'Reading {file}', write: 'Creating {file}', edit: 'Editing {file}', grep: 'Searching "{pattern}"', glob: 'Looking through {pattern}', files: 'files',
     websearch: 'Researching: {query}', webfetch: 'Reading {host}', web: 'Reading a web page', ask: 'Asks you something', askWhat: 'Asks you: {question}',
-    plan: 'Presents the plan', planning: 'Planning', skill: 'Using skill {skill}', mcp: 'Using {tool}', working: 'Working',
+    plan: 'Presents the plan', planning: 'Planning', skill: 'Using skill {skill}', working: 'Working',
   },
   task: {
     scope: 'Work only inside {dir}: do not read or change files outside that folder. Do exactly what is asked (or the agreed plan step), without going off on tangents or adding ideas nobody asked for.',
@@ -338,13 +338,13 @@ export default {
     skipped: 'The PO leaves the open points to the team: make reasonable assumptions and note them in your summary.',
     unknown: 'unknown clarification', notAsking: 'that brief is no longer waiting for answers',
     ui: {
-      title: '{name} has questions about your brief', reviewing: '{name} is reviewing your brief for {project}…', placeholder: 'Your answer…',
-      send: '▶ Send it to work', skip: 'Let the team decide', cancel: 'Cancel the brief', sent: 'Brief sent to work.', hint: 'Answer what you can: an empty answer is left to the team.',
+      title: '{name} has questions about your brief', placeholder: 'Your answer…',
+      send: '▶ Send it to work', skip: 'Let the team decide', cancel: 'Cancel the brief', hint: 'Answer what you can: an empty answer is left to the team.',
     },
   },
   // the screen's signal when an agent (or the analyst) waits for you
   attention: {
-    all: 'See all {n}', inbox: '✋ Waiting for you', inboxHint: 'Oldest first. Each one stays here until you answer.', now: 'just now', one: '{who} is waiting for you', many: '{n} are waiting for you', since: '{min} min', answer: 'Answer', terminal: 'answer in its terminal', see: 'See',
+    all: 'See all {n}', inbox: '✋ Waiting for you', inboxHint: 'Oldest first. Each one stays here until you answer.', now: 'just now', one: '{who} is waiting for you', many: '{n} are waiting for you', since: '{min} min', answer: 'Answer', terminal: 'answer in its terminal', 
     question: 'asks you: {text}', clarify: '{name} has {n} question(s) about your brief', title: '✋ ({n}) waiting for you',
     sound: 'A sound when they wait for you', notify: 'A system notification when they wait for you', notifyTitle: 'Dev Team Office: waiting for you',
   },
@@ -526,7 +526,7 @@ export default {
     pathMissing: 'the path is missing', pathRelative: '{path}: use the full path (e.g. ~/Workspace/my-project)', pathNotFound: '{path}: that folder does not exist',
     harness: 'choose the agent for that path: claude-code, opencode or pi', args: '{name}: args must be a list of strings',
     agentExists: 'that agent is already registered for that path', saveFailed: 'could not save: {error}', agentsMax: 'at most {n} agents',
-    unknownAgent: 'unknown agent', unknownGap: 'unknown gap', componentName: 'the component needs a name', componentPath: 'the component\'s folder goes inside the project (relative, without ..)', unknownComponent: 'unknown component', systemName: 'the system needs a name', unknownSystem: 'unknown system: {system}', systemExists: 'there is already a system called “{name}”', systemParts: 'a system has up to {n} artifacts', systemPartName: 'each artifact needs a name', systemPartTwice: 'two artifacts with the same name', systemKind: 'an artifact’s kind is one of: {kinds}', systemUses: '“{name}” uses “{uses}”, which is not in the system', systemCycle: 'what they use goes in a circle: {names}', handoffEmpty: 'the handoff is empty', noHandoff: 'there is no system brief running in this folder', mineKind: 'it is a skill or a tool (kind: skill | tool)', mineName: 'the name goes in lowercase, with dashes, 2 to 40 characters (starting with a letter)', mineTitle: 'what it does and when to use it is missing', mineScript: 'the tool needs its program', unknownMine: 'no such skill or tool of yours', mineExists: 'you already have one called “{name}”', mineMax: 'you can have up to {n}', mineRun: 'it runs with one of: {runs}', mineParams: 'up to 8 parameters', mineParam: 'the parameter “{name}” goes in lowercase (letters, digits and _) and only once', mineTimeout: 'the limit is 1 to 600 seconds', settingsFile: { json: 'that file is not JSON', kind: 'those are not Dev Team Office settings (its "kind" must be "dev-team-office/settings")', version: 'those settings come from a newer Dev Team Office: update it first (dev-team-office update)' }, character: { json: 'that file is not JSON', kind: 'that is not a Dev Team Office character (its "kind" must be "dev-team-office/character")' }, unknownRole: 'unknown role: {role}', oneOf: '{role}: "{key}" must be one of: {values}', notEditable: '{role}: "{key}" cannot be changed',
+    unknownAgent: 'unknown agent', unknownGap: 'unknown gap', componentName: 'the component needs a name', componentPath: 'the component\'s folder goes inside the project (relative, without ..)', unknownComponent: 'unknown component', systemName: 'the project needs a name', unknownSystem: 'unknown project: {system}', systemExists: 'there is already a project called “{name}”', systemParts: 'a project has up to {n} artifacts', systemPartName: 'each artifact needs a name', systemPartTwice: 'two artifacts with the same name', systemKind: 'an artifact’s kind is one of: {kinds}', systemUses: '“{name}” uses “{uses}”, which is not in the project', systemCycle: 'what they use goes in a circle: {names}', handoffEmpty: 'the handoff is empty', noHandoff: 'there is no project brief running in this folder', mineKind: 'it is a skill or a tool (kind: skill | tool)', mineName: 'the name goes in lowercase, with dashes, 2 to 40 characters (starting with a letter)', mineTitle: 'what it does and when to use it is missing', mineScript: 'the tool needs its program', unknownMine: 'no such skill or tool of yours', mineExists: 'you already have one called “{name}”', mineMax: 'you can have up to {n}', mineRun: 'it runs with one of: {runs}', mineParams: 'up to 8 parameters', mineParam: 'the parameter “{name}” goes in lowercase (letters, digits and _) and only once', mineTimeout: 'the limit is 1 to 600 seconds', settingsFile: { json: 'that file is not JSON', kind: 'those are not Dev Team Office settings (its "kind" must be "dev-team-office/settings")', version: 'those settings come from a newer Dev Team Office: update it first (dev-team-office update)' }, character: { json: 'that file is not JSON', kind: 'that is not a Dev Team Office character (its "kind" must be "dev-team-office/character")' }, unknownRole: 'unknown role: {role}', oneOf: '{role}: "{key}" must be one of: {values}', notEditable: '{role}: "{key}" cannot be changed',
     color: '{role}.{key}: use a color like #3f73f0', empty: '{role}.{key} cannot be empty',
     unknownOffice: 'unknown department (office): {office}', officeName: 'give the department a name', officeExists: 'there is already a department with that name', autonomy: 'autonomy must be one of: {levels} (or empty: the company’s)',
     officesMax: 'at most {n} offices', mainOffice: 'the main office cannot be deleted', timezone: 'unknown time zone: {tz}',
@@ -563,10 +563,10 @@ export default {
   },
   herdr: {
     opened: '🪟 pane {pane} opened: {title} ({office})', closed: '🪟 pane {pane} closed: {title}', noAgent: 'cannot find any installed agent (claude, pi or opencode)',
-    launched: '🪟 {agent} opened in pane {pane} ({office})', notInside: 'Not inside herdr: agents run in the background.',
+    
     subagentOver: '🪟 subagent {title}: it stopped reporting and its pane is gone or its process ended, so it is over (it never sent its end)',
     subagentStale: '🪟 subagent {title}: it has not reported for 30 minutes, so I close its pane and consider it over',
-    startTitle: 'the office agent', noPane: 'herdr did not return the new pane',
+    noPane: 'herdr did not return the new pane',
   },
   // the activity monitor (inside herdr, instead of the game)
   monitor: {
@@ -582,7 +582,7 @@ export default {
   // a subagent's pane (dev-team-office follow)
   follow: {
     waiting: 'waiting for the subagent…', thinking: 'thinking…', red: 'fails, as expected in RED', done: 'finished ({time})',
-    closes: 'this pane closes by itself in a few seconds', offline: 'lost connection to the office, retrying…', gone: 'the office closed',
+    closes: 'this pane closes by itself in a few seconds', offline: 'lost connection to the office, retrying…', 
     usage: 'Usage: dev-team-office follow --session <session> --sub <subagent id> [--office <id>]',
   },
   // ---------------------------------------------------------------- terminal and web
@@ -593,7 +593,7 @@ export default {
     task: 'TASK', noTaskYet: 'Session without a task yet', waitingAgent: 'Waiting for events from an agent…',
     stats: '{tools} actions · {errors} errors · {subs} sub · {status}', flow: 'FLOW', pipelines: 'PIPELINES', tasks: 'TASKS',
     connected: '{n} agent(s) connected', team: 'TEAM', noActivity: 'No activity', detail: 'DETAIL · {name}', nothingYet: 'Has not done anything yet.',
-    log: 'LOG', panes: 'PANES (herdr)', office: 'Office',
+    log: 'LOG', panes: 'PANES (herdr)',
     flash: {
       demo: 'Claude Code demo running', demoPi: 'TDD demo (Pi) running', reset: 'Office reset', sent: 'Message sent', failed: 'Could not: {error}',
       cancelRun: 'Cancelling the pipeline “{name}”', cancelTask: 'Cancelling: {text}', noTasks: 'No tasks in progress', poked: 'You said hi to {name}', pickSomeone: 'Pick someone with tab or a click',
@@ -617,6 +617,16 @@ export default {
   },
   // the architecture's map (⚙ › Map: public/architecture-ui.js)
   arch: {
+    // the outline `dev-team-office architecture` prints (the MCP gives the agents the same one, in English)
+    text: {
+      head: 'Company: {departments} department(s), {repos} repositories, {components} component(s), {systems} project(s), {resources} infrastructure resource(s).',
+      dept: 'Department "{name}" ({key})', noRepos: '(no repositories)', repo: 'repository {name} [{kind}] {path}',
+      shared: '(shared with projects of other departments)', components: 'components: {list}', infra: 'infrastructure: {list}',
+      project: 'Project "{name}" (department {dept}): a change goes {order}', noArtifacts: '(no artifacts)',
+      noRepo: '(no repository registered)', uses: 'uses {list}', sharedPart: '(shared)', infraHead: 'Infrastructure',
+      planned: '[planned]', detected: '[detected]', nobody: 'nobody linked', review: 'Review',
+      how: { uses: 'uses', publishes: 'publishes', consumes: 'consumes', reads: 'reads', writes: 'writes', calls: 'calls', schedules: 'schedules', owns: 'owns' },
+    },
     company: 'The company', jump: 'Go to…', crumbs: 'Where you are', diagram: 'The architecture’s diagram', stack: 'Show each repository’s stack ({n})', zoomIn: 'Zoom in', zoomOut: 'Zoom out', fit: 'Fit the width',
     pick: 'Click a box to see what it uses, who uses it and what a change of it reaches. Double-click it (or ⤢ Open) to go one level down.',
     whole: 'the whole repository', shared: 'shared', sharedHint: 'It is an artifact of a project of another department', detected: 'detected',
@@ -650,7 +660,7 @@ export default {
       hint: 'A profile says which model each role uses. It is used when a brief opens a new session (the agent starts with the default model) and by a pipeline\'s stages that set no model. You can add your own.',
       active: 'Default profile', label: 'Name', for: 'For:', default: 'Default', same: 'same as the default ({model})', remove: 'Remove this profile', add: '✚ New profile', newLabel: 'Profile {n}',
     },
-    title: '⚙ Settings', loading: 'Loading…', close: 'Close', save: 'Save', saved: 'Saved: already in use.', file: 'stored in {file}',
+    title: '⚙ Settings', loading: 'Loading…', close: 'Close', save: 'Save', saved: 'Saved: already in use.', file: 'stored in {file}', moreInBrowser: 'The rest (projects, infrastructure, the map, autonomy, experts…), in the browser:',
     back: 'Back to the office', backKey: 'Back to the office (Esc)', search: 'Search the settings…', sections: 'Sections', noMatch: 'No section matches that.',
     groups: { office: 'The office', company: 'The company', architecture: 'Architecture', agents: 'The agents', people: 'The people', yours: 'Yours', system: 'System' },
     nav: {
@@ -705,7 +715,7 @@ export default {
       update: 'To update: dev-team-office update. To check the installation: dev-team-office doctor.',
       docs: 'Read more', readme: 'README', guides: 'Documentation', changelog: 'Changelog', issue: 'Report a problem',
       keys: 'Keys in the office',
-      key: { t: 'a new brief', a: 'the activity', w: 'the work', d: 'the daily', c: 'these settings', v: 'front or top-down view', o: 'the next department', l: 'background services', i: 'the loops', e: 'the E2E tests', f: 'full screen' },
+      pgKey: 'PgUp / PgDn', key: { t: 'a new brief', a: 'the activity', w: 'the work', d: 'the daily', c: 'these settings', v: 'front or top-down view', o: 'the next floor', r: 'answer what an agent asks you', pg: 'a floor up or down', esc: 'close what is open', l: 'background services', i: 'the loops', e: 'the E2E tests', f: 'full screen' },
     },
     tabs: { general: 'General', offices: 'Departments', repos: 'Repositories', look: 'Characters', models: 'Models', mine: 'Mine' },
     // what is yours, not the company's: your private skills and your own tools (server/mine.js)
@@ -728,7 +738,7 @@ export default {
       autonomyDepts: 'Each department can have its own level: Departments →',
       cardEmbeddings: 'Search by meaning', cardIndex: 'The index', cardData: 'Where everything is kept', dataFile: 'Database',
       dataHint: 'Everything the office knows is in that one SQLite file: copy it to back it all up, history included. The export above carries only your settings.',
-      io: 'Your settings (a JSON file)', ioHint: 'Exports what is yours: the general settings, the departments (with their instructions, autonomy and characters) the registered projects with their instructions and components, what is yours (your skills and tools), the experts and the infrastructure. Not the log, the briefs, the directives or the archive. Importing replaces what the file brings and leaves the rest; a project whose folder is not on this machine is skipped.', ioExport: '⬇ Export settings', ioImport: '⬆ Import settings', ioDone: 'Settings imported: {prefs} settings, {departments} departments, {characters} characters, {projects} projects, {components} components, {systems} systems, {skills} skills, {tools} tools, {experts} experts, {resources} infrastructure.',
+      io: 'Your settings (a JSON file)', ioHint: 'Exports what is yours: the general settings, the departments (with their instructions, autonomy and characters), the registered repositories with their instructions and components, the projects, the infrastructure, what is yours (your skills and tools) and the experts. Not the log, the briefs, the directives, the loops or the archive. Importing replaces what the file brings and leaves the rest; a repository whose folder is not on this machine is skipped.', ioExport: '⬇ Export settings', ioImport: '⬆ Import settings', ioDone: 'Settings imported: {prefs} settings, {departments} departments, {characters} characters, {projects} repositories, {components} components, {systems} projects, {skills} skills, {tools} tools, {experts} experts, {resources} infrastructure.',
       archive: 'Archive (the agents’ knowledge)', archivePush: 'What the archive knows goes on top of every brief and question (the glossary terms and the most relevant passages)', embeddings: 'Semantic search', embed_off: 'Off: by words only (offline)', embed_ollama: 'Ollama, on this machine', embed_openai: 'An OpenAI-compatible API (OpenAI, Voyage…)', embedModel: 'Embedding model', embedUrl: 'Address', embedOllamaHint: 'Install Ollama and run: ollama pull nomic-embed-text. Nothing leaves this machine.', embedKeyHint: 'Its key goes in the DEV_TEAM_OFFICE_EMBED_KEY environment variable (never in the database). The archive’s text is sent to that API to be embedded.', indexStatus: '🧠 {chunks} chunk(s) indexed · {embedded} with embedding', reindex: '↻ Index it again',
       theme: 'Style', theme_pixel: 'Pixel art (the usual team)', theme_anime: 'Anime (a team of women)', themeHint: 'How the office’s people look. Each style has its own cast, and what you change in ⚙ › Characters stays in the style you are using.', themeAnimeHint: 'A team of adult women in the style of Japanese anime, with their own names, hair styles and outfits (and yours, the PO’s). There are no men here. What you change in ⚙ › Characters stays in this style; the terminal stays in pixel art, with this cast.',
       intel: '🧠 Intelligence', intelHint: 'The model the office leans on to size the impact of an order: how each repo is touched and what it needs that is not on the map (components, repos, queues, databases, APIs…). It only reads and answers; it changes nothing.', intelProvider: 'Provider', intel_off: 'None: only the order’s words', intel_agent: 'One of your agents (its CLI, read-only)', intel_anthropic: 'The Claude API (Anthropic)', intel_openai: 'An OpenAI-compatible API (OpenAI, OpenRouter, LM Studio…)', intel_ollama: 'Ollama, on this machine',
@@ -819,7 +829,7 @@ export default {
     context: 'Context · {agent}', contextAria: 'Context: {pct}% free ({used} of {max} used)', contextLimit: 'Compacts by itself at {at}', contextCompacted: 'Compacted: how full it is will be known with its next answer',
     canvas: 'The office: click a character to see their card, the board for a new brief',
     settings: 'Settings', settingsKey: 'Settings (c)', fullscreen: 'Fullscreen', fullscreenKey: 'Fullscreen (f)', view: 'Front or top-down view', viewKey: 'Front or top-down view (v)', servicesKey: 'Background services: {n} running (l)',
-    office: 'Office', officeKey: 'Pick which office to view (o)', floor: 'Floor',
+    floor: 'Floor',
     sheetClose: 'Close card', poke: '👋 Say hi', subagents: '{n} subagent(s)', nothingYet: 'Has not done anything in this session yet.',
     mood: { stressed: 'stressed 😰 ({n} errors in a row)', tired: 'tired 🥱 (their agent has {pct}% context left)', bath: 'in the bathroom 🚻', bathWait: 'waiting for the bathroom 😣', dream: 'dreaming of {dream} {emoji}', lunch: 'having lunch {food}', fire: 'putting out the fire! 🧯', talking: 'chatting 💬' },
     session: 'session', sessionLabel: 'Session', latest: 'most recent', noTaskYet: 'Session without a task yet', waitingAgent: 'Waiting for events from an agent…',
@@ -843,7 +853,7 @@ export default {
     task: '📨 {text} → {status}{detail}', run: '▶ “{name}”: {status}{stage}', weather: '{icon} Outside {office}: {label}{temp}', lang: '⚙ Language: {lang}',
     officeAdded: '🏢 New office: {name} ({tz})', officeRemoved: '🏢 The office {name} was deleted',
     startAgent: '🪟 {agent} opened in pane {pane} ({office}): it orchestrates its work from there (and can open more panes)', startFailed: 'Could not open the agent in herdr: {error}',
-    attached: 'An office was already running: opening its game', noTty: 'No interactive terminal: just the log (and the web).',
+    attached: 'An office was already running: opening its game', 
   },
   cli: {
     help: `dev-team-office {version}: your coding agent as a development team (a company with one or more offices).
@@ -873,9 +883,14 @@ Usage:
   dev-team-office offices set <id> [--name …] [--timezone …] [--location …] [--instructions …]
   dev-team-office offices rm <id>
   dev-team-office config [key] [value]
-                                  The settings (in the SQLite database): lang en|es, timezone <zone>|system, city <city>|zone,
-                                  weather on|off, herdr.launch on|off, herdr.subagents on|off, herdr.direction right|down,
-                                  herdr.startAgent auto|none|<id>, log.life on|off, view.office <id>, view.mode flat|iso.
+                                  The general settings (in the SQLite database), one value each; without a key, all of them:
+                                  lang en|es, theme pixel|anime, timezone <zone>|system, city <city>|zone, weather on|off,
+                                  view.office <id>, view.mode flat|iso, view.floor office|exec|archive, log.life on|off,
+                                  standards "<text>"|-, capacity 1-20, autonomy.clarify|autonomy.autonomous on|off,
+                                  compact.auto on|off, compact.at 400k|80%, archive.push on|off, archive.embeddings off|ollama|openai,
+                                  archive.model|archive.url <value>, intelligence.provider off|agent|anthropic|openai|ollama,
+                                  intelligence.harness|intelligence.model|intelligence.url <value>, intelligence.timeout 10-600,
+                                  herdr.launch|herdr.subagents on|off, herdr.direction right|down, herdr.startAgent auto|none|<id>.
   dev-team-office agents          The agent maintainer: the registered ones and what their harness brings.
   dev-team-office agents add <full path> --agent claude|opencode|pi|codex [--name <name>] [--office <id>] [--instructions "<how to work with it>"]
   dev-team-office agents set <id> [--name …] [--office <id>] [--instructions …]
@@ -886,7 +901,7 @@ Usage:
                                   A character as JSON, to share them: name, sex, personality, style and look.
   dev-team-office prompt <id> "<text>" [--pipeline <entry>] [--new]
                                   Sends a prompt to a registered agent through an entry of its harness.
-  dev-team-office task "<text>" --agent pi|opencode|claude [--session <id>] [--launch [--cwd <dir>]]
+  dev-team-office task "<text>" --agent pi|opencode|claude|codex [--session <id>] [--launch [--cwd <dir>]]
   dev-team-office tasks           Lists the tasks sent and their status.
   dev-team-office pane [--role qa] [--title "tests"] [--direction right|down] [--agent pi|claude|opencode|codex] -- <command or prompt>
                                   Inside herdr (the agent uses it): opens a pane next to its own with an
@@ -906,11 +921,17 @@ Usage:
                                   A side question to the agent on duty about the team (like /btw).
   dev-team-office settings export [--out <file or folder>]
   dev-team-office settings import <file.json>
-                                  Your settings as JSON: the general ones, the departments (with their characters) and
-                                  the projects with their instructions. Importing replaces what the file brings, the rest stays.
+                                  Your settings as JSON: the general ones, the departments (with their instructions and
+                                  characters), the repositories (with their instructions and components), the projects, the
+                                  infrastructure, your skills and tools, and the experts. Importing replaces what the file
+                                  brings, the rest stays.
   dev-team-office daily [--office <id>] [--all]
                                   The daily on demand, to be told the latest: what each one did since the last daily
                                   and what they are on now (in the game they gather at the table). --all: the company's.
+  dev-team-office architecture [--json]
+                                  The company's architecture as an outline (also: map): each department with its repositories,
+                                  their components and infrastructure, each project in the order a change goes, and the review.
+                                  The same one the agents read with the MCP tool get_architecture. --json: the whole graph.
   dev-team-office e2e -- <command>
                                   Runs your end-to-end tests (Playwright) with the office watching: each test and each
                                   step live, and when it ends its movie (the trace, on when the command is
@@ -956,11 +977,11 @@ API: docs/api.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
     offices: 'Offices:', officeLine: '  {id}  {name}  · {tz}{country}  · {agents} agent(s){viewing}', viewing: '  ← the one being viewed',
     officeAdded: 'Office created: {id}  ({name}, {tz})', officeSaved: 'Office updated: {id}', agentSaved: 'Project updated: {id}', agentsUsage: 'Usage: dev-team-office agents [add <full path> --agent … | set <id> | rm <id>] [--name …] [--office …] [--instructions …]', characterUsage: 'Usage: dev-team-office character export <role> [--office <id>] [--out <file>]  ·  character import <file.json> [--role <role>] [--office <id>]', characterRole: 'Which role is it for? Add --role qa|backend|frontend|tl|manager|analyst|designer|po|devops|security', characterExported: '{name} exported to {file}', characterImported: '{name} is now the {role} of {office}', officeRemoved: 'Office deleted: {id} (its agents moved to the main one)',
     officesUsage: 'Usage: dev-team-office offices [add "<name>" | set <id> | rm <id>] [--name …] [--timezone …] [--location …]',
-    config: 'Settings (in {file}):', configSaved: '{key} = {value}', configUnknown: 'Unknown setting: {key}. See: dev-team-office config',
+    config: 'Settings (in {file}):', configSaved: '{key} = {value}', configUnknown: 'Unknown setting: {key}. The settings: {keys}', configBool: '{key} is on or off', configLimit: 'compact.at is a number of tokens (400k, 400000) or a share of the window (80%)',
     paneUsage: 'Usage: dev-team-office pane [--role qa] [--title "tests"] [--agent pi|claude|opencode|codex] -- <command or prompt>',
     teams: 'Teams:', teamNone: '(no team packs shipped)',
     teamUsage: 'Usage: dev-team-office team [list] | dev-team-office team install <team> --agent <pi|claude|opencode|codex> [--project <dir>] [--from <packsRoot>]',
-    settingsUsage: 'Usage: dev-team-office settings export [--out <file>]  ·  settings import <file.json>', settingsExported: 'Settings exported to {file}', btwUsage: 'Usage: dev-team-office btw "<question>" [--office <id>]', btwAsking: '❓ asking {agent}…',
+    settingsUsage: 'Usage: dev-team-office settings export [--out <file>]  ·  settings import <file.json>', settingsExported: 'Settings exported to {file}', btwUsage: 'Usage: dev-team-office btw "<question>" [--office <id>]', 
     updateGit: 'Updating the git clone at {dir} (git pull --ff-only)…',
     updateGitFailed: 'Could not update {dir} with git pull --ff-only (local changes, or another branch?): update it by hand, then dev-team-office restart',
     replaced: 'The office {old} that was running was replaced by this one ({version})',
@@ -977,7 +998,7 @@ API: docs/api.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
     unknown: 'unknown: {names} (use pi, opencode, claude or codex)', lib: 'Shared library at {path}',
     pi: 'Pi: extension at {ext} and skill at {skill}/', piHint: '    Open pi in your project: it starts the office if needed and registers the project (/office in Pi).',
     opencode: 'OpenCode: plugin at {plugin}', opencodeHint: '    Open opencode in your project: it connects to the office by itself.',
-    claude: 'Claude Code: hook at {hook}', claudeStep: '    One step left for you: copy the "hooks" section of {snippet}', claudeWhere: '    into ~/.claude/settings.json (or the project\'s .claude/settings.json).',
+    claude: 'Claude Code: hook at {hook}', 
     codex: 'Codex: hook at {hook}',
   },
   btw: {

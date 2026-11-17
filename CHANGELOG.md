@@ -4,6 +4,34 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-11-17
+
+A review of everything there is against what the docs say: what did not match, what was half done and what nobody used.
+
+### Added
+
+- **`dev-team-office architecture`** (also `map`): the company's architecture as an outline in your language, from the running office or from the database when it is off: each department with its repositories, their components and infrastructure, each project in the order a change goes, and the review said in words. `--json` prints the whole graph. It is the same outline the agents read with `get_architecture`.
+- **`dev-team-office config` covers every general setting**, not only the first eleven: the style, the company's standards and capacity, the autonomy, the auto-compaction (`compact.at 400k` or `80%`), the archive, the intelligence and the floor. Without a key it lists them all with their value; a wrong value says what it takes.
+- **⚙ › Intelligence warns what is missing** (the key, the model, the agent's CLI) before you try it. `GET /v1/intelligence` brings it in words too (`problemText`).
+- **A reference of the environment variables** in the settings guide, and the installer's `DEV_TEAM_OFFICE_SOURCE` and `DEV_TEAM_OFFICE_REPO` in the installation guide.
+- The terminal's settings say where the rest is: the General tab gives the browser's settings address.
+- The agents learn about the company's map: the MCP server's instructions and the office's skill tell them to read `get_architecture` before a change that crosses repositories, and what to do with a 🧩 project brief, a 🆕 resource and a 🔁 loop step.
+
+### Fixed
+
+- **The history of what you sent (`GET /v1/prompts?agent=`) never answered:** another route with the same path took it. It is now `GET /v1/prompts/history`.
+- **Settings sections that did not redraw after their own change.** Since 0.28.0, choosing another provider in ⚙ › Intelligence, turning the search by meaning on in ⚙ › Archive, or turning auto-compaction off or changing its unit in ⚙ › Context left the old fields on screen. They now show what the new choice takes.
+- **A new project with the name of an existing one replaced it** (⚙ › Projects): the API updates the project with that name. The form now says there is already one with that name.
+- The texts that still said "system" where the interface says "project" (the errors of ⚙ › Projects, the import summary, which also called the repositories "projects"), and the export's description, which left out the projects, the infrastructure, your skills and tools and the experts.
+- `dev-team-office task --agent` lists Codex, which can receive work too.
+- ⚙ › About lists every key of the game (`r`, PgUp/PgDn, Esc) and says what `o` does: the next floor.
+- The guides: the full CLI table (with `character`, `settings`, `daily` and `architecture`), the database's tables and settings, the code map (it was missing about 25 modules) and AGENTS.md's map.
+
+### Removed
+
+- **The standalone binary built with Deno** (`npm run build`). The docs promised it ran without Node, but `start`, `restart`, `setup` and the MCP server start Node with `bin/dev-team-office.js`, so it could not work; it had not been built since the first version.
+- Seventeen interface texts nothing used any more, in both languages.
+
 ## [0.28.0] - 2026-11-17
 
 ### Added
@@ -404,6 +432,8 @@ First release meant to be installed from the internet.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
 [Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.25.0...v0.26.0

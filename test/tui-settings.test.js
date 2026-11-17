@@ -48,3 +48,26 @@ test('desde la terminal: ⚙ → Personajes → renombrar a Tomás → ctrl+s gu
     applyAppearance({});
   }
 });
+
+test('los ajustes de la terminal dicen dónde está el resto: los del navegador, con su dirección', async () => {
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
+  const cols = 160, rows = 80;
+  const stdin = Object.assign(new EventEmitter(), { isTTY: true, setRawMode() {}, setEncoding() {}, resume() {}, pause() {} });
+  const stdout = Object.assign(new EventEmitter(), { columns: cols, rows, out: '', write(s) { this.out += s; return true; } });
+  const type = (s) => stdin.emit('data', s);
+  const done = runTui({ feed: localFeed(server), stdin, stdout, colorMode: 'truecolor' });
+  // the screen is drawn cell by cell with colors in between: what it says, without the escapes
+  const said = () => stdout.out.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
+  try {
+    await sleep(150);
+    const { gearCell } = computeLayout(cols, rows);
+    type(`\x1b[<0;${gearCell.col + 2};${gearCell.row + 1}M`);
+    await until(() => said().includes('⚙ Ajustes') && said().includes('Idioma'));
+    await until(() => said().includes('Lo demás (proyectos, infraestructura, el mapa') && said().includes(`${server.url}/#settings`));
+  } finally {
+    type('\x1b');
+    type('q');
+    await done;
+    await server.close();
+  }
+});

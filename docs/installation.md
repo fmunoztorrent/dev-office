@@ -75,6 +75,8 @@ The installer accepts these variables:
 - `DEV_TEAM_OFFICE_REF`: which tag or branch to install. The default is the latest version (the highest version tag, or `main` when its version is newer: a release whose tag is not there yet); `main` is the newest code: `curl -fsSL … | DEV_TEAM_OFFICE_REF=main sh`.
 - `DEV_TEAM_OFFICE_NO_SETUP=1`: only install, without connecting the agents.
 - `DEV_TEAM_OFFICE_MODIFY_PATH=1`: add `~/.local/bin` to your shell's profile without asking; `0` never touches it.
+- `DEV_TEAM_OFFICE_SOURCE`: a local folder or `.tar.gz` to install instead of downloading (to try a checkout).
+- `DEV_TEAM_OFFICE_REPO`: the GitHub `owner/repo` to download from (a fork).
 
 ## 3. Connect the agents (`setup`)
 

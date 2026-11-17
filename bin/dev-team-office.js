@@ -11,7 +11,7 @@ import { startServer, DEFAULT_PORT, DEFAULT_HOST, VERSION, defaultSocketPath } f
 import { listTeams, installTeam } from './team.js';
 import { openStore } from '../server/store.js';
 import { detectHarness } from '../integrations/common/devteam.mjs';
-import { t, setLanguage, getLanguage } from '../public/i18n.js';
+import { t, has, setLanguage, getLanguage } from '../public/i18n.js';
 import { systemZone, countryName, zoneInfo } from '../public/clock.js';
 import { exportCharacter, parseCharacter, changedLook, characterFile } from '../public/character.js';
 import { defaultLook } from '../public/sim.js';
@@ -431,7 +431,44 @@ async function cityLocation(name, timezone) {
 }
 
 // The general settings (dev-team-office config [key] [value]).
-const CONFIG_KEYS = ['lang', 'timezone', 'city', 'weather', 'herdr.launch', 'herdr.subagents', 'herdr.direction', 'herdr.startAgent', 'log.life', 'view.office', 'view.mode'];
+// Every setting `config` reads and writes: the general ones (⚙ in the game), one value each.
+const CONFIG_KEYS = [
+  'lang', 'theme', 'timezone', 'city', 'weather', 'view.office', 'view.mode', 'view.floor', 'log.life',
+  'standards', 'capacity', 'autonomy.clarify', 'autonomy.autonomous', 'compact.auto', 'compact.at',
+  'archive.push', 'archive.embeddings', 'archive.model', 'archive.url',
+  'intelligence.provider', 'intelligence.harness', 'intelligence.model', 'intelligence.url', 'intelligence.timeout',
+  'herdr.launch', 'herdr.subagents', 'herdr.direction', 'herdr.startAgent',
+];
+const CONFIG_BOOLS = ['weather', 'log.life', 'autonomy.clarify', 'autonomy.autonomous', 'compact.auto', 'archive.push', 'herdr.launch', 'herdr.subagents'];
+const CONFIG_NUMBERS = ['capacity', 'intelligence.timeout'];
+/** A setting as `config` shows it: on/off, the limit with its unit, a long text cut. */
+function configShown(key, value, prefs) {
+  if (typeof value === 'boolean') return value ? 'on' : 'off';
+  if (key === 'compact.at') return prefs.compact.unit === 'pct' ? `${value}%` : `${Math.round(value / 1000)}k`;
+  const s = String(value ?? '');
+  return s.length > 60 ? `${s.slice(0, 59).replace(/\s+/g, ' ')}…` : s;
+}
+/** What `config <key> <value>` changes: the value typed, as the setting wants it. */
+async function configPatch(store, key, raw) {
+  let value = raw;
+  if (CONFIG_BOOLS.includes(key)) {
+    if (/^(on|true|yes|si|sí|1)$/i.test(raw)) value = true;
+    else if (/^(off|false|no|0)$/i.test(raw)) value = false;
+    else fail(t('cli.configBool', { key }));
+  }
+  if (CONFIG_NUMBERS.includes(key)) value = Number(raw);
+  if (key === 'timezone' && (!raw || raw === 'system')) value = null;
+  if (key === 'city') value = !raw || raw === 'zone' ? null : await cityLocation(raw, store.getPrefs().timezone || systemZone());
+  if (key === 'standards') value = raw === '-' ? '' : raw;
+  // the auto-compaction limit: 400k (tokens) or 80% (of the model's window)
+  if (key === 'compact.at') {
+    const m = /^(\d+(?:\.\d+)?)\s*(k|%)?$/i.exec(raw.trim());
+    if (!m) fail(t('cli.configLimit'));
+    return m[2] === '%' ? { compact: { unit: 'pct', at: Number(m[1]) } } : { compact: { unit: 'tokens', at: Number(m[1]) * (m[2] ? 1000 : 1) } };
+  }
+  const [a, b] = key.split('.');
+  return { patch: b ? { [a]: { [b]: value } } : { [a]: value }, value };
+}
 async function cmdConfig() {
   const [, key, ...rest] = args._;
   const live = await runningOffice();
@@ -442,20 +479,23 @@ async function cmdConfig() {
       console.log(t('cli.config', { file: tilde(store.file) }));
       const get = (k) => k.split('.').reduce((o, x) => o?.[x], p);
       const zone = p.timezone || systemZone();
-      for (const k of CONFIG_KEYS) console.log(`  ${k.padEnd(18)}${get(k) ?? (k === 'city' ? `zone (${zoneInfo(zone).city || zone})` : `system (${systemZone()})`)}`);
+      for (const k of CONFIG_KEYS) {
+        const v = get(k);
+        const shown = v === null || v === undefined ? (k === 'city' ? `zone (${zoneInfo(zone).city || zone})` : `system (${systemZone()})`) : configShown(k, v, p);
+        console.log(`  ${k.padEnd(23)}${shown === '' ? '—' : shown}`);
+      }
       return;
     }
-    if (!CONFIG_KEYS.includes(key)) fail(t('cli.configUnknown', { key }));
-    let value = rest.join(' ');
-    if (['weather', 'herdr.launch', 'herdr.subagents', 'log.life'].includes(key)) value = /^(on|true|yes|si|sí|1)$/i.test(value);
-    if (key === 'timezone' && (!value || value === 'system')) value = null;
-    if (key === 'city') value = !value || value === 'zone' ? null : await cityLocation(value, store.getPrefs().timezone || systemZone());
-    const [a, b] = key.split('.');
-    const patch = b ? { [a]: { [b]: value } } : { [a]: value };
+    if (!CONFIG_KEYS.includes(key)) fail(t('cli.configUnknown', { key, keys: CONFIG_KEYS.join(', ') }));
+    const raw = rest.join(' ').trim();
+    const made = await configPatch(store, key, raw);
+    const patch = made.patch || made;
     const out = live ? await api('/v1/settings', { prefs: patch }, 'PUT') : store.setPrefs(patch);
     if (!out?.ok) fail(t('cli.couldNot', { error: out?.error || t('cli.noAnswer') }));
-    if (key === 'lang') setLanguage(value);
-    console.log(t('cli.configSaved', { key, value: value ?? 'system' }));
+    if (key === 'lang') setLanguage(made.value);
+    const now = key.split('.').reduce((o, x) => o?.[x], out.prefs);
+    const shown = now === null || now === undefined ? 'system' : configShown(key, now, out.prefs);
+    console.log(t('cli.configSaved', { key, value: shown === '' ? '—' : shown }));
   } finally { store.close(); }
 }
 
@@ -714,6 +754,28 @@ async function cmdDaily() {
   console.log(out.text.replace(/\*\*/g, ''));
 }
 
+// `dev-team-office architecture` (also `map`): the company's architecture as an outline, in your language:
+// each department with its repositories, their components and infrastructure, each project in the order a
+// change goes, and the review. The same one the agents read with the MCP tool get_architecture (in
+// English). From the running office, or from the database when it is not running. --json: the whole graph.
+async function cmdArchitecture() {
+  const { architecture, architectureText } = await import('../server/architecture.js');
+  let g;
+  if (await runningOffice()) {
+    g = await api('/v1/architecture');
+    if (!g?.ok) fail(t('cli.couldNot', { error: g?.error || t('cli.noAnswer') }));
+  } else {
+    const store = openStore();
+    try { g = architecture(store, { name: (o) => o.name || t('offices.main') }); } finally { store.close(); }
+  }
+  if (args.json) return console.log(JSON.stringify({ nodes: g.nodes, edges: g.edges, findings: g.findings, stats: g.stats }, null, 2));
+  console.log(architectureText(g, {
+    say: (key, vars) => t(`arch.text.${key}`, vars),
+    how: (h) => (has(`arch.text.how.${h}`) ? t(`arch.text.how.${h}`) : h),
+    finding: (f) => (has(`arch.findings.${f.code}`) ? t(`arch.findings.${f.code}`, f.vars) : f.code),
+  }));
+}
+
 // `dev-team-office e2e -- <command>`: the end-to-end tests with the office watching: its Playwright
 // reporter in their environment, and the trace on when the command is Playwright's (server/e2e.js).
 async function cmdE2e() {
@@ -750,7 +812,7 @@ if (args.version) { console.log(VERSION); process.exit(0); }
 const commands = {
   open: () => cmdOpen({ game: !!args.game }), game: () => cmdOpen({ game: true }), monitor: () => cmdOpen(), serve: cmdServe, start: cmdStart, stop: cmdStop, restart: () => (args['if-outdated'] || args['if-running'] ? cmdRefresh() : cmdRestart()), watch: () => cmdWatch(args._[1]), status: cmdStatus,
   demo: cmdDemo, send: cmdSend, task: cmdTask, tasks: cmdTasks, install: cmdSetup, setup: cmdSetup, uninstall: cmdUninstall, doctor: cmdDoctor, update: cmdUpdate, agents: cmdAgents, offices: cmdOffices, departments: cmdOffices, character: cmdCharacter, config: cmdConfig,
-  pane: cmdPane, follow: cmdFollow, join: cmdJoin, prompt: cmdPrompt, team: cmdTeam, mcp: cmdMcp, btw: cmdBtw, daily: cmdDaily, standup: cmdDaily, e2e: cmdE2e, settings: cmdSettings, help: () => console.log(HELP()),
+  pane: cmdPane, follow: cmdFollow, join: cmdJoin, prompt: cmdPrompt, team: cmdTeam, mcp: cmdMcp, btw: cmdBtw, daily: cmdDaily, standup: cmdDaily, architecture: cmdArchitecture, map: cmdArchitecture, e2e: cmdE2e, settings: cmdSettings, help: () => console.log(HELP()),
 };
 const cmd = commands[args._[0] || 'open'];
 if (!cmd) fail(`${t('cli.unknownCommand', { cmd: args._[0] })}\n\n${HELP()}`);

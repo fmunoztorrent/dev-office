@@ -139,4 +139,4 @@ Under the diagram, the **review** lists what deserves a look, the serious ones f
 | A repository in no project (once there are projects) | Nothing says what it uses or who uses it |
 | A repository shared between departments, a resource still to be created, one found in a repository and not declared, a department without repositories | Notes, to keep the map honest |
 
-Agents read the same map with the MCP tool [`get_architecture`](mcp.md), and other programs with [`GET /v1/architecture`](api.md#the-architecture).
+Agents read the same map with the MCP tool [`get_architecture`](mcp.md), you in a terminal with `dev-team-office architecture` (an outline in your language; `--json`, the whole graph), and other programs with [`GET /v1/architecture`](api.md#the-architecture).

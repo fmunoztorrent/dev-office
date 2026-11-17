@@ -26,8 +26,8 @@ const repo = (name, pkg, extra = {}) => {
  * components), a project "Pagos" (web → bff → core), a queue the core publishes to and nobody consumes,
  * and a database nobody is linked to.
  */
-function company() {
-  const store = openStore(':memory:');
+function company(db = ':memory:') {
+  const store = openStore(db);
   const pagos = store.createOffice({ name: 'Pagos' }).office;
   const plataforma = store.createOffice({ name: 'Plataforma' }).office;
   const add = (name, office, pkg, extra) => store.createAgent({ path: repo(name, pkg, extra), harness: 'claude-code', name, office: office.id, bin: '/nonexistent/claude' }).agent;
@@ -258,4 +258,28 @@ test('el MCP: get_architecture, también con la oficina apagada', async () => {
   assert.match(out.content[0].text, /Project "Ventas".*: a change goes core → web\n {2}- web \[frontend\] = ventas-web, uses core/);
   assert.match(out.content[0].text, /^Company: 1 department\(s\), 2 repositories/);
   mcp.close();
+});
+
+test('la CLI: dev-team-office architecture en tu idioma (sin la oficina corriendo), y --json el grafo', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const home = tmp();
+  const file = path.join(home, 'office.db');
+  company(file).store.close();
+  const env = { PATH: process.env.PATH, HOME: home, DEV_TEAM_OFFICE_LANG: 'es', DEV_TEAM_OFFICE_DB: file, DEV_TEAM_OFFICE_PORT: '1', DEV_TEAM_OFFICE_SOCKET: path.join(home, 'none.sock'), DEV_TEAM_OFFICE_WEATHER: 'off' };
+  const cli = (...args) => spawnSync(process.execPath, [new URL('../bin/dev-team-office.js', import.meta.url).pathname, ...args], { env, encoding: 'utf8', timeout: 20000 });
+  try {
+    const r = cli('architecture');
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /^Empresa: 3 departamento\(s\), 5 repositorios, 2 componente\(s\), 2 proyecto\(s\), 2 recurso\(s\) de infraestructura\./);
+    assert.match(r.stdout, /Proyecto «Pagos» \(departamento Pagos\): un cambio va core → bff → web/);
+    assert.match(r.stdout, /infraestructura: publica cobros/);
+    assert.match(r.stdout, /- queue "cobros" \(SQS\): pagos-core publica/);
+    // the review, said in words (not its codes)
+    assert.match(r.stdout, /Revisión\n {2}- \[warn\] /);
+    assert.doesNotMatch(r.stdout, /noConsumer/);
+    assert.equal(cli('map').stdout, r.stdout, 'map es lo mismo');
+    const g = JSON.parse(cli('architecture', '--json').stdout);
+    assert.equal(g.stats.repos, 5);
+    assert.ok(g.findings.some((f) => f.code === 'noConsumer'));
+  } finally { fs.rmSync(home, { recursive: true, force: true }); }
 });

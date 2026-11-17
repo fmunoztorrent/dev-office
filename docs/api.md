@@ -157,7 +157,7 @@ An agent is a full path + the CLI that serves it (`claude-code`, `opencode`, `pi
 | `POST` | `/v1/agents/<id>/prompt` | `{ text, entry?, session? }` | `{ ok, task }` or `{ ok, run }` |
 | `POST` | `/v1/agents/<id>/team` | `{ team? }` (the pack; `example` by default) | Installs in its folder (in the harness's format) the pack's agents whose roles no subagent of its harness covers, and the sessions open there learn it: `{ ok, installed: true, team, dir, files, agents, whole, fresh, agent }`. With everything covered: `{ ok, installed: false, reason: "has-team", have }`. Used by `join` and Pi's `/office` |
 | `POST` | `/v1/run` | `{ target, entry?, text, session?, profile? }` | Same, for any agent in `/v1/agents` (also an unregistered session: `session:<id>`). `profile`: a model profile's id, or `none` (the agent's own model); without it, `prefs.models.active` |
-| `GET` | `/v1/prompts?agent=<id>&limit=` | | `{ prompts }`: the history |
+| `GET` | `/v1/prompts/history?agent=<id>&limit=` | | `{ ok, prompts }`: the history of what you sent (the newest first, 50 by default, up to 200), of every agent or of one |
 
 Each agent in `/v1/agents` carries:
 
@@ -316,7 +316,7 @@ Each expert keeps a list of quick actions (`actions`: `[{ label, prompt }]`, at 
 
 ## The architecture
 
-The whole map as one graph (server/architecture.js): what the settings' ⚙ › Map draws and the MCP tool `get_architecture` tells an agent.
+The whole map as one graph (server/architecture.js): what the settings' ⚙ › Map draws, the MCP tool `get_architecture` tells an agent and `dev-team-office architecture --json` prints.
 
 | Method | Path | Answer |
 |---|---|---|
@@ -336,7 +336,7 @@ The infrastructure on the map (server/resources.js): queues, topics, databases, 
 | `GET` | `/v1/resources` | `{ ok, resources: [{ id, kind, name, tech, location, state: exists \| planned, notes, links: [{ project, how }] }], kinds }` |
 | `POST` | `/v1/resources` | `{ kind, name, tech?, location?, state?, notes?, links?: [{ project: agent id \| folder, how }], addLinks? }`: puts it on the map (the same kind and name updates it; `addLinks` adds to its links). `how`: `uses`, `publishes`, `consumes`, `reads`, `writes`, `calls`, `schedules` or `owns` |
 | `PUT` · `DELETE` | `/v1/resources/<id>` | Changes it (what is not said stays) · removes it |
-| `GET` | `/v1/intelligence` | `{ ok, enabled, model, config: { provider, harness, model, url, timeout }, problem }`: the model the office leans on (`prefs.intelligence`; `problem`: `key`, `model`, or why its agent cannot be asked) |
+| `GET` | `/v1/intelligence` | `{ ok, enabled, model, config: { provider, harness, model, url, timeout }, problem, problemText }`: the model the office leans on (`prefs.intelligence`; `problem`: `key`, `model`, or why its agent cannot be asked; `problemText`, the same in words, which ⚙ › Intelligence shows) |
 | `POST` | `/v1/intelligence/test` | Asks it something tiny: `{ ok, ms, model }`, or `502 { ok: false, error }`; `400` without one |
 
 - **`prefs.intelligence`:** `{ provider: off | agent | anthropic | openai | ollama, harness, model, url, timeout }` (`timeout` in seconds, 10–600). `agent` runs one of your agents' CLIs read-only in the system's temporary folder (`claude -p --permission-mode plan`, `codex exec --sandbox read-only`, `opencode run --agent plan`, `pi -p --tools read,…`), with `--model` if you give one. `anthropic` calls the Messages API (`anthropic-version: 2026-10-21`, structured output with the analysis' JSON schema; its key in `DEV_TEAM_OFFICE_MODEL_KEY` or `ANTHROPIC_API_KEY`). `openai`: `POST <url>/chat/completions` (its key in `DEV_TEAM_OFFICE_MODEL_KEY` or `OPENAI_API_KEY`). `ollama`: `POST <url>/api/chat`. Keys are never stored.

@@ -70,7 +70,7 @@ test('el orden: primero lo que otros usan; sin decir qué usa cada uno, se propo
   assert.deepEqual(orderParts(parts).order, ['ui', 'core', 'bff', 'web']);
   assert.deepEqual(consumersOf(parts, 'core'), ['bff', 'web'], 'cambiar el core alcanza al BFF y, por él, al front');
   assert.match(orderParts([{ name: 'a', uses: ['b'] }, { name: 'b', uses: ['a'] }]).error, /círculo: a, b/);
-  assert.match(orderParts([{ name: 'a', uses: ['x'] }]).error, /«a» usa «x», que no está en el sistema/);
+  assert.match(orderParts([{ name: 'a', uses: ['x'] }]).error, /«a» usa «x», que no está en el proyecto/);
   // without a bff, the screens use the backends
   assert.deepEqual(suggestUses([{ name: 'app', kind: 'mobile' }, { name: 'api', kind: 'backend' }])[0].uses, ['api']);
 });
@@ -87,7 +87,7 @@ test('un sistema se valida: sus repos registrados, sus tipos, sin nombres repeti
     assert.match(bad([{ name: 'a', project: bff.id }, { name: 'A', project: core.id }]), /mismo nombre/);
     assert.match(bad([{ name: 'a', project: bff.id, uses: ['b'] }, { name: 'b', project: core.id, uses: ['a'] }]), /círculo/);
     const otro = store.saveSystem({ name: 'Caja', parts: [] }).system;
-    assert.match(store.saveSystem({ id: otro.id, name: 'pagos' }).error, /ya hay un sistema/, 'el nombre es único (sin mayúsculas)');
+    assert.match(store.saveSystem({ id: otro.id, name: 'pagos' }).error, /ya hay un proyecto/, 'el nombre es único (sin mayúsculas)');
     assert.equal(store.saveSystem({ name: 'PAGOS', instructions: 'otra' }).system.id, system.id, 'sin id, el del mismo nombre se actualiza');
     store.saveSystem({ id: system.id, name: 'Pagos', instructions: 'Los montos van en centavos.' });
     // the system an artifact is in, from its folder

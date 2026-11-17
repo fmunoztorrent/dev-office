@@ -137,35 +137,52 @@ export function architecture(store, { name = (o) => o.name || o.id } = {}) {
  * each department with its repositories and their components, each project with what uses what,
  * the infrastructure with who uses it, and the review.
  */
-export function architectureText(g) {
+// The outline's words, in English: what the MCP gives the agents (they read English). The CLI passes the
+// user's language instead (`arch.text` in public/locales).
+const OUTLINE = {
+  head: 'Company: {departments} department(s), {repos} repositories, {components} component(s), {systems} project(s), {resources} infrastructure resource(s).',
+  dept: 'Department "{name}" ({key})', noRepos: '(no repositories)', repo: 'repository {name} [{kind}] {path}',
+  shared: '(shared with projects of other departments)', components: 'components: {list}', infra: 'infrastructure: {list}',
+  project: 'Project "{name}" (department {dept}): a change goes {order}', noArtifacts: '(no artifacts)',
+  noRepo: '(no repository registered)', uses: 'uses {list}', sharedPart: '(shared)', infraHead: 'Infrastructure',
+  planned: '[planned]', detected: '[detected]', nobody: 'nobody linked', review: 'Review',
+};
+const english = (key, vars = {}) => OUTLINE[key].replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
+
+/**
+ * The graph as an outline, to read before a change that crosses repositories. In English by default (the
+ * MCP's); `say(key, vars)` gives the words in another language, `how(code)` says how a repository uses a
+ * resource and `finding(f)` says a finding of the review (by default, their codes).
+ */
+export function architectureText(g, { say = english, how = (h) => h, finding = (f) => `${f.code}${Object.keys(f.vars).length ? `: ${Object.values(f.vars).filter(Boolean).join(' · ')}` : ''}` } = {}) {
   const out = [];
   const by = (type) => g.nodes.filter((n) => n.type === type);
   const nameOf = (id) => g.nodes.find((n) => n.id === id)?.name || id;
-  out.push(`Company: ${g.stats.departments} department(s), ${g.stats.repos} repositor${g.stats.repos === 1 ? 'y' : 'ies'}, ${g.stats.components} component(s), ${g.stats.systems} project(s), ${g.stats.resources} infrastructure resource(s).`);
+  out.push(say('head', g.stats));
   for (const d of by('dept')) {
-    out.push('', `Department "${d.name}" (${d.key})`);
+    out.push('', say('dept', { name: d.name, key: d.key }));
     const repos = by('repo').filter((r) => r.dept === d.key);
-    if (!repos.length) out.push('  (no repositories)');
+    if (!repos.length) out.push(`  ${say('noRepos')}`);
     for (const r of repos) {
-      out.push(`  - repository ${r.name} [${r.kind}] ${r.path}${r.shared ? ' (shared with projects of other departments)' : ''}`);
+      out.push(`  - ${say('repo', { name: r.name, kind: r.kind, path: r.path })}${r.shared ? ` ${say('shared')}` : ''}`);
       const comps = by('component').filter((c) => c.repo === r.id);
-      if (comps.length) out.push(`      components: ${comps.map((c) => `${c.name}${c.path ? ` (${c.path})` : ''}`).join(', ')}`);
-      const infra = g.edges.filter((e) => e.kind === 'link' && e.from === r.id).map((e) => `${e.how} ${nameOf(e.to)}`);
-      if (infra.length) out.push(`      infrastructure: ${infra.join('; ')}`);
+      if (comps.length) out.push(`      ${say('components', { list: comps.map((c) => `${c.name}${c.path ? ` (${c.path})` : ''}`).join(', ') })}`);
+      const infra = g.edges.filter((e) => e.kind === 'link' && e.from === r.id).map((e) => `${how(e.how)} ${nameOf(e.to)}`);
+      if (infra.length) out.push(`      ${say('infra', { list: infra.join('; ') })}`);
     }
   }
   for (const s of by('system')) {
-    out.push('', `Project "${s.name}" (department ${nameOf(`dept:${s.dept}`)}): a change goes ${s.order.join(' → ') || '(no artifacts)'}`);
-    for (const p of s.parts) out.push(`  - ${p.name} [${p.kind}]${p.node ? ` = ${nameOf(p.node)}` : ' = (no repository registered)'}${p.uses.length ? `, uses ${p.uses.join(', ')}` : ''}${p.shared ? ' (shared)' : ''}`);
+    out.push('', say('project', { name: s.name, dept: nameOf(`dept:${s.dept}`), order: s.order.join(' → ') || say('noArtifacts') }));
+    for (const p of s.parts) out.push(`  - ${p.name} [${p.kind}] = ${p.node ? nameOf(p.node) : say('noRepo')}${p.uses.length ? `, ${say('uses', { list: p.uses.join(', ') })}` : ''}${p.shared ? ` ${say('sharedPart')}` : ''}`);
   }
   const res = by('resource').filter((r) => !r.techOnly);
   if (res.length) {
-    out.push('', 'Infrastructure');
-    for (const r of res) out.push(`  - ${r.kind} "${r.name}"${r.tech ? ` (${r.tech})` : ''}${r.state === 'planned' ? ' [planned]' : ''}${r.source === 'detected' ? ' [detected]' : ''}: ${r.users.map((u) => `${u.name} ${u.how}`).join(', ') || 'nobody linked'}`);
+    out.push('', say('infraHead'));
+    for (const r of res) out.push(`  - ${r.kind} "${r.name}"${r.tech ? ` (${r.tech})` : ''}${r.state === 'planned' ? ` ${say('planned')}` : ''}${r.source === 'detected' ? ` ${say('detected')}` : ''}: ${r.users.map((u) => `${u.name} ${how(u.how)}`).join(', ') || say('nobody')}`);
   }
   if (g.findings.length) {
-    out.push('', 'Review');
-    for (const f of g.findings) out.push(`  - [${f.level}] ${f.code}${Object.keys(f.vars).length ? `: ${Object.values(f.vars).filter(Boolean).join(' · ')}` : ''}`);
+    out.push('', say('review'));
+    for (const f of g.findings) out.push(`  - [${f.level}] ${finding(f)}`);
   }
   return out.join('\n');
 }

@@ -45,78 +45,111 @@ Todo se guarda en un solo archivo SQLite (`node:sqlite`) y no hay **ninguna depe
 ## El mapa del código
 
 ```
-bin/dev-team-office.js  el ejecutable: open (la bitácora + el juego; dentro de herdr, el monitor), monitor, game, serve, start, stop, restart, watch, status, join, follow, demo, send, task, agents, offices, config, pane, btw, mcp, setup, doctor, uninstall, update
-bin/setup.js            conecta cada agente (hooks, MCP, skills, lanzador), doctor y uninstall
-bin/install.js          copia los archivos de cada integración
-install.sh              el instalador de una línea (curl … | sh)
-server/mcp.js           el servidor MCP (stdio)
-server/asks.js          btw: preguntas al margen al agente de turno
-server/directives.js    la dirección: una orden para los proyectos de varias oficinas, y cómo va cada parte
-server/archive.js       el archivo: lo que sabe la empresa, y la instalación de sus skills y conectores en un proyecto
-server/standup.js       la daily: lo que cuenta cada personaje desde la bitácora real, y su acta
-server/components.js    el mapa de la empresa (departamentos → proyectos → componentes) y el impacto de un pedido en él
-server/architecture.js  todo el mapa como un grafo (departamentos, proyectos, repositorios, componentes, infraestructura) y su revisión
-server/settings-io.js   tus ajustes como archivo JSON: exportar e importar
-server/compact.js       la autocompactación: pasado tu tope, se le pide al agente que compacte (a su manera)
-server/mine.js          lo tuyo: skills privadas (en tus carpetas personales) y tus herramientas (las corre el MCP)
-server/loops.js         el loop de un proyecto: pasos con criterios de éxito, uno tras otro, cada cierto intervalo
-server/experts.js       los expertos (SME): quién sabe de cada skill, y qué skill usa una herramienta del agente
-server/e2e.js           las pruebas e2e, miradas: lo que cuenta el reporter de Playwright, la traza de cada prueba hecha cuadros y acciones
-server/zip.js           un lector de ZIP chico (una traza de Playwright)
-server/resources.js     la infraestructura: lo que la carpeta de cada repo dice que usa, lo que un pedido nombra de ella y lo que está en el mapa
-server/intelligence.js  el modelo en que se apoya la oficina (uno de tus agentes, la API de Claude, una API compatible con OpenAI u Ollama): el impacto de un pedido
-server/ws.js            WebSocket sin dependencias (RFC 6455)
-server/server.js        API HTTP + WebSocket en TCP y socket Unix
-server/adapters.js      payload nativo → formato genérico
-server/office.js        estado: sesiones, todos, subagentes, turnos, bitácora
-server/roles.js         qué personaje representa cada herramienta/archivo/comando
-server/tasks.js         tareas hacia los agentes: registro, cola, entrega y sesiones nuevas de un agente registrado
-server/pipeline.js      pipelines: relay entre la pizarra y la sesión de agente que los ejecuta
-server/store.js         la base SQLite: oficinas, repositorios registrados, ajustes (idioma, zona, herdr…), apariencia e historial
-server/company.js       la empresa: las oficinas y a cuál va cada evento (por oficina, sesión, pane o ruta)
-server/herdr.js         herdr: los agentes y sus actividades en panes (por su CLI), y lo que pasa con esos panes
-server/subpanes.js      herdr: un pane por subagente (abre `dev-team-office follow` y lo cierra cuando termina)
-server/registry.js      los agentes (registrados + sesiones abiertas), lo que trae su harness y a dónde va un prompt
-server/demo.js          sesiones simuladas (Claude Code y flujo TDD de Pi)
-server/weather.js       el clima de afuera (Open-Meteo), para la pared de vidrio
-public/sim.js           la simulación (personajes, rutas, reacciones, vida de la oficina); la comparten terminal y navegador
-public/sky.js           lo que se ve por el vidrio: sol, luna, estaciones, clima y la ciudad (terminal y navegador)
-public/clock.js         la hora de la oficina en su zona horaria (ZonedDate), y el país y la ciudad de cada zona
-public/zones.js         zona horaria → país y coordenadas (generado desde zone.tab por scripts/gen-zones.mjs)
-public/i18n.js          los idiomas del juego (inglés y español); los textos están en public/locales/
-public/targets.js       a quién se le puede mandar una tarea (terminal y navegador)
-public/brief.js         el diálogo de la pizarra (terminal y navegador)
-public/settings-ui.js   ⚙ Ajustes en la web: un área propia (#settings/<sección>), sus secciones en settings-sections.js
-public/architecture.js  la arquitectura como dibujo, sin el DOM: lo que muestra cada nivel (empresa, departamento, proyecto, repositorio) y su ubicación
-public/architecture-ui.js  ⚙ › Mapa: el diagrama, el panel del nodo elegido y la revisión
-public/sprite.js        el retrato de un personaje (ficha y ajustes)
-tui/settings.js         ⚙ Ajustes en la terminal
-tui/console.js          la bitácora de la terminal donde se lanza la oficina (g juego · o navegador · q salir)
-tui/follow.js           el pane de un subagente dentro de herdr: lo que va haciendo, en vivo
-tui/monitor.js          el monitor de actividad (dentro de herdr): cifras, cada agente y sus subagentes, el equipo y la bitácora
-examples/tienda/        proyecto de ejemplo con equipo, pipelines y agentes
-tui/                    la oficina en la terminal: framebuffer de medios bloques, vista, teclado y ratón
-public/game.js          la oficina en canvas, para el navegador (vidrio, luces, noche, efectos), en vista frontal o cenital
-public/scene.js         la escena: lo que hay en pantalla en cada cuadro, como datos planos (la capa entre el juego y sus renderers)
-public/themes.js        los temas gráficos: el elenco anime (todas mujeres), sus peinados y su ropa
-public/anime.js         la gente del tema anime, dibujada con trazos vectoriales (las vistas del juego y los retratos)
-public/renderers.js     el registro de renderers (otro, uno en 3D, dibuja la misma escena); renderers/plan.js, el de referencia
-public/loops-ui.js      el diálogo de los loops
-public/e2e-ui.js        la mini pantalla de las pruebas e2e sobre el juego y el reproductor expandido
-public/impact.js        el impacto de un pedido como dibujo, sin el DOM: el árbol de sus repos y el grafo de todo lo que toca, ya ubicados
-public/impact-ui.js     el árbol (con sus burbujas), el diálogo del grafo y las preguntas sobre lo que no está en el mapa
-public/floors.js        los dos pisos compartidos en canvas (la dirección y el archivo): sus escenas y su gente
-public/compact.js       el tope de la autocompactación en tokens (lo comparten el servidor y la barra de contexto)
-public/floors-ui.js     sus diálogos: las directivas y el archivo
-public/iso.js           la cámara isométrica de la vista cenital (piso, paredes y sprites con transformaciones afines)
-integrations/common/    la librería del lado del agente: proyecto, pipelines, gates (la usan todas)
-integrations/playwright/ el reporter de Playwright de la oficina (sus pruebas e2e, en vivo)
-integrations/           Claude Code (hook), Codex (hook), OpenCode (plugin), Pi (extensión)
-skills/                 los skills (cualquier harness): eventos por rol y configurar un harness
-.claude-plugin/         el plugin y el marketplace de Claude Code
-teams/                  team packs instalables (un subagente por rol)
-docs/                   instalación, uso, convenciones, API, MCP, eventos por rol, pipelines, el dibujo (la escena) y cómo conectar un harness
-test/                   node --test (incluye un agente de mentira: test/fixtures/fake-agent.mjs)
+La línea de comandos y la instalación
+  bin/dev-team-office.js   el ejecutable: open (la bitácora + el juego; dentro de herdr, el monitor), monitor, game, serve, start,
+                           stop, restart, watch, status, join, follow, pane, demo, send, task(s), prompt, agents, offices,
+                           character, config, settings, architecture, daily, btw, e2e, team, mcp, setup, doctor, update, uninstall
+  bin/setup.js             conecta cada agente (hooks, MCP, skills, lanzador), doctor y uninstall
+  bin/install.js           copia los archivos de cada integración
+  bin/skills.js            las skills propias de la oficina, instaladas en la carpeta de cada agente con su marca de versión
+  bin/team.js              los packs de equipo, en el formato de cada harness, y el equipo que completa `join`
+  install.sh               el instalador de una línea (curl … | sh)
+  scripts/                 la demo y el envío de eventos, el generador de la tabla de zonas, el flujo real aislado
+                           (dev-session.sh) y la prueba de instalación de un usuario nuevo (install-check.mjs)
+
+El servidor: un proceso de Node
+  server/index.js          `npm start`: la oficina sin la interfaz de la terminal
+  server/server.js         la API HTTP + WebSocket por TCP y por un socket Unix, y el cableado de todo
+  server/ws.js             un WebSocket sin dependencias (RFC 6455)
+  server/lifecycle.js      desde fuera: si hay una corriendo (y qué versión), detenerla, iniciarla en segundo plano
+  server/store.js          la base SQLite: departamentos, repositorios, ajustes (prefs), apariencia, historial,
+                           directivas, el archivo, proyectos, loops, expertos, infraestructura
+  server/paths.js          carpetas comparadas por su ruta real (/tmp es /private/tmp en macOS)
+  server/settings-io.js    tus ajustes como archivo JSON: exportar e importar
+
+Los eventos entran: de un agente a un personaje
+  server/adapters.js       el payload de cada agente → un evento genérico
+  server/company.js        los departamentos, y a cuál va cada evento (por oficina, sesión, pane o carpeta)
+  server/office.js         el estado de una oficina: sesiones, todos, subagentes (subId), turnos, la pizarra, la bitácora
+  server/roles.js          qué personaje hace cada herramienta, archivo o comando
+  server/humanize.js       lo que hacen, dicho en palabras, y el badge sobre su cabeza
+  server/experts.js        los expertos: qué skill usa una herramienta del agente
+  server/compact.js        la autocompactación: pasado tu tope, se le pide al agente que compacte (a su manera)
+  server/services.js       los servicios que un agente deja corriendo (un dev server, un watcher): si siguen vivos, y sus logs
+  server/prompts.js        lo que un agente te pregunta en su pantalla (dentro de herdr), y las teclas que lo contestan
+  server/e2e.js            las pruebas e2e, miradas: los eventos del reporter de Playwright, la traza de cada prueba como cuadros
+  server/zip.js            un lector de ZIP chico (una traza de Playwright)
+  server/weather.js        el clima afuera (Open-Meteo), para el ventanal
+
+El trabajo sale: de ti a un agente
+  server/tasks.js          los encargos: la cola, la entrega a una sesión abierta, o una nueva (un pane de herdr, o la CLI)
+  server/registry.js       los agentes (registrados + sesiones abiertas), lo que trae su harness, a dónde va un prompt
+  server/pipeline.js       los pipelines: el relevo entre la pizarra y la sesión que los corre
+  server/clarify.js        la revisión de la analista antes de que un encargo pase a trabajo, y tus respuestas
+  server/guides.js         los estándares de la empresa y las indicaciones de cada departamento y repositorio, sobre cada encargo
+  server/asks.js           btw: preguntas al margen al agente de turno
+  server/directives.js     la dirección: una orden para varios departamentos, primero su impacto, sus partes en orden
+  server/loops.js          el loop de un proyecto: pasos con criterios de éxito, enviados uno tras otro
+  server/standup.js        la daily: lo que cuenta cada personaje desde la bitácora real, y su acta
+  server/herdr.js          herdr: los agentes y sus actividades en panes, con su CLI
+  server/subpanes.js       herdr: un pane por subagente (`dev-team-office follow`)
+  server/mcp.js            el servidor MCP (stdio): las herramientas que llaman los agentes, y el prompt `join`
+  server/mine.js           lo tuyo: skills privadas en tus carpetas personales, y tus herramientas (`my_<nombre>`)
+
+El mapa de la empresa
+  server/components.js     departamentos → repositorios → componentes, y el impacto de un pedido en ellos
+  server/systems.js        los proyectos: sus artefactos, qué usa cada uno y el orden en que va un cambio
+  server/resources.js      la infraestructura: lo que los archivos de cada repositorio dicen que usa, y lo que nombra un pedido
+  server/architecture.js   todo como un grafo, su revisión, y su esquema para un agente o la CLI
+  server/intelligence.js   el modelo en que se apoya la oficina (uno de tus agentes, la API de Claude, compatible con OpenAI, Ollama)
+
+El archivo
+  server/archive.js        notas, decisiones, documentos, skills y conectores; instalar skills y conectores en un proyecto
+  server/rag.js            el archivo como RAG: búsqueda por palabras (FTS5) y por significado, el glosario y los vacíos
+  server/chunks.js         un documento cortado en fragmentos
+  server/ingest.js         el texto legible de un documento (Markdown, HTML…; PDF y Word con pdftotext o pandoc, si la máquina los tiene)
+
+El navegador (public/)
+  public/main.js           la página: la conexión, el HUD, los diálogos y las teclas
+  public/sim.js            la simulación (personajes, rutas, reacciones, vida de la oficina); la comparte con la terminal
+  public/scene.js          lo que hay en pantalla cada cuadro, como datos planos: la capa entre el juego y sus renderers
+  public/renderers.js      el registro de renderers; renderers/plan.js es el de referencia
+  public/game.js · iso.js  la oficina en canvas, en vista frontal y en la cenital isométrica
+  public/themes.js · anime.js  los temas gráficos, y el elenco anime dibujado con trazos vectoriales
+  public/sprite.js         el retrato de un personaje (ficha y ajustes)
+  public/sky.js · clock.js · zones.js  lo que se ve por el ventanal, la hora de la oficina, el país y la ciudad de cada zona
+  public/floors.js · floors-ui.js  la dirección y el archivo: sus escenas y sus diálogos
+  public/brief.js · targets.js · board-ui.js  el diálogo del encargo, a quién puede ir un encargo, y los post-its de la pizarra
+  public/impact.js · impact-ui.js  el impacto de un pedido como dibujos (árbol y grafo) y las preguntas por lo que no está en el mapa
+  public/architecture.js · architecture-ui.js  la arquitectura como dibujo (cada nivel, su ubicación) y ⚙ › Mapa
+  public/settings-ui.js · settings-sections.js  ⚙ Ajustes: un área propia (#settings/<sección>) y sus secciones
+  public/loops-ui.js · e2e-ui.js · services-ui.js · prompts-ui.js  los loops, la pantalla e2e, los servicios y las preguntas de los agentes
+  public/character.js · models.js · compact.js  un personaje como JSON, los perfiles de modelos, el tope de la compactación
+  public/markdown.js       un renderer de Markdown chico y seguro (el archivo)
+  public/i18n.js · locales/  los idiomas, y cada texto de la interfaz (en.js, es.js)
+
+La terminal (tui/)
+  tui/app.js · view.js · screen.js  el juego en la terminal: su ciclo y sus teclas, la escena en medios bloques, el framebuffer
+  tui/feeds.js             de dónde saca sus eventos: el servidor en el mismo proceso, u otra oficina (`watch`)
+  tui/console.js           la bitácora de la terminal donde parte la oficina
+  tui/monitor.js           el monitor de actividad (dentro de herdr)
+  tui/follow.js            el pane de un subagente dentro de herdr
+  tui/settings.js          ⚙ Ajustes en la terminal (los de todos los días)
+
+Lo que corre junto al agente
+  integrations/common/     la librería del lado del agente: proyecto, subagentes, pipelines, gates, la ruta del reporter e2e
+  integrations/claude-code/  el hook de Claude Code (y los hooks del plugin)
+  integrations/codex/      el hook de Codex
+  integrations/opencode/   el plugin de OpenCode
+  integrations/pi/         la extensión de Pi (también sus subagentes)
+  integrations/playwright/ el reporter de Playwright de la oficina
+  skills/                  las skills de la oficina (cualquier harness): trabajar con la oficina, declarar roles, no desviarse
+  .claude-plugin/          el plugin de Claude Code y su marketplace
+  teams/                   packs de equipo instalables (un subagente por rol)
+  examples/tienda/         un proyecto de ejemplo con equipo, pipelines y agentes
+
+docs/                      las guías (índice en docs/README.md), cada una en inglés y en español
+test/                      node --test, con agentes y herdr de mentira (test/fixtures)
 ```
 
 Para cambiar quién hace qué, edita las reglas de [`server/roles.js`](../server/roles.js).

@@ -159,16 +159,20 @@ Es el `/btw` de Claude Code llevado a cada harness: contesta la sesión que trab
 | `dev-team-office watch` | Otra terminal mirando el juego de la misma oficina |
 | `dev-team-office status` | ¿Corre? Versión, puerto y socket |
 | `dev-team-office join [ruta] [--agent <cli>] [--office <oficina>] [--team <pack>\|--no-team] [--open]` | Suma un proyecto al juego y le completa el equipo con el de la oficina (ver arriba) |
-| `dev-team-office agents` · `agents add` · `agents rm` | El mantenedor de agentes |
-| `dev-team-office offices` · `offices add` · `offices set` · `offices rm` | Las oficinas |
+| `dev-team-office agents` · `agents add` · `agents set` · `agents rm` | Los repositorios: cada uno con su agente, su departamento y sus indicaciones |
+| `dev-team-office offices` · `offices add` · `offices set` · `offices rm` | Los departamentos (también `departments`) |
+| `dev-team-office architecture [--json]` | La arquitectura de la empresa como esquema (también `map`): departamentos, repositorios, proyectos, infraestructura y la revisión. La misma que leen los agentes con `get_architecture` |
 | `dev-team-office task` · `tasks` · `prompt` | Mandar trabajo y ver cómo va |
 | `dev-team-office pane … -- <comando>` | Dentro de herdr: una actividad en otro pane |
 | `dev-team-office follow --session <s> --sub <id>` | Lo que hace un subagente, en vivo (la oficina lo abre sola en su pane) |
 | `dev-team-office btw "…"` | Una pregunta al margen |
+| `dev-team-office daily [--office <id>] [--all]` | La daily ahora: qué hizo cada uno desde la anterior y en qué está (también `standup`) |
 | `dev-team-office e2e -- <comando>` | Corre tus pruebas end-to-end (Playwright) con la oficina mirando: su pantalla muestra cada prueba y sus pasos en vivo, y la película de cada una (con el comando de Playwright, la traza se enciende sola) |
 | `dev-team-office send <kind> …` | Manda un evento a mano (para probar) |
 | `dev-team-office demo [--pi]` | Una sesión de ejemplo |
-| `dev-team-office config [clave] [valor]` | Los ajustes: `lang`, `timezone`, `city <ciudad>\|zone`, `weather`, `herdr.*`, `log.life`, `view.office`, `view.mode flat\|iso` |
+| `dev-team-office config [clave] [valor]` | Cada ajuste general, un valor cada uno ([las claves](settings.es.md#desde-la-línea-de-comandos)) |
+| `dev-team-office settings export [--out <archivo>]` · `settings import <archivo>` | Tus ajustes como archivo JSON, para guardarlos o llevarlos a otra máquina |
+| `dev-team-office character export <rol>` · `character import <archivo>` | Un personaje como archivo JSON, para compartirlo |
 | `dev-team-office team …` | Los team packs |
 | `dev-team-office setup` · `doctor` · `update` · `uninstall` | La instalación |
 | `dev-team-office mcp` | El servidor MCP (stdio; lo registra `setup`) |

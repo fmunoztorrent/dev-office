@@ -21,7 +21,6 @@ How each agent talks to the office, what `dev-team-office setup` installs for it
 
 The hooks and the MCP point to a stable launcher (`~/.dev-team-office/bin/dev-team-office`) that remembers which Node to use, so they also work from desktop apps with a minimal PATH. A hook never breaks its agent: if the office is off, it does nothing. `--only codex,claude` connects only those; `--dry-run` shows what it would do.
 
-**Standalone binary** (no Node needed; built with Deno): `npm run build` produces `dist/dev-team-office` (arm64; `npm run build:mac-x64` for Intel).
 
 To connect any other harness (or understand the role contract), see [docs/connect-a-harness.md](connect-a-harness.md). The MCP server is documented in [docs/mcp.md](mcp.md).
 

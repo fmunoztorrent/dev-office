@@ -53,7 +53,7 @@ import { zoneInfo, systemZone } from '../public/clock.js';
 import { insideDir as inside, insideDir } from './paths.js';
 import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.28.0';
+export const VERSION = '0.29.0';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
 const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
@@ -836,8 +836,9 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const out = m[2] === 'cancel' ? clarify.cancel(id) : clarify.answer(id, { answers: Array.isArray(b.answers) ? b.answers : [], skip: !!b.skip });
         return json(res, out.ok ? 200 : out.status || 400, out);
       }
-      if (req.method === 'GET' && p === '/v1/prompts') {
-        return json(res, 200, { prompts: store.listPrompts({ agentId: q('agent'), limit: q('limit') || 50 }) });
+      // the history of the prompts you sent (and how each ended); /v1/prompts itself is what agents ask you now
+      if (req.method === 'GET' && p === '/v1/prompts/history') {
+        return json(res, 200, { ok: true, prompts: store.listPrompts({ agentId: q('agent') || undefined, limit: Math.min(200, Number(q('limit')) || 50) }) });
       }
       // What the agents announce: projects and pipelines each session can run.
       if (req.method === 'GET' && p === '/v1/projects') return json(res, 200, { projects: pipelines.projects(q('office')) });
@@ -923,7 +924,12 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         return json(res, out.ok ? 200 : out.status || 400, out);
       }
       // The model the office leans on (⚙ › Intelligence): how it is set, and a small question to try it
-      if (req.method === 'GET' && p === '/v1/intelligence') return json(res, 200, { ok: true, enabled: intel.enabled, model: intel.label, config: intel.config, problem: intel.problem() });
+      if (req.method === 'GET' && p === '/v1/intelligence') {
+        // what is missing for it to work, as a code (key, model) or the agent CLI's own error, and said in words
+        const problem = intel.problem();
+        const problemText = !problem ? null : ['key', 'model'].includes(problem) ? t(`intel.problem.${problem}`) : problem;
+        return json(res, 200, { ok: true, enabled: intel.enabled, model: intel.label, config: intel.config, problem, problemText });
+      }
       if (req.method === 'POST' && p === '/v1/intelligence/test') {
         if (!intel.enabled) return json(res, 400, { ok: false, error: t('intel.off') });
         const out = await intel.test();

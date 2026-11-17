@@ -75,6 +75,8 @@ El instalador acepta estas variables:
 - `DEV_TEAM_OFFICE_REF`: qué tag o rama instalar. Por defecto, la versión más nueva (el tag de versión más alto, o `main` si su versión es más nueva: una versión cuyo tag todavía no está); `main` es el código más nuevo: `curl -fsSL … | DEV_TEAM_OFFICE_REF=main sh`.
 - `DEV_TEAM_OFFICE_NO_SETUP=1`: sólo instala, sin conectar los agentes.
 - `DEV_TEAM_OFFICE_MODIFY_PATH=1`: agrega `~/.local/bin` al perfil de tu shell sin preguntar; `0` no lo toca nunca.
+- `DEV_TEAM_OFFICE_SOURCE`: una carpeta local o un `.tar.gz` para instalar en vez de descargar (para probar un checkout).
+- `DEV_TEAM_OFFICE_REPO`: el `dueño/repo` de GitHub de donde descargar (un fork).
 
 ## 3. Conectar los agentes (`setup`)
 

@@ -98,6 +98,21 @@ If the review asks for changes: `tl changes "…"` → `backend fix` → `qa gre
 - `send_task`: sends a prompt to another registered project's agent.
 - `list_projects`, `list_offices`, `create_office`, `update_project`, `remove_project`.
 
+## The company's map: architecture, projects, infrastructure and loops
+
+- **Before a change that crosses repositories** (an API another repo calls, an event others consume, a
+  shared table) or touches shared infrastructure, read `get_architecture`: each department's repositories,
+  each project's artifacts in the order a change goes, who publishes to or consumes each queue and topic,
+  and what a change of yours reaches. `get_instructions` gives the standards and instructions that apply here.
+- A brief with a **🧩** line is your artifact's part of a project: do only your part. If others use what you
+  expose, call `handoff` when you finish (what changed: endpoints, types, events, and how to try it). A
+  brief that brings "What X left" is the handoff of an artifact you use: build on it.
+- When a brief asks you to create infrastructure (**🆕** a queue, a topic, a table, a bucket, a cron…),
+  `declare_resource` it once it exists, with how your repository uses it.
+- A brief that starts with **🔁** is a step of a project loop with numbered success criteria: check each one
+  for real and report them all with `loop_report` before you end.
+- The user's own tools show up as `my_<name>` (`list_my_tools`, `run_my_tool`): use them when they fit.
+
 ## The company's archive and its executive floor
 
 - **Before starting a task**, `search_knowledge` with its key words: decisions, conventions, docs, skills and

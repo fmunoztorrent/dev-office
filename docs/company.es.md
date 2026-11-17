@@ -139,4 +139,4 @@ Bajo el diagrama, la **revisión** lista lo que merece una mirada, lo grave prim
 | Un repositorio en ningún proyecto (cuando ya hay proyectos) | Nada dice qué usa ni quién lo usa |
 | Un repositorio compartido entre departamentos, un recurso por crear, uno encontrado en un repositorio y sin declarar, un departamento sin repositorios | Notas, para que el mapa diga la verdad |
 
-Los agentes leen el mismo mapa con la herramienta MCP [`get_architecture`](mcp.es.md), y otros programas con [`GET /v1/architecture`](api.es.md#la-arquitectura).
+Los agentes leen el mismo mapa con la herramienta MCP [`get_architecture`](mcp.es.md), tú en una terminal con `dev-team-office architecture` (un esquema en tu idioma; `--json`, el grafo entero), y otros programas con [`GET /v1/architecture`](api.es.md#la-arquitectura).

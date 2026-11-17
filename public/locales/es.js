@@ -223,7 +223,7 @@ export default {
     todo: 'POR HACER', doing: 'EN CURSO', done: 'HECHO',
     todoShort: 'hacer {todo} · curso {doing} · hecho {done}',
     boardTip: '✎ clic: nuevo encargo', boardTipTickets: '🔍 clic: ver las tareas',
-    cafe: 'CAFÉ', wc: 'WC', exit: 'SALIDA', dining: 'COMEDOR', menu: 'MENÚ', menuToday: ['sopa', 'pasta', 'postre'],
+    cafe: 'CAFÉ', wc: 'WC', exit: 'SALIDA', dining: 'COMEDOR', 
     tvBreaking: 'ÚLTIMA HORA', tvServer: 'SERVIDOR', tvNews: 'NOTICIAS', tvWeather: 'CLIMA',
     tvLive: 'EN VIVO: el equipo trabaja en «{title}»', tvQuiet: 'Todo tranquilo en la oficina',
     resize: 'Agranda la terminal (mínimo 60×18) · q para salir',
@@ -266,7 +266,7 @@ export default {
     permission: 'Permiso para {tool}', interrupted: 'Interrumpido', turnEnd: 'termina su turno{text}',
     read: 'Leyendo {file}', write: 'Creando {file}', edit: 'Editando {file}', grep: 'Buscando "{pattern}"', glob: 'Revisando {pattern}', files: 'archivos',
     websearch: 'Investigando: {query}', webfetch: 'Leyendo {host}', web: 'Leyendo una web', ask: 'Te pregunta algo', askWhat: 'Te pregunta: {question}',
-    plan: 'Presenta el plan', planning: 'Planificando', skill: 'Usando skill {skill}', mcp: 'Usando {tool}', working: 'Trabajando',
+    plan: 'Presenta el plan', planning: 'Planificando', skill: 'Usando skill {skill}', working: 'Trabajando',
   },
   task: {
     scope: 'Trabaja sólo dentro de {dir}: no leas ni cambies archivos fuera de esa carpeta. Haz exactamente lo que se pide (o el paso del plan acordado), sin irte por la tangente ni agregar ideas que nadie pidió.',
@@ -338,13 +338,13 @@ export default {
     skipped: 'La PO le deja los puntos abiertos al equipo: toma supuestos razonables y anótalos en tu resumen.',
     unknown: 'aclaración desconocida', notAsking: 'ese encargo ya no espera respuestas',
     ui: {
-      title: '{name} tiene preguntas sobre tu encargo', reviewing: '{name} revisa tu encargo para {project}…', placeholder: 'Tu respuesta…',
-      send: '▶ Mandarlo a trabajar', skip: 'Que decida el equipo', cancel: 'Cancelar el encargo', sent: 'Encargo enviado a trabajar.', hint: 'Contesta lo que puedas: lo que dejes vacío lo decide el equipo.',
+      title: '{name} tiene preguntas sobre tu encargo', placeholder: 'Tu respuesta…',
+      send: '▶ Mandarlo a trabajar', skip: 'Que decida el equipo', cancel: 'Cancelar el encargo', hint: 'Contesta lo que puedas: lo que dejes vacío lo decide el equipo.',
     },
   },
   // la señal en la pantalla cuando un agente (o la analista) te espera
   attention: {
-    all: 'Ver las {n}', inbox: '✋ Te están esperando', inboxHint: 'Las más antiguas primero. Cada una sigue aquí hasta que respondas.', now: 'recién', one: '{who} te está esperando', many: '{n} te están esperando', since: '{min} min', answer: 'Responder', terminal: 'responde en su terminal', see: 'Ver',
+    all: 'Ver las {n}', inbox: '✋ Te están esperando', inboxHint: 'Las más antiguas primero. Cada una sigue aquí hasta que respondas.', now: 'recién', one: '{who} te está esperando', many: '{n} te están esperando', since: '{min} min', answer: 'Responder', terminal: 'responde en su terminal', 
     question: 'te pregunta: {text}', clarify: '{name} tiene {n} pregunta(s) sobre tu encargo', title: '✋ ({n}) te esperan',
     sound: 'Un sonido cuando te esperan', notify: 'Una notificación del sistema cuando te esperan', notifyTitle: 'Dev Team Office: te esperan',
   },
@@ -526,7 +526,7 @@ export default {
     pathMissing: 'falta la ruta', pathRelative: '{path}: usa la ruta completa (p. ej. ~/Workspace/mi-proyecto)', pathNotFound: '{path}: no existe esa carpeta',
     harness: 'elige el agente que atiende esa ruta: claude-code, opencode o pi', args: '{name}: args debe ser una lista de textos',
     agentExists: 'ese agente ya está registrado en esa ruta', saveFailed: 'no se pudo guardar: {error}', agentsMax: 'como máximo {n} agentes',
-    unknownAgent: 'agente desconocido', unknownGap: 'vacío desconocido', componentName: 'el componente necesita un nombre', componentPath: 'la carpeta del componente va dentro del proyecto (relativa, sin ..)', unknownComponent: 'componente desconocido', systemName: 'el sistema necesita un nombre', unknownSystem: 'sistema desconocido: {system}', systemExists: 'ya hay un sistema que se llama «{name}»', systemParts: 'un sistema tiene hasta {n} artefactos', systemPartName: 'cada artefacto necesita un nombre', systemPartTwice: 'dos artefactos con el mismo nombre', systemKind: 'el tipo de un artefacto es uno de: {kinds}', systemUses: '«{name}» usa «{uses}», que no está en el sistema', systemCycle: 'lo que usan forma un círculo: {names}', handoffEmpty: 'el traspaso está vacío', noHandoff: 'no hay un encargo de sistema en curso en esta carpeta', mineKind: 'es una skill o una herramienta (kind: skill | tool)', mineName: 'el nombre va en minúsculas, con guiones, de 2 a 40 caracteres (empieza con una letra)', mineTitle: 'falta qué hace y cuándo usarla', mineScript: 'la herramienta necesita su programa', unknownMine: 'no existe esa skill o herramienta tuya', mineExists: 'ya tienes una que se llama «{name}»', mineMax: 'puedes tener hasta {n}', mineRun: 'se corre con uno de: {runs}', mineParams: 'hasta 8 parámetros', mineParam: 'el parámetro «{name}» va en minúsculas (letras, números y _) y sin repetirse', mineTimeout: 'el tope es de 1 a 600 segundos', settingsFile: { json: 'ese archivo no es JSON', kind: 'eso no son ajustes de Dev Team Office (su "kind" debe ser "dev-team-office/settings")', version: 'esos ajustes son de una versión más nueva de Dev Team Office: actualízala primero (dev-team-office update)' }, character: { json: 'ese archivo no es JSON', kind: 'eso no es un personaje de Dev Team Office (su "kind" debe ser "dev-team-office/character")' }, unknownRole: 'rol desconocido: {role}', oneOf: '{role}: «{key}» debe ser uno de: {values}', notEditable: '{role}: no se puede cambiar "{key}"',
+    unknownAgent: 'agente desconocido', unknownGap: 'vacío desconocido', componentName: 'el componente necesita un nombre', componentPath: 'la carpeta del componente va dentro del proyecto (relativa, sin ..)', unknownComponent: 'componente desconocido', systemName: 'el proyecto necesita un nombre', unknownSystem: 'proyecto desconocido: {system}', systemExists: 'ya hay un proyecto que se llama «{name}»', systemParts: 'un proyecto tiene hasta {n} artefactos', systemPartName: 'cada artefacto necesita un nombre', systemPartTwice: 'dos artefactos con el mismo nombre', systemKind: 'el tipo de un artefacto es uno de: {kinds}', systemUses: '«{name}» usa «{uses}», que no está en el proyecto', systemCycle: 'lo que usan forma un círculo: {names}', handoffEmpty: 'el traspaso está vacío', noHandoff: 'no hay un encargo de proyecto en curso en esta carpeta', mineKind: 'es una skill o una herramienta (kind: skill | tool)', mineName: 'el nombre va en minúsculas, con guiones, de 2 a 40 caracteres (empieza con una letra)', mineTitle: 'falta qué hace y cuándo usarla', mineScript: 'la herramienta necesita su programa', unknownMine: 'no existe esa skill o herramienta tuya', mineExists: 'ya tienes una que se llama «{name}»', mineMax: 'puedes tener hasta {n}', mineRun: 'se corre con uno de: {runs}', mineParams: 'hasta 8 parámetros', mineParam: 'el parámetro «{name}» va en minúsculas (letras, números y _) y sin repetirse', mineTimeout: 'el tope es de 1 a 600 segundos', settingsFile: { json: 'ese archivo no es JSON', kind: 'eso no son ajustes de Dev Team Office (su "kind" debe ser "dev-team-office/settings")', version: 'esos ajustes son de una versión más nueva de Dev Team Office: actualízala primero (dev-team-office update)' }, character: { json: 'ese archivo no es JSON', kind: 'eso no es un personaje de Dev Team Office (su "kind" debe ser "dev-team-office/character")' }, unknownRole: 'rol desconocido: {role}', oneOf: '{role}: «{key}» debe ser uno de: {values}', notEditable: '{role}: no se puede cambiar "{key}"',
     color: '{role}.{key}: usa un color como #3f73f0', empty: '{role}.{key} no puede quedar vacío',
     unknownOffice: 'departamento (oficina) desconocido: {office}', officeName: 'ponle un nombre al departamento', officeExists: 'ya hay un departamento con ese nombre', autonomy: 'la autonomía debe ser una de: {levels} (o vacía: la de la empresa)',
     officesMax: 'como máximo {n} oficinas', mainOffice: 'la oficina principal no se puede eliminar', timezone: 'zona horaria desconocida: {tz}',
@@ -563,10 +563,10 @@ export default {
   },
   herdr: {
     opened: '🪟 pane {pane} abierto: {title} ({office})', closed: '🪟 pane {pane} cerrado: {title}', noAgent: 'no encuentro ningún agente instalado (claude, pi u opencode)',
-    launched: '🪟 {agent} se abrió en el pane {pane} ({office})', notInside: 'No estás dentro de herdr: los agentes se lanzan en segundo plano.',
+    
     subagentOver: '🪟 subagente {title}: dejó de reportar y su pane ya no está o su proceso terminó, así que lo doy por terminado (nunca mandó su final)',
     subagentStale: '🪟 subagente {title}: no reporta desde hace 30 minutos, así que cierro su pane y lo doy por terminado',
-    startTitle: 'el agente de la oficina', noPane: 'herdr no devolvió el pane nuevo',
+    noPane: 'herdr no devolvió el pane nuevo',
   },
   // the activity monitor (inside herdr, instead of the game)
   monitor: {
@@ -582,7 +582,7 @@ export default {
   // a subagent's pane (dev-team-office follow)
   follow: {
     waiting: 'esperando al subagente…', thinking: 'piensa…', red: 'falla, como se espera en RED', done: 'terminó ({time})',
-    closes: 'el pane se cierra solo en unos segundos', offline: 'sin conexión con la oficina, reintentando…', gone: 'la oficina se cerró',
+    closes: 'el pane se cierra solo en unos segundos', offline: 'sin conexión con la oficina, reintentando…', 
     usage: 'Uso: dev-team-office follow --session <sesión> --sub <id del subagente> [--office <id>]',
   },
   // ---------------------------------------------------------------- terminal and web
@@ -593,7 +593,7 @@ export default {
     task: 'TAREA', noTaskYet: 'Sesión sin tarea todavía', waitingAgent: 'Esperando eventos de un agente…',
     stats: '{tools} acciones · {errors} errores · {subs} sub · {status}', flow: 'FLUJO', pipelines: 'PIPELINES', tasks: 'TAREAS',
     connected: '{n} agente(s) conectado(s)', team: 'EQUIPO', noActivity: 'Sin actividad', detail: 'DETALLE · {name}', nothingYet: 'Todavía no ha hecho nada.',
-    log: 'BITÁCORA', panes: 'PANES (herdr)', office: 'Oficina',
+    log: 'BITÁCORA', panes: 'PANES (herdr)',
     flash: {
       demo: 'Demo de Claude Code en marcha', demoPi: 'Demo TDD (Pi) en marcha', reset: 'Oficina reiniciada', sent: 'Mensaje enviado', failed: 'No se pudo: {error}',
       cancelRun: 'Cancelando el pipeline «{name}»', cancelTask: 'Cancelando: {text}', noTasks: 'No hay tareas en curso', poked: 'Saludaste a {name}', pickSomeone: 'Elige a alguien con tab o con un clic',
@@ -617,6 +617,16 @@ export default {
   },
   // el mapa de la arquitectura (⚙ › Mapa: public/architecture-ui.js)
   arch: {
+    // el esquema que imprime `dev-team-office architecture` (el MCP les da el mismo a los agentes, en inglés)
+    text: {
+      head: 'Empresa: {departments} departamento(s), {repos} repositorios, {components} componente(s), {systems} proyecto(s), {resources} recurso(s) de infraestructura.',
+      dept: 'Departamento «{name}» ({key})', noRepos: '(sin repositorios)', repo: 'repositorio {name} [{kind}] {path}',
+      shared: '(compartido con proyectos de otros departamentos)', components: 'componentes: {list}', infra: 'infraestructura: {list}',
+      project: 'Proyecto «{name}» (departamento {dept}): un cambio va {order}', noArtifacts: '(sin artefactos)',
+      noRepo: '(sin repositorio registrado)', uses: 'usa {list}', sharedPart: '(compartido)', infraHead: 'Infraestructura',
+      planned: '[planeado]', detected: '[detectado]', nobody: 'nadie vinculado', review: 'Revisión',
+      how: { uses: 'usa', publishes: 'publica', consumes: 'consume', reads: 'lee', writes: 'escribe', calls: 'llama', schedules: 'programa', owns: 'es dueño de' },
+    },
     company: 'La empresa', jump: 'Ir a…', crumbs: 'Dónde estás', diagram: 'El diagrama de la arquitectura', stack: 'Mostrar el stack de cada repositorio ({n})', zoomIn: 'Acercar', zoomOut: 'Alejar', fit: 'Ajustar al ancho',
     pick: 'Haz clic en una caja para ver qué usa, quién la usa y hasta dónde llega un cambio suyo. Doble clic (o ⤢ Abrir) para bajar un nivel.',
     whole: 'el repositorio entero', shared: 'compartido', sharedHint: 'Es artefacto de un proyecto de otro departamento', detected: 'detectado',
@@ -650,7 +660,7 @@ export default {
       hint: 'Un perfil dice qué modelo usa cada rol. Se usa al abrir una sesión nueva desde un encargo (el agente arranca con el modelo por defecto) y en las etapas de un pipeline que no fijan modelo. Puedes agregar los tuyos.',
       active: 'Perfil por defecto', label: 'Nombre', for: 'Para:', default: 'Por defecto', same: 'igual que el por defecto ({model})', remove: 'Quitar este perfil', add: '✚ Nuevo perfil', newLabel: 'Perfil {n}',
     },
-    title: '⚙ Ajustes', loading: 'Cargando…', close: 'Cerrar', save: 'Guardar', saved: 'Guardado: ya se está usando.', file: 'se guarda en {file}',
+    title: '⚙ Ajustes', loading: 'Cargando…', close: 'Cerrar', save: 'Guardar', saved: 'Guardado: ya se está usando.', file: 'se guarda en {file}', moreInBrowser: 'Lo demás (proyectos, infraestructura, el mapa, autonomía, expertos…), en el navegador:',
     back: 'Volver a la oficina', backKey: 'Volver a la oficina (Esc)', search: 'Buscar en los ajustes…', sections: 'Secciones', noMatch: 'Ninguna sección coincide.',
     groups: { office: 'La oficina', company: 'La empresa', architecture: 'Arquitectura', agents: 'Los agentes', people: 'La gente', yours: 'Lo tuyo', system: 'Sistema' },
     nav: {
@@ -705,7 +715,7 @@ export default {
       update: 'Para actualizar: dev-team-office update. Para revisar la instalación: dev-team-office doctor.',
       docs: 'Leer más', readme: 'README', guides: 'Documentación', changelog: 'Cambios', issue: 'Reportar un problema',
       keys: 'Teclas en la oficina',
-      key: { t: 'un encargo nuevo', a: 'la actividad', w: 'el trabajo', d: 'la daily', c: 'esta configuración', v: 'vista frontal o cenital', o: 'el departamento siguiente', l: 'servicios en segundo plano', i: 'los loops', e: 'las pruebas E2E', f: 'pantalla completa' },
+      pgKey: 'Re Pág / Av Pág', key: { t: 'un encargo nuevo', a: 'la actividad', w: 'el trabajo', d: 'la daily', c: 'esta configuración', v: 'vista frontal o cenital', o: 'el piso siguiente', r: 'responder lo que te pregunta un agente', pg: 'un piso arriba o abajo', esc: 'cerrar lo que está abierto', l: 'servicios en segundo plano', i: 'los loops', e: 'las pruebas E2E', f: 'pantalla completa' },
     },
     tabs: { general: 'General', offices: 'Departamentos', repos: 'Repositorios', look: 'Personajes', models: 'Modelos', mine: 'Mío' },
     // what is yours, not the company's: your private skills and your own tools (server/mine.js)
@@ -728,7 +738,7 @@ export default {
       autonomyDepts: 'Cada departamento puede tener su propio nivel: Departamentos →',
       cardEmbeddings: 'Búsqueda por significado', cardIndex: 'El índice', cardData: 'Dónde se guarda todo', dataFile: 'Base de datos',
       dataHint: 'Todo lo que sabe la oficina está en ese único archivo SQLite: cópialo para respaldarlo todo, con su historial. La exportación de arriba lleva sólo tu configuración.',
-      io: 'Tus ajustes (archivo JSON)', ioHint: 'Exporta lo que es tuyo: los ajustes generales, los departamentos (con sus indicaciones, su autonomía y sus personajes) los proyectos registrados con sus indicaciones y sus componentes, lo tuyo (tus skills y tus herramientas), los expertos y la infraestructura. No van la bitácora, los encargos, las directivas ni el archivo. Importar reemplaza lo que trae el archivo y deja lo demás; un proyecto cuya carpeta no está en esta máquina se salta.', ioExport: '⬇ Exportar ajustes', ioImport: '⬆ Importar ajustes', ioDone: 'Ajustes importados: {prefs} ajustes, {departments} departamentos, {characters} personajes, {projects} proyectos, {components} componentes, {systems} sistemas, {skills} skills, {tools} herramientas, {experts} expertos, {resources} de infraestructura.',
+      io: 'Tus ajustes (archivo JSON)', ioHint: 'Exporta lo que es tuyo: los ajustes generales, los departamentos (con sus indicaciones, su autonomía y sus personajes), los repositorios registrados con sus indicaciones y sus componentes, los proyectos, la infraestructura, lo tuyo (tus skills y tus herramientas) y los expertos. No van la bitácora, los encargos, las directivas, los loops ni el archivo. Importar reemplaza lo que trae el archivo y deja lo demás; un repositorio cuya carpeta no está en esta máquina se salta.', ioExport: '⬇ Exportar ajustes', ioImport: '⬆ Importar ajustes', ioDone: 'Ajustes importados: {prefs} ajustes, {departments} departamentos, {characters} personajes, {projects} repositorios, {components} componentes, {systems} proyectos, {skills} skills, {tools} herramientas, {experts} expertos, {resources} de infraestructura.',
       archive: 'Archivo (lo que saben los agentes)', archivePush: 'Lo que sabe el archivo va arriba de cada encargo y pregunta (los términos del glosario y los fragmentos más relevantes)', embeddings: 'Búsqueda semántica', embed_off: 'Apagada: sólo por palabras (sin internet)', embed_ollama: 'Ollama, en esta máquina', embed_openai: 'Una API compatible con OpenAI (OpenAI, Voyage…)', embedModel: 'Modelo de embeddings', embedUrl: 'Dirección', embedOllamaHint: 'Instala Ollama y corre: ollama pull nomic-embed-text. Nada sale de esta máquina.', embedKeyHint: 'Su clave va en la variable de entorno DEV_TEAM_OFFICE_EMBED_KEY (nunca en la base). El texto del archivo se manda a esa API para sacar sus embeddings.', indexStatus: '🧠 {chunks} fragmento(s) indexado(s) · {embedded} con embedding', reindex: '↻ Indexarlo de nuevo',
       theme: 'Estilo', theme_pixel: 'Pixel art (el equipo de siempre)', theme_anime: 'Anime (un equipo de mujeres)', themeHint: 'Cómo se ve la gente de la oficina. Cada estilo tiene su propio elenco, y lo que cambies en ⚙ › Personajes queda en el estilo que estés usando.', themeAnimeHint: 'Un equipo de mujeres adultas al estilo del anime japonés, con sus propios nombres, peinados y ropa (y la tuya, la de la PO). Aquí no hay hombres. Lo que cambies en ⚙ › Personajes queda en este estilo; la terminal sigue en pixel art, con este elenco.',
       intel: '🧠 Inteligencia', intelHint: 'El modelo en que se apoya la oficina para dimensionar el impacto de un pedido: cómo toca cada repo y qué necesita que no está en el mapa (componentes, repos, colas, bases de datos, APIs…). Sólo lee y contesta; no cambia nada.', intelProvider: 'Proveedor', intel_off: 'Ninguno: sólo las palabras del pedido', intel_agent: 'Uno de tus agentes (su CLI, sólo lectura)', intel_anthropic: 'La API de Claude (Anthropic)', intel_openai: 'Una API compatible con OpenAI (OpenAI, OpenRouter, LM Studio…)', intel_ollama: 'Ollama, en esta máquina',
@@ -819,7 +829,7 @@ export default {
     context: 'Contexto · {agent}', contextAria: 'Contexto: queda {pct}% libre ({used} de {max} usados)', contextLimit: 'Se compacta solo en {at}', contextCompacted: 'Compactado: se sabrá cuánto ocupa con su próxima respuesta',
     canvas: 'La oficina: clic en un personaje para ver su ficha, en la pizarra para un nuevo encargo',
     settings: 'Ajustes', settingsKey: 'Ajustes (c)', fullscreen: 'Pantalla completa', fullscreenKey: 'Pantalla completa (f)', view: 'Vista frontal o cenital', viewKey: 'Vista frontal o cenital (v)', servicesKey: 'Servicios en segundo plano: {n} corriendo (l)',
-    office: 'Oficina', officeKey: 'Elige qué oficina ver (o)', floor: 'Piso',
+    floor: 'Piso',
     sheetClose: 'Cerrar ficha', poke: '👋 Saludar', subagents: '{n} subagente(s)', nothingYet: 'Todavía no ha hecho nada en esta sesión.',
     mood: { stressed: 'estresad{g:a|o} 😰 ({n} errores seguidos)', tired: 'cansad{g:a|o} 🥱 (a su agente le queda {pct}% de contexto)', bath: 'en el baño 🚻', bathWait: 'esperando el baño 😣', dream: 'sueña con {dream} {emoji}', lunch: 'almorzando {food}', fire: '¡apagando el incendio! 🧯', talking: 'conversando 💬' },
     session: 'sesión', sessionLabel: 'Sesión', latest: 'más reciente', noTaskYet: 'Sesión sin tarea todavía', waitingAgent: 'Esperando eventos de un agente…',
@@ -843,7 +853,7 @@ export default {
     task: '📨 {text} → {status}{detail}', run: '▶ «{name}»: {status}{stage}', weather: '{icon} Afuera de {office}: {label}{temp}', lang: '⚙ Idioma: {lang}',
     officeAdded: '🏢 Nueva oficina: {name} ({tz})', officeRemoved: '🏢 Se eliminó la oficina {name}',
     startAgent: '🪟 {agent} se abrió en el pane {pane} ({office}): desde ahí orquesta su trabajo (y puede abrir más panes)', startFailed: 'No se pudo abrir el agente en herdr: {error}',
-    attached: 'Ya había una oficina corriendo: abro su juego', noTty: 'Sin terminal interactiva: sólo la bitácora (y la web).',
+    attached: 'Ya había una oficina corriendo: abro su juego', 
   },
   cli: {
     help: `dev-team-office {version}: tu agente de código como un equipo de desarrollo (una empresa con una o varias oficinas).
@@ -873,9 +883,14 @@ Uso:
   dev-team-office offices set <id> [--name …] [--timezone …] [--location …] [--instructions …]
   dev-team-office offices rm <id>
   dev-team-office config [clave] [valor]
-                                  Los ajustes (en la base SQLite): lang en|es, timezone <zona>|system, city <ciudad>|zone,
-                                  weather on|off, herdr.launch on|off, herdr.subagents on|off, herdr.direction right|down,
-                                  herdr.startAgent auto|none|<id>, log.life on|off, view.office <id>, view.mode flat|iso.
+                                  Los ajustes generales (en la base SQLite), un valor cada uno; sin clave, todos:
+                                  lang en|es, theme pixel|anime, timezone <zona>|system, city <ciudad>|zone, weather on|off,
+                                  view.office <id>, view.mode flat|iso, view.floor office|exec|archive, log.life on|off,
+                                  standards "<texto>"|-, capacity 1-20, autonomy.clarify|autonomy.autonomous on|off,
+                                  compact.auto on|off, compact.at 400k|80%, archive.push on|off, archive.embeddings off|ollama|openai,
+                                  archive.model|archive.url <valor>, intelligence.provider off|agent|anthropic|openai|ollama,
+                                  intelligence.harness|intelligence.model|intelligence.url <valor>, intelligence.timeout 10-600,
+                                  herdr.launch|herdr.subagents on|off, herdr.direction right|down, herdr.startAgent auto|none|<id>.
   dev-team-office agents          El mantenedor de agentes: los registrados y lo que trae su harness.
   dev-team-office agents add <ruta completa> --agent claude|opencode|pi|codex [--name <nombre>] [--office <id>] [--instructions "<cómo trabajar con él>"]
   dev-team-office agents set <id> [--name …] [--office <id>] [--instructions …]
@@ -886,7 +901,7 @@ Uso:
                                   Un personaje como JSON, para compartirlo: nombre, sexo, personalidad, estilo y aspecto.
   dev-team-office prompt <id> "<texto>" [--pipeline <entrada>] [--new]
                                   Le manda un prompt a un agente registrado por una entrada de su harness.
-  dev-team-office task "<texto>" --agent pi|opencode|claude [--session <id>] [--launch [--cwd <dir>]]
+  dev-team-office task "<texto>" --agent pi|opencode|claude|codex [--session <id>] [--launch [--cwd <dir>]]
   dev-team-office tasks           Lista las tareas enviadas y su estado.
   dev-team-office pane [--role qa] [--title "tests"] [--direction right|down] [--agent pi|claude|opencode|codex] -- <comando o prompt>
                                   Dentro de herdr (lo usa el agente): abre un pane junto al suyo con una
@@ -906,11 +921,17 @@ Uso:
                                   Una pregunta al margen al agente de turno sobre el equipo (como /btw).
   dev-team-office settings export [--out <archivo o carpeta>]
   dev-team-office settings import <archivo.json>
-                                  Tus ajustes como JSON: los generales, los departamentos (con sus personajes) y los
-                                  proyectos con sus indicaciones. Importar reemplaza lo que trae el archivo y deja lo demás.
+                                  Tus ajustes como JSON: los generales, los departamentos (con sus indicaciones y sus
+                                  personajes), los repositorios (con sus indicaciones y componentes), los proyectos, la
+                                  infraestructura, tus skills y herramientas, y los expertos. Importar reemplaza lo que trae
+                                  el archivo y deja lo demás.
   dev-team-office daily [--office <id>] [--all]
                                   La daily a pedido, para saber lo último: qué hizo cada uno desde la última daily y en
                                   qué está ahora (en el juego se juntan en la mesa). --all: la de toda la empresa.
+  dev-team-office architecture [--json]
+                                  La arquitectura de la empresa como esquema (también: map): cada departamento con sus
+                                  repositorios, sus componentes e infraestructura, cada proyecto en el orden en que va un cambio,
+                                  y la revisión. El mismo que leen los agentes con la herramienta MCP get_architecture. --json: el grafo.
   dev-team-office e2e -- <comando>
                                   Corre tus pruebas end-to-end (Playwright) con la oficina mirando: cada prueba y cada
                                   paso en vivo, y al terminar su película (la traza, encendida si el comando es
@@ -956,11 +977,11 @@ API: docs/api.es.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
     offices: 'Oficinas:', officeLine: '  {id}  {name}  · {tz}{country}  · {agents} agente(s){viewing}', viewing: '  ← la que se mira',
     officeAdded: 'Oficina creada: {id}  ({name}, {tz})', officeSaved: 'Oficina actualizada: {id}', agentSaved: 'Proyecto actualizado: {id}', agentsUsage: 'Uso: dev-team-office agents [add <ruta completa> --agent … | set <id> | rm <id>] [--name …] [--office …] [--instructions …]', characterUsage: 'Uso: dev-team-office character export <rol> [--office <id>] [--out <archivo>]  ·  character import <archivo.json> [--role <rol>] [--office <id>]', characterRole: '¿Para qué rol es? Agrega --role qa|backend|frontend|tl|manager|analyst|designer|po|devops|security', characterExported: '{name} exportado a {file}', characterImported: '{name} es ahora el {role} de {office}', officeRemoved: 'Oficina eliminada: {id} (sus agentes pasaron a la principal)',
     officesUsage: 'Uso: dev-team-office offices [add "<nombre>" | set <id> | rm <id>] [--name …] [--timezone …] [--location …]',
-    config: 'Ajustes (en {file}):', configSaved: '{key} = {value}', configUnknown: 'Ajuste desconocido: {key}. Mira: dev-team-office config',
+    config: 'Ajustes (en {file}):', configSaved: '{key} = {value}', configUnknown: 'Ajuste desconocido: {key}. Los ajustes: {keys}', configBool: '{key} es on u off', configLimit: 'compact.at es un número de tokens (400k, 400000) o una parte de la ventana (80%)',
     paneUsage: 'Uso: dev-team-office pane [--role qa] [--title "tests"] [--agent pi|claude|opencode|codex] -- <comando o prompt>',
     teams: 'Equipos:', teamNone: '(sin equipos empaquetados)',
     teamUsage: 'Uso: dev-team-office team [list] | dev-team-office team install <team> --agent <pi|claude|opencode|codex> [--project <dir>] [--from <packsRoot>]',
-    settingsUsage: 'Uso: dev-team-office settings export [--out <archivo>]  ·  settings import <archivo.json>', settingsExported: 'Ajustes exportados a {file}', btwUsage: 'Uso: dev-team-office btw "<pregunta>" [--office <id>]', btwAsking: '❓ preguntándole a {agent}…',
+    settingsUsage: 'Uso: dev-team-office settings export [--out <archivo>]  ·  settings import <archivo.json>', settingsExported: 'Ajustes exportados a {file}', btwUsage: 'Uso: dev-team-office btw "<pregunta>" [--office <id>]', 
     updateGit: 'Actualizando el clon de git en {dir} (git pull --ff-only)…',
     updateGitFailed: 'No se pudo actualizar {dir} con git pull --ff-only (¿cambios locales u otra rama?): actualízalo a mano y luego dev-team-office restart',
     replaced: 'La oficina {old} que estaba corriendo fue reemplazada por esta ({version})',
@@ -977,7 +998,7 @@ API: docs/api.es.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
     unknown: 'no conozco: {names} (usa pi, opencode, claude o codex)', lib: 'Librería común en {path}',
     pi: 'Pi: extensión en {ext} y skill en {skill}/', piHint: '    Abre pi en tu proyecto: levanta la oficina si no está corriendo y registra el proyecto (/office en Pi).',
     opencode: 'OpenCode: plugin en {plugin}', opencodeHint: '    Abre opencode en tu proyecto: se conecta solo a la oficina.',
-    claude: 'Claude Code: hook en {hook}', claudeStep: '    Falta un paso tuyo: copia la sección "hooks" de {snippet}', claudeWhere: '    a ~/.claude/settings.json (o a .claude/settings.json del proyecto).',
+    claude: 'Claude Code: hook en {hook}', 
     codex: 'Codex: hook en {hook}',
   },
   btw: {
