@@ -716,6 +716,7 @@ export default {
     },
   },
   ui: {
+    dock: 'Buttons', 
     pulse: { title: '⏱ What everyone is on', closes: 'closes in {t}', ago: '{t} ago', waiting: 'waiting for you: {text}', thinking: 'thinking…' },
     phone: { title: 'Call an expert', key: 'Call an expert (p)', none: 'No experts yet: add them in ⚙ › Characters › Experts.', placeholder: 'What do you need from them?', call: '📞 Call', empty: 'Write what you need, or pick an action.', calling: 'Calling {name}…', sent: '{name} is on it: the task went to the project agent that knows the skill.' },
     lately: 'What they did lately', newcomerOf: 'Newcomer · {role} · {project}', visitorOf: 'Visiting · {role} · {project}', talkEmpty: 'Ask {name} something about what they are doing (end with ?) and their agent answers. Anything else, they answer in their own words.', talkEmptyTeam: 'Say something to the whole team.',

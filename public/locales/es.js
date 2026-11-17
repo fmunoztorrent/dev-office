@@ -716,6 +716,7 @@ export default {
     },
   },
   ui: {
+    dock: 'Botones', 
     pulse: { title: '⏱ En qué está cada uno', closes: 'se cierra en {t}', ago: 'hace {t}', waiting: 'te espera: {text}', thinking: 'pensando…' },
     phone: { title: 'Llamar a un experto', key: 'Llamar a un experto (p)', none: 'Todavía no hay expertos: agrégalos en ⚙ › Personajes › Expertos.', placeholder: '¿Qué necesitas?', call: '📞 Llamar', empty: 'Escribe lo que necesitas, o elige una acción.', calling: 'Llamando a {name}…', sent: '{name} se pone en ello: la tarea fue al agente del proyecto que conoce la skill.' },
     lately: 'Lo último que hizo', newcomerOf: 'Recién llegado · {role} · {project}', visitorOf: 'De visita · {role} · {project}', talkEmpty: 'Pregúntale a {name} algo sobre lo que está haciendo (con ?) y te contesta su agente. Lo demás te lo contesta con sus palabras.', talkEmptyTeam: 'Dile algo a todo el equipo.',

@@ -193,6 +193,24 @@ const loopsUi = createLoops({
 // what each session was last seen doing (the status card's lines)
 const doing = new Map();
 createPulse({ getSessions: () => [...sessions.values()], getDoing: () => doing, agentName: (src) => AGENT_NAME[src] || src });
+// The dock's bubble: hovering (or focusing) a button says what it does. The native tooltip is moved aside so both do not show.
+{
+  const dock = $('dock');
+  const tip = el('div', 'dock-tip');
+  tip.hidden = true;
+  tip.setAttribute('role', 'tooltip');
+  dock.append(tip);
+  const show = (b) => {
+    if (b.title) { b.dataset.tip = b.title; b.removeAttribute('title'); }
+    if (!b.dataset.tip) return;
+    tip.textContent = b.dataset.tip;
+    tip.style.left = `${b.offsetLeft + b.offsetWidth / 2}px`;
+    tip.hidden = false;
+  };
+  const hide = () => { tip.hidden = true; };
+  for (const ev of ['mouseover', 'focusin']) dock.addEventListener(ev, (e) => { const b = e.target.closest?.('.hud-btn'); if (b) show(b); });
+  for (const ev of ['mouseout', 'focusout']) dock.addEventListener(ev, (e) => { if (e.target.closest?.('.hud-btn')) hide(); });
+}
 let experts = []; // the company's experts (⚙ › Characters › Experts)
 const phone = createPhone({ getExperts: () => experts, personOf: (x) => expertPerson(x) });
 function onExperts(list) { experts = Array.isArray(list) ? list : []; setExperts(experts); phone.refresh(); }

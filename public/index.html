@@ -35,17 +35,6 @@
         <button id="ask-chip" class="ask-chip" type="button" hidden></button>
         <button id="loop-chip" class="svc-chip loop-chip" type="button" hidden></button>
       </div>
-      <div class="hud hud-tr">
-        <button id="open-settings" class="hud-btn" type="button" data-i18n-title="ui.settingsKey" data-i18n-aria="ui.settings">
-          <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><rect x="7" y="0" width="2" height="3"/><rect x="7" y="13" width="2" height="3"/><rect x="0" y="7" width="3" height="2"/><rect x="13" y="7" width="3" height="2"/><rect x="2" y="2" width="3" height="3"/><rect x="11" y="2" width="3" height="3"/><rect x="2" y="11" width="3" height="3"/><rect x="11" y="11" width="3" height="3"/><path fill-rule="evenodd" d="M5 3h6v2h2v6h-2v2H5v-2H3V5h2zM6 6v4h4V6z"/></g></svg>
-        </button>
-        <button id="view-mode" class="hud-btn" type="button" data-i18n-title="ui.viewKey" data-i18n-aria="ui.view">
-          <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><rect x="7" y="1" width="2" height="2"/><rect x="5" y="3" width="2" height="2"/><rect x="9" y="3" width="2" height="2"/><rect x="3" y="5" width="2" height="2"/><rect x="11" y="5" width="2" height="2"/><rect x="1" y="7" width="2" height="2"/><rect x="13" y="7" width="2" height="2"/><rect x="3" y="9" width="2" height="2"/><rect x="11" y="9" width="2" height="2"/><rect x="5" y="11" width="2" height="2"/><rect x="9" y="11" width="2" height="2"/><rect x="7" y="13" width="2" height="2"/><rect x="7" y="7" width="2" height="2"/></g></svg>
-        </button>
-        <button id="fullscreen" class="hud-btn" type="button" data-i18n-title="ui.fullscreenKey" data-i18n-aria="ui.fullscreen">
-          <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><rect x="1" y="1" width="5" height="2"/><rect x="1" y="1" width="2" height="5"/><rect x="10" y="1" width="5" height="2"/><rect x="13" y="1" width="2" height="5"/><rect x="1" y="13" width="5" height="2"/><rect x="1" y="10" width="2" height="5"/><rect x="10" y="13" width="5" height="2"/><rect x="13" y="10" width="2" height="5"/></g></svg>
-        </button>
-      </div>
 
       <!-- Waiting for you: an agent (or the analyst) needs your answer. Big, at the top, pulsing, with
            the screen's edge lit up: it does not go away until you answer. -->
@@ -94,7 +83,8 @@
 
       <!-- Bottom left: the activity (what the agents do and the office's life) and the work
            (briefs, pipelines, tasks and demos). Talking to someone is done on their sheet. -->
-      <div class="hud hud-bl">
+      <!-- the dock: every button of the game, floating at the bottom center; hovering one tells what it does -->
+      <div class="hud dock" id="dock" role="toolbar" data-i18n-aria="ui.dock">
         <button id="open-log" class="hud-btn" type="button" data-i18n-title="ui.feedKey" data-i18n-aria="ui.feed" aria-expanded="false" aria-controls="feed">
           <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><path fill-rule="evenodd" d="M2 1h12v14H2zM3 2v12h10V2z"/><rect x="5" y="4" width="6" height="1"/><rect x="5" y="6" width="6" height="1"/><rect x="5" y="8" width="4" height="1"/><rect x="5" y="10" width="6" height="1"/><rect x="5" y="12" width="3" height="1"/></g></svg>
           <span id="feed-badge" class="badge" hidden></span>
@@ -109,6 +99,15 @@
         <!-- the expert phone: call an expert of the company when you need them (only when there are experts) -->
         <button id="open-phone" class="hud-btn" type="button" hidden data-i18n-title="ui.phone.key" data-i18n-aria="ui.phone.title" aria-controls="phone">
           <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><path d="M1 5h2v-2h10v2h2v3h-3v-1h-2v-1h-4v1h-2v1h-3z"/><path d="M5 9h6v2h-1v1h2v-1h1v3h-1v1h-8v-1h-1v-3h1v1h2v-1h-1z"/><rect x="7" y="12" width="2" height="1" fill="#0b0c14"/></g></svg>
+        </button>
+        <button id="open-settings" class="hud-btn" type="button" data-i18n-title="ui.settingsKey" data-i18n-aria="ui.settings">
+          <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><rect x="7" y="0" width="2" height="3"/><rect x="7" y="13" width="2" height="3"/><rect x="0" y="7" width="3" height="2"/><rect x="13" y="7" width="3" height="2"/><rect x="2" y="2" width="3" height="3"/><rect x="11" y="2" width="3" height="3"/><rect x="2" y="11" width="3" height="3"/><rect x="11" y="11" width="3" height="3"/><path fill-rule="evenodd" d="M5 3h6v2h2v6h-2v2H5v-2H3V5h2zM6 6v4h4V6z"/></g></svg>
+        </button>
+        <button id="view-mode" class="hud-btn" type="button" data-i18n-title="ui.viewKey" data-i18n-aria="ui.view">
+          <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><rect x="7" y="1" width="2" height="2"/><rect x="5" y="3" width="2" height="2"/><rect x="9" y="3" width="2" height="2"/><rect x="3" y="5" width="2" height="2"/><rect x="11" y="5" width="2" height="2"/><rect x="1" y="7" width="2" height="2"/><rect x="13" y="7" width="2" height="2"/><rect x="3" y="9" width="2" height="2"/><rect x="11" y="9" width="2" height="2"/><rect x="5" y="11" width="2" height="2"/><rect x="9" y="11" width="2" height="2"/><rect x="7" y="13" width="2" height="2"/><rect x="7" y="7" width="2" height="2"/></g></svg>
+        </button>
+        <button id="fullscreen" class="hud-btn" type="button" data-i18n-title="ui.fullscreenKey" data-i18n-aria="ui.fullscreen">
+          <svg viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><g fill="currentColor"><rect x="1" y="1" width="5" height="2"/><rect x="1" y="1" width="2" height="5"/><rect x="10" y="1" width="5" height="2"/><rect x="13" y="1" width="2" height="5"/><rect x="1" y="13" width="5" height="2"/><rect x="1" y="10" width="2" height="5"/><rect x="10" y="13" width="5" height="2"/><rect x="13" y="10" width="2" height="5"/></g></svg>
         </button>
       </div>
       <!-- the status card: every few minutes, what each connected agent is working on, with a timer (pulse-ui.js) -->
