@@ -232,7 +232,7 @@ Una instancia de la oficina es una **empresa**: le puedes ir agregando **departa
 
 - **sus proyectos** (repositorios, cada uno con su agente: `--office` o el selector en ⚙ › Repositorios; el mantenedor también puede traer un proyecto que ya existe);
 - **sus indicaciones**: cómo se trabaja ahí (convenciones, lo que nunca se hace, a quién preguntar). Van arriba de cada encargo, pipeline, directiva y pregunta a sus proyectos, como las de un proyecto de ChatGPT o Claude;
-- **su autonomía**: guiada (la analista revisa cada encargo y el agente te pregunta cuando tiene dudas), equilibrada (revisa y después el agente trabaja hasta terminar) o autónoma (sin revisión); si no, la de la empresa (⚙ › General › Autonomía);
+- **su autonomía**: guiada (la analista revisa cada encargo y el agente te pregunta cuando tiene dudas), equilibrada (revisa y después el agente trabaja hasta terminar) o autónoma (sin revisión); si no, la de la empresa (⚙ › Autonomía);
 - **su personal**: sus personajes (nombres, cargos, personalidades, estilos y colores propios);
 - **su zona horaria** (opcional: si no, la de la empresa; si no, la del sistema operativo), y con ella su hora, su almuerzo, su día y su noche, su estación y **su clima**. Un departamento es un equipo; el juego lo dibuja como una oficina, pero no necesita un lugar propio;
 - **su actividad**: cada evento de un agente va a su oficina — la que dice el propio agente (la oficina se la pasa al abrirlo), la de su sesión, la de su pane de herdr o la del agente registrado cuya ruta contiene su carpeta; si no, a la principal.
@@ -257,7 +257,7 @@ Las interfaces muestran **una oficina a la vez**: la que eliges en el selector d
 
 ### Proyectos: un producto y sus artefactos
 
-Una empresa no trabaja en repos, trabaja en productos: «Pagos» es su **core**, su **BFF** y su **front en Next.js**, quizás tres repos. En **⚙ › Departamentos › Proyectos** cada producto es un **proyecto**:
+Una empresa no trabaja en repos, trabaja en productos: «Pagos» es su **core**, su **BFF** y su **front en Next.js**, quizás tres repos. En **⚙ › Proyectos** cada producto es un **proyecto**:
 
 - **sus artefactos:** cada uno es un repo registrado, o un componente de uno (el `apps/web` de un monorepo), **con su carpeta a la vista** (`~/code/pagos-core`, `~/code/monorepo/apps/web`), con **su tipo** (frontend, app móvil, BFF, backend/core, worker, librería, datos, infraestructura: se detecta de su carpeta, o el que digas) y **lo que usa** (el BFF usa el core; el front, el BFF). **↻ Proponer** llena las dos cosas;
 - **su equipo:** el departamento que responde por él, o **un equipo propio** (un departamento nuevo, y sus repos se van a él): si cada proyecto tiene su squad, cada uno tiene su piso y su gente. Un repo tiene un departamento dueño (su gente hace su trabajo), pero puede ser artefacto de sistemas de otros departamentos: un core **compartido**;
@@ -305,7 +305,7 @@ El piso de la dirección está vestido para eso: parquet de nogal, una alfombra 
 
 - **La base de conocimiento de la empresa (un RAG):** notas, decisiones, documentos, el **glosario** (cada término con su definición y sus sinónimos) y las actas de las directivas. **📥 Cargar** trae archivos (Markdown, texto, CSV, JSON, HTML; PDF y Word con `pdftotext` o `pandoc` en la máquina), arrastrados o elegidos, o una dirección web; cada uno puede ser para toda la empresa, un departamento o un proyecto, y vigente hasta una fecha.
   - **Tú lo lees como documento** (Markdown con formato, ⬇ .md para bajarlo): el texto legible se guarda tal cual.
-  - **Los agentes lo reciben como índice:** cada entrada se corta en fragmentos por sus títulos, se indexa por palabras (sin acentos, sin internet) y, si lo enciendes en ⚙ › General › Archivo, también por significado (embeddings de Ollama local o de una API compatible con OpenAI, guardados junto a cada fragmento). *Cómo se indexó* muestra sus fragmentos.
+  - **Los agentes lo reciben como índice:** cada entrada se corta en fragmentos por sus títulos, se indexa por palabras (sin acentos, sin internet) y, si lo enciendes en ⚙ › Archivo, también por significado (embeddings de Ollama local o de una API compatible con OpenAI, guardados junto a cada fragmento). *Cómo se indexó* muestra sus fragmentos.
   - **A pedido:** `search_knowledge` (MCP) devuelve los fragmentos que contestan una pregunta, del proyecto del agente, de su departamento y de la empresa, cada uno con un id como `[k12§3]` para citarlo, y los términos del glosario que tocan.
   - **Arriba de cada encargo y pregunta:** un bloque «📚 Del archivo» con los términos del glosario que menciona y los fragmentos más relevantes (se puede apagar).
   - **🕳 Vacíos:** lo que los agentes buscaron y no encontraron (o encontraron sólo en parte). Contéstalo (una nota, un documento, un término) y la próxima vez lo encuentran.
@@ -383,7 +383,7 @@ La oficina busca que tú encargues y el equipo llegue solo al objetivo:
 
 - **Primero, la analista revisa el encargo.** Antes de que pase a trabajo, Valentina se lo da a leer al agente del proyecto (en sólo lectura: no cambia nada ni empieza) con las indicaciones del proyecto y del departamento. Si se puede hacer bien con lo que hay, pasa directo a trabajo. Si falta algo que sólo tú sabes y que cambiaría el resultado (el alcance, los criterios de aceptación, una decisión de negocio), te trae **hasta 3 preguntas**: va a tu escritorio con la mano en alto. Contestas lo que puedas (lo que dejes vacío lo decide el equipo), o **Que decida el equipo**; tus respuestas van con el encargo. Si la revisión falla o tarda demasiado, el encargo va tal cual.
 - **Después, modo autónomo.** Cada encargo lleva una línea que le pide al agente trabajarlo hasta terminar por su cuenta (planificar, implementar, probar y verificar, con subagentes si conviene) y preguntar sólo lo que únicamente tú puedes responder, con su herramienta de preguntas; si no, tomar supuestos razonables y anotarlos. Los pipelines ya trabajan así.
-- Las dos se cambian en **⚙ › General › Autonomía**, y cada departamento puede tener su propio nivel (⚙ › Departamentos).
+- Las dos se cambian en **⚙ › Autonomía**, y cada departamento puede tener su propio nivel (⚙ › Departamentos).
 
 **Cuando un agente te espera, lo ves.** Un agente que te pregunta algo (el `AskUserQuestion` de Claude Code, el `question` de Pi y OpenCode), un permiso que necesita, una pregunta en su pantalla dentro de herdr, o las preguntas de la analista: arriba late un cartel amarillo grande, en todos los pisos, con quién te espera, para qué y hace cuánto, y el borde de la pantalla se ilumina. El título de la pestaña dice `✋ (n)`. **Responder** abre las preguntas (o la pregunta dentro de herdr); fuera de herdr, contestas en la terminal del agente. Se queda hasta que contestas. Si quieres (⚙ › General, en cada navegador), con un sonido y una notificación del sistema. El juego de la terminal lo muestra como una franja que late arriba de la escena. Cuando te espera más de uno, **Ver las n** abre la **bandeja**: todo lo que te espera en una lista, lo más antiguo primero, cada cosa con su botón.
 

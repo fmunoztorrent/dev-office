@@ -24,7 +24,7 @@ export class SubPanes {
    * @param company  the offices: each session's pane, to open the subagent's below it
    * @param command  the command that runs in the pane, without its arguments: [node, …/dev-team-office.js]
    * @param env      () => the pane's environment (the office URL)
-   * @param enabled  () => is it on? (⚙ › herdr › Each subagent in its pane)
+   * @param enabled  () => is it on? (⚙ › Terminal › Each subagent in its pane)
    * @param who      (office, role) => the character's name (for the pane title)
    * @param linger   how long it stays open after the subagent stopped reporting (ms)
    * @param onEnded  (entry, why) => the subagent is over without having said so ('pane', 'process', 'stale')

@@ -16,7 +16,7 @@
 // The office takes that header out of the board's title (office.js).
 //
 // Each department also says how much it works on its own (autonomyOf): guided, balanced or
-// autonomous; or, without its own, the company's ⚙ › General › Autonomy.
+// autonomous; or, without its own, the company's ⚙ › Autonomy.
 
 import path from 'node:path';
 import { insideDir, realDir } from './paths.js';

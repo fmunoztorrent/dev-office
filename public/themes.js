@@ -1,4 +1,4 @@
-// The game's graphic themes (⚙ › General › Style, prefs.theme): how its people look. Shared by the
+// The game's graphic themes (⚙ › The game › Style, prefs.theme): how its people look. Shared by the
 // web view, the terminal and the server (their names, in the log and the texts).
 //
 //   pixel   the pixel-art team (the default): its cast is the one in sim.js (TEAM, VISITORS)

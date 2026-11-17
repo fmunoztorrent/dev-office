@@ -53,7 +53,7 @@ export class ClarifyDesk extends EventEmitter {
     this.items = new Map();
   }
 
-  /** Is the review on? (⚙ › General › Autonomy) */
+  /** Is the review on? (⚙ › Autonomy) */
   get enabled() { return this.store?.getPrefs?.().autonomy?.clarify !== false; }
   /** For a department: its own autonomy level, or the company's. */
   enabledFor(office) { return autonomyOf(this.store, office).clarify; }

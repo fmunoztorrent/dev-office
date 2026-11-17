@@ -229,7 +229,7 @@ function onPrompts(list) {
 // Whatever needs your answer: the analyst's questions about a brief, what an agent asks on its screen
 // (inside herdr) and the sessions that stopped to wait for you (a permission, their question tool).
 // It shows as a big pulsing banner at the top with the screen's edge lit up, in the tab's title, and
-// (if you want, in ⚙ › General) with a sound and a system notification. It stays until you answer.
+// (if you want, in ⚙ › The game) with a sound and a system notification. It stays until you answer.
 const ALERTS_KEY = 'dto.alerts';
 const alertPrefs = () => { try { return { sound: true, notify: false, ...JSON.parse(localStorage.getItem(ALERTS_KEY) || '{}') }; } catch { return { sound: true, notify: false }; } };
 function setAlertPrefs(patch) { try { localStorage.setItem(ALERTS_KEY, JSON.stringify({ ...alertPrefs(), ...patch })); } catch { /* private window: only for now */ } }
@@ -1222,10 +1222,10 @@ $('b-text').addEventListener('input', () => { if (briefImpact.text && briefImpac
 $('b-agent').addEventListener('change', () => { if (briefImpact.text) forgetBriefImpact(); });
 $('brief').addEventListener('close', forgetBriefImpact);
 
-// ⚙ Settings: general, offices, the agents maintainer and the characters' appearance.
+// ⚙ Settings: an area of its own over the game (settings-ui.js), at #settings/<section>.
 const settings = createSettings({
   getTargets: () => targets, getOffices: () => offices, getOffice: () => office, getPrefs: () => prefs, getHerdr: () => herdr,
-  onPrompt: (id) => { $('settings').close(); openBrief(id); },
+  onPrompt: (id) => { settings.close(); openBrief(id); },
   onView: (id) => viewOffice(id),
   // the departments a save just brought: redrawn from the answer, not from the WebSocket's message
   onOffices: (list) => onOffices(list, list.find((o) => o.id === office?.id)),
@@ -1298,6 +1298,11 @@ document.addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (document.querySelector('dialog[open]')) return;
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName);
+  // in the settings area the game's keys rest: only Escape, back to the office
+  if (settings.isOpen()) {
+    if (e.key === 'Escape') { if (typing) document.activeElement.blur(); else settings.close(); }
+    return;
+  }
   if (e.key === 'Escape') {
     if (typing) document.activeElement.blur();
     if (selected) select(null); else if (feed.open) toggleFeed(false);

@@ -160,7 +160,7 @@ export function createDirectivesUi({ getDirectives = () => [], getOffices = () =
     st.ask = impactQuestions($('dv-ask'), m.unknown, { projects: st.groups.flatMap((g) => g.projects.map((a) => ({ id: a.id, name: a.name, dept: g.name }))), offices: getOffices() });
   }
 
-  /** The model's analysis (⚙ › General › 🧠), when it arrives: the same map, with its judgment. */
+  /** The model's analysis (⚙ › Intelligence), when it arrives: the same map, with its judgment. */
   async function think(text, m) {
     const gen = ++st.gen;
     const info = await api('/v1/intelligence');

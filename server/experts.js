@@ -1,5 +1,5 @@
 // The subject matter experts (SME): a character who knows a skill. For now you associate each one with
-// a skill by hand (⚙ › Characters › Experts): "Ana, PCI compliance" knows the skill `pci-dss`. When an
+// a skill by hand (⚙ › Experts): "Ana, PCI compliance" knows the skill `pci-dss`. When an
 // agent uses that skill, its expert comes to the office: up the elevator, to a hot desk, with the skill in
 // their badge, and leaves when the agent's turn ends (like the visiting specialists). The work stays the
 // team's: the expert is who the agent consults.

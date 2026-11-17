@@ -232,7 +232,7 @@ One office instance is a **company**: you can keep adding **departments** — ea
 
 - **its projects** (repositories, each with its agent: `--office` or the selector in ⚙ › Repositories; the maintainer can also bring an existing project into it);
 - **its instructions**: how to work there (conventions, what is never done, who to ask). They go on top of every brief, pipeline, directive and question to its projects, like a ChatGPT or Claude project's;
-- **its autonomy**: guided (the analyst reviews each brief and the agent asks you when in doubt), balanced (it reviews, then the agent works to the end) or autonomous (no review); otherwise the company's (⚙ › General › Autonomy);
+- **its autonomy**: guided (the analyst reviews each brief and the agent asks you when in doubt), balanced (it reviews, then the agent works to the end) or autonomous (no review); otherwise the company's (⚙ › Autonomy);
 - **its people**: its characters (their own names, titles, personalities, styles and colors);
 - **its time zone** (optional: otherwise the company's; otherwise the system's), and with it its time, its lunch, its day and night, its season and **its weather**. A department is a team; the game draws it as an office, but it does not need a place of its own;
 - **its activity**: each agent event goes to its office — the one the agent itself states (the office passes it when opening it), its session's, its herdr pane's, or the one of the registered agent whose path contains its folder; otherwise, the main one.
@@ -257,7 +257,7 @@ The interfaces show **one office at a time**: the one you pick in the selector a
 
 ### Projects: a product and its artifacts
 
-A company does not work in repos, it works in products: "Payments" is its **core**, its **BFF** and its **Next.js front**, maybe three repos. In **⚙ › Departments › Systems** each product is a **system**:
+A company does not work in repos, it works in products: "Payments" is its **core**, its **BFF** and its **Next.js front**, maybe three repos. In **⚙ › Projects** each product is a **system**:
 
 - **its artifacts:** each one a registered repo, or one component of one (a monorepo's `apps/web`), **with its folder on sight** (`~/code/payments-core`, `~/code/monorepo/apps/web`), **its kind** (frontend, mobile app, BFF, backend/core, worker, library, data, infrastructure: detected from its folder, or the one you say) and **what it uses** (the BFF uses the core; the front, the BFF). **↻ Propose** fills both;
 - **its team:** the department that answers for it, or **a team of its own** (a new department, and its repos move to it): if each project has its own squad, each one gets its floor and its people. A repo has one owner department (its people do its work), but it can be an artifact of other departments' systems: a **shared** core;
@@ -305,7 +305,7 @@ The executive floor is dressed for it: a walnut parquet, a Persian rug under the
 
 - **The company's knowledge base (a RAG):** notes, decisions, documents, the **glossary** (each term with its definition and synonyms) and the directives' minutes. **📥 Load** brings in files (Markdown, text, CSV, JSON, HTML; PDF and Word with `pdftotext` or `pandoc` on the machine), dropped or picked, or a web address; each one can be for the whole company, a department or a project, and valid until a date.
   - **You read it as a document** (rendered Markdown, ⬇ .md to download it): the readable text is kept as it is.
-  - **The agents get it as an index:** each entry is cut into chunks by its headings, indexed by words (accent-insensitive, offline) and, if you turn it on in ⚙ › General › Archive, by meaning too (embeddings from local Ollama or an OpenAI-compatible API, stored next to each chunk). *How it was indexed* shows its chunks.
+  - **The agents get it as an index:** each entry is cut into chunks by its headings, indexed by words (accent-insensitive, offline) and, if you turn it on in ⚙ › Archive, by meaning too (embeddings from local Ollama or an OpenAI-compatible API, stored next to each chunk). *How it was indexed* shows its chunks.
   - **On demand:** `search_knowledge` (MCP) returns the passages that answer a question, from the agent's project, its department and the company, each with an id like `[k12§3]` to cite, and the glossary terms involved.
   - **On top of every brief and question:** a "📚 From the archive" block with the glossary terms it mentions and the most relevant passages (it can be turned off).
   - **🕳 Gaps:** what the agents searched and did not find (or found only partly). Answer it (a note, a doc, a term) and they will find it next time.
@@ -383,7 +383,7 @@ The office aims for you to brief and the team to get there on its own:
 
 - **First, the analyst checks the brief.** Before it goes to work, Valentina has the project's own agent read it (read-only: it changes nothing and does not start) with the project's and department's instructions. If it can be done well with what there is, it goes straight to work. If something only you know is missing and it would change the result (the scope, the acceptance criteria, a business decision), she brings you **up to 3 questions**: she walks to your desk with her hand up. You answer what you can (an empty answer is left to the team), or **Let the team decide**; your answers go with the brief. If the review fails or takes too long, the brief goes as it is.
 - **Then, autonomous mode.** Every brief carries a line asking the agent to work on it to the end on its own (plan, implement, test and check, with subagents if it helps) and to ask only what only you can answer, with its question tool; otherwise to make reasonable assumptions and note them. Pipelines already work that way.
-- Both are switched in **⚙ › General › Autonomy**, and each department can have its own level (⚙ › Departments).
+- Both are switched in **⚙ › Autonomy**, and each department can have its own level (⚙ › Departments).
 
 **When an agent waits for you, you see it.** An agent asking you something (Claude Code's `AskUserQuestion`, Pi's and OpenCode's question), a permission it needs, a question on its screen inside herdr, or the analyst's questions: a big yellow banner pulses at the top, on every floor, with who is waiting, for what and for how long, and the screen's edge lights up. The tab's title says `✋ (n)`. **Answer** opens the questions (or the prompt inside herdr); outside herdr, you answer in the agent's terminal. It stays until you answer. Optionally (⚙ › General, per browser), a sound and a system notification. The terminal game shows it as a pulsing strip at the top of the scene. When more than one is waiting, **See all** opens the **inbox**: everything waiting for you in one list, oldest first, each with its own button.
 

@@ -134,7 +134,7 @@ export class DirectiveDesk extends EventEmitter {
   }
 
   /**
-   * The impact with the model's judgment (⚙ › General › 🧠): the plan, then what the model says on top.
+   * The impact with the model's judgment (⚙ › Intelligence): the plan, then what the model says on top.
    * Returns the plan plus { insight: { ok, model, ms, error? } } (without a model: { ok: false, error: 'off' }).
    */
   async think(args = {}) {

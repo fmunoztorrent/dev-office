@@ -322,7 +322,7 @@ const TOOLS = [
   {
     name: 'map_impact',
     title: 'Map the impact of an order',
-    description: 'Before a directive: which departments, projects, components and infrastructure (queues, topics, databases, third-party APIs, schedulers…) of the company an order touches (by what it names, plus the projects or offices you pick), and what it names that is not on the map (to ask the user about). With think, the model chosen in the office (⚙ › General › 🧠) adds how each repo is touched and what the words missed (it takes a while). Read-only.',
+    description: 'Before a directive: which departments, projects, components and infrastructure (queues, topics, databases, third-party APIs, schedulers…) of the company an order touches (by what it names, plus the projects or offices you pick), and what it names that is not on the map (to ask the user about). With think, the model chosen in the office (⚙ › Intelligence) adds how each repo is touched and what the words missed (it takes a while). Read-only.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -335,6 +335,13 @@ const TOOLS = [
       required: ['text'],
       additionalProperties: false,
     },
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  },
+  {
+    name: 'get_architecture',
+    title: 'The company\'s architecture',
+    description: 'How everything on the office\'s map relates, from a component up to the whole company: each department with its repositories and their components, each project (a product) with which artifact uses which and the order a change goes in, the infrastructure (queues, topics, databases, third-party APIs…) with who publishes, consumes, reads or calls it, and a review of what deserves a look (a queue nobody consumes, a repository in no project, an artifact without a repository…). Read it before a change that crosses repositories.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, openWorldHint: false },
   },
   {
@@ -824,6 +831,14 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
       return { text: `${out.text}${note}`, data: out.map };
     },
 
+    async get_architecture() {
+      const { architecture, architectureText } = await import('./architecture.js');
+      let g;
+      if (await running()) g = okOr(await api('/v1/architecture'));
+      else g = architecture(local());
+      return { text: architectureText(g), data: { nodes: g.nodes, edges: g.edges, findings: g.findings, stats: g.stats } };
+    },
+
     async list_systems() {
       let systems;
       if (await running()) systems = okOr(await api('/v1/systems')).systems || [];
@@ -832,7 +847,7 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
         systems = local().listSystems().map((s) => { const o = orderParts(s.parts); return { ...s, order: o.ok ? o.order : s.parts.map((p) => p.name) }; });
       }
       const line = (s) => `${s.name}${s.officeName ? ` (team: ${s.officeName})` : ''}: ${s.order.join(' → ')}\n${s.parts.map((p) => `  ${p.name} [${p.kind}] ${p.repo || p.project}${p.path ? `/${p.path}` : ''}${p.uses?.length ? ` · uses ${p.uses.join(', ')}` : ''}${p.shared ? ' · shared' : ''}`).join('\n')}`;
-      return { text: systems.length ? systems.map(line).join('\n') : 'No systems yet (⚙ › Departments › Systems).', data: { systems } };
+      return { text: systems.length ? systems.map(line).join('\n') : 'No systems yet (⚙ › Projects).', data: { systems } };
     },
 
     async handoff({ text } = {}) {

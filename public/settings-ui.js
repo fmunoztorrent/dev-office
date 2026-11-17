@@ -1,11 +1,19 @@
-// ⚙ Settings in the web view. The office is the frontend and keeps its own data in its SQLite database:
-//   General      game language, the company's time zone and city, real weather, herdr and the log
-//   Offices      the company's offices (teams or domains): name, time zone and city
-//   Repositories the maintainer: each repository is a full path + the agent (CLI) that serves it
-//                + its department. What that harness brings (Errementari, commands, prompts,
-//                .devteam/) is detected, and a prompt sent from the whiteboard starts THAT pipeline.
-//   Characters   how the characters of the office being watched look.
-//   Mine         what is yours, not the company's: your private skills and your own tools (server/mine.js).
+// ⚙ Settings: an area of its own over the game (not a dialog), with its sections on the left, in groups,
+// and a search. The office is the frontend and keeps its own data in its SQLite database.
+//
+//   The office      General (language, time zone, city, weather) · The game (view, style, sounds)
+//   The company     Company (the CTO's standards, capacity) · Departments · Repositories (each one a full
+//                   path + the agent that serves it + its department; what its harness brings is detected)
+//   Architecture    The map (architecture-ui.js: everything related, from a component to the whole company)
+//                   · Projects (a product and its artifacts: server/systems.js) · Infrastructure
+//                   (queues, databases, third-party APIs… and who uses them: server/resources.js)
+//   The agents      Autonomy · Context (auto-compaction) · Models · Intelligence · Archive (RAG) · Terminal (herdr)
+//   The people      Characters · Experts
+//   Yours           Mine: your private skills and your own tools (server/mine.js)
+//   System          Backup (your settings as a file) · About
+//
+// Its address is the page's hash: #settings/<section>. A section that keeps a draft (Characters, Models)
+// saves with the button at the bottom; the rest saves each change as you make it.
 
 import { personOf, defaultLook, VISITORS, APPEARANCE_KEYS, LOOK_PALETTES, SEXES, PERSONALITIES, STYLES, randomLook, lookForSex, DEFAULT_EXPERT, currentTheme } from './sim.js';
 import { ANIME_EXPERT } from './themes.js';
@@ -16,6 +24,9 @@ import { allZones, zoneInfo, countryName } from './clock.js';
 import { parsePlace } from './sky.js';
 import { MODEL_ROLES, PROFILE_HARNESSES } from './models.js';
 import { tildeHome as tilde, artifactFolder } from './targets.js';
+import { createArchitecture } from './architecture-ui.js';
+import { SETTINGS_GROUPS, SETTINGS_SECTIONS } from './settings-sections.js';
+import { RESOURCE_ICON as RICON, RESOURCE_KINDS as RKINDS, RESOURCE_LINKS as RHOWS, KIND_ICON } from './impact.js';
 
 const ROLE_ORDER = ['po', 'analyst', 'manager', 'tl', 'qa', 'backend', 'frontend', 'designer', 'devops', 'security']; // the last two: the visiting specialists
 const HARNESS_NAME = { pi: 'Pi', 'claude-code': 'Claude Code', opencode: 'OpenCode', codex: 'Codex' };
@@ -41,6 +52,15 @@ async function api(method, path, body) {
   const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
   return res.ok ? { ok: true, ...data } : { ok: false, error: data.error || `HTTP ${res.status}` };
 }
+
+// The sections and their groups, in the menu's order, are in settings-sections.js.
+const ICON = { general: '⚙', game: '🎮', company: '🏛', offices: '👥', repos: '📦', architecture: '🗺', projects: '🧩', infra: '🗄', autonomy: '🤖', context: '🗜', models: '🎛', intelligence: '🧠', archive: '📚', terminal: '🖥', look: '🧑', experts: '🎓', mine: '🔒', backup: '💾', about: 'ℹ' };
+// the sections that keep a draft and save with the button
+const DRAFTS = new Set(['look', 'models']);
+// the ones redrawn when something arrives from the office (they hold no half-written text)
+const LIVE = new Set(['general', 'game', 'offices', 'terminal']);
+const DOCS = 'https://github.com/fmunoztorrent/dev-office';
+const fold = (x) => String(x ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 const emptyForm = () => ({ id: null, path: '', harness: '', name: '', bin: '', args: '', office: null, instructions: '', detected: null, touched: false });
 const emptyOffice = () => ({ id: null, name: '', timezone: '', location: '', instructions: '', autonomy: '' });
@@ -112,9 +132,26 @@ function cityInput({ value, timezone, placeholder, label, onPick }) {
  * @param onView                (id) => watch another office
  */
 export function createSettings({ getTargets = () => [], getOffices = () => [], getOffice = () => null, getPrefs = () => null, getHerdr = () => null, onPrompt, onView, onSaved, onOffices, alerts } = {}) {
-  const st = { tab: 'general', data: null, looks: null, form: emptyForm(), office: emptyOffice() };
-  const msg = (text, ok = false) => { $('s-msg').textContent = text; $('s-msg').style.color = ok ? '#2a9d8f' : ''; };
+  const st = { tab: 'general', open: false, pushed: false, data: null, looks: null, form: emptyForm(), office: emptyOffice() };
+  const msg = (text, ok = false) => { const m = $('s-msg'); m.textContent = text || ''; m.classList.toggle('ok', !!ok && !!text); m.classList.toggle('bad', !ok && !!text); };
   const here = () => getOffice()?.id || 'main';
+  const N = (id) => t(`settings.nav.${id}`);
+  const groupOf = (id) => SETTINGS_GROUPS.find(([, ids]) => ids.includes(id))?.[0];
+  // one panel per section, made once
+  const body = $('settings-form');
+  body.replaceChildren(...SETTINGS_SECTIONS.map((id) => el('section', { 'data-panel': id, class: 's-panel', hidden: true })));
+  const panelOf = (id) => body.querySelector(`[data-panel="${id}"]`);
+  /** A group of fields under a title. */
+  const card = (title, ...children) => el('section', { class: 'cfg-card' }, title ? el('h3', {}, title) : null, children);
+  const prefs = () => getPrefs() || st.data?.office.prefs;
+  const check = (checked, label, onchange) => el('label', { class: 'b-check' }, el('input', { type: 'checkbox', checked: checked ? true : undefined, onchange }), label);
+  const G = (k, v) => t(`settings.general.${k}`, v);
+  // the map of the architecture (architecture-ui.js): from it you jump to the form of what you picked
+  const arch = createArchitecture({
+    api,
+    onPrompt: (id) => onPrompt?.(id),
+    onGo: (section, what = {}) => { jumpTo(section, what); },
+  });
 
   async function load() {
     const s = await api('GET', `/v1/settings?office=${encodeURIComponent(here())}`);
@@ -123,30 +160,105 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     return true;
   }
 
+  /** Opens the area on a section (the last one seen, if none is given). */
   async function open(tab = st.tab) {
-    $('settings').showModal();
-    msg(t('settings.loading'), true);
-    if (!(await load())) return;
-    msg('');
-    show(tab);
+    const section = SETTINGS_SECTIONS.includes(tab) ? tab : 'general';
+    const hash = `#settings/${section}`;
+    if (location.hash !== hash) { history[st.open ? 'replaceState' : 'pushState'](null, '', hash); if (!st.open) st.pushed = true; }
+    await enter(section);
   }
 
+  async function enter(section) {
+    const was = st.open;
+    st.open = true;
+    st.tab = section;
+    const area = $('settings');
+    area.hidden = false;
+    document.body.classList.add('in-settings');
+    if (!was) { $('cfg-search').value = ''; st.back = document.activeElement; }
+    renderNav();
+    if (!st.data || !was) {
+      msg(t('settings.loading'), true);
+      if (!(await load())) return;
+      msg('');
+    }
+    if (!st.open) return;
+    show(st.tab);
+    $('cfg-content').scrollTop = 0;
+    if (!was) $('cfg-content').focus({ preventScroll: true });
+  }
+
+  /** Back to the office. */
+  function close() {
+    if (!st.open) return;
+    if (st.pushed && location.hash.startsWith('#settings')) { history.back(); return; } // popstate hides it
+    if (location.hash.startsWith('#settings')) history.replaceState(null, '', location.pathname + location.search);
+    hide();
+  }
+  function hide() {
+    st.open = st.pushed = false;
+    $('settings').hidden = true;
+    document.body.classList.remove('in-settings');
+    msg('');
+    st.back?.focus?.();
+  }
+  /** The page's address changed (a link, the back button): the area follows it. */
+  function route() {
+    const m = location.hash.match(/^#settings(?:\/([\w-]+))?/);
+    if (m) enter(SETTINGS_SECTIONS.includes(m[1]) ? m[1] : st.tab);
+    else if (st.open) hide();
+  }
+
+  /** Goes to a section (from the menu, the search or another section). */
+  function go(section) {
+    if (!SETTINGS_SECTIONS.includes(section)) return;
+    msg('');
+    st.tab = section;
+    if (location.hash !== `#settings/${section}`) history.replaceState(null, '', `#settings/${section}`);
+    show(section);
+    $('cfg-content').scrollTop = 0;
+  }
+
+  /** From the map: the form of a department, a repository, a project or a resource, ready to edit. */
+  function jumpTo(section, { edit = null, adopt = null } = {}) {
+    if (section === 'repos' && edit) { const a = (st.projects || getTargets()).find((x) => x.id === edit); go('repos'); if (a) editRepo(a); return; }
+    if (section === 'offices' && edit) { const o = getOffices().find((x) => x.id === edit); if (o) st.office = officeForm(o); go('offices'); $('s-office-form')?.scrollIntoView({ block: 'nearest' }); return; }
+    if (section === 'projects' && edit) { const sys = (st.systems || []).find((x) => x.id === edit); if (sys) st.system = systemDraft(sys); go('projects'); $('s-system-form')?.scrollIntoView({ block: 'nearest' }); return; }
+    if (section === 'infra') { st.resource = adopt ? adoptForm(adopt) : edit ? resourceForm((st.resources || []).find((r) => r.id === edit)) : emptyResource(); go('infra'); $('s-res-form')?.scrollIntoView({ block: 'nearest' }); return; }
+    go(section);
+  }
+
+  /** The menu: the sections in their groups (the ones the search finds), and the phone's picker. */
+  function renderNav() {
+    const q = fold($('cfg-search').value).trim();
+    const hit = (id) => !q || fold(`${N(id)} ${t(`settings.desc.${id}`)} ${t(`settings.words.${id}`)}`).includes(q);
+    const groups = SETTINGS_GROUPS.map(([g, ids]) => [g, ids.filter(hit)]).filter(([, ids]) => ids.length);
+    put($('cfg-nav'), groups.length ? groups.map(([g, ids]) => el('div', { class: 'cfg-group' },
+      el('h3', {}, t(`settings.groups.${g}`)),
+      ids.map((id) => el('button', { type: 'button', class: 'cfg-item', 'data-section': id, 'aria-current': id === st.tab ? 'page' : undefined, title: t(`settings.desc.${id}`), onclick: () => go(id) },
+        el('span', { class: 'cfg-ic', 'aria-hidden': 'true' }, ICON[id]), el('span', {}, N(id))))))
+      : el('p', { class: 'hint cfg-none' }, t('settings.noMatch')));
+    put($('cfg-jump'), SETTINGS_GROUPS.map(([g, ids]) => el('optgroup', { label: t(`settings.groups.${g}`) }, ids.map((id) => option(id, `${ICON[id]} ${N(id)}`, id === st.tab)))));
+    st.found = groups.flatMap(([, ids]) => ids);
+  }
+
+  /** Draws a section. */
   function show(tab) {
-    st.tab = tab;
-    for (const b of document.querySelectorAll('#settings .tabs button')) b.setAttribute('aria-selected', String(b.dataset.tab === tab));
-    for (const p of document.querySelectorAll('#settings .s-panel')) p.hidden = p.dataset.panel !== tab;
-    $('settings-save').hidden = tab !== 'look' && tab !== 'models';
+    st.tab = SETTINGS_SECTIONS.includes(tab) ? tab : 'general';
+    tab = st.tab;
+    renderNav();
+    $('settings').dataset.section = tab;
+    $('cfg-crumb').textContent = t(`settings.groups.${groupOf(tab)}`);
+    $('cfg-title').textContent = `${ICON[tab]} ${N(tab)}`;
+    $('cfg-desc').textContent = t(`settings.desc.${tab}`);
+    for (const p of body.children) p.hidden = p.dataset.panel !== tab;
+    $('settings-save').hidden = !DRAFTS.has(tab);
     $('s-file').textContent = st.data ? t('settings.file', { file: tilde(st.data.office.file) }) : '';
-    if (tab === 'general') { renderGeneral(); indexStatus(); }
-    else if (tab === 'offices') { renderOffices(); loadProjects(); }
-    else if (tab === 'repos') { renderRepos(); loadProjects(); }
-    else if (tab === 'models') { st.models = null; renderModels(); }
-    else if (tab === 'mine') renderMine();
-    else { st.looks = null; st.experts = null; renderLook(); loadExperts(); }
+    RENDER[tab]();
   }
 
   /** 🧠 Intelligence: which model, its address and limit, and a button to try it. */
-  function intelGroup(c, G) {
+  function intelGroup(c) {
     const PH = { anthropic: ['claude-opus-5-5', 'https://api.anthropic.com/v1'], openai: ['gpt-…', 'https://api.openai.com/v1'], ollama: ['llama3.1', 'http://127.0.0.1:11434'] };
     const result = el('span', { class: 'hint', role: 'status' });
     const test = el('button', { type: 'button', class: 's-mini', onclick: async () => {
@@ -158,8 +270,6 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     } }, G('intelTest'));
     const on = c.provider !== 'off';
     return [
-      el('h3', {}, G('intel')),
-      el('p', { class: 'hint' }, G('intelHint')),
       el('label', { class: 'b-field' }, el('span', {}, G('intelProvider')),
         el('select', { onchange: (e) => setPref({ intelligence: { provider: e.target.value } }) }, ['off', 'agent', 'anthropic', 'openai', 'ollama'].map((x) => option(x, G(`intel_${x}`), x === c.provider)))),
       c.provider === 'agent' ? el('label', { class: 'b-field' }, el('span', {}, G('intelHarness')),
@@ -180,15 +290,17 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     box.textContent = t('settings.general.indexStatus', { chunks: r.chunks, embedded: r.embedded }) + (r.error ? ` · ⚠ ${r.error}` : r.running ? ' · …' : '');
   }
 
-  /** Something new arrived (agents, offices, settings, the language…): the tab is redrawn. */
+  /** Something new arrived (agents, offices, settings, the language…): the section is redrawn. */
   function refresh(all = false) {
-    if (!$('settings').open) return;
-    if (st.tab === 'repos') return renderList();
-    if (all || st.tab === 'general' || st.tab === 'offices') show(st.tab);
+    if (!st.open || !st.data) return;
+    if (all) return show(st.tab);
+    if (st.tab === 'repos') return loadProjects();
+    if (st.tab === 'architecture') return arch.reload();
+    if (LIVE.has(st.tab)) show(st.tab);
   }
   /** The watched office's characters changed (another office chosen, or saved): Characters shows them. */
   function appearanceChanged() {
-    if (!$('settings').open || st.tab !== 'look' || (!st.pendingLook && !st.saved)) return;
+    if (!st.open || st.tab !== 'look' || (!st.pendingLook && !st.saved)) return;
     st.pendingLook = st.saved = false;
     st.looks = null;
     renderLook();
@@ -204,78 +316,156 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   }
 
   function renderGeneral() {
-    const panel = document.querySelector('[data-panel="general"]');
-    const p = getPrefs() || st.data?.office.prefs;
+    const panel = panelOf('general');
+    const p = prefs();
+    if (!p) return;
+    put(panel,
+      card(G('cardLanguage'),
+        el('label', { class: 'b-field' }, el('span', {}, G('language')),
+          el('select', { 'aria-label': G('language'), onchange: (e) => setPref({ lang: e.target.value }) }, Object.entries(LANGUAGES).map(([id, name]) => option(id, name, id === p.lang)))),
+        el('p', { class: 'hint' }, G('languageHint'))),
+      card(G('cardPlace'),
+        el('label', { class: 'b-field' }, el('span', {}, G('timezone')),
+          el('span', { class: 'tz-field' }, zoneInput({ value: p.timezone, placeholder: G('tzSystem', { tz: st.data?.systemZone || '' }), label: G('timezone'), onPick: (z) => setPref({ timezone: z }) }))),
+        el('p', { class: 'hint' }, G('tzHint')),
+        el('label', { class: 'b-field' }, el('span', {}, G('city')),
+          el('span', { class: 'tz-field' }, cityInput({ value: p.city, timezone: p.timezone || st.data?.systemZone, placeholder: G('cityZone', { city: zoneInfo(p.timezone || st.data?.systemZone).city || '' }), label: G('city'), onPick: (c) => setPref({ city: c }) }))),
+        el('p', { class: 'hint' }, G('cityHint')),
+        check(p.weather, `${G('weather')}: ${G(p.weather ? 'weatherOn' : 'weatherOff')}`, (e) => setPref({ weather: e.target.checked }))));
+  }
+
+  /** 🎮 The game: how it is seen (the view, the style), what the log tells and how it calls you. */
+  function renderGame() {
+    const panel = panelOf('game');
+    const p = prefs();
+    if (!p) return;
+    put(panel,
+      card(G('cardView'),
+        el('label', { class: 'b-field' }, el('span', {}, G('viewMode')),
+          el('select', { 'aria-label': G('viewMode'), onchange: (e) => setPref({ view: { mode: e.target.value } }) }, ['flat', 'iso'].map((m) => option(m, G(`view_${m}`), m === (p.view?.mode || 'flat'))))),
+        // the graphic theme: how the people look (public/themes.js)
+        el('label', { class: 'b-field' }, el('span', {}, G('theme')),
+          el('select', { 'aria-label': G('theme'), onchange: (e) => setPref({ theme: e.target.value }) }, ['pixel', 'anime'].map((m) => option(m, G(`theme_${m}`), m === (p.theme || 'pixel'))))),
+        el('p', { class: 'hint' }, G(p.theme === 'anime' ? 'themeAnimeHint' : 'themeHint'))),
+      card(G('cardLog'),
+        check(p.log?.life, G('life'), (e) => setPref({ log: { life: e.target.checked } }))),
+      // when they wait for you (this browser's own: a sound, a system notification)
+      alerts ? card(G('cardAlerts'),
+        el('p', { class: 'hint' }, G('alertsHint')),
+        check(alerts.get().sound, t('attention.sound'), (e) => alerts.set({ sound: e.target.checked })),
+        'Notification' in window ? check(alerts.get().notify, t('attention.notify'), async (e) => {
+          const on = e.target.checked && (Notification.permission === 'granted' || (await Notification.requestPermission()) === 'granted');
+          alerts.set({ notify: on });
+          e.target.checked = on;
+        }) : null) : null);
+  }
+
+  /** 🤖 Autonomy: the analyst reviews each brief first, and the agents work to the end on their own. */
+  function renderAutonomy() {
+    const p = prefs();
+    if (!p) return;
+    put(panelOf('autonomy'),
+      card(G('autonomy'),
+        check(p.autonomy?.clarify !== false, G('clarify'), (e) => setPref({ autonomy: { clarify: e.target.checked } })),
+        el('p', { class: 'hint' }, G('clarifyHint')),
+        check(p.autonomy?.autonomous !== false, G('autonomous'), (e) => setPref({ autonomy: { autonomous: e.target.checked } })),
+        el('p', { class: 'hint' }, G('autonomousHint'))),
+      el('p', { class: 'hint' }, el('button', { type: 'button', class: 'cfg-link', onclick: () => go('offices') }, G('autonomyDepts'))));
+  }
+
+  /** 🗜 Context: past the limit an agent's context is compacted on its own (server/compact.js). */
+  function renderContext() {
+    const p = prefs();
+    if (!p) return;
+    put(panelOf('context'), card(G('compact'), compactGroup(p.compact || { auto: true, at: 400000, unit: 'tokens' })));
+  }
+
+  /** 📚 The archive as a RAG: its chunks go on top of every brief; embeddings for the semantic search. */
+  function renderArchive() {
+    const p = prefs();
+    if (!p) return;
+    put(panelOf('archive'),
+      card(G('archive'),
+        check(p.archive?.push !== false, G('archivePush'), (e) => setPref({ archive: { push: e.target.checked } }))),
+      card(G('cardEmbeddings'),
+        el('label', { class: 'b-field' }, el('span', {}, G('embeddings')),
+          el('select', { onchange: (e) => setPref({ archive: { embeddings: e.target.value } }) }, ['off', 'ollama', 'openai'].map((x) => option(x, G(`embed_${x}`), x === (p.archive?.embeddings || 'off'))))),
+        p.archive?.embeddings && p.archive.embeddings !== 'off' ? [
+          el('label', { class: 'b-field' }, el('span', {}, G('embedModel')), el('input', { type: 'text', value: p.archive.model || '', placeholder: p.archive.embeddings === 'ollama' ? 'nomic-embed-text' : 'text-embedding-3-small', onchange: (e) => setPref({ archive: { model: e.target.value } }) })),
+          el('label', { class: 'b-field' }, el('span', {}, G('embedUrl')), el('input', { type: 'text', value: p.archive.url || '', placeholder: p.archive.embeddings === 'ollama' ? 'http://127.0.0.1:11434' : 'https://api.openai.com/v1', onchange: (e) => setPref({ archive: { url: e.target.value } }) })),
+          el('p', { class: 'hint' }, G(p.archive.embeddings === 'ollama' ? 'embedOllamaHint' : 'embedKeyHint')),
+        ] : null),
+      card(G('cardIndex'),
+        el('p', { class: 'hint', id: 's-index' }),
+        el('div', { class: 's-row' }, el('button', { type: 'button', class: 's-mini', onclick: async () => { await api('POST', '/v1/archive/reindex', {}); indexStatus(); } }, G('reindex')))));
+  }
+
+  /** 🧠 Intelligence: the model the office leans on to size an order's impact (server/intelligence.js). */
+  function renderIntelligence() {
+    const p = prefs();
+    if (!p) return;
+    put(panelOf('intelligence'), card(G('intel'), el('p', { class: 'hint' }, G('intelHint')), intelGroup(p.intelligence || { provider: 'off', harness: 'claude-code', model: '', url: '', timeout: 120 })));
+  }
+
+  /** 🖥 Terminal: herdr, the agent in a pane and each subagent in its own. */
+  function renderTerminal() {
+    const p = prefs();
     if (!p) return;
     const herdr = getHerdr() || st.data?.herdr || {};
     const agents = getTargets().filter((x) => x.registered);
-    const G = (k, v) => t(`settings.general.${k}`, v);
-    const check = (checked, label, onchange) => el('label', { class: 'b-check' }, el('input', { type: 'checkbox', checked: checked ? true : undefined, onchange }), label);
+    put(panelOf('terminal'),
+      el('p', { class: `cfg-status ${herdr.available ? 'ok' : 'off'}` }, herdr.available ? G('herdrOn', { pane: herdr.pane || '?' }) : G('herdrOff')),
+      card(G('herdr'),
+        check(p.herdr.launch, G('herdrLaunch'), (e) => setPref({ herdr: { launch: e.target.checked } })),
+        check(p.herdr.subagents !== false, G('herdrSubagents'), (e) => setPref({ herdr: { subagents: e.target.checked } })),
+        el('label', { class: 'b-field' }, el('span', {}, G('herdrDirection')),
+          el('select', { onchange: (e) => setPref({ herdr: { direction: e.target.value } }) }, ['right', 'down'].map((d) => option(d, G(d), d === p.herdr.direction)))),
+        el('label', { class: 'b-field' }, el('span', {}, G('startAgent')),
+          el('select', { onchange: (e) => setPref({ herdr: { startAgent: e.target.value } }) },
+            option('auto', G('auto'), p.herdr.startAgent === 'auto'), option('none', G('none'), p.herdr.startAgent === 'none'),
+            agents.map((a) => option(a.id, `${a.name} · ${HARNESS_NAME[a.harness]}`, a.id === p.herdr.startAgent))))));
+  }
+
+  /** 💾 Backup: your settings as a JSON file, to keep them, share them or take them to another machine. */
+  function renderBackup() {
+    put(panelOf('backup'),
+      card(G('io'),
+        el('p', { class: 'hint' }, G('ioHint')),
+        el('div', { class: 's-row' },
+          el('a', { class: 's-mini', href: '/v1/settings/export', download: '' }, G('ioExport')),
+          el('button', { type: 'button', class: 's-mini', onclick: importSettingsFile }, G('ioImport'))),
+        el('ul', { class: 'hint s-io', id: 's-io' })),
+      card(G('cardData'),
+        el('dl', { class: 'cfg-facts' }, el('dt', {}, G('dataFile')), el('dd', {}, el('code', {}, tilde(st.data?.office.file || '')))),
+        el('p', { class: 'hint' }, G('dataHint'))));
+  }
+
+  /** ℹ About: the version that is running, where it runs and where to read more. */
+  async function renderAbout() {
+    const panel = panelOf('about');
+    const B = (k, v) => t(`settings.about.${k}`, v);
+    const h = await api('GET', '/v1/health');
+    if (st.tab !== 'about') return;
+    const link = (href, label) => el('a', { class: 's-mini', href, target: '_blank', rel: 'noopener' }, label);
     put(panel,
-      el('label', { class: 'b-field' }, el('span', {}, G('language')),
-        el('select', { 'aria-label': G('language'), onchange: (e) => setPref({ lang: e.target.value }) }, Object.entries(LANGUAGES).map(([id, name]) => option(id, name, id === p.lang)))),
-      el('label', { class: 'b-field' }, el('span', {}, G('timezone')),
-        el('span', { class: 'tz-field' }, zoneInput({ value: p.timezone, placeholder: G('tzSystem', { tz: st.data?.systemZone || '' }), label: G('timezone'), onPick: (z) => setPref({ timezone: z }) }))),
-      el('p', { class: 'hint' }, G('tzHint')),
-      el('label', { class: 'b-field' }, el('span', {}, G('city')),
-        el('span', { class: 'tz-field' }, cityInput({ value: p.city, timezone: p.timezone || st.data?.systemZone, placeholder: G('cityZone', { city: zoneInfo(p.timezone || st.data?.systemZone).city || '' }), label: G('city'), onPick: (c) => setPref({ city: c }) }))),
-      el('p', { class: 'hint' }, G('cityHint')),
-      check(p.weather, `${G('weather')}: ${G(p.weather ? 'weatherOn' : 'weatherOff')}`, (e) => setPref({ weather: e.target.checked })),
-      check(p.log?.life, G('life'), (e) => setPref({ log: { life: e.target.checked } })),
-      // autonomy: the analyst reviews each brief first, and the agents work to the end on their own
-      el('h3', {}, G('autonomy')),
-      check(p.autonomy?.clarify !== false, G('clarify'), (e) => setPref({ autonomy: { clarify: e.target.checked } })),
-      check(p.autonomy?.autonomous !== false, G('autonomous'), (e) => setPref({ autonomy: { autonomous: e.target.checked } })),
-      // the agents' context: past the limit it is compacted on its own (server/compact.js)
-      compactGroup(p.compact || { auto: true, at: 400000, unit: 'tokens' }, G, check),
-      // the archive as a RAG: its chunks go on top of every brief; embeddings for the semantic search
-      el('h3', {}, G('archive')),
-      check(p.archive?.push !== false, G('archivePush'), (e) => setPref({ archive: { push: e.target.checked } })),
-      el('label', { class: 'b-field' }, el('span', {}, G('embeddings')),
-        el('select', { onchange: (e) => setPref({ archive: { embeddings: e.target.value } }) }, ['off', 'ollama', 'openai'].map((x) => option(x, G(`embed_${x}`), x === (p.archive?.embeddings || 'off'))))),
-      p.archive?.embeddings && p.archive.embeddings !== 'off' ? [
-        el('label', { class: 'b-field' }, el('span', {}, G('embedModel')), el('input', { type: 'text', value: p.archive.model || '', placeholder: p.archive.embeddings === 'ollama' ? 'nomic-embed-text' : 'text-embedding-3-small', onchange: (e) => setPref({ archive: { model: e.target.value } }) })),
-        el('label', { class: 'b-field' }, el('span', {}, G('embedUrl')), el('input', { type: 'text', value: p.archive.url || '', placeholder: p.archive.embeddings === 'ollama' ? 'http://127.0.0.1:11434' : 'https://api.openai.com/v1', onchange: (e) => setPref({ archive: { url: e.target.value } }) })),
-        el('p', { class: 'hint' }, G(p.archive.embeddings === 'ollama' ? 'embedOllamaHint' : 'embedKeyHint')),
-      ] : null,
-      el('p', { class: 'hint', id: 's-index' }),
-      el('div', { class: 's-row' }, el('button', { type: 'button', class: 's-mini', onclick: async () => { await api('POST', '/v1/archive/reindex', {}); indexStatus(); } }, G('reindex'))),
-      // the model the office leans on to size an order's impact (server/intelligence.js)
-      intelGroup(p.intelligence || { provider: 'off', harness: 'claude-code', model: '', url: '', timeout: 120 }, G),
-      // when they wait for you (this browser's own: a sound, a system notification)
-      alerts ? check(alerts.get().sound, t('attention.sound'), (e) => alerts.set({ sound: e.target.checked })) : null,
-      alerts && 'Notification' in window ? check(alerts.get().notify, t('attention.notify'), async (e) => {
-        const on = e.target.checked && (Notification.permission === 'granted' || (await Notification.requestPermission()) === 'granted');
-        alerts.set({ notify: on });
-        e.target.checked = on;
-      }) : null,
-      el('label', { class: 'b-field' }, el('span', {}, G('viewMode')),
-        el('select', { 'aria-label': G('viewMode'), onchange: (e) => setPref({ view: { mode: e.target.value } }) }, ['flat', 'iso'].map((m) => option(m, G(`view_${m}`), m === (p.view?.mode || 'flat'))))),
-      // the graphic theme: how the people look (public/themes.js)
-      el('label', { class: 'b-field' }, el('span', {}, G('theme')),
-        el('select', { 'aria-label': G('theme'), onchange: (e) => setPref({ theme: e.target.value }) }, ['pixel', 'anime'].map((m) => option(m, G(`theme_${m}`), m === (p.theme || 'pixel'))))),
-      el('p', { class: 'hint' }, G(p.theme === 'anime' ? 'themeAnimeHint' : 'themeHint')),
-      el('h3', {}, G('herdr')),
-      el('p', { class: 'hint' }, herdr.available ? G('herdrOn', { pane: herdr.pane || '?' }) : G('herdrOff')),
-      check(p.herdr.launch, G('herdrLaunch'), (e) => setPref({ herdr: { launch: e.target.checked } })),
-      check(p.herdr.subagents !== false, G('herdrSubagents'), (e) => setPref({ herdr: { subagents: e.target.checked } })),
-      el('label', { class: 'b-field' }, el('span', {}, G('herdrDirection')),
-        el('select', { onchange: (e) => setPref({ herdr: { direction: e.target.value } }) }, ['right', 'down'].map((d) => option(d, G(d), d === p.herdr.direction)))),
-      el('label', { class: 'b-field' }, el('span', {}, G('startAgent')),
-        el('select', { onchange: (e) => setPref({ herdr: { startAgent: e.target.value } }) },
-          option('auto', G('auto'), p.herdr.startAgent === 'auto'), option('none', G('none'), p.herdr.startAgent === 'none'),
-          agents.map((a) => option(a.id, `${a.name} · ${HARNESS_NAME[a.harness]}`, a.id === p.herdr.startAgent)))),
-      // your settings as a JSON file: to keep them, share them or take them to another machine
-      el('h3', {}, G('io')),
-      el('p', { class: 'hint' }, G('ioHint')),
-      el('div', { class: 's-row' },
-        el('a', { class: 's-mini', href: '/v1/settings/export', download: '' }, G('ioExport')),
-        el('button', { type: 'button', class: 's-mini', onclick: importSettingsFile }, G('ioImport'))),
-      el('ul', { class: 'hint s-io', id: 's-io' }));
+      card('Dev Team Office',
+        el('dl', { class: 'cfg-facts' },
+          el('dt', {}, B('version')), el('dd', {}, h.ok ? h.version : '?'),
+          el('dt', {}, B('address')), el('dd', {}, el('code', {}, h.ok ? h.url : location.origin)),
+          el('dt', {}, B('data')), el('dd', {}, el('code', {}, tilde(st.data?.office.file || ''))),
+          h.ok && h.root ? [el('dt', {}, B('installed')), el('dd', {}, el('code', {}, tilde(h.root)))] : null,
+          el('dt', {}, B('terminal')), el('dd', {}, h.ok && h.herdr ? B('herdrOn') : B('herdrOff'))),
+        el('p', { class: 'hint' }, B('update'))),
+      card(B('docs'),
+        el('div', { class: 's-row cfg-links' },
+          link(`${DOCS}#readme`, B('readme')), link(`${DOCS}/blob/main/docs/${getLanguage() === 'es' ? 'README.es.md' : 'README.md'}`, B('guides')),
+          link(`${DOCS}/blob/main/CHANGELOG.md`, B('changelog')), link(`${DOCS}/issues/new/choose`, B('issue')))),
+      card(B('keys'),
+        el('ul', { class: 'cfg-keys' }, ['t', 'a', 'w', 'd', 'c', 'v', 'o', 'l', 'i', 'e', 'f'].map((k) => el('li', {}, el('kbd', {}, k), ` ${B(`key.${k}`)}`)))));
   }
 
   /** The auto-compaction: on or off, and its limit (in thousands of tokens, or a share of the window). */
-  function compactGroup(c, G, check) {
+  function compactGroup(c) {
     const pct = c.unit === 'pct';
     const save = () => {
       const unit = $('s-compact-unit').value;
@@ -283,7 +473,6 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       setPref({ compact: { unit, at: unit === 'pct' ? n : n * 1000 } });
     };
     return [
-      el('h3', {}, G('compact')),
       check(c.auto, G('compactAuto'), (e) => setPref({ compact: { auto: e.target.checked } })),
       el('label', { class: 'b-field' }, el('span', {}, G('compactAt')),
         el('span', { class: 's-compact' },
@@ -306,7 +495,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       await load();
       msg(t('settings.general.ioDone', r.applied), true);
       onSaved?.();
-      show('general');
+      go('backup');
       // what could not be brought (a project whose folder is not on this machine…)
       if (r.skipped?.length) $('s-io').replaceChildren(...r.skipped.map((x) => el('li', {}, `✖ ${x.what}: ${x.error}`)));
     } });
@@ -342,7 +531,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   }
 
   async function renderMine() {
-    const panel = document.querySelector('[data-panel="mine"]');
+    const panel = panelOf('mine');
     const M = (k, v) => t(`settings.mine.${k}`, v);
     const r = await api('GET', '/v1/mine');
     if (!r.ok) return msg(r.error);
@@ -389,15 +578,33 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
 
   // ------------------------------------------------------------ Oficinas
 
+  const officeForm = (o) => ({ id: o.id, name: o.custom ? o.name : '', timezone: o.ownTimezone || '', location: o.location || '', instructions: o.instructions || '', autonomy: o.autonomy || '' });
+
+  /** 🏛 The company: its standards (the CTO's) and how much a department takes at once (operations). */
+  function renderCompany() {
+    const O = (k, v) => t(`settings.offices.${k}`, v);
+    const p = prefs() || {};
+    put(panelOf('company'),
+      card(O('standardsTitle'),
+        el('label', { class: 'note' }, el('span', {}, O('standards')),
+          el('textarea', { id: 's-standards', rows: 6, maxlength: 4000, placeholder: O('standardsPh') }, p.standards || '')),
+        el('p', { class: 'hint' }, O('standardsHint'))),
+      card(O('capacityTitle'),
+        el('label', { class: 'b-field' }, el('span', {}, O('capacity')),
+          el('input', { id: 's-capacity', type: 'number', min: 1, max: 20, value: p.capacity || 3, class: 's-num' })),
+        el('p', { class: 'hint' }, O('capacityHint'))),
+      el('div', { class: 's-row' }, el('button', { type: 'button', class: 'btn', onclick: () => setPref({ standards: $('s-standards').value, capacity: Number($('s-capacity').value) || 3 }) }, O('saveCompany'))));
+  }
+
   /**
    * The departments maintainer: each department is an office of the company, with its projects
    * (repositories and their agents), its people (the characters), its instructions (how to work
    * there), its time zone and its weather.
    */
   function renderOffices() {
-    const panel = document.querySelector('[data-panel="offices"]');
+    const panel = panelOf('offices');
     const O = (k, v) => t(`settings.offices.${k}`, v);
-    const p = getPrefs() || st.data?.office.prefs || {};
+    const p = prefs() || {};
     const company = p.timezone || st.data?.systemZone || '';
     const projects = st.projects || getTargets().filter((x) => x.registered);
     const cards = getOffices().map((o) => {
@@ -418,7 +625,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
           `${a.name} · ${HARNESS_NAME[a.harness] || a.harness}${a.instructions ? ' 📋' : ''}`,
           el('div', { class: 's-path' }, tilde(a.path)))) : el('span', { class: 'hint' }, O('noRepos'))),
         el('div', { class: 's-row' },
-          el('button', { type: 'button', class: 's-mini', onclick: () => { st.form = { ...emptyForm(), office: o.id }; show('repos'); } }, O('addRepo')),
+          el('button', { type: 'button', class: 's-mini', onclick: () => { st.form = { ...emptyForm(), office: o.id }; go('repos'); $('s-agent-form')?.scrollIntoView({ block: 'nearest' }); } }, O('addRepo')),
           others.length ? el('select', { class: 's-mini', 'aria-label': O('moveRepo'), onchange: async (e) => {
             if (!e.target.value) return;
             const r = await api('PUT', `/v1/agents/${encodeURIComponent(e.target.value)}`, { office: o.id });
@@ -427,32 +634,17 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
             loadProjects();
           } }, option('', O('moveRepo'), true), others.map((a) => option(a.id, `${a.name} · ${HARNESS_NAME[a.harness] || a.harness}`))) : null),
         el('div', { class: 's-row' },
-          o.id !== here() ? el('button', { type: 'button', class: 's-mini', onclick: () => { onView?.(o.id); $('settings').close(); } }, `👁 ${O('view')}`) : null,
-          el('button', { type: 'button', class: 's-mini', onclick: () => { st.office = { id: o.id, name: o.custom ? o.name : '', timezone: o.ownTimezone || '', location: o.location || '', instructions: o.instructions || '', autonomy: o.autonomy || '' }; renderOffices(); $('s-office-form')?.scrollIntoView({ block: 'nearest' }); } }, O('edit')),
+          o.id !== here() ? el('button', { type: 'button', class: 's-mini', onclick: () => { onView?.(o.id); close(); } }, `👁 ${O('view')}`) : null,
+          el('button', { type: 'button', class: 's-mini', onclick: () => { arch.go({ type: 'dept', id: o.id }); go('architecture'); } }, `🗺 ${O('map')}`),
+          el('button', { type: 'button', class: 's-mini', onclick: () => { st.office = officeForm(o); renderOffices(); $('s-office-form')?.scrollIntoView({ block: 'nearest' }); } }, O('edit')),
           o.id !== 'main' ? el('button', { type: 'button', class: 's-mini danger', onclick: () => removeOffice(o) }, O('delete')) : null));
     });
     const f = st.office;
     const editing = getOffices().find((o) => o.id === f.id);
-    // the company's standards (the CTO's) and how much a department takes at once (operations)
-    const companyBox = el('div', { class: 's-form s-company' },
-      el('label', { class: 'note' }, el('span', {}, O('standards')),
-        el('textarea', { id: 's-standards', rows: 3, maxlength: 4000, placeholder: O('standardsPh') }, p.standards || '')),
-      el('label', { class: 'b-field' }, el('span', {}, O('capacity')),
-        el('input', { id: 's-capacity', type: 'number', min: 1, max: 20, value: p.capacity || 3, class: 's-num' })),
-      el('p', { class: 'hint' }, O('capacityHint')),
-      el('div', { class: 's-row' }, el('button', { type: 'button', class: 'btn', onclick: () => setPref({ standards: $('s-standards').value, capacity: Number($('s-capacity').value) || 3 }) }, O('saveCompany'))));
     put(panel,
-      el('p', { class: 'hint' }, O('hint')),
-      el('h3', {}, O('companyTitle')),
-      companyBox,
-      el('h3', {}, O('departments')),
       el('div', { class: 's-agents' }, cards),
-      // the systems: a product or business project and its artifacts (repos, or components of one)
-      systemsBox(projects),
-      // the infrastructure: queues, topics, databases, third-party APIs… and who uses them
-      resourcesBox(projects),
-      el('h3', {}, editing ? O('editTitle', { name: editing.name }) : O('newTitle')),
-      el('div', { class: 's-form', id: 's-office-form' },
+      el('section', { class: 'cfg-card s-form', id: 's-office-form' },
+        el('h3', {}, editing ? O('editTitle', { name: editing.name }) : O('newTitle')),
         el('label', { class: 'b-field' }, el('span', {}, O('name')), el('input', { type: 'text', value: f.name, maxlength: 40, oninput: (e) => { f.name = e.target.value; } })),
         el('label', { class: 'note' }, el('span', {}, O('instructions')),
           el('textarea', { rows: 4, maxlength: 4000, placeholder: O('instructionsPh'), oninput: (e) => { f.instructions = e.target.value; } }, f.instructions || '')),
@@ -486,9 +678,11 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     st.kindList = sys.ok ? sys.kinds : ['frontend', 'mobile', 'bff', 'backend', 'worker', 'library', 'data', 'infra', 'other'];
     // the infrastructure: the declared ones, and what each project's folder says it uses
     st.resources = map.ok ? map.resources || [] : [];
-    if (!$('settings').open) return;
+    if (!st.open) return;
     if (st.tab === 'offices') renderOffices();
     else if (st.tab === 'repos') renderList();
+    else if (st.tab === 'projects') renderProjects();
+    else if (st.tab === 'infra') renderInfra();
   }
 
   /** A project's components: chips (the declared ones can be removed) and ＋ to declare one (name and folder). */
@@ -516,55 +710,99 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   // ------------------------------------------------------------ Infrastructure (server/resources.js)
 
   const R = (k, v) => t(`settings.resources.${k}`, v);
-  const RICON = { queue: '📨', topic: '📣', database: '🗄', cache: '⚡', storage: '🪣', service: '🛰', api: '🔌', scheduler: '⏰', repo: '📦', other: '⚙️' };
-  const RKINDS = Object.keys(RICON);
-  const RHOWS = ['uses', 'publishes', 'consumes', 'reads', 'writes', 'calls', 'schedules', 'owns'];
-  const emptyResource = () => ({ kind: 'queue', name: '', tech: '', location: '', project: '', how: 'uses', planned: false });
+  const emptyResource = () => ({ id: null, kind: 'queue', name: '', tech: '', location: '', notes: '', planned: false, links: [] });
+  /** A declared resource as its form edits it (its links: the repository's id and how it uses it). */
+  const resourceForm = (r) => (r ? { id: r.id, kind: r.kind, name: r.name, tech: r.tech || '', location: r.location || '', notes: r.notes || '', planned: r.state === 'planned', links: r.projects.map((x) => ({ project: x.id, how: x.how })) } : emptyResource());
+  /** What a repository's folder says it has (a queue its Terraform names): the form to declare it. */
+  const adoptForm = (r) => ({ ...emptyResource(), kind: r.kind, name: r.name, tech: r.tech || '', links: (r.projects || r.users || []).map((x) => ({ project: String(x.id).replace(/^repo:/, ''), how: x.how || 'uses' })) });
 
-  /** The infrastructure on the map: the declared ones (with who uses them), what the repos use, and the form. */
-  function resourcesBox(projects) {
+  /** 🗄 Infrastructure: what is declared (with who uses it and how), what the repositories say they use, and the form. */
+  function renderInfra() {
+    const projects = st.projects || getTargets().filter((x) => x.registered);
     const all = st.resources || [];
     const declared = all.filter((r) => r.source === 'declared');
-    const detected = all.filter((r) => r.source === 'detected');
+    const named = all.filter((r) => r.source === 'detected' && !r.techOnly);
+    const stack = all.filter((r) => r.techOnly);
     const f = st.resource ||= emptyResource();
-    const users = (r) => r.projects.map((x) => `${x.name} (${t(`infra.how.${x.how}`)})`).join(', ');
+    const how = (h) => t(`infra.how.${h}`);
+    const reload = () => { loadProjects(); };
+    const put1 = async (r, links) => {
+      const out = await api('PUT', `/v1/resources/${encodeURIComponent(r.id)}`, { links });
+      if (!out.ok) return msg(out.error);
+      msg(R('saved', { name: r.name }), true);
+      reload();
+    };
     const save = async () => {
       if (!f.name.trim()) return msg(t('err.resourceName'));
-      const a = projects.find((x) => x.id === f.project);
-      const r = await api('POST', '/v1/resources', { kind: f.kind, name: f.name, tech: f.tech, location: f.location, state: f.planned ? 'planned' : 'exists', ...(a ? { addLinks: [{ project: a.id, how: f.how }] } : {}) });
+      const body = { kind: f.kind, name: f.name, tech: f.tech, location: f.location, notes: f.notes, state: f.planned ? 'planned' : 'exists', links: f.links.filter((l) => l.project) };
+      const r = f.id ? await api('PUT', `/v1/resources/${encodeURIComponent(f.id)}`, body) : await api('POST', '/v1/resources', body);
       if (!r.ok) return msg(r.error);
       msg(R('saved', { name: r.resource.name }), true);
       st.resource = emptyResource();
-      loadProjects();
+      reload();
     };
     const bind = (k) => (e) => { f[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value; };
-    return [
-      el('h3', {}, R('title')),
+    const again = () => { renderInfra(); $('s-res-form')?.scrollIntoView({ block: 'nearest' }); };
+    const cardOf = (r) => {
+      const others = projects.filter((a) => !r.projects.some((x) => x.id === a.id));
+      const pick = el('select', { class: 's-mini', 'aria-label': R('project') }, option('', R('linkRepo'), true), others.map((a) => option(a.id, a.name)));
+      const verb = el('select', { class: 's-mini', 'aria-label': R('how') }, RHOWS.map((h) => option(h, how(h), h === 'uses')));
+      return el('div', { class: 's-agent s-resource' },
+        el('div', { class: 's-agent-head' },
+          el('b', {}, `${RICON[r.kind] || ''} ${r.name}`), el('span', { class: 's-tag kind' }, t(`infra.kinds.${r.kind}`)),
+          r.tech ? el('span', { class: 's-tag' }, r.tech) : null,
+          r.state === 'planned' ? el('span', { class: 's-tag warn' }, R('planned')) : null,
+          !r.projects.length ? el('span', { class: 's-bad' }, R('nobody')) : null),
+        r.location ? el('div', { class: 's-path' }, `📍 ${r.location}`) : null,
+        r.notes ? el('p', { class: 'hint' }, r.notes) : null,
+        el('div', { class: 's-comp-row' },
+          el('span', { class: 's-dept-k' }, R('usedBy')),
+          r.projects.map((x) => el('span', { class: 's-comp own' }, `📦 ${x.name} · ${how(x.how)}`,
+            el('button', { type: 'button', class: 's-x', 'aria-label': R('unlink', { name: x.name }), onclick: () => put1(r, r.projects.filter((y) => !(y.id === x.id && y.how === x.how)).map((y) => ({ project: y.id, how: y.how }))) }, '✕')))),
+        el('div', { class: 's-row s-res-link' },
+          others.length ? [pick, verb, el('button', { type: 'button', class: 's-mini', onclick: () => { if (!pick.value) return pick.focus(); put1(r, [...r.projects.map((y) => ({ project: y.id, how: y.how })), { project: pick.value, how: verb.value }]); } }, R('link'))] : null,
+          el('span', { class: 'cfg-grow' }),
+          el('button', { type: 'button', class: 's-mini', onclick: () => { arch.go({ type: 'company' }, `res:${r.id}`); go('architecture'); } }, `🗺 ${t('settings.offices.map')}`),
+          el('button', { type: 'button', class: 's-mini', onclick: () => { st.resource = resourceForm(r); again(); } }, R('edit')),
+          el('button', { type: 'button', class: 's-mini danger', 'aria-label': R('remove', { name: r.name }), onclick: async () => {
+            if (!confirm(R('confirmDelete', { name: r.name }))) return;
+            const out = await api('DELETE', `/v1/resources/${encodeURIComponent(r.id)}`);
+            if (!out.ok) return msg(out.error);
+            if (st.resource?.id === r.id) st.resource = emptyResource();
+            msg(R('removed'), true);
+            reload();
+          } }, R('delete'))));
+    };
+    const linkRow = (l, i) => el('div', { class: 's-row s-res-linkrow' },
+      el('select', { 'aria-label': R('project'), onchange: (e) => { l.project = e.target.value; } }, option('', R('pickRepo'), !l.project), projects.map((a) => option(a.id, a.name, a.id === l.project))),
+      el('select', { 'aria-label': R('how'), onchange: (e) => { l.how = e.target.value; } }, RHOWS.map((h) => option(h, how(h), h === l.how))),
+      el('button', { type: 'button', class: 's-x', 'aria-label': R('unlink', { name: projects.find((a) => a.id === l.project)?.name || '' }), onclick: () => { f.links.splice(i, 1); again(); } }, '✕'));
+    put(panelOf('infra'),
       el('p', { class: 'hint' }, R('hint')),
-      declared.length ? el('ul', { class: 's-res' }, declared.map((r) => el('li', {},
-        el('b', {}, `${RICON[r.kind] || ''} ${r.name}`), ` · ${t(`infra.kinds.${r.kind}`)}`,
-        r.tech ? ` · ${r.tech}` : '', r.location ? el('span', { class: 'hint' }, ` · ${r.location}`) : null,
-        r.state === 'planned' ? el('span', { class: 's-tag' }, R('planned')) : null,
-        r.projects.length ? el('span', { class: 'hint' }, ` ← ${users(r)}`) : null,
-        el('button', { type: 'button', class: 's-x', 'aria-label': R('remove', { name: r.name }), onclick: async () => {
-          if (!confirm(R('confirmDelete', { name: r.name }))) return;
-          const out = await api('DELETE', `/v1/resources/${encodeURIComponent(r.id)}`);
-          if (!out.ok) return msg(out.error);
-          msg(R('removed'), true);
-          loadProjects();
-        } }, '✕')))) : el('p', { class: 'hint' }, R('none')),
-      detected.length ? el('div', { class: 's-comps' }, el('span', { class: 's-dept-k' }, R('detected')),
-        el('div', { class: 's-comp-row' }, detected.map((r) => el('span', { class: 's-comp', title: users(r) }, `${RICON[r.kind] || ''} ${r.name}${r.techOnly ? '' : ` (${r.tech})`}`)))) : null,
-      el('div', { class: 's-form s-res-form' },
+      declared.length ? el('div', { class: 's-agents' }, declared.map(cardOf)) : el('p', { class: 'cfg-empty' }, R('none')),
+      named.length ? card(R('detectedNamed'),
+        el('p', { class: 'hint' }, R('detectedNamedHint')),
+        el('ul', { class: 's-res' }, named.map((r) => el('li', {},
+          el('b', {}, `${RICON[r.kind] || ''} ${r.name}`), ` · ${t(`infra.kinds.${r.kind}`)}${r.tech ? ` · ${r.tech}` : ''}`,
+          el('span', { class: 'hint' }, ` ← ${r.projects.map((x) => x.name).join(', ')}`),
+          el('button', { type: 'button', class: 's-mini', onclick: () => { st.resource = adoptForm(r); again(); } }, R('declare')))))) : null,
+      stack.length ? card(R('detected'),
+        el('p', { class: 'hint' }, R('stackHint')),
+        el('div', { class: 's-comp-row' }, stack.map((r) => el('span', { class: 's-comp', title: r.projects.map((x) => x.name).join(', ') }, `${RICON[r.kind] || ''} ${r.name} `, el('span', { class: 'hint' }, `← ${r.projects.map((x) => x.name).join(', ')}`))))) : null,
+      el('section', { class: 'cfg-card s-form s-res-form', id: 's-res-form' },
+        el('h3', {}, f.id ? R('editTitle', { name: f.name }) : R('newTitle')),
         el('label', { class: 'b-field' }, el('span', {}, R('kind')), el('select', { onchange: bind('kind') }, RKINDS.map((k) => option(k, `${RICON[k]} ${t(`infra.kinds.${k}`)}`, k === f.kind)))),
         el('label', { class: 'b-field' }, el('span', {}, R('name')), el('input', { type: 'text', value: f.name, maxlength: 80, placeholder: R('namePh'), oninput: bind('name') })),
         el('label', { class: 'b-field' }, el('span', {}, R('tech')), el('input', { type: 'text', value: f.tech, maxlength: 60, placeholder: R('techPh'), oninput: bind('tech') })),
         el('label', { class: 'b-field' }, el('span', {}, R('location')), el('input', { type: 'text', value: f.location, maxlength: 200, placeholder: R('locationPh'), oninput: bind('location') })),
-        el('label', { class: 'b-field' }, el('span', {}, R('project')), el('select', { onchange: bind('project') }, option('', R('none2'), !f.project), projects.map((a) => option(a.id, a.name, a.id === f.project)))),
-        el('label', { class: 'b-field' }, el('span', {}, R('how')), el('select', { onchange: bind('how') }, RHOWS.map((h) => option(h, t(`infra.how.${h}`), h === f.how)))),
-        el('label', { class: 'b-check' }, el('input', { type: 'checkbox', checked: f.planned ? true : undefined, onchange: bind('planned') }), R('planned')),
-        el('div', { class: 's-row' }, el('button', { type: 'button', class: 'btn', onclick: save }, R('add')))),
-    ];
+        el('label', { class: 'b-field' }, el('span', {}, R('notes')), el('input', { type: 'text', value: f.notes, maxlength: 500, placeholder: R('notesPh'), oninput: bind('notes') })),
+        el('label', { class: 'b-check' }, el('input', { type: 'checkbox', checked: f.planned ? true : undefined, onchange: bind('planned') }), R('plannedCheck')),
+        el('div', { class: 's-dept-k' }, `${R('usedBy')} (${f.links.length})`),
+        f.links.map(linkRow),
+        el('div', { class: 's-row' }, projects.length ? el('button', { type: 'button', class: 's-mini', onclick: () => { f.links.push({ project: '', how: 'uses' }); again(); } }, R('addLink')) : el('span', { class: 'hint' }, R('noRepos'))),
+        el('div', { class: 's-row' },
+          el('button', { type: 'button', class: 'btn', onclick: save }, f.id ? R('save') : R('add')),
+          f.id || f.name || f.links.length ? el('button', { type: 'button', class: 'btn ghost', onclick: () => { st.resource = emptyResource(); again(); } }, R('cancel')) : null)));
   }
 
   // ------------------------------------------------------------ Projects (server/systems.js)
@@ -573,23 +811,31 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   const KIND = (k) => t(`system.kinds.${k}`);
   const emptySystem = () => ({ id: null, name: '', office: here(), team: '', move: true, instructions: '', parts: [] });
 
-  /** The systems: a card each (its team, the order a change goes in and its artifacts), and the form. */
+  const systemDraft = (s) => ({ id: s.id, name: s.name, office: s.office, team: '', move: true, instructions: s.instructions || '', parts: s.parts.map((p) => ({ name: p.name, project: p.target || p.project, component: p.component || '', path: p.path || '', kind: p.kind, uses: [...(p.uses || [])] })) });
+
+  /** 🧩 Projects: a product or business project and its artifacts (repositories, or components of one). */
+  function renderProjects() {
+    put(panelOf('projects'), systemsBox(st.projects || getTargets().filter((x) => x.registered)));
+  }
+
+  /** The projects: a card each (its team, the order a change goes in and its artifacts), and the form. */
   function systemsBox(projects) {
     const list = st.systems || [];
     const cards = list.map((s) => el('div', { class: 's-agent s-system' },
       el('div', { class: 's-agent-head' },
         el('b', {}, `🧩 ${s.name}`), el('span', { class: 's-tag kind' }, `👥 ${s.officeName || s.office}`),
         s.instructions ? el('span', { class: 's-tag kind', title: s.instructions }, S('hasInstructions')) : null),
-      el('div', { class: 's-sys-order' }, s.order.join('  →  ')),
+      el('div', { class: 's-sys-order' }, el('span', { class: 'hint' }, `${t('arch.f.order')}: `), s.order.join('  →  ')),
       el('ul', { class: 's-sys-parts' }, s.parts.map((p) => el('li', {},
-        el('b', {}, p.name), ` · ${KIND(p.kind)} · `,
-        el('span', { class: 'hint' }, `${p.repo}${p.path ? `/${p.path}` : ''}${p.target ? ` · ${tilde(artifactFolder(p))}` : ''}`),
+        el('b', {}, `${KIND_ICON[p.kind] || ''} ${p.name}`), ` · ${KIND(p.kind)} · `,
+        el('span', { class: 'hint', title: p.target ? tilde(artifactFolder(p)) : undefined }, `${p.repo}${p.path ? `/${p.path}` : ''}`),
         p.uses?.length ? ` · ${t('system.uses', { list: p.uses.join(', ') })}` : '',
         p.shared ? el('span', { class: 's-tag', title: S('sharedHint') }, S('shared')) : null,
         p.target ? null : el('span', { class: 's-tag danger' }, S('noRepo'))))),
       el('div', { class: 's-row' },
         el('button', { type: 'button', class: 's-mini', onclick: () => { onPrompt?.(`system:${s.id}`); } }, `✉ ${S('brief')}`),
-        el('button', { type: 'button', class: 's-mini', onclick: () => { st.system = { id: s.id, name: s.name, office: s.office, team: '', move: true, instructions: s.instructions || '', parts: s.parts.map((p) => ({ name: p.name, project: p.target || p.project, component: p.component || '', path: p.path || '', kind: p.kind, uses: [...(p.uses || [])] })) }; renderOffices(); $('s-system-form')?.scrollIntoView({ block: 'nearest' }); } }, S('edit')),
+        el('button', { type: 'button', class: 's-mini', onclick: () => { arch.go({ type: 'system', id: s.id }); go('architecture'); } }, `🗺 ${t('settings.offices.map')}`),
+        el('button', { type: 'button', class: 's-mini', onclick: () => { st.system = systemDraft(s); renderProjects(); $('s-system-form')?.scrollIntoView({ block: 'nearest' }); } }, S('edit')),
         el('button', { type: 'button', class: 's-mini danger', onclick: async () => {
           if (!confirm(S('confirmDelete', { name: s.name }))) return;
           const r = await api('DELETE', `/v1/systems/${encodeURIComponent(s.id)}`);
@@ -598,9 +844,8 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
           loadProjects();
         } }, S('delete')))));
     return [
-      el('h3', {}, S('title')),
       el('p', { class: 'hint' }, S('hint')),
-      list.length ? el('div', { class: 's-agents' }, cards) : el('p', { class: 'hint' }, S('none')),
+      list.length ? el('div', { class: 's-agents' }, cards) : el('p', { class: 'cfg-empty' }, S('none')),
       systemForm(projects),
     ];
   }
@@ -608,7 +853,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   function systemForm(projects) {
     const f = st.system ||= emptySystem();
     const kinds = st.kindList || ['other'];
-    const rerender = () => { renderOffices(); $('s-system-form')?.scrollIntoView({ block: 'nearest' }); };
+    const rerender = () => { renderProjects(); $('s-system-form')?.scrollIntoView({ block: 'nearest' }); };
     const compsOf = (id) => (st.components?.[id] || []);
     const partRow = (p, i) => {
       const others = f.parts.filter((x, j) => j !== i && x.name);
@@ -623,7 +868,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
           others.map((x) => el('label', { class: 'b-check' }, el('input', { type: 'checkbox', checked: p.uses.includes(x.name) ? true : undefined, onchange: (e) => { p.uses = e.target.checked ? [...p.uses, x.name] : p.uses.filter((u) => u !== x.name); } }), x.name))) : null,
         el('button', { type: 'button', class: 's-x', 'aria-label': S('removePart'), onclick: () => { f.parts.splice(i, 1); for (const x of f.parts) x.uses = x.uses.filter((u) => u !== p.name); rerender(); } }, '✕'));
     };
-    return el('div', { class: 's-form', id: 's-system-form' },
+    return el('section', { class: 'cfg-card s-form', id: 's-system-form' },
       el('h3', {}, f.id ? S('editTitle', { name: f.name }) : S('newTitle')),
       el('label', { class: 'b-field' }, el('span', {}, S('name')), el('input', { type: 'text', value: f.name, maxlength: 60, placeholder: S('namePh'), oninput: (e) => { f.name = e.target.value; } })),
       el('label', { class: 'b-field' }, el('span', {}, S('team')),
@@ -675,7 +920,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     st.office = emptyOffice();
     await reloadOffices();
     await load();
-    renderOffices();
+    if (st.tab === 'offices') renderOffices();
   }
 
   async function removeOffice(o) {
@@ -692,12 +937,10 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   const A = (k, v) => t(`settings.repos.${k}`, v);
 
   function renderRepos() {
-    const panel = document.querySelector('[data-panel="repos"]');
-    put(panel,
+    put(panelOf('repos'),
       el('p', { class: 'hint' }, A('hint')),
       el('div', { id: 's-agent-list', class: 's-agents' }),
-      el('h3', { id: 's-form-title' }),
-      el('div', { id: 's-agent-form', class: 's-form' }));
+      el('section', { class: 'cfg-card' }, el('h3', { id: 's-form-title' }), el('div', { id: 's-agent-form', class: 's-form' })));
     renderList();
     renderForm();
   }
@@ -708,13 +951,15 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     const targets = getTargets();
     const offices = getOffices();
     const officeName = (id) => offices.find((o) => o.id === id)?.name || id;
-    const registered = targets.filter((x) => x.registered);
+    // every department's repositories (the page itself only knows the watched office's), and the watched
+    // office's open sessions nobody registered
+    const registered = st.projects || targets.filter((x) => x.registered);
     const loose = targets.filter((x) => !x.registered);
     const card = (a) => el('div', { class: 's-agent' },
       el('div', { class: 's-agent-head' },
         el('b', {}, a.name), el('span', { class: 's-tag' }, HARNESS_NAME[a.harness] || a.harness),
         ...a.kinds.map((k) => el('span', { class: 's-tag kind' }, k)),
-        offices.length > 1 ? el('span', { class: 's-tag' }, `🏢 ${officeName(a.office)}`) : null,
+        offices.length > 1 && !a.registered ? el('span', { class: 's-tag' }, `🏢 ${officeName(a.office)}`) : null,
         a.instructions ? el('span', { class: 's-tag kind', title: a.instructions }, A('hasInstructions')) : null,
         a.sessions.some((x) => x.live) ? el('span', { class: 's-ok' }, A('sessionOpen')) : null,
         !a.exists ? el('span', { class: 's-bad' }, A('pathMissing')) : !a.available ? el('span', { class: 's-bad' }, A('cliMissing', { agent: HARNESS_NAME[a.harness] })) : null),
@@ -724,12 +969,16 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       el('div', { class: 's-row' },
         el('button', { type: 'button', class: 's-mini', onclick: () => onPrompt?.(a.id) }, A('sendPrompt')),
         a.registered
-          ? [el('button', { type: 'button', class: 's-mini', onclick: () => edit(a) }, A('edit')),
+          ? [el('button', { type: 'button', class: 's-mini', onclick: () => { arch.go({ type: 'repo', id: a.id }); go('architecture'); } }, `🗺 ${t('settings.offices.map')}`),
+            el('button', { type: 'button', class: 's-mini', onclick: () => edit(a) }, A('edit')),
             el('button', { type: 'button', class: 's-mini danger', onclick: () => remove(a) }, A('delete'))]
           : el('button', { type: 'button', class: 's-mini', onclick: () => { st.form = { ...emptyForm(), path: a.path, harness: a.harness, office: a.office, touched: true }; renderForm(); detect(); } }, A('register'))));
+    const depts = offices.map((o) => [o, registered.filter((a) => a.office === o.id)]).filter(([, list]) => list.length);
     put(box,
-      registered.length ? registered.map(card) : el('p', { class: 'hint' }, A('noneWeb')),
-      loose.length ? [el('h3', {}, A('loose')), loose.map(card)] : null);
+      !registered.length ? el('p', { class: 'cfg-empty' }, A('noneWeb'))
+        : depts.length > 1 ? depts.map(([o, list]) => [el('h3', { class: 'cfg-sub' }, `👥 ${o.name} `, el('span', { class: 'hint' }, `(${list.length})`)), list.map(card)])
+          : registered.map(card),
+      loose.length ? [el('h3', { class: 'cfg-sub' }, A('loose')), loose.map(card)] : null);
   }
 
   function renderForm() {
@@ -778,6 +1027,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     if (focused) document.querySelector(`#s-agent-form [aria-label="${focused}"]`)?.focus();
   }
 
+  const editRepo = (a) => edit(a);
   function edit(a) {
     st.form = { ...emptyForm(), id: a.id, path: a.path, harness: a.harness, name: a.name, office: a.office, bin: a.bin || '', args: (a.args || []).join(' '), instructions: a.instructions || '', touched: true };
     renderForm();
@@ -828,7 +1078,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
 
   function renderLook() {
     st.looks ||= Object.fromEntries(ROLE_ORDER.map((r) => [r, Object.fromEntries(APPEARANCE_KEYS.map((k) => [k, personOf(r)[k]]))]));
-    const panel = document.querySelector('[data-panel="look"]');
+    const panel = panelOf('look');
     const cards = ROLE_ORDER.map((role) => {
       const look = st.looks[role];
       const canvas = el('canvas', { 'aria-label': LK('preview', { name: look.name }) });
@@ -862,11 +1112,10 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       );
     });
     // keep the scroll and the focus where they were (a swatch redraws the panel)
-    const box = panel.closest('.brief-body'), top = box?.scrollTop, focus = document.activeElement?.getAttribute('aria-label');
+    const box = $('cfg-content'), top = box?.scrollTop, focus = document.activeElement?.getAttribute('aria-label');
     put(panel,
       el('p', { class: 'hint' }, `${getOffice()?.name ? `🏢 ${getOffice().name} · ` : ''}${LK('hint')}`),
-      el('div', { class: 's-looks' }, cards),
-      expertsBox());
+      el('div', { class: 's-looks' }, cards));
     if (box) box.scrollTop = top;
     if (focus) [...panel.querySelectorAll('[aria-label]')].find((x) => x.getAttribute('aria-label') === focus)?.focus();
   }
@@ -887,10 +1136,19 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     if (!r.ok) return msg(r.error);
     st.experts = r.experts.map(expertForm);
     st.skills = r.skills || [];
-    if (st.tab === 'look' && $('settings').open) renderLook();
+    if (st.tab === 'experts' && st.open) renderExperts();
   }
   /** The experts changed elsewhere (another window): reloaded, unless one is being written here. */
-  function expertsChanged() { if ($('settings').open && st.tab === 'look' && !st.experts?.some((x) => x.dirty)) loadExperts(); }
+  function expertsChanged() { if (st.open && st.tab === 'experts' && !st.experts?.some((x) => x.dirty)) loadExperts(); }
+
+  /** 🎓 The experts: a character each, tied to a skill; they come up when an agent uses it. */
+  function renderExperts() {
+    const panel = panelOf('experts');
+    const box = $('cfg-content'), top = box.scrollTop, focus = document.activeElement?.getAttribute('aria-label');
+    put(panel, expertsBox());
+    box.scrollTop = top;
+    if (focus) [...panel.querySelectorAll('[aria-label]')].find((x) => x.getAttribute('aria-label') === focus)?.focus();
+  }
 
   function expertsBox() {
     const list = st.experts;
@@ -898,10 +1156,10 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       const look = x.look;
       const canvas = el('canvas', { 'aria-label': LK('preview', { name: look.name || '?' }) });
       const redraw = () => drawSprite(canvas, { ...DEFAULT_EXPERT, ...(currentTheme() === 'anime' ? ANIME_EXPERT : {}), ...look, ...(currentTheme() === 'anime' ? { sex: 'f', beard: false } : {}) }, { id: x.id || 'sme' });
-      const set = (k, v, again = true) => { look[k] = v; x.dirty = true; if (again) renderLook(); else redraw(); };
+      const set = (k, v, again = true) => { look[k] = v; x.dirty = true; if (again) renderExperts(); else redraw(); };
       const toggle = (k) => el('label', {}, el('input', { type: 'checkbox', checked: look[k] ? true : undefined, onchange: (e) => set(k, e.target.checked, false) }), LK(k));
       const select = (k, values, label) => el('label', { class: 's-pick' }, el('span', {}, LK(k)),
-        el('select', { 'aria-label': LK('of', { label: LK(k), name: look.name }), onchange: (e) => (k === 'sex' ? (Object.assign(look, lookForSex(e.target.value)), x.dirty = true, renderLook()) : set(k, e.target.value, false)) },
+        el('select', { 'aria-label': LK('of', { label: LK(k), name: look.name }), onchange: (e) => (k === 'sex' ? (Object.assign(look, lookForSex(e.target.value)), x.dirty = true, renderExperts()) : set(k, e.target.value, false)) },
           values.map((v) => option(v, label(v), look[k] === v))));
       redraw();
       const save = async () => {
@@ -919,7 +1177,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
           if (!r.ok) return msg(r.error);
         }
         list.splice(i, 1);
-        renderLook();
+        renderExperts();
       };
       /** An action's button: it sends the prompt to the project agent that knows the skill. */
       const run = async (a) => {
@@ -947,7 +1205,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
           added++;
         }
         x.dirty = true;
-        renderLook();
+        renderExperts();
         msg(XK('actionSuggested', { n: added }), true);
       };
       return el('div', { class: 's-look s-expert' },
@@ -963,12 +1221,12 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
           el('div', { class: 's-row' },
             el('span', { class: 'hint' }, XK('actionsHint')),
             el('button', { type: 'button', class: 's-mini', onclick: suggest }, XK('actionSuggest')),
-            el('button', { type: 'button', class: 's-mini', onclick: () => { x.actions.push({ label: '', prompt: '' }); x.dirty = true; renderLook(); } }, XK('actionAdd'))),
+            el('button', { type: 'button', class: 's-mini', onclick: () => { x.actions.push({ label: '', prompt: '' }); x.dirty = true; renderExperts(); } }, XK('actionAdd'))),
           x.actions.map((a) => el('div', { class: 's-action' },
             el('div', { class: 's-action-top' },
               el('input', { type: 'text', value: a.label, maxlength: 60, placeholder: XK('actionLabel'), 'aria-label': XK('actionLabel'), oninput: (e) => { a.label = e.target.value; x.dirty = true; } }),
               el('button', { type: 'button', class: 's-mini', title: XK('actionRun'), 'aria-label': XK('actionRun'), onclick: () => run(a) }, '▶'),
-              el('button', { type: 'button', class: 's-mini danger', title: XK('actionRemove'), 'aria-label': XK('actionRemove'), onclick: () => { x.actions.splice(x.actions.indexOf(a), 1); x.dirty = true; renderLook(); } }, '✕')),
+              el('button', { type: 'button', class: 's-mini danger', title: XK('actionRemove'), 'aria-label': XK('actionRemove'), onclick: () => { x.actions.splice(x.actions.indexOf(a), 1); x.dirty = true; renderExperts(); } }, '✕')),
             el('textarea', { rows: 2, maxlength: 4000, placeholder: XK('actionPrompt'), oninput: (e) => { a.prompt = e.target.value; x.dirty = true; } }, a.prompt)))),
         el('div', { class: 'pair' },
           currentTheme() === 'anime' ? null : select('sex', SEXES, (v) => LK(`sexes.${v}`)),
@@ -977,16 +1235,15 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         el('div', { class: 'toggles' }, toggle('long'), currentTheme() === 'anime' ? null : toggle('beard'), toggle('glasses')),
         el('div', { class: 'toggles' },
           el('span', { class: 'hint' }, x.id ? XK('role', { skill: x.skill }) : XK('new')),
-          el('button', { type: 'button', class: 's-mini', title: LK('randomTitle'), onclick: () => { Object.assign(look, randomLook(look.sex)); x.dirty = true; renderLook(); } }, '🎲'),
+          el('button', { type: 'button', class: 's-mini', title: LK('randomTitle'), onclick: () => { Object.assign(look, randomLook(look.sex)); x.dirty = true; renderExperts(); } }, '🎲'),
           el('button', { type: 'button', class: 's-mini danger', title: XK('remove'), 'aria-label': XK('remove'), onclick: remove }, '🗑'),
           el('button', { type: 'button', class: 's-mini', onclick: save }, XK('save'))));
     };
     return el('section', { class: 's-experts' },
-      el('h3', {}, XK('title')),
       el('p', { class: 'hint' }, XK('hint')),
       el('datalist', { id: 's-skills' }, (st.skills || []).map((k) => el('option', { value: k.name }, k.where ? `${k.name} · ${k.where}` : k.name))),
       list ? el('div', { class: 's-looks' }, list.map(card)) : el('p', { class: 'hint' }, t('settings.loading')),
-      el('div', { class: 's-row' }, el('button', { type: 'button', class: 's-mini', disabled: !list, onclick: () => { list.push({ ...expertForm(), dirty: true }); renderLook(); } }, XK('add'))));
+      el('div', { class: 's-row' }, el('button', { type: 'button', class: 's-mini', disabled: !list, onclick: () => { list.push({ ...expertForm(), dirty: true }); renderExperts(); } }, XK('add'))));
   }
 
   // A character as a JSON file (public/character.js): to share them, and to bring one in.
@@ -1027,8 +1284,8 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   // ------------------------------------------------------------ Models (profiles: public/models.js)
 
   function renderModels() {
-    const panel = document.querySelector('[data-panel="models"]');
-    const p = getPrefs() || st.data?.office.prefs;
+    const panel = panelOf('models');
+    const p = prefs();
     if (!p?.models) return;
     st.models ||= structuredClone(p.models);
     const m = st.models;
@@ -1067,12 +1324,43 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       el('button', { type: 'button', class: 'btn ghost', onclick: add }, M('add')));
   }
 
-  // ------------------------------------------------------------ eventos
+  // ------------------------------------------------------------ what draws each section, and the events
 
-  for (const b of document.querySelectorAll('#settings .tabs button')) b.onclick = () => { msg(''); show(b.dataset.tab); };
-  $('settings-close').onclick = $('settings-cancel').onclick = () => $('settings').close();
+  const RENDER = {
+    general: renderGeneral,
+    game: renderGame,
+    company: renderCompany,
+    offices: () => { renderOffices(); loadProjects(); },
+    repos: () => { renderRepos(); loadProjects(); },
+    architecture: () => arch.render(panelOf('architecture')),
+    projects: () => { renderProjects(); loadProjects(); },
+    infra: () => { renderInfra(); loadProjects(); },
+    autonomy: renderAutonomy,
+    context: renderContext,
+    models: () => { st.models = null; renderModels(); },
+    intelligence: renderIntelligence,
+    archive: () => { renderArchive(); indexStatus(); },
+    terminal: renderTerminal,
+    look: () => { st.looks = null; renderLook(); },
+    experts: () => { st.experts = null; renderExperts(); loadExperts(); },
+    mine: renderMine,
+    backup: renderBackup,
+    about: renderAbout,
+  };
+
+  $('settings-close').onclick = close;
   $('settings-save').onclick = () => (st.tab === 'look' ? saveLook() : st.tab === 'models' ? setPref({ models: st.models }) : null);
   $('settings-form').onsubmit = (e) => e.preventDefault();
+  $('cfg-jump').onchange = (e) => go(e.target.value);
+  const search = $('cfg-search');
+  search.oninput = renderNav;
+  // Enter goes to the first section found; Escape clears the search
+  search.onkeydown = (e) => {
+    if (e.key === 'Enter' && st.found?.length) { e.preventDefault(); go(st.found[0]); } else if (e.key === 'Escape' && search.value) { e.stopPropagation(); search.value = ''; renderNav(); }
+  };
+  window.addEventListener('popstate', route);
+  window.addEventListener('hashchange', route);
+  if (location.hash.startsWith('#settings')) route();
 
-  return { open, refresh, appearanceChanged, expertsChanged };
+  return { open, close, refresh, appearanceChanged, expertsChanged, isOpen: () => st.open, go };
 }

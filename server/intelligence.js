@@ -1,4 +1,4 @@
-// The office's judgment: a model you choose (⚙ › General › 🧠 Intelligence) that reads an order next to
+// The office's judgment: a model you choose (⚙ › Intelligence) that reads an order next to
 // the company's map and says what it touches and how, and what it needs that is not on the map. The
 // office is still the frontend: the model only reads and answers (JSON); it changes nothing. Without
 // one (provider 'off'), the impact is read from the order's words alone (server/components.js).
