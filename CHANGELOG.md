@@ -2,7 +2,23 @@
 
 All notable changes to Dev Team Office. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/) (while it is `0.x`, a minor version may change behavior).
 
-## [Unreleased]
+## [0.30.0] - 2026-11-17
+
+The office gets a phone to call the company's experts, a card that says what everyone is working on, and every button gathered in a dock.
+
+### Added
+
+- **The expert phone (📞 in the dock).** When the company has experts (⚙ › Characters › Experts), the phone button shows up: it lists each one with their portrait, their quick actions and a free request, and a call goes to the project agent that knows their skill. While there is nobody to call, the button stays hidden.
+- **The status card (⏱).** Every five minutes a small card says what each connected agent is working on and how long ago, with a countdown that closes it (a click closes it sooner). It only comes up when there is someone connected with recent activity.
+
+### Changed
+
+- **All the game's buttons live in a dock** floating at the bottom center, with a bubble on hover (or focus) that says what each one does. The HUD no longer scatters them around the scene.
+
+### Fixed
+
+- **An agent with its turn open looked "free" during a long tool call or a long think** (no event arrives for a while). An open turn now counts as working for up to ten minutes.
+- **A failing tool blocked the character** as if the agent had stopped. The office keeps it working: the agent reads the error and goes on.
 
 ## [0.29.1] - 2026-11-17
 
