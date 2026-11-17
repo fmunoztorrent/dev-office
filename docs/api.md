@@ -314,6 +314,19 @@ Each expert keeps a list of quick actions (`actions`: `[{ label, prompt }]`, at 
 - **Which skill a tool uses:** Claude Code's `Skill` (`{ skill }`, without its plugin: `plugin:name` → `name`), OpenCode's `skill` (`{ name }`), or a path with `…/skills/<name>/…` (reading the skill's `SKILL.md`, as Pi and Codex do; also in a command).
 - Over WebSocket, `{ type: "experts", experts }`; the state (`/v1/state`) carries `experts`. They travel in your settings file (`experts`).
 
+## The architecture
+
+The whole map as one graph (server/architecture.js): what the settings' ⚙ › Map draws and the MCP tool `get_architecture` tells an agent.
+
+| Method | Path | Answer |
+|---|---|---|
+| `GET` | `/v1/architecture` | `{ ok, nodes, edges, findings, stats }` |
+
+- **`nodes`:** `{ id, type, name, key }` and, by type: a department (`dept:<office>`); a repository (`repo:<agent>`: `dept`, `path`, `harness`, `kind`, `exists`, `systems` (the projects it is an artifact of), `shared` (an artifact of another department's project)); a component (`comp:<agent>:<folder>`: `repo`, `path`, `kind`, `declared`); a project (`sys:<id>`: `dept`, `order` (the order a change goes in), `parts: [{ name, kind, node, uses, shared, missing }]`); a resource (`res:<id>`: `kind`, `tech`, `location`, `state`, `source: declared | detected`, `techOnly` (a repository's stack), `users: [{ id, name, how }]`).
+- **`edges`:** `{ from, to, kind: uses, system, label }` (an artifact uses another, in that project) or `{ from, to, kind: link, how }` (a repository and its infrastructure).
+- **`findings`:** the review, the warnings first: `{ level: warn | info, code, node, vars }`. Codes: `noConsumer`, `noPublisher`, `resourceUnused`, `repoMissing`, `partNoRepo`, `systemOrder` (warnings); `sharedRepo`, `repoNoProject`, `resourcePlanned`, `resourceDetected`, `emptySystem`, `emptyDept`, `noProjects` (notes).
+- **`stats`:** `{ departments, repos, components, systems, resources, stack, relations }`.
+
 ## Infrastructure and the office's model
 
 The infrastructure on the map (server/resources.js): queues, topics, databases, caches, storage, other teams' services, third-party APIs, schedulers and repositories the office does not have. Each repo's stack is detected from its folder (`GET /v1/map` → each project's `infra: [{ kind, tech, name?, source }]`, and `resources` with the declared and detected ones together).

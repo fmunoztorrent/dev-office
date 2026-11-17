@@ -2,7 +2,7 @@
 
 [English](pipelines.md) · **Español**
 
-> **¿Tu proyecto ya trae su pipeline?** Si usas un harness como [Errementari](https://github.com/fmunoztorrent/errementari) (`/task` → spec → architect → qa → backend → qa → close), comandos de Claude/OpenCode o prompts de Pi, no necesitas nada de esto: registra la ruta en ⚙ › Agentes y el prompt arranca el pipeline de tu harness (ver el README, «Agentes»). Este documento es para definir pipelines propios en `.devteam/`.
+> **¿Tu proyecto ya trae su pipeline?** Si usas un harness como [Errementari](https://github.com/fmunoztorrent/errementari) (`/task` → spec → architect → qa → backend → qa → close), comandos de Claude/OpenCode o prompts de Pi, no necesitas nada de esto: registra la ruta en ⚙ › Repositorios y el prompt arranca el pipeline de tu harness (ver el README, «Agentes»). Este documento es para definir pipelines propios en `.devteam/`.
 
 Al hacer clic en la pizarra de la oficina se abre el diálogo **Nuevo encargo**. Desde ahí se manda una tarea directa a un agente, o se arranca un **pipeline**: una tarea que pasa por varias etapas, cada una en manos de un personaje del equipo, con su propio agente y su propio modelo. Lo que hace el agente por dentro se ve en el juego.
 

@@ -220,8 +220,8 @@ dev-team-office demo --pi   # a sample session: the team moves
 
 In the browser, `http://127.0.0.1:4317` shows the office. Two useful shortcuts:
 
-- **⚙ › General** picks the language, the time zone, the **city** (for the weather, the sun and the moon: a time zone covers many cities) and the **view**: the usual **front** view or the **top-down (isometric)** one. It also switches with the ◇ button or `v`.
-- **⚙ › Agents** shows what got registered.
+- **⚙ › General** picks the language, the time zone, the **city** (for the weather, the sun and the moon: a time zone covers many cities) and **⚙ › The game**, the **view**: the usual **front** view or the **top-down (isometric)** one. It also switches with the ◇ button or `v`.
+- **⚙ › Repositories** shows what got registered.
 
 ## 7. Where everything lives
 
@@ -266,4 +266,4 @@ Either way `update` ends with `setup`, so the office's skills are this version's
 | Pi shows nothing | `dev-team-office doctor`; check that the extension is in `~/.pi/agent/extensions/` and that Pi is ≥ 1.2 if you use gentle-pi |
 | Codex does not report | Trust the new hooks with `/hooks` |
 | Subagents show up as the wrong character | Add `role: <role>` to their file (`analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`) and run `join` again |
-| Inside herdr no pane opens per subagent | ⚙ › General › "Each subagent in its pane", or `dev-team-office config herdr.subagents on` |
+| Inside herdr no pane opens per subagent | ⚙ › Terminal › "Each subagent in its pane", or `dev-team-office config herdr.subagents on` |

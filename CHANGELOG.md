@@ -4,6 +4,24 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-11-17
+
+### Added
+
+- **⚙ › Map: the company's architecture, drawn.** One diagram you walk level by level: the whole company (a lane per department, who uses whom across them, the infrastructure at the bottom), a department (its repositories, and from outside only what they use or uses them), a project (its artifacts with their turn) and a repository (its components and its stack). Click a box to see what it uses, who uses it and what a change of it reaches; double-click to go down; from its panel, edit it or send it a brief.
+- **The architecture's review.** Under the map, what deserves a look, the serious ones first: a queue something publishes to and nothing consumes, a resource nobody uses, a repository whose folder is gone, an artifact without a repository, a repository in no project…
+- **`GET /v1/architecture` and the MCP tool `get_architecture`:** the same map for other programs and for the agents (also with the office off), so an agent can read how the company fits together before a change that crosses repositories.
+- **The infrastructure, administered in full.** Each resource's card links and unlinks repositories in place (with how each one uses it), **Edit** opens its whole form (notes included), and what a repository's files name and nobody declared yet can be declared with one click.
+- **New guides:** the office, getting work done, the company, settings, herdr, E2E tests, integrations and how it is built, with an index in `docs/`; a code of conduct and a support page. Every document in English and in Spanish.
+
+### Changed
+
+- **⚙ Settings is now an area of its own, not a dialog.** It covers the whole window, with its sections in groups on the left (the office, the company, architecture, the agents, the people, yours, system) and a search that finds a section by what it holds. It has an address (`#settings/<section>`), so a link opens a section and the browser's back button works; on a phone the menu becomes a picker.
+- **What was one long General tab is now sections of their own:** General, The game, Company, Autonomy, Context, Intelligence, Archive, Terminal, Backup and About. Projects, Infrastructure and Experts have their own too.
+- **Repositories lists every department's repositories**, grouped by department, not only the watched office's.
+- **The README is a front door:** what the office is, a quick start, the supported agents, how it works and where to read more. What it used to explain at length now lives in its guide.
+- **The security policy says everything that can leave your machine** (the weather, an optional model, the optional search by meaning), and is in Spanish too.
+
 ## [0.27.0] - 2026-11-16
 
 ### Changed
@@ -385,7 +403,10 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.28.0...HEAD
+[0.28.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.27.0...v0.28.0
+[0.27.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.26.0...v0.27.0
+[0.26.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.24.1...v0.25.0
 [0.24.1]: https://github.com/fmunoztorrent/dev-office/compare/v0.24.0...v0.24.1
 [0.24.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.23.0...v0.24.0

@@ -1,0 +1,9 @@
+# The issue chooser: the two templates, plus where to go for what is not an issue.
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/fmunoztorrent/dev-office/blob/main/docs/README.md
+    about: Installation, usage, the guides and the troubleshooting table (also in Spanish).
+  - name: Report a security vulnerability
+    url: https://github.com/fmunoztorrent/dev-office/security/advisories/new
+    about: Privately, please. Never in a public issue.

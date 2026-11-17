@@ -102,7 +102,7 @@ Cada archivo de configuración que se toca queda respaldado en `<archivo>.dev-te
 dev-team-office setup --only pi
 ```
 
-Deja la extensión en `~/.pi/agent/extensions/dev-team-office.ts` y el skill en `~/.agents/skills/dev-team-office/`. Si tus agentes viven en otro repo (por ejemplo uno propio del harness), corré el paso de sincronización de ese harness para exponerlos en `~/.pi/agent/agents/` (el `sync.sh` del harness suele crear los symlinks). Pi declara el rol del turno con el skill y reporta el mapa de agentes al registrarse.
+Deja la extensión en `~/.pi/agent/extensions/dev-team-office.ts` y el skill en `~/.agents/skills/dev-team-office/`. Si tus agentes viven en otro repo (por ejemplo uno propio del harness), corre el paso de sincronización de ese harness para exponerlos en `~/.pi/agent/agents/` (el `sync.sh` del harness suele crear los symlinks). Pi declara el rol del turno con el skill y reporta el mapa de agentes al registrarse.
 
 ### OpenCode
 
@@ -182,7 +182,7 @@ for (const f of fs.readdirSync(dir).filter((f) => f.endsWith(".md"))) {
   if (r) roles[a.name] = r;
 }
 console.log(Object.keys(roles).length + " agentes mapeados", JSON.stringify(roles));
-assert.ok(Object.keys(roles).length > 0, "no se mapeó ningún rol: revisá el frontmatter role:");
+assert.ok(Object.keys(roles).length > 0, "no se mapeó ningún rol: revisa el frontmatter role:");
 console.log("PASS: mapa de roles leído desde " + dir);
 '
 ```
@@ -194,7 +194,7 @@ console.log("PASS: mapa de roles leído desde " + dir);
 Toma el directorio de agentes del harness como **argumento obligatorio**: no trae ningún default, no nombra ningún harness y no lee ninguna ruta propia de una máquina. Descubre los `.md` del directorio en vez de listarlos a mano, así que sirve para cualquier harness con cualquier cantidad de agentes. Sin argumento imprime una línea de uso y sale con código distinto de cero. Termina la línea con el directorio de agentes de tu harness:
 
 ```bash
-cd "$(git rev-parse --show-toplevel)" && node --input-type=module -e 'import assert from "node:assert/strict"; import fs from "node:fs"; import path from "node:path"; import { parseAgentFile, roleOfAgent } from "./integrations/common/devteam.mjs"; import { Office } from "./server/office.js"; const dir = process.argv[1]; if (!dir) { console.error("uso: pasá el directorio de agentes del harness como argumento"); process.exit(2); } const roles = {}; for (const f of fs.readdirSync(dir).filter((f) => f.endsWith(".md"))) { const a = parseAgentFile(fs.readFileSync(path.join(dir, f), "utf8"), f); const r = roleOfAgent(a.name, a.role); if (r) roles[a.name] = r; } assert.ok(Object.keys(roles).length > 0, "no se mapeó ningún rol: revisá el frontmatter role:"); const office = new Office(); for (const [agent, expected] of Object.entries(roles)) { const s = "s-" + agent; office.ingest("pi", { session: s, cwd: "/x", kind: "session_start" }); office.ingest("pi", { session: s, cwd: "/x", kind: "agent_roles", roles }); office.ingest("pi", { session: s, cwd: "/x", kind: "tool_start", tool: "subagent_run", input: { agent, task: "implementar" } }); assert.equal(office.sessionSummary(s).subagents[0].role, expected); } console.log("PASS: " + Object.keys(roles).length + " agentes declarados, ingestados en la oficina");' "$@"
+cd "$(git rev-parse --show-toplevel)" && node --input-type=module -e 'import assert from "node:assert/strict"; import fs from "node:fs"; import path from "node:path"; import { parseAgentFile, roleOfAgent } from "./integrations/common/devteam.mjs"; import { Office } from "./server/office.js"; const dir = process.argv[1]; if (!dir) { console.error("uso: pasá el directorio de agentes del harness como argumento"); process.exit(2); } const roles = {}; for (const f of fs.readdirSync(dir).filter((f) => f.endsWith(".md"))) { const a = parseAgentFile(fs.readFileSync(path.join(dir, f), "utf8"), f); const r = roleOfAgent(a.name, a.role); if (r) roles[a.name] = r; } assert.ok(Object.keys(roles).length > 0, "no se mapeó ningún rol: revisa el frontmatter role:"); const office = new Office(); for (const [agent, expected] of Object.entries(roles)) { const s = "s-" + agent; office.ingest("pi", { session: s, cwd: "/x", kind: "session_start" }); office.ingest("pi", { session: s, cwd: "/x", kind: "agent_roles", roles }); office.ingest("pi", { session: s, cwd: "/x", kind: "tool_start", tool: "subagent_run", input: { agent, task: "implementar" } }); assert.equal(office.sessionSummary(s).subagents[0].role, expected); } console.log("PASS: " + Object.keys(roles).length + " agentes declarados, ingestados en la oficina");' "$@"
 ```
 
 Éxito: imprime `PASS: N agentes declarados, ingestados en la oficina` y termina con exit 0. Prueba las dos puntas del contrato: que cada `.md` del directorio aporta su `role:` declarado al mapa, y que al inyectar ese mapa y lanzar un `subagent_run` con cada nombre, la oficina resuelve el rol declarado (no la heurística).
@@ -241,55 +241,49 @@ La consecuencia es clara: si tu harness nombra a sus agentes con palabras que no
 
 ## Gotchas
 
-Todos observados en esta máquina durante la verificación.
+Todos observados durante la verificación.
 
-### 1. `install <harness>` no instala los agentes del harness
+### 1. `setup` no instala los agentes del harness
 
 - **Síntoma:** corriste `dev-team-office setup` y el mapa de roles queda vacío; ningún subagente cae en su personaje.
-- **Causa:** `setup` deja la librería común, los skills y la integración de cada harness (extensión, plugin o hook). Los archivos `.md` de tus agentes no son suyos. Si no están en los directorios escaneados (`~/.pi/agent/agents/`, etc.), `detectHarness` no encuentra ninguno y `roles` sale `{}`.
-- **Qué hacer:** correr el paso de sincronización del propio harness para exponer sus agentes (por ejemplo, symlinkearlos en `~/.pi/agent/agents/`). Un harness que guarda sus agentes en su repo necesita su propio sync.
+- **Causa:** `setup` deja la librería común, las skills y la integración de cada harness (extensión, plugin o hook). Los archivos `.md` de tus agentes no son asunto suyo. Si no están en los directorios que se revisan (`~/.pi/agent/agents/`, etc.), `detectHarness` no encuentra ninguno y `roles` sale `{}`.
+- **Qué hacer:** corre el paso de sincronización del propio harness para exponer sus agentes (por ejemplo, con enlaces simbólicos en `~/.pi/agent/agents/`), o corre `join` para que la oficina complete los roles que faltan con su propio equipo.
 
 ### 2. `detectHarness` sólo anuncia `pi` si el repo tiene `.pi/`
 
-- **Síntoma:** la oficina no lista `pi` como harness de ese repo, pero los subagentes igual mapean bien.
-- **Causa:** la lista `harnesses` sale de marcadores en el repo (`.pi/`, `.claude/`, `opencode.json`…), mientras que el mapa de roles se arma escaneando el directorio de usuario. Son cosas independientes.
-- **Qué hacer:** nada. No es un bug. **No crees un `.pi/` a ciegas** para "arreglarlo": sólo estarías agregando un marcador que no corresponde.
+- **Síntoma:** la oficina no lista `pi` como harness de ese repo, pero los subagentes igual caen bien.
+- **Causa:** la lista `harnesses` sale de marcadores en el repo (`.pi/`, `.claude/`, `opencode.json`…), mientras que el mapa de roles se arma revisando también el directorio del usuario. Son cosas independientes.
+- **Qué hacer:** nada. No es un bug. **No crees un `.pi/` a ciegas** para «arreglarlo»: sólo agregarías un marcador que no corresponde.
 
 ### 3. Una sesión headless nunca se registra por WebSocket
 
-- **Síntoma:** abrís `pi -p` (o lanzado por la oficina) y la sesión no aparece como agente en vivo en el tablero, aunque sus eventos sí llegan.
-- **Causa:** la extensión salta el registro cuando `stdin` no es TTY, cuando `DEV_TEAM_OFFICE_LAUNCHED` está seteado, o cuando `WebSocket` no está definido (caso de `pi -p`).
-- **Qué hacer:** es esperado. Los eventos entran por HTTP igual; para ver un agente en vivo, corré una sesión interactiva.
+- **Síntoma:** abres `pi -p` (o una que lanzó la oficina) y la sesión no aparece como agente en vivo en el tablero, aunque sus eventos sí llegan.
+- **Causa:** la extensión se salta el registro cuando `stdin` no es una TTY, cuando `DEV_TEAM_OFFICE_LAUNCHED` está definido, o cuando `WebSocket` no existe (el caso de `pi -p`).
+- **Qué hacer:** es lo esperado. Los eventos entran por HTTP igual; para ver un agente en vivo, corre una sesión interactiva.
 
 ### 4. `POST /v1/events/pi` con `agent_roles` responde `200 {ok:true, accepted:0}`
 
-- **Síntoma:** respondiste el evento y `accepted` vale 0; parece que no se aprendió nada.
-- **Causa:** el evento es **aprendido, no dibujado**: guarda el mapa de roles pero no produce ningún evento dibujable.
-- **Qué hacer:** no leas `accepted` como señal de éxito/fallo. La señal es el **HTTP 200**. Para comprobar que se aprendió, mirá el mapa de la sesión: `office.sessionSummary(s).agentRoles` (o `office.sessions.get(s).agentRoles`).
+- **Síntoma:** mandaste el evento y `accepted` vale 0; parece que no se aprendió nada.
+- **Causa:** el evento se **aprende, no se dibuja**: guarda el mapa de roles, pero no produce ningún evento que dibujar.
+- **Qué hacer:** no leas `accepted` como señal de éxito o fracaso. La señal es el **HTTP 200**. Para comprobar que se aprendió, mira el mapa de la sesión: `office.sessionSummary(s).agentRoles`.
 
-### 5. La librería y la extensión instaladas son COPIAS, no symlinks
+### 5. La librería y la extensión instaladas son COPIAS, no enlaces
 
-- **Síntoma:** editaste el repo y el agente sigue con el comportamiento viejo.
-- **Causa:** `install` copia (`writeFileSync`), no enlaza. El agente corre la copia de `~/.dev-team-office/lib/devteam.mjs` (y de la extensión).
-- **Qué hacer:** volver a correr `dev-team-office install <harness>` después de cada cambio. Se ve el desfase con `cmp ~/.dev-team-office/lib/devteam.mjs integrations/common/devteam.mjs`.
+- **Síntoma:** editaste el repo y el agente sigue con el comportamiento de antes.
+- **Causa:** `install` copia, no enlaza. El agente corre la copia de `~/.dev-team-office/lib/devteam.mjs` (y la de la extensión).
+- **Qué hacer:** vuelve a correr `dev-team-office setup` (o `install <harness>`) después de cada cambio. El desfase se ve con `cmp ~/.dev-team-office/lib/devteam.mjs integrations/common/devteam.mjs`.
 
-### 6. `install` imprime `ExperimentalWarning: SQLite is an experimental feature` en stderr
+### 6. Node imprime `ExperimentalWarning: SQLite is an experimental feature`
 
-- **Síntoma:** un warning que parece un error apenas corrés `install`.
-- **Causa:** el CLI importa el store, que usa `node:sqlite`; el módulo es experimental y Node lo avisa.
-- **Qué hacer:** ignorarlo. Es inofensivo y no afecta al comando.
+- **Síntoma:** un aviso que parece un error apenas corres un comando.
+- **Causa:** la CLI importa la base, que usa `node:sqlite`; el módulo es experimental en algunas versiones de Node y Node lo avisa.
+- **Qué hacer:** ignorarlo. Es inofensivo.
 
-### 7. `npm install` reescribe `package-lock.json` si la versión del lock quedó vieja
+### 7. Un `sync.sh` que sólo enlaza `agents/*.md` se desfasa en silencio con `skills/*`
 
-- **Síntoma:** tu primer `npm install` ensucia el lock con un diff inesperado.
-- **Causa:** el campo `version` del lock estaba desfasado respecto de `package.json` (estuvo `0.1.0` contra `0.4.0`).
-- **Qué hacer:** esperarlo; es el lock poniéndose al día. Revisá y commiteá ese refresh a conciencia, no como ruido.
-
-### 8. Un `sync.sh` que sólo enlaza `agents/*.md` se desvía en silencio para `skills/*`
-
-- **Síntoma:** los agentes se actualizan al sincronizar, pero los skills del harness quedan viejos.
-- **Causa:** el `sync.sh` itera sólo `agents/*.md`; los symlinks de `skills/*` se crearon a mano en su momento.
-- **Qué hacer:** revisarlo en cualquier harness. Si tiene `skills/`, el sync debe cubrirlos también (o hacerse a mano cada vez, a sabiendas).
+- **Síntoma:** los agentes se actualizan al sincronizar, pero las skills del harness quedan viejas.
+- **Causa:** el `sync.sh` recorre sólo `agents/*.md`; los enlaces de `skills/*` se crearon a mano en su momento.
+- **Qué hacer:** revísalo en cualquier harness. Si tiene `skills/`, la sincronización tiene que cubrirlas también.
 
 ## Solución de problemas
 

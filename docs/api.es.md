@@ -314,6 +314,19 @@ Cada experto guarda una lista de acciones rápidas (`actions`: `[{ label, prompt
 - **Qué skill usa una herramienta:** `Skill` de Claude Code (`{ skill }`, sin su plugin: `plugin:nombre` → `nombre`), `skill` de OpenCode (`{ name }`), o una ruta con `…/skills/<nombre>/…` (leer el `SKILL.md` de la skill, como hacen Pi y Codex; también en un comando).
 - Por WebSocket, `{ type: "experts", experts }`; el estado (`/v1/state`) trae `experts`. Viajan en tu archivo de ajustes (`experts`).
 
+## La arquitectura
+
+Todo el mapa como un solo grafo (server/architecture.js): lo que dibuja ⚙ › Mapa en los ajustes y lo que la herramienta MCP `get_architecture` le cuenta a un agente.
+
+| Método | Ruta | Respuesta |
+|---|---|---|
+| `GET` | `/v1/architecture` | `{ ok, nodes, edges, findings, stats }` |
+
+- **`nodes`:** `{ id, type, name, key }` y, según el tipo: un departamento (`dept:<oficina>`); un repositorio (`repo:<agente>`: `dept`, `path`, `harness`, `kind`, `exists`, `systems` (los proyectos de los que es artefacto), `shared` (artefacto de un proyecto de otro departamento)); un componente (`comp:<agente>:<carpeta>`: `repo`, `path`, `kind`, `declared`); un proyecto (`sys:<id>`: `dept`, `order` (el orden en que va un cambio), `parts: [{ name, kind, node, uses, shared, missing }]`); un recurso (`res:<id>`: `kind`, `tech`, `location`, `state`, `source: declared | detected`, `techOnly` (el stack de un repositorio), `users: [{ id, name, how }]`).
+- **`edges`:** `{ from, to, kind: uses, system, label }` (un artefacto usa a otro, en ese proyecto) o `{ from, to, kind: link, how }` (un repositorio y su infraestructura).
+- **`findings`:** la revisión, primero los avisos: `{ level: warn | info, code, node, vars }`. Códigos: `noConsumer`, `noPublisher`, `resourceUnused`, `repoMissing`, `partNoRepo`, `systemOrder` (avisos); `sharedRepo`, `repoNoProject`, `resourcePlanned`, `resourceDetected`, `emptySystem`, `emptyDept`, `noProjects` (notas).
+- **`stats`:** `{ departments, repos, components, systems, resources, stack, relations }`.
+
 ## La infraestructura y el modelo de la oficina
 
 La infraestructura en el mapa (server/resources.js): colas, tópicos, bases de datos, cachés, almacenamiento, servicios de otros equipos, APIs de terceros, schedulers y repositorios que la oficina no tiene. Lo que usa cada repo se detecta de su carpeta (`GET /v1/map` → el `infra: [{ kind, tech, name?, source }]` de cada proyecto, y `resources` con lo declarado y lo detectado juntos).
