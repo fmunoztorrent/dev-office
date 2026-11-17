@@ -295,8 +295,6 @@ export default {
     newDesc: 'new (a directive asked for it)', needAnswers: 'Before it goes, tell me what {what} is: whether it exists and where, whether it must be created, or whether it is a new department.', badAnswer: 'What is "{what}"? Answer: it exists, create it, a separate repo, a new repo, infrastructure, a new department, or not part of the project.', deptEmpty: '{names} was created, but it has no projects yet: add one (⚙ › Departments) and send the directive again.',
     askInfra: '"{what}" ({kind}): does it exist already, and where? Or must it be created, and by whom?', whoCreates: 'Which project creates "{what}"? Pick one.', needWhere: 'Where is "{what}"? Write its folder or its repository’s URL.', noFolder: 'The folder {path} does not exist', repoExists: 'The folder {path} exists and is not empty: if it is a repo already, answer “It is a separate repo”.',
     ui: {
-    pulse: { title: '⏱ What everyone is on', closes: 'closes in {t}', ago: '{t} ago', waiting: 'waiting for you: {text}', thinking: 'thinking…' },
-    phone: { title: 'Call an expert', key: 'Call an expert (p)', none: 'No experts yet: add them in ⚙ › Characters › Experts.', placeholder: 'What do you need from them?', call: '📞 Call', empty: 'Write what you need, or pick an action.', calling: 'Calling {name}…', sent: '{name} is on it: the task went to the project agent that knows the skill.' },
       tree: 'The repos it touches', component: 'component', expand: '⤢ See the detail', graphTitle: '🗺 The impact in detail', task: 'The order', unknown: '❓ Not on the map', dept: '{n} repo(s)',
       thinking: '🧠 {model} is analyzing the order…', thought: '🧠 Analyzed with {model} ({s} s)', thinkFailed: '🧠 The analysis by {model} did not come ({error}): the map by words stays.', thinkOff: 'For a finer analysis (how each repo is touched and what is missing), choose a model in ⚙ › General › 🧠 Intelligence.', rethink: '🧠 Analyze again',
       why: 'Why', how: 'How it is touched', components: 'Components', infra: 'Infrastructure', stack: 'Uses', system: 'Project', path: 'Folder', answerBelow: 'Not on the map: answer it below.', summary: 'The analysis', usedBy: 'Used by', where: 'Where',
@@ -718,6 +716,8 @@ export default {
     },
   },
   ui: {
+    pulse: { title: '⏱ What everyone is on', closes: 'closes in {t}', ago: '{t} ago', waiting: 'waiting for you: {text}', thinking: 'thinking…' },
+    phone: { title: 'Call an expert', key: 'Call an expert (p)', none: 'No experts yet: add them in ⚙ › Characters › Experts.', placeholder: 'What do you need from them?', call: '📞 Call', empty: 'Write what you need, or pick an action.', calling: 'Calling {name}…', sent: '{name} is on it: the task went to the project agent that knows the skill.' },
     lately: 'What they did lately', newcomerOf: 'Newcomer · {role} · {project}', visitorOf: 'Visiting · {role} · {project}', talkEmpty: 'Ask {name} something about what they are doing (end with ?) and their agent answers. Anything else, they answer in their own words.', talkEmptyTeam: 'Say something to the whole team.',
     contextNone: 'The agent’s context, as a health bar: it shows up when an agent reports it (Claude Code, Pi and OpenCode do while they work).',
     context: 'Context · {agent}', contextAria: 'Context: {pct}% free ({used} of {max} used)', contextLimit: 'Compacts by itself at {at}', contextCompacted: 'Compacted: how full it is will be known with its next answer',
