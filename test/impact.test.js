@@ -85,7 +85,7 @@ test('el mapa de impacto: departamentos, proyectos y componentes que nombra; lo 
     assert.deepEqual(r.map.departments.find((o) => o.id === 'tienda').projects[0].components.filter((c) => c.impacted).map((c) => c.name), ['web']);
     // chosen by hand: it counts
     assert.deepEqual(desk.plan({ text: 'Actualizar el logger', targets: [tienda.id] }).map.targets, [tienda.id]);
-    assert.match(desk.plan({ text: 'Actualizar el logger' }).text, /No identifiqué qué departamentos ni proyectos toca/);
+    assert.match(desk.plan({ text: 'Actualizar el logger' }).text, /No identifiqué qué departamentos ni repositorios toca/);
   } finally { store.close(); for (const d of dirs) fs.rmSync(d, { recursive: true, force: true }); }
 });
 
@@ -97,7 +97,7 @@ test('lo que no está en el mapa se pregunta antes de enviar: existe (y dónde),
     assert.equal(out.ok, false);
     assert.equal(out.needsAnswers, true);
     assert.deepEqual(out.map.unknown.map((u) => u.phrase), ['app móvil', 'portal de socios']);
-    assert.equal(out.map.unknown[0].question, '¿Existe «app móvil»? ¿En qué proyecto y carpeta está, o hay que crearlo?');
+    assert.equal(out.map.unknown[0].question, '¿Existe «app móvil»? ¿En qué repositorio y carpeta está, o hay que crearlo?');
     assert.match(out.error, /«app móvil», «portal de socios»/);
     assert.equal(sent.length, 0, 'no se envía nada');
     // a bad answer
@@ -111,7 +111,7 @@ test('lo que no está en el mapa se pregunta antes de enviar: existe (y dónde),
     assert.deepEqual(d.parts.map((p) => [p.name, p.components, p.fresh]), [['api-pagos', ['notificaciones'], []], ['tienda', [], ['app móvil']]]);
     const toTienda = sent.find((m) => m.target === tienda.id).text;
     assert.match(toTienda, /\n🆕 Componente nuevo «app móvil» \(apps\/mobile\): hay que crearlo como parte de esta directiva\.\n\n/);
-    assert.match(sent.find((m) => m.target === pagos.id).text, /\n🧩 Componentes de este proyecto que toca: notificaciones \(services\/notificaciones\)\.\n\n/);
+    assert.match(sent.find((m) => m.target === pagos.id).text, /\n🧩 Componentes de este repositorio que toca: notificaciones \(services\/notificaciones\)\.\n\n/);
     // it is on the map now: the next order that names it knows where it is
     assert.deepEqual(store.listComponents().map((c) => [c.name, c.path]), [['app móvil', 'apps/mobile']]);
     const again = desk.plan({ text: 'Que la app móvil tenga modo oscuro' });

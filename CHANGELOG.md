@@ -4,6 +4,65 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.29.1] - 2026-11-17
+
+The office used for real, from the installer to Claude Code doing the work: what failed there, fixed.
+
+### Fixed
+
+- **A Claude Code session the office starts in the background could not leave its handoff, report a loop's criteria or read what its brief let it read.** In `claude -p` nobody is there to approve a permission, so the `handoff` and `loop_report` calls were denied (the next artifact got the end of the answer instead, and the loop waited for the ✅ lines), and reading the folder of the artifact it uses was blocked. The office now gives those sessions its own MCP tools that the briefs ask for (never the ones that send work or change the company) and reading, only reading, those folders. Tried with Claude Code: a project's brief in order with its handoff, and a loop whose step reported its two criteria.
+- **`dev-team-office join` answered in English**, the MCP's language for the agents. It now speaks yours.
+- **"Project" kept meaning a registered repository** in the executive floor, the impact map, the loops, the archive, ⚙ › Departments and the errors, next to "project" meaning a product. A repository is now a repository everywhere, also in the terminal (`offices`, `agents`), in the work guide and in the briefs' headers.
+- **The new loop's form was squeezed** under a tall empty title: a style meant for each dialog's own card also caught the form inside the loops dialog.
+- `dev-team-office doctor` names the folder where the command really is.
+- The installation guide says where to get herdr.
+
+## [0.29.0] - 2026-11-17
+
+A review of everything there is against what the docs say: what did not match, what was half done and what nobody used.
+
+### Added
+
+- **`dev-team-office architecture`** (also `map`): the company's architecture as an outline in your language, from the running office or from the database when it is off: each department with its repositories, their components and infrastructure, each project in the order a change goes, and the review said in words. `--json` prints the whole graph. It is the same outline the agents read with `get_architecture`.
+- **`dev-team-office config` covers every general setting**, not only the first eleven: the style, the company's standards and capacity, the autonomy, the auto-compaction (`compact.at 400k` or `80%`), the archive, the intelligence and the floor. Without a key it lists them all with their value; a wrong value says what it takes.
+- **⚙ › Intelligence warns what is missing** (the key, the model, the agent's CLI) before you try it. `GET /v1/intelligence` brings it in words too (`problemText`).
+- **A reference of the environment variables** in the settings guide, and the installer's `DEV_TEAM_OFFICE_SOURCE` and `DEV_TEAM_OFFICE_REPO` in the installation guide.
+- The terminal's settings say where the rest is: the General tab gives the browser's settings address.
+- The agents learn about the company's map: the MCP server's instructions and the office's skill tell them to read `get_architecture` before a change that crosses repositories, and what to do with a 🧩 project brief, a 🆕 resource and a 🔁 loop step.
+
+### Fixed
+
+- **The history of what you sent (`GET /v1/prompts?agent=`) never answered:** another route with the same path took it. It is now `GET /v1/prompts/history`.
+- **Settings sections that did not redraw after their own change.** Since 0.28.0, choosing another provider in ⚙ › Intelligence, turning the search by meaning on in ⚙ › Archive, or turning auto-compaction off or changing its unit in ⚙ › Context left the old fields on screen. They now show what the new choice takes.
+- **A new project with the name of an existing one replaced it** (⚙ › Projects): the API updates the project with that name. The form now says there is already one with that name.
+- The texts that still said "system" where the interface says "project" (the errors of ⚙ › Projects, the import summary, which also called the repositories "projects"), and the export's description, which left out the projects, the infrastructure, your skills and tools and the experts.
+- `dev-team-office task --agent` lists Codex, which can receive work too.
+- ⚙ › About lists every key of the game (`r`, PgUp/PgDn, Esc) and says what `o` does: the next floor.
+- The guides: the full CLI table (with `character`, `settings`, `daily` and `architecture`), the database's tables and settings, the code map (it was missing about 25 modules) and AGENTS.md's map.
+
+### Removed
+
+- **The standalone binary built with Deno** (`npm run build`). The docs promised it ran without Node, but `start`, `restart`, `setup` and the MCP server start Node with `bin/dev-team-office.js`, so it could not work; it had not been built since the first version.
+- Seventeen interface texts nothing used any more, in both languages.
+
+## [0.28.0] - 2026-11-17
+
+### Added
+
+- **⚙ › Map: the company's architecture, drawn.** One diagram you walk level by level: the whole company (a lane per department, who uses whom across them, the infrastructure at the bottom), a department (its repositories, and from outside only what they use or uses them), a project (its artifacts with their turn) and a repository (its components and its stack). Click a box to see what it uses, who uses it and what a change of it reaches; double-click to go down; from its panel, edit it or send it a brief.
+- **The architecture's review.** Under the map, what deserves a look, the serious ones first: a queue something publishes to and nothing consumes, a resource nobody uses, a repository whose folder is gone, an artifact without a repository, a repository in no project…
+- **`GET /v1/architecture` and the MCP tool `get_architecture`:** the same map for other programs and for the agents (also with the office off), so an agent can read how the company fits together before a change that crosses repositories.
+- **The infrastructure, administered in full.** Each resource's card links and unlinks repositories in place (with how each one uses it), **Edit** opens its whole form (notes included), and what a repository's files name and nobody declared yet can be declared with one click.
+- **New guides:** the office, getting work done, the company, settings, herdr, E2E tests, integrations and how it is built, with an index in `docs/`; a code of conduct and a support page. Every document in English and in Spanish.
+
+### Changed
+
+- **⚙ Settings is now an area of its own, not a dialog.** It covers the whole window, with its sections in groups on the left (the office, the company, architecture, the agents, the people, yours, system) and a search that finds a section by what it holds. It has an address (`#settings/<section>`), so a link opens a section and the browser's back button works; on a phone the menu becomes a picker.
+- **What was one long General tab is now sections of their own:** General, The game, Company, Autonomy, Context, Intelligence, Archive, Terminal, Backup and About. Projects, Infrastructure and Experts have their own too.
+- **Repositories lists every department's repositories**, grouped by department, not only the watched office's.
+- **The README is a front door:** what the office is, a quick start, the supported agents, how it works and where to read more. What it used to explain at length now lives in its guide.
+- **The security policy says everything that can leave your machine** (the weather, an optional model, the optional search by meaning), and is in Spanish too.
+
 ## [0.27.0] - 2026-11-16
 
 ### Changed
@@ -385,7 +444,13 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.29.1...HEAD
+[0.29.1]: https://github.com/fmunoztorrent/dev-office/compare/v0.29.0...v0.29.1
+[0.29.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.28.0...v0.29.0
+[0.28.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.27.0...v0.28.0
+[0.27.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.26.0...v0.27.0
+[0.26.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.24.1...v0.25.0
 [0.24.1]: https://github.com/fmunoztorrent/dev-office/compare/v0.24.0...v0.24.1
 [0.24.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.23.0...v0.24.0

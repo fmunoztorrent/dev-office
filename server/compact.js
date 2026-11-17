@@ -1,4 +1,4 @@
-// Auto-compaction: when an agent's context goes past your threshold (⚙ › General: 400k tokens by
+// Auto-compaction: when an agent's context goes past your threshold (⚙ › Context: 400k tokens by
 // default, or a share of its model's window), the office asks the agent to compact it. The agent does it
 // (the office never touches a conversation), each one its own way:
 //

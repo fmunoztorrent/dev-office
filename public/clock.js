@@ -1,4 +1,4 @@
-// The office's time: each office has its time zone (⚙ › Offices; the system's by default). The
+// The office's time: each office has its time zone (⚙ › Departments; the system's by default). The
 // zone gives the date and time shown (the clock, lunch, day and night), the country and the city,
 // and with it the weather outside.
 //

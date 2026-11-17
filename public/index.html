@@ -460,54 +460,34 @@
       </footer>
     </form>
   </dialog>
-  <dialog id="settings" class="brief settings" aria-labelledby="settings-title">
-    <form id="settings-form" method="dialog">
-      <header class="brief-head">
-        <span class="pin" aria-hidden="true"></span>
-        <h2 id="settings-title" data-i18n="settings.title">⚙ Settings</h2>
-        <button type="button" class="brief-x" id="settings-close" data-i18n-aria="settings.close">✕</button>
-      </header>
-      <nav class="tabs" role="tablist">
-        <button type="button" role="tab" data-tab="general" aria-selected="true" data-i18n="settings.tabs.general">General</button>
-        <button type="button" role="tab" data-tab="offices" aria-selected="false" data-i18n="settings.tabs.offices">Offices</button>
-        <button type="button" role="tab" data-tab="repos" aria-selected="false" data-i18n="settings.tabs.repos">Repositories</button>
-        <button type="button" role="tab" data-tab="look" aria-selected="false" data-i18n="settings.tabs.look">Characters</button>
-        <button type="button" role="tab" data-tab="models" aria-selected="false" data-i18n="settings.tabs.models">Models</button>
-        <button type="button" role="tab" data-tab="mine" aria-selected="false" data-i18n="settings.tabs.mine">Mine</button>
-      </nav>
-      <div class="brief-body">
-        <section data-panel="general" class="s-panel"></section>
-        <section data-panel="offices" class="s-panel" hidden></section>
-        <section data-panel="repos" class="s-panel" hidden></section>
-        <section data-panel="look" class="s-panel" hidden></section>
-        <section data-panel="models" class="s-panel" hidden></section>
-        <section data-panel="mine" class="s-panel" hidden></section>
-        <p id="s-msg" class="b-problem" role="status"></p>
+  <!-- ⚙ Settings: an area of its own over the game, not a dialog (settings-ui.js). On the left its
+       sections, in groups, with a search; on the right the section chosen. Its address is the page's
+       hash (#settings/<section>), so the browser's back button and a link both work. -->
+  <section id="settings" class="cfg" hidden aria-labelledby="settings-title">
+    <header class="cfg-top">
+      <button type="button" class="cfg-back" id="settings-close" data-i18n-title="settings.backKey"><span aria-hidden="true">←</span> <span data-i18n="settings.back">Back to the office</span></button>
+      <h1 id="settings-title" data-i18n="settings.title">⚙ Settings</h1>
+      <input type="search" id="cfg-search" class="cfg-search" autocomplete="off" spellcheck="false" data-i18n-ph="settings.search" data-i18n-aria="settings.search">
+    </header>
+    <div class="cfg-main">
+      <nav class="cfg-nav" id="cfg-nav" data-i18n-aria="settings.sections"></nav>
+      <!-- on a phone the sections are a picker -->
+      <select class="cfg-jump" id="cfg-jump" data-i18n-aria="settings.sections"></select>
+      <div class="cfg-content" id="cfg-content" tabindex="-1">
+        <header class="cfg-head">
+          <p class="cfg-crumb" id="cfg-crumb"></p>
+          <h2 id="cfg-title"></h2>
+          <p class="cfg-desc" id="cfg-desc"></p>
+        </header>
+        <form id="settings-form" class="cfg-body" novalidate></form>
       </div>
-      <footer class="brief-foot">
-        <span class="muted" id="s-file"></span>
-        <button type="button" class="btn ghost" id="settings-cancel" data-i18n="settings.close">Close</button>
-        <button type="button" class="btn" id="settings-save" data-i18n="settings.save">Save</button>
-      </footer>
-    </form>
-  </dialog>
-  <dialog id="pick-repo" class="brief settings pick-repo" aria-labelledby="pk-title">
-    <form method="dialog">
-      <header class="brief-head">
-        <span class="pin" aria-hidden="true"></span>
-        <h2 id="pk-title" data-i18n="settings.repos.pick">Choose a repository</h2>
-        <button type="button" class="brief-x" id="pk-close" data-i18n-aria="settings.close">✕</button>
-      </header>
-      <div class="brief-body">
-        <p class="hint" id="pk-hint" data-i18n="settings.repos.pickHint">The repositories the office already knows.</p>
-        <div class="s-agents" id="pk-list"></div>
-        <p id="pk-msg" class="b-problem" role="status"></p>
-      </div>
-      <footer class="brief-foot">
-        <button type="button" class="btn ghost" id="pk-manual" data-i18n="settings.repos.pickManual">＋ Type the path instead</button>
-      </footer>
-    </form>
-  </dialog>
+    </div>
+    <footer class="cfg-foot">
+      <span class="muted" id="s-file"></span>
+      <p id="s-msg" class="cfg-msg" role="status"></p>
+      <button type="button" class="btn" id="settings-save" data-i18n="settings.save" hidden>Save</button>
+    </footer>
+  </section>
   <script type="module" src="/main.js"></script>
 </body>
 </html>

@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { startServer } from '../server/server.js';
+import { openStore, DEFAULT_PREFS } from '../server/store.js';
 import { exportSettings, importSettings, parseSettings, SETTINGS_KIND } from '../server/settings-io.js';
 
 const tmp = () => fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dto-settings-')));
@@ -119,11 +120,52 @@ test('la CLI: settings export a un archivo y settings import en otra máquina (s
     assert.match(r.stdout, /Ajustes exportados a/);
     r = cli(homes[1], 'settings', 'import', file);
     assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stdout, /Ajustes importados: \d+ ajustes, 2 departamentos, 0 personajes, 1 proyectos, 0 componentes, 0 sistemas, 0 skills, 0 herramientas, 0 expertos, 0 de infraestructura\./);
+    assert.match(r.stdout, /Ajustes importados: \d+ ajustes, 2 departamentos, 0 personajes, 1 repositorios, 0 componentes, 0 proyectos, 0 skills, 0 herramientas, 0 expertos, 0 de infraestructura\./);
     r = cli(homes[1], 'settings', 'export');
     const x = JSON.parse(r.stdout);
     assert.deepEqual(x.prefs.view, { mode: 'iso' });
     assert.deepEqual(x.projects.map((p) => [p.name, p.department, p.instructions]), [['tienda', 'pagos', 'pnpm.']]);
     assert.equal(cli(homes[1], 'settings').status, 1, 'sin subcomando: el uso');
   } finally { for (const d of [...homes, dir]) fs.rmSync(d, { recursive: true, force: true }); }
+});
+
+test('la CLI: config lee y escribe todos los ajustes generales, cada uno con su tipo', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const ROOT = path.join(path.dirname(new URL(import.meta.url).pathname), '..');
+  const home = tmp();
+  const env = { PATH: process.env.PATH, HOME: home, DEV_TEAM_OFFICE_LANG: 'es', DEV_TEAM_OFFICE_DB: path.join(home, 'office.db'), DEV_TEAM_OFFICE_PORT: '1', DEV_TEAM_OFFICE_SOCKET: path.join(home, 'none.sock'), DEV_TEAM_OFFICE_WEATHER: 'off' };
+  const cli = (...args) => spawnSync(process.execPath, [path.join(ROOT, 'bin', 'dev-team-office.js'), 'config', ...args], { env, encoding: 'utf8', timeout: 20000 });
+  try {
+    for (const [k, v, shown] of [['theme', 'anime', 'anime'], ['capacity', '5', '5'], ['autonomy.clarify', 'off', 'off'], ['compact.at', '80%', '80%'], ['compact.at', '300k', '300k'], ['intelligence.provider', 'ollama', 'ollama'], ['intelligence.timeout', '90', '90'], ['archive.push', 'no', 'off'], ['view.floor', 'archive', 'archive'], ['standards', 'Tests antes de mergear.', 'Tests antes de mergear.']]) {
+      const r = cli(k, v);
+      assert.equal(r.status, 0, `${k}: ${r.stderr}`);
+      assert.equal(r.stdout.trim(), `${k} = ${shown}`);
+    }
+    const db = openStore(path.join(home, 'office.db'));
+    const p = db.getPrefs();
+    db.close();
+    assert.deepEqual([p.theme, p.capacity, p.autonomy.clarify, p.compact, p.intelligence.provider, p.intelligence.timeout, p.archive.push, p.view.floor, p.standards],
+      ['anime', 5, false, { auto: true, at: 300000, unit: 'tokens' }, 'ollama', 90, false, 'archive', 'Tests antes de mergear.']);
+    // sin clave, todos, con su valor: cada ajuste general que existe (los perfiles de modelos se editan en ⚙;
+    // la unidad del tope va con compact.at)
+    const all = cli().stdout;
+    const leaves = (o, p = '') => Object.entries(o).flatMap(([k, v]) => (v && typeof v === 'object' && !Array.isArray(v) ? leaves(v, `${p}${k}.`) : [`${p}${k}`]));
+    const listed = all.split('\n').slice(1).map((l) => l.trim().split(/\s+/)[0]).filter(Boolean);
+    assert.deepEqual(leaves(DEFAULT_PREFS).filter((k) => !k.startsWith('models.') && k !== 'compact.unit').sort(), [...listed].sort());
+    assert.match(all, /^ {2}theme {18}anime$/m);
+    assert.match(all, /^ {2}compact\.at {13}300k$/m);
+    assert.match(all, /^ {2}archive\.model {10}—$/m);
+    // "-" borra los estándares
+    assert.equal(cli('standards', '-').stdout.trim(), 'standards = —');
+    // lo que no vale no se guarda, y dice por qué
+    let r = cli('autonomy.clarify', 'quizás');
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /autonomy\.clarify es on u off/);
+    r = cli('capacity', '99');
+    assert.equal(r.status, 1);
+    r = cli('compact.at', 'mucho');
+    assert.match(r.stderr, /compact\.at es un número de tokens/);
+    r = cli('nada.de.nada', 'x');
+    assert.match(r.stderr, /Ajuste desconocido: nada\.de\.nada\. Los ajustes: lang, theme/);
+  } finally { fs.rmSync(home, { recursive: true, force: true }); }
 });

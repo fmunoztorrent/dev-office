@@ -209,6 +209,6 @@ test('API: ejecutar una acción sin proyecto que conozca la skill se lo dice', a
     const made = await call('POST', '/v1/experts', { skill: 'pci-dss', look: { name: 'Ana' } });
     const out = await call('POST', `/v1/experts/${made.expert.id}/run`, { prompt: 'Auditá' });
     assert.equal(out.status, 400);
-    assert.match(out.error, /proyecto registrado/);
+    assert.match(out.error, /repositorio registrado/);
   } finally { await server.close(); }
 });

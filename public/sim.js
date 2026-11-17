@@ -126,7 +126,7 @@ export const DEFAULT_VISITORS = defaults(VISITORS);
 const ANIME_DEFAULTS = { ...defaults(ANIME_TEAM), ...defaults(ANIME_VISITORS) };
 
 // ------------------------------------------------------------------------------------ the theme
-// The graphic theme (⚙ › General › Style): pixel art (the default) or anime. It decides the default
+// The graphic theme (⚙ › The game › Style): pixel art (the default) or anime. It decides the default
 // cast, and in the anime one there are no men: every look is a woman's (her face, her titles).
 let theme = 'pixel';
 export const currentTheme = () => theme;

@@ -53,7 +53,7 @@ Y abre `http://127.0.0.1:4320`. Con `dev-team-office demo --pi --port 4320` corr
 - **Un tema por cambio**, con su test. Los tests van en `test/<tema>.test.js` y sus nombres son frases en español que dicen qué se espera.
 - **Sin dependencias nuevas de ejecución.** Si de verdad hace falta una, explica por qué en el PR.
 - **Los textos de la interfaz en los dos idiomas** (`public/locales/en.js` y `es.js`, con las mismas claves y las mismas `{variables}`).
-- **La documentación al día, en los dos idiomas:** cada documento en inglés (`README.md`, `CONTRIBUTING.md`, `docs/<nombre>.md`) tiene su versión en español al lado (`.es.md`); un cambio en uno va también en el otro. También la ayuda de la CLI (`cli.help`), si cambia lo que ve el usuario.
+- **La documentación al día, en los dos idiomas:** cada documento en inglés (`README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `SUPPORT.md`, `CODE_OF_CONDUCT.md`, `docs/<nombre>.md`) tiene su versión en español al lado (`.es.md`), con los mismos títulos; un cambio en uno va también en el otro. `test/docs.test.js` revisa cada enlace, ancla e imagen, y los pares. El README es la puerta de entrada y se mantiene corto: lo que hace una función en detalle va en su guía de `docs/` ([el índice](docs/README.es.md)). También la ayuda de la CLI (`cli.help`), si el usuario ve el cambio.
 - **Los comentarios del código, en inglés.**
 - **Las integraciones no rompen al agente:** con la oficina apagada no hacen nada, siempre con un tope de tiempo y sin escribir en la salida del agente.
 - **El mensaje del commit** con prefijo convencional: `feat(herdr): …`, `fix(office): …`, `docs: …`.
@@ -66,7 +66,8 @@ Y abre `http://127.0.0.1:4320`. Con `dev-team-office demo --pi --port 4320` corr
 | Conectar otro agente | [docs/connect-a-harness.es.md](docs/connect-a-harness.es.md): adaptador, integración, `setup` |
 | Un evento nuevo | [`server/office.js`](server/office.js) (`#enrich`), la simulación ([`public/sim.js`](public/sim.js)) y [docs/api.es.md](docs/api.es.md) |
 | Algo nuevo en la oficina (un mueble, una reacción) | [`public/sim.js`](public/sim.js) para la lógica y [`public/game.js`](public/game.js) para dibujarlo en las dos vistas (la cenital usa [`public/iso.js`](public/iso.js)). La terminal está en [`tui/view.js`](tui/view.js) |
-| Un ajuste | [`server/store.js`](server/store.js), [`public/settings-ui.js`](public/settings-ui.js), [`tui/settings.js`](tui/settings.js) y `dev-team-office config` |
+| Un ajuste | [`server/store.js`](server/store.js), [`public/settings-ui.js`](public/settings-ui.js) (una sección nueva: su id en [`public/settings-sections.js`](public/settings-sections.js) y sus `settings.nav`, `settings.desc` y `settings.words` en los dos idiomas), [`tui/settings.js`](tui/settings.js), `dev-team-office config` y [docs/settings.es.md](docs/settings.es.md) |
+| Una guía nueva | `docs/<nombre>.md` y `docs/<nombre>.es.md`, en la lista de [docs/README.es.md](docs/README.es.md) y de su versión en inglés |
 | Una herramienta MCP | [`server/mcp.js`](server/mcp.js) y [docs/mcp.es.md](docs/mcp.es.md) |
 
 ## Publicar una versión

@@ -3,7 +3,7 @@
 //
 //   - Lexical search, always: SQLite's FTS5 over each entry's chunks (server/chunks.js), without
 //     accents and by prefix, so exact business terms (SKUs, codes, acronyms) are found. Offline.
-//   - Semantic search, optional (⚙ › General › Archive): each chunk's embedding, from local Ollama or
+//   - Semantic search, optional (⚙ › Archive): each chunk's embedding, from local Ollama or
 //     an OpenAI-compatible API (OpenAI, Voyage…; its key in $DEV_TEAM_OFFICE_EMBED_KEY), compared
 //     by cosine in memory. Both rankings are fused (reciprocal rank fusion).
 //   - The glossary (entries of kind `term`: the term, its definition, its synonyms as tags) widens
@@ -151,7 +151,7 @@ const PROVIDERS = {
 export const EMBEDDING_PROVIDERS = ['off', ...Object.keys(PROVIDERS)];
 
 /**
- * The embedding provider of ⚙ › General › Archive: { enabled, model, embed(texts) → [Float32Array] }.
+ * The embedding provider of ⚙ › Archive: { enabled, model, embed(texts) → [Float32Array] }.
  * `model` names the provider too ("ollama:nomic-embed-text"): changing it re-embeds everything.
  */
 export function createEmbedder(getPrefs, { fetch: fetchFn = globalThis.fetch, env = process.env } = {}) {

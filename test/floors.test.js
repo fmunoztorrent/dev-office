@@ -318,7 +318,7 @@ test('el monitor de la terminal cuenta las directivas en curso y lo que guarda e
   assert.deepEqual([n.directives, n.knowledge], [1, 3]);
   mon.floorEvent({ floor: 'exec', kind: 'directive', text: 'Agregar /health', total: 2, offices: ['Principal', 'Pagos'] });
   mon.floorEvent({ floor: 'archive', kind: 'saved', text: 'Minuta', entryKind: 'minute' });
-  assert.deepEqual(mon.model.log.map((l) => l.text), ['🏛 Directiva «Agregar /health» a 2 proyecto(s): Principal, Pagos'], 'las actas no se cuentan');
+  assert.deepEqual(mon.model.log.map((l) => l.text), ['🏛 Directiva «Agregar /health» a 2 repositorio(s): Principal, Pagos'], 'las actas no se cuentan');
   const screen = renderMonitor(mon, { cols: 240, rows: 30, color: false, now: Date.now() }).join('\n');
   assert.match(screen, /🏛 1 directiva\(s\) en curso/);
   assert.match(screen, /📚 3 en el archivo/);

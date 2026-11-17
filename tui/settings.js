@@ -1,5 +1,8 @@
-// ⚙ Settings in the terminal: a form over the cork board, with the same tabs as the web.
-//   General      language, time zone and city, real weather, herdr (agents in panes) and the log
+// ⚙ Settings in the terminal: a form over the cork board, with the everyday settings. The rest (projects,
+// infrastructure, the map, autonomy, intelligence, the archive, experts…) live in the browser's settings
+// area, and the General tab says where (its address).
+//   General      language, time zone and city, real weather, the log, auto-compaction, herdr (agents in
+//                panes) and the default model profile
 //   Offices      the company's offices: name, time zone and city; view, edit, delete
 //   Repositories the maintainer: add (full path + the agent that serves it + its department),
 //                delete and send it a prompt; shows what each one's harness brings
@@ -202,6 +205,8 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
       const profileLabel = (id) => (id === 'none' ? t('brief.ownModel') : p.models.profiles[id]?.label || id);
       f.push({ type: 'select', label: t('settings.models.active'), value: () => profileLabel(p.models?.active || 'none'), cycle: (d) => setPref({ models: { active: cycle(profiles, p.models?.active || 'none', d) } }) });
       f.push({ type: 'info', text: `  ${t('settings.file', { file: tilde(s.data.office.file) })}` });
+      f.push({ type: 'info', text: `  ${t('settings.moreInBrowser')}` });
+      f.push({ type: 'info', text: `    ${http}/#settings`, color: C.ink });
     } else if (s.tab === 'offices') {
       f.push({ type: 'info', text: `  ${t('settings.offices.hint')}` });
       for (const o of s.offices) {

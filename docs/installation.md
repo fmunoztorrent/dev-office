@@ -10,7 +10,7 @@ This guide is for a machine that does not have Dev Team Office yet. At the end y
 |---|---|---|
 | **Node.js ≥ 22.13** (macOS or Linux) | The office, its SQLite database (`node:sqlite`) and its WebSocket. It has no other dependencies | Yes |
 | A coding agent: **Pi**, **Claude Code**, **OpenCode** or **Codex** (also Gemini CLI or Cursor, MCP only) | It does the work. The office draws it and sends it tasks | Yes, at least one |
-| **herdr** | Each agent and each subagent in its own pane, with the activity monitor next to them | No, but it is the recommended way |
+| **[herdr](https://herdr.dev)** | Each agent and each subagent in its own pane, with the activity monitor next to them | No, but it is the recommended way |
 | A *truecolor* terminal (iTerm2, Ghostty, WezTerm, Kitty, VS Code) | The terminal game looks better | No |
 
 To check Node:
@@ -75,6 +75,8 @@ The installer accepts these variables:
 - `DEV_TEAM_OFFICE_REF`: which tag or branch to install. The default is the latest version (the highest version tag, or `main` when its version is newer: a release whose tag is not there yet); `main` is the newest code: `curl -fsSL … | DEV_TEAM_OFFICE_REF=main sh`.
 - `DEV_TEAM_OFFICE_NO_SETUP=1`: only install, without connecting the agents.
 - `DEV_TEAM_OFFICE_MODIFY_PATH=1`: add `~/.local/bin` to your shell's profile without asking; `0` never touches it.
+- `DEV_TEAM_OFFICE_SOURCE`: a local folder or `.tar.gz` to install instead of downloading (to try a checkout).
+- `DEV_TEAM_OFFICE_REPO`: the GitHub `owner/repo` to download from (a fork).
 
 ## 3. Connect the agents (`setup`)
 
@@ -220,8 +222,8 @@ dev-team-office demo --pi   # a sample session: the team moves
 
 In the browser, `http://127.0.0.1:4317` shows the office. Two useful shortcuts:
 
-- **⚙ › General** picks the language, the time zone, the **city** (for the weather, the sun and the moon: a time zone covers many cities) and the **view**: the usual **front** view or the **top-down (isometric)** one. It also switches with the ◇ button or `v`.
-- **⚙ › Agents** shows what got registered.
+- **⚙ › General** picks the language, the time zone, the **city** (for the weather, the sun and the moon: a time zone covers many cities) and **⚙ › The game**, the **view**: the usual **front** view or the **top-down (isometric)** one. It also switches with the ◇ button or `v`.
+- **⚙ › Repositories** shows what got registered.
 
 ## 7. Where everything lives
 
@@ -266,4 +268,4 @@ Either way `update` ends with `setup`, so the office's skills are this version's
 | Pi shows nothing | `dev-team-office doctor`; check that the extension is in `~/.pi/agent/extensions/` and that Pi is ≥ 1.2 if you use gentle-pi |
 | Codex does not report | Trust the new hooks with `/hooks` |
 | Subagents show up as the wrong character | Add `role: <role>` to their file (`analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`) and run `join` again |
-| Inside herdr no pane opens per subagent | ⚙ › General › "Each subagent in its pane", or `dev-team-office config herdr.subagents on` |
+| Inside herdr no pane opens per subagent | ⚙ › Terminal › "Each subagent in its pane", or `dev-team-office config herdr.subagents on` |

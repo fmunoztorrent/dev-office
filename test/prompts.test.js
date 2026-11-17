@@ -129,3 +129,20 @@ test('fuera de herdr no hay preguntas que leer ni teclas que apretar', async () 
     await server.close();
   }
 });
+
+test('el historial de lo que mandaste tiene su ruta, aparte de lo que te preguntan los agentes', async () => {
+  const db = openStore(':memory:');
+  db.savePrompt({ id: 'b-t1', agentId: 'erre', agent: 'claude-code', text: 'Login', status: 'done' });
+  db.savePrompt({ id: 'b-t2', agentId: 'otro', agent: 'pi', text: 'Pagos', status: 'sent' });
+  const server = await startServer({ port: 0, socket: null, db, weather: false });
+  const get = (p) => fetch(`${server.url}${p}`).then((r) => r.json());
+  try {
+    // /v1/prompts sigue siendo lo que te preguntan (fuera de herdr, nada), aunque lleve ?agent=
+    assert.deepEqual((await get('/v1/prompts?agent=erre')).prompts, []);
+    assert.deepEqual((await get('/v1/prompts/history')).prompts.map((p) => p.text).sort(), ['Login', 'Pagos']);
+    const one = await get('/v1/prompts/history?agent=erre&limit=5');
+    assert.deepEqual([one.ok, one.prompts.map((p) => p.text)], [true, ['Login']]);
+  } finally {
+    await server.close();
+  }
+});

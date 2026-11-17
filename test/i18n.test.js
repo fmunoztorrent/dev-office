@@ -2,6 +2,7 @@
 // database and shared by the server, the terminal and the web. (This file does NOT import ./es.js: it tests English.)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import WebSocket from 'ws';
 import en from '../public/locales/en.js';
 import es from '../public/locales/es.js';
@@ -10,6 +11,7 @@ import { createSim, TEAM, applyAppearance, phaseInfo } from '../public/sim.js';
 import { describe } from '../server/roles.js';
 import { openStore } from '../server/store.js';
 import { startServer } from '../server/server.js';
+import { SETTINGS_GROUPS, SETTINGS_SECTIONS } from '../public/settings-sections.js';
 
 const flat = (o, p = '') => Object.entries(o).flatMap(([k, v]) => (v && typeof v === 'object' && !Array.isArray(v) ? flat(v, `${p}${k}.`) : [`${p}${k}`]));
 const get = (o, k) => k.split('.').reduce((x, y) => x?.[y], o);
@@ -22,6 +24,64 @@ test('los dos idiomas tienen las mismas claves y las mismas {variables}', () => 
   assert.deepEqual(b.filter((k) => !a.includes(k)), [], 'faltan en inglés');
   for (const k of a) assert.equal(vars(get(en, k)), vars(get(es, k)), k);
   for (const k of a) if (Array.isArray(get(en, k))) assert.ok(get(en, k).length && get(es, k).length, k);
+});
+
+/** Repeated keys in an object literal (the later one silently wins): their paths. */
+function repeatedKeys(src) {
+  const out = [];
+  const stack = [{ keys: new Set(), name: '' }];
+  let i = 0, expectKey = true, last = '';
+  const key = (k) => {
+    const top = stack.at(-1);
+    last = k;
+    if (!top?.keys) return;
+    if (top.keys.has(k)) out.push([...stack.slice(1).map((s) => s.name), k].join('.'));
+    top.keys.add(k);
+  };
+  while (i < src.length) {
+    const c = src[i];
+    if (c === '/' && src[i + 1] === '/') { i = src.indexOf('\n', i); if (i < 0) break; continue; }
+    if (c === '/' && src[i + 1] === '*') { i = src.indexOf('*/', i) + 2; continue; }
+    if (c === "'" || c === '"' || c === '`') {
+      let j = i + 1;
+      while (j < src.length && src[j] !== c) { if (src[j] === '\\') j++; j++; }
+      const str = src.slice(i + 1, j);
+      i = j + 1;
+      if (expectKey && /^\s*:/.test(src.slice(i, i + 4))) key(str);
+      expectKey = false;
+      continue;
+    }
+    if (c === '{') { stack.push({ keys: new Set(), name: last }); expectKey = true; i++; continue; }
+    if (c === '[') { stack.push({ keys: null, name: last }); expectKey = false; i++; continue; }
+    if (c === '}' || c === ']') { stack.pop(); expectKey = false; i++; continue; }
+    if (c === ',') { expectKey = !!stack.at(-1)?.keys; i++; continue; }
+    if (expectKey && /[A-Za-z_$]/.test(c)) {
+      const word = /^[\w$]+/.exec(src.slice(i, i + 80))[0];
+      i += word.length;
+      if (/^\s*:/.test(src.slice(i, i + 4))) key(word);
+      expectKey = false;
+      continue;
+    }
+    if (!/\s/.test(c)) expectKey = false;
+    i++;
+  }
+  return out;
+}
+
+test('ningún idioma repite una clave (la segunda taparía a la primera sin avisar)', () => {
+  assert.deepEqual(repeatedKeys("export default { a: { x: 'p: {', y: [{ k: 1 }, { k: 2 }], x: `q` }, b: 1, a: 2 }"), ['.a.x', '.a']);
+  for (const lang of ['en', 'es']) assert.deepEqual(repeatedKeys(fs.readFileSync(new URL(`../public/locales/${lang}.js`, import.meta.url), 'utf8')), [], lang);
+});
+
+test('cada sección de los ajustes tiene su nombre, para qué es y las palabras del buscador, y cada grupo su nombre', () => {
+  assert.equal(new Set(SETTINGS_SECTIONS).size, SETTINGS_SECTIONS.length);
+  for (const dict of [en, es]) {
+    for (const [group] of SETTINGS_GROUPS) assert.equal(typeof dict.settings.groups[group], 'string', group);
+    for (const id of SETTINGS_SECTIONS) for (const k of ['nav', 'desc', 'words']) assert.ok(dict.settings[k][id]?.length > 2, `${k}.${id}`);
+    for (const k of ['nav', 'desc', 'words']) assert.deepEqual(Object.keys(dict.settings[k]).sort(), [...SETTINGS_SECTIONS].sort(), k);
+    // the review's findings (server/architecture.js) each have their sentence
+    for (const code of ['emptyDept', 'repoMissing', 'systemOrder', 'partNoRepo', 'emptySystem', 'sharedRepo', 'repoNoProject', 'resourceUnused', 'resourcePlanned', 'noConsumer', 'noPublisher', 'resourceDetected', 'noProjects']) assert.ok(dict.arch.findings[code], code);
+  }
 });
 
 test('inglés por defecto; español al elegirlo (y uno desconocido vuelve al inglés)', () => {

@@ -18,6 +18,8 @@ Esta guía cubre el día a día con la oficina. Si todavía no la instalas, empi
 
 Fuera de herdr, `dev-team-office` muestra la **bitácora**: una línea por cada cosa que pasa. `g` abre el juego ahí mismo y `o` lo abre en el navegador.
 
+**Requisitos de la terminal:** al menos 60×18 (se ve bien desde 120×36). Con *truecolor* se ve mejor: iTerm2, Ghostty, WezTerm, Kitty, la terminal de VS Code y la de Claude lo tienen. En las demás se usan 256 colores; se fuerza con `--color truecolor|256`.
+
 ### El monitor
 
 ```
@@ -52,7 +54,7 @@ abre o se cierra) no lo mueven.
   - las personas de pie, cada una delante o detrás de lo que corresponda;
   - la oficina es el último piso de una torre de vidrio, en tonos apagados para que la oficina destaque (de noche, con algunas ventanas encendidas), y detrás de la torre está el mismo paisaje que se ve por las ventanas: cielo, sol o luna, clima y ciudad.
 
-Para cambiar de vista: el botón ◇ (arriba a la derecha), la tecla `v` o **⚙ › General › Vista de la oficina**. La elección queda en los ajustes y todas las ventanas la siguen. El juego en la terminal usa siempre la frontal.
+Para cambiar de vista: el botón ◇ (arriba a la derecha), la tecla `v` o **⚙ › El juego › Vista**. La elección queda en los ajustes y todas las ventanas la siguen. El juego en la terminal usa siempre la frontal.
 
 En las dos vistas (y en el juego de la terminal):
 
@@ -60,13 +62,24 @@ En las dos vistas (y en el juego de la terminal):
 - **Cada subagente es alguien nuevo:** un extra translúcido de su rol (otro nombre, la misma camisa) que llega en el ascensor, al final del pasillo, recibe un escritorio propio en la fila de adelante (aparece con él y se va con él; pasados siete, en la mesa de reuniones), hace el trabajo del subagente y se va al terminar. La placa de su escritorio dice quién es y para qué proyecto vino.
 - **Los especialistas de visita, Rafa (DevOps/SRE) e Inés (seguridad),** tampoco tienen escritorio: cuando el trabajo del agente es suyo (un despliegue, un contenedor, un workflow de CI; una auditoría, un escáner, una llave) suben igual por el ascensor, sólidos y siempre la misma persona, y se van al terminar el turno.
 - **La pizarra con tickets** se expande al hacerle clic: las tareas como post-its en tres columnas. En la terminal, `t` o Enter ahí abre un encargo nuevo.
-- **La barra de contexto** (navegador, pequeña, junto al clima): cuánto contexto le queda al agente de la sesión enfocada, o al último que lo informa, con los tokens usados y una muesca donde se compacta solo (⚙ › General, 400k por defecto: la oficina le pide al agente que compacte cuando termina su turno).
+- **La barra de contexto** (navegador, pequeña, junto al clima): cuánto contexto le queda al agente de la sesión enfocada, o al último que lo informa, con los tokens usados y una muesca donde se compacta solo (⚙ › Contexto, 400k por defecto: la oficina le pide al agente que compacte cuando termina su turno).
 - **Un badge sobre cada personaje** dice lo que hace su agente, lo más chico posible (`✏️ cart.js`, `🧪 tests`, `💾 commit`); se va cuando termina el turno.
 - **El dock:** todos los botones del juego (actividad, trabajo, daily, teléfono de expertos, ajustes, vista, pantalla completa) flotan abajo al centro en una caja negra con el borde amarillo del juego; al pasar el puntero por uno, una burbuja dice qué hace.
 - **El estado de cada personaje es el real de su agente:** mientras su turno está abierto (un comando largo, un pensar largo) dice *trabajando*, nunca *libre*; un comando que falla no es *bloqueado* (eso es esperarte a ti, errores que el agente reporta y una fase bloqueada).
 - **El teléfono de expertos (📞, o `p`):** aparece en el HUD cuando la empresa tiene expertos (⚙ › Personajes › Expertos). Los lista con sus acciones rápidas y un texto libre; una llamada despacha la tarea al agente del proyecto que conoce su skill.
 - **La tarjeta de estado (⏱):** cada 5 minutos aparece 30 segundos, con una cuenta regresiva, y lista en qué trabaja cada agente conectado a la oficina (y los que te esperan). Un clic en ✕ la cierra antes.
 - **El cielo tiene vida:** pájaros en V de día, un avión de vez en cuando (su estela; de noche, sus luces), un globo aerostático en días calmos, murciélagos al atardecer, estrellas fugaces y un satélite en noches despejadas. Con lluvia no vuela nada.
+
+### Alrededor de la oficina (navegador)
+
+La misma oficina se puede ver en el navegador en `http://127.0.0.1:4317`, **a pantalla completa**: todo va dentro del juego.
+
+- **⚙** (arriba a la derecha, o `c`): ajustes. **⛶** (o `f`): pantalla completa del navegador. **🏢** (arriba a la izquierda, o `o`): qué oficina ver, si la empresa tiene más de una.
+- **📰** (abajo a la izquierda, o `a`): la **actividad**, una bitácora que se lee sobre la oficina: lo que hacen los agentes y, con *vida de la oficina* marcada (queda guardado), las conversaciones, los sueños, el almuerzo y los incendios. Cerrada, un contador avisa lo nuevo.
+- **📋** (abajo a la izquierda, o `w`): el **trabajo**: la sesión que sigues, su tarea, su avance y su flujo por roles, los pipelines y encargos enviados (con ✕ para cancelarlos), las demos, un encargo nuevo y el equipo, cada uno con lo que está haciendo (clic en uno abre su ficha).
+- **Clic en un personaje, o en un recién llegado (un subagente):** se abre **un chat con esa persona** a la derecha, del alto de la pantalla: quién es y qué está haciendo arriba, la conversación ocupando el resto, y abajo donde escribes (Enter envía, Shift+Enter es una línea nueva). Una pregunta la contesta su agente —la de un recién llegado, la sesión de su propio subagente— y también la dice en la oficina (ver [btw](#btw-una-pregunta-al-margen)). 👋 lo saluda; *Lo último que hizo* abre sus últimas acciones. El tuyo (el de la PO) le habla a todo el equipo.
+- **Clic en la pizarra** (o `t`): nuevo encargo. `esc` cierra la ficha o la actividad.
+- **Servicios en segundo plano:** cuando un agente deja un servicio corriendo (un servidor de desarrollo con el `run_in_background` de Claude Code, `npm run dev > dev.log 2>&1 &`…), se enciende en cian una unidad del rack de servidores y aparece el chip **▶** en el HUD. **Clic en el rack** o en el chip (o `l`): la lista de servicios y una terminal con lo que imprime el elegido, en vivo. Dentro de herdr, **⧉ Abrir en herdr** sigue su log en un pane propio (`tail -F`). La oficina sólo los mira: los levanta y los detiene el agente.
 
 ## Pedirle algo al equipo
 
@@ -100,7 +113,7 @@ agent_prompt_stalled | agent_pane_busy)`— en vez de quedar «en curso» para s
 
 Dentro de herdr:
 
-- tu agente se abre en un pane al lado del monitor (⚙ › General › «Agente al abrir»);
+- tu agente se abre en un pane al lado del monitor (⚙ › Terminal › «Agente al abrir»);
 - cada **subagente** que lanza se abre en **su propio pane**, debajo del agente. Ahí ves:
   - quién es (su personaje) y su tarea;
   - cada herramienta que usa y la salida de sus comandos;
@@ -109,7 +122,7 @@ Dentro de herdr:
   Los que corren a la vez quedan uno al lado del otro. Cada pane se cierra solo unos segundos después de que su subagente termina.
 - el agente puede abrir más panes para sus actividades: `dev-team-office pane --role qa -- npm test -- --watch`.
 
-El subagente lo sigue corriendo su harness; el pane sólo lo **muestra**, con `dev-team-office follow`. Se apaga en ⚙ › General › «Cada subagente en su pane», o con `dev-team-office config herdr.subagents off`.
+El subagente lo sigue corriendo su harness; el pane sólo lo **muestra**, con `dev-team-office follow`. Se apaga en ⚙ › Terminal › «Cada subagente en su pane», o con `dev-team-office config herdr.subagents off`.
 
 ## Cuando un agente te pregunta algo
 
@@ -125,14 +138,18 @@ Tu respuesta se aprieta en el pane del agente, como si estuvieras ahí: las flec
 - **`join`** suma un proyecto en un solo paso: levanta la oficina, registra la raíz del repo con su agente y te dice qué personaje hace cada subagente. Está como prompt MCP (`/mcp__dev-team-office__join`), como herramienta MCP (`join_office`), en Pi (`/office`) y en la terminal (`dev-team-office join`).
   - Si al agente **le faltan roles** (o no trae subagentes), le completa el equipo con el de la oficina (arquitecto, explorador, backend, frontend y QA) en el proyecto, en su formato: `.claude/agents`, `.opencode/agents`, `.pi/agents` o `.codex/agents`. Claude Code (si esa carpeta no existía) y OpenCode tienen que reiniciarse para verlos; Pi los usa desde el próximo subagente. Detalle en [installation.es.md](installation.es.md#si-tu-agente-no-trae-equipo).
   - `--team <pack>` elige otro pack y `--no-team` no deja ninguno.
-- **⚙ › Agentes** (o `dev-team-office agents add <ruta> --agent <cli>`) es el mantenedor: ruta completa, CLI y oficina.
+- **⚙ › Repositorios** (o `dev-team-office agents add <ruta> --agent <cli>`) es el mantenedor: ruta completa, CLI y oficina.
 - **Una oficina, varios proyectos:** registra un agente por carpeta de proyecto (`api-pagos` con Claude Code, `bff-web` con Pi…). El encargo los agrupa por proyecto, cada uno trabaja sólo dentro de su carpeta, la lista de sesiones dice de qué proyecto es cada una y, cuando hay más de uno activo, cada línea de la bitácora lleva su proyecto.
-- **Oficinas:** una empresa puede tener varias (equipos o dominios), cada una con su zona horaria, su ciudad (su clima) y sus personajes. Se crean en ⚙ › Oficinas o con `dev-team-office offices add "Pagos" --timezone Europe/Madrid`.
+- **Oficinas:** una empresa puede tener varias (equipos o dominios), cada una con su zona horaria, su ciudad (su clima) y sus personajes. Se crean en ⚙ › Departamentos o con `dev-team-office offices add "Pagos" --timezone Europe/Madrid`.
 - **Team packs:** `dev-team-office team install example --agent <pi|claude|opencode|codex> --project .` deja un subagente por rol, en el formato de ese agente.
 
 ## btw: una pregunta al margen
 
-Una pregunta escrita en la ficha de un personaje en el navegador («¿quién está con los tests?»), `b` en el juego de la terminal o `dev-team-office btw "…"` le pregunta al agente sin interrumpir su trabajo: el del proyecto y la tarea en que trabaja ese personaje (o el de turno), y el personaje la contesta en su ficha y en su burbuja. Lo demás que escribas ahí lo dice en voz alta, y te contesta con sus palabras.
+Desde el juego puedes preguntarle algo al **agente de turno** de la oficina que miras, sobre el dominio, el equipo o lo que están haciendo, sin interrumpir su trabajo: haz clic en un personaje y escribe tu pregunta en su ficha (en tu propia ficha, la de la PO, le hablas a todo el equipo), o pulsa `b` en el juego de la terminal. También `dev-team-office btw "¿quién está con los tests?"`.
+
+**Háblale directo a un personaje:** haz clic en él y escríbele en su ficha, como en un chat. Una pregunta (que termine en `?` o empiece con `¿`) va al agente del **proyecto y la tarea en que trabaja ese personaje**, y te contesta sobre eso, en su burbuja y en su ficha, que guarda la conversación; lo demás lo dices en voz alta y te contesta con sus palabras. Con una sesión elegida en 📋 Trabajo, contesta esa. En el juego de la terminal: elígelo (`tab`) y `m` o `b`.
+
+Es el `/btw` de Claude Code llevado a cada harness: contesta la sesión que trabajó más recientemente en esa oficina (o la del personaje al que le preguntaste), **bifurcada y sin guardarse** (`claude --resume … --fork-session`, `opencode run --session … --fork`), en sólo lectura; si no se puede bifurcar (Pi, Codex) o no hay sesión, contesta con el proyecto, la tarea, el plan y los últimos pasos de esa sesión (o el agente registrado de la oficina, con un resumen de lo que está pasando). Quien tiene el turno se queda pensando y contesta en voz alta; la respuesta completa aparece en su ficha (o, si no está abierta, en una tarjeta arriba), en la actividad, y queda guardada.
 
 ## La CLI, completa
 
@@ -146,16 +163,20 @@ Una pregunta escrita en la ficha de un personaje en el navegador («¿quién est
 | `dev-team-office watch` | Otra terminal mirando el juego de la misma oficina |
 | `dev-team-office status` | ¿Corre? Versión, puerto y socket |
 | `dev-team-office join [ruta] [--agent <cli>] [--office <oficina>] [--team <pack>\|--no-team] [--open]` | Suma un proyecto al juego y le completa el equipo con el de la oficina (ver arriba) |
-| `dev-team-office agents` · `agents add` · `agents rm` | El mantenedor de agentes |
-| `dev-team-office offices` · `offices add` · `offices set` · `offices rm` | Las oficinas |
+| `dev-team-office agents` · `agents add` · `agents set` · `agents rm` | Los repositorios: cada uno con su agente, su departamento y sus indicaciones |
+| `dev-team-office offices` · `offices add` · `offices set` · `offices rm` | Los departamentos (también `departments`) |
+| `dev-team-office architecture [--json]` | La arquitectura de la empresa como esquema (también `map`): departamentos, repositorios, proyectos, infraestructura y la revisión. La misma que leen los agentes con `get_architecture` |
 | `dev-team-office task` · `tasks` · `prompt` | Mandar trabajo y ver cómo va |
 | `dev-team-office pane … -- <comando>` | Dentro de herdr: una actividad en otro pane |
 | `dev-team-office follow --session <s> --sub <id>` | Lo que hace un subagente, en vivo (la oficina lo abre sola en su pane) |
 | `dev-team-office btw "…"` | Una pregunta al margen |
+| `dev-team-office daily [--office <id>] [--all]` | La daily ahora: qué hizo cada uno desde la anterior y en qué está (también `standup`) |
 | `dev-team-office e2e -- <comando>` | Corre tus pruebas end-to-end (Playwright) con la oficina mirando: su pantalla muestra cada prueba y sus pasos en vivo, y la película de cada una (con el comando de Playwright, la traza se enciende sola) |
 | `dev-team-office send <kind> …` | Manda un evento a mano (para probar) |
 | `dev-team-office demo [--pi]` | Una sesión de ejemplo |
-| `dev-team-office config [clave] [valor]` | Los ajustes: `lang`, `timezone`, `city <ciudad>\|zone`, `weather`, `herdr.*`, `log.life`, `view.office`, `view.mode flat\|iso` |
+| `dev-team-office config [clave] [valor]` | Cada ajuste general, un valor cada uno ([las claves](settings.es.md#desde-la-línea-de-comandos)) |
+| `dev-team-office settings export [--out <archivo>]` · `settings import <archivo>` | Tus ajustes como archivo JSON, para guardarlos o llevarlos a otra máquina |
+| `dev-team-office character export <rol>` · `character import <archivo>` | Un personaje como archivo JSON, para compartirlo |
 | `dev-team-office team …` | Los team packs |
 | `dev-team-office setup` · `doctor` · `update` · `uninstall` | La instalación |
 | `dev-team-office mcp` | El servidor MCP (stdio; lo registra `setup`) |

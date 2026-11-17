@@ -19,7 +19,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { clip } from './roles.js';
 import { sanitizeProject } from './pipeline.js';
-import { agentCommand, modelArgs, HARNESSES, which, e2eEnv } from '../integrations/common/devteam.mjs';
+import { agentCommand, officeAllows, modelArgs, HARNESSES, which, e2eEnv } from '../integrations/common/devteam.mjs';
 import { guideFor, guideText, autonomyOf, GUIDE_MARK } from './guides.js';
 import { contextBlock } from './rag.js';
 import { t as tr } from '../public/i18n.js';
@@ -192,7 +192,7 @@ export class TaskHub extends EventEmitter {
       // the agent works in its project's folder, and only on what is asked (a harness command goes as is)
       task.prompt = task.command ? text : this.brief(text, task.cwd, { office: task.office, reads: task.reads });
       task.model = model ? clip(model, 80) : null; // the model profile's (null: the agent's own)
-      const cmd = agentCommand(agent, { text: task.prompt, command: task.command, args: task.args, model: task.model }, launch || {});
+      const cmd = agentCommand(agent, { text: task.prompt, command: task.command, args: task.args, model: task.model, reads: task.reads }, launch || {});
       if (cmd.error) return { ok: false, error: cmd.code === 'missing' ? tr('err.notInstalled', { bin: cmd.bin }) : tr('err.cantLaunch', { agent }) };
       this.#add(task);
       this.#dispatchEvent(task);
@@ -229,7 +229,7 @@ export class TaskHub extends EventEmitter {
     try {
       const prefs = this.prefs() || {};
       const { pane } = await this.herdr.launchAgent({
-        harness: task.agent, cwd: task.cwd, prompt: task.prompt || task.text, bin, args: withModel(task.agent, Array.isArray(args) ? args : [], task.model), env: fenced(task.agent, env),
+        harness: task.agent, cwd: task.cwd, prompt: task.prompt || task.text, bin, args: [...withModel(task.agent, Array.isArray(args) ? args : [], task.model), ...officeAllows(task.agent, task.reads)], env: fenced(task.agent, env),
         direction: prefs.herdr?.direction, office: task.office, officeName: this.officeName?.(task.office) || '',
         role: 'manager', title: task.title, taskId: task.id, label: `${label} · ${path.basename(task.cwd)}`,
       });

@@ -3,7 +3,7 @@
 // draw that same scene instead.
 // The world is x LEFT..W by y 0..H (the office, and left of it the hallway with the elevator and the
 // bathroom); the canvas is drawn at an integer multiple of that size so that in full screen
-// the "pixels" stay crisp. There are two views of the same office, to choose from (⚙ › General,
+// the "pixels" stay crisp. There are two views of the same office, to choose from (⚙ › The game,
 // the ◇ button or the v key): the usual front view (the default) and the isometric top-down view
 // (the floor as a rhombus, the back and left walls, furniture as volumes and people standing,
 // sorted by depth; see iso.js). The back wall is glass: behind it you see the city with the real

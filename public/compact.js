@@ -1,5 +1,5 @@
 // The auto-compaction's limit, shared by the office (server/compact.js) and its context bar (main.js):
-// your threshold (⚙ › General) in tokens for an agent's context, and tokens as people say them.
+// your threshold (⚙ › Context) in tokens for an agent's context, and tokens as people say them.
 
 /** 412k, 1.2M: a number of tokens as people say it. */
 export const kTokens = (n) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}M` : `${Math.round(n / 1000)}k`);

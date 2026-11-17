@@ -26,11 +26,12 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 const KINDS = ['task', 'phase', 'phase_end', 'todos', 'waiting', 'error', 'turn_end', 'done', 'chat', 'agent_roles'];
 
-const INSTRUCTIONS = `Dev Team Office is a live pixel-art office that shows what coding agents do: each character is a role of a dev team. The product owner (po) is the user, who gives the orders; you and your subagents are the rest: analyst, manager, tl, qa, backend, frontend, designer.
+const INSTRUCTIONS = `Dev Team Office is a live pixel-art office that shows what coding agents do: each character is a role of a dev team. The product owner (po) is the user, who gives the orders; you and your subagents are the rest: analyst, manager, tl, qa, backend, frontend, designer, and the visiting devops and security specialists.
 To add yourself and this project to the office in one step, call join_office (or the user runs the \`join\` prompt): it starts the office if needed, registers the project and returns which character plays each subagent.
 Use these tools to: register the current project (register_project) so the office can send it work; see what a project's harness brings (detect_project); tell the office which role and phase you are in while you work (report_activity: task → phase … → done); send a prompt to another registered agent (send_task); and open herdr panes for side activities (open_pane).
 The company has two shared floors. The archive keeps what the company knows: before starting a task, search it (search_knowledge, then get_knowledge for the whole entry) for decisions, docs, skills and connectors that apply; when you settle something worth keeping (a decision, a convention, how something works), save it (save_knowledge). The executive floor gives orders that cover several offices or projects at once (send_directive, list_directives); when a brief starts with 🏛 it is your part of one: do only this project's part.
-A company groups its repos in systems (a product: "Payments" = its core, its bff and its web; list_systems): a brief whose header says other artifacts use yours goes before theirs, so when you finish, call handoff with what they need to know (what changed in what you expose). A brief that carries "What X left" is the handoff of an artifact you use: build on it.
+Before a change that crosses repositories or touches shared infrastructure, read the company's architecture (get_architecture): which repositories each department has, which project uses what, who publishes to or consumes each queue and topic, and what a change of yours reaches.
+A company groups its repos in systems (a product: "Payments" = its core, its bff and its web; list_systems; the office's settings call them projects): a brief whose header says other artifacts use yours goes before theirs, so when you finish, call handoff with what they need to know (what changed in what you expose). A brief that carries "What X left" is the handoff of an artifact you use: build on it.
 When a brief asks you to create infrastructure (🆕 a queue, a topic, a database, a scheduler…), declare it with declare_resource once it exists, so the company's map knows where it lives and who uses it.
 A brief that starts with 🔁 is a step of a project loop: it lists its success criteria, numbered. Before you end, check each one for real and report all of them with loop_report; the loop moves on only when every criterion is met.
 Your Playwright end-to-end tests show live in the office (each test, its steps and the browser's frames): run them with the trace on (\`npx playwright test --trace=on\`, or \`dev-team-office e2e -- <command>\`) so the user can watch the movie of each one.
@@ -322,7 +323,7 @@ const TOOLS = [
   {
     name: 'map_impact',
     title: 'Map the impact of an order',
-    description: 'Before a directive: which departments, projects, components and infrastructure (queues, topics, databases, third-party APIs, schedulers…) of the company an order touches (by what it names, plus the projects or offices you pick), and what it names that is not on the map (to ask the user about). With think, the model chosen in the office (⚙ › General › 🧠) adds how each repo is touched and what the words missed (it takes a while). Read-only.',
+    description: 'Before a directive: which departments, projects, components and infrastructure (queues, topics, databases, third-party APIs, schedulers…) of the company an order touches (by what it names, plus the projects or offices you pick), and what it names that is not on the map (to ask the user about). With think, the model chosen in the office (⚙ › Intelligence) adds how each repo is touched and what the words missed (it takes a while). Read-only.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -338,9 +339,16 @@ const TOOLS = [
     annotations: { readOnlyHint: true, openWorldHint: false },
   },
   {
+    name: 'get_architecture',
+    title: 'The company\'s architecture',
+    description: 'How everything on the office\'s map relates, from a component up to the whole company: each department with its repositories and their components, each project (a product) with which artifact uses which and the order a change goes in, the infrastructure (queues, topics, databases, third-party APIs…) with who publishes, consumes, reads or calls it, and a review of what deserves a look (a queue nobody consumes, a repository in no project, an artifact without a repository…). Read it before a change that crosses repositories.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  },
+  {
     name: 'list_systems',
     title: 'List the systems',
-    description: 'The systems (a product or business project: "Payments") and their artifacts: which repo (or component of one) each is, its kind (frontend, bff, backend…), what it uses, the order a change goes in (core → bff → web) and the team that answers for it. A repo has one owner department but can be an artifact of other departments\' systems (shared).',
+    description: 'The systems (a product or business project: "Payments"; the office\'s settings call them projects, and its registered repos repositories) and their artifacts: which repo (or component of one) each is, its kind (frontend, bff, backend…), what it uses, the order a change goes in (core → bff → web) and the team that answers for it. A repo has one owner department but can be an artifact of other departments\' systems (shared).',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, openWorldHint: false },
   },
@@ -824,6 +832,14 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
       return { text: `${out.text}${note}`, data: out.map };
     },
 
+    async get_architecture() {
+      const { architecture, architectureText } = await import('./architecture.js');
+      let g;
+      if (await running()) g = okOr(await api('/v1/architecture'));
+      else g = architecture(local());
+      return { text: architectureText(g), data: { nodes: g.nodes, edges: g.edges, findings: g.findings, stats: g.stats } };
+    },
+
     async list_systems() {
       let systems;
       if (await running()) systems = okOr(await api('/v1/systems')).systems || [];
@@ -832,7 +848,7 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
         systems = local().listSystems().map((s) => { const o = orderParts(s.parts); return { ...s, order: o.ok ? o.order : s.parts.map((p) => p.name) }; });
       }
       const line = (s) => `${s.name}${s.officeName ? ` (team: ${s.officeName})` : ''}: ${s.order.join(' → ')}\n${s.parts.map((p) => `  ${p.name} [${p.kind}] ${p.repo || p.project}${p.path ? `/${p.path}` : ''}${p.uses?.length ? ` · uses ${p.uses.join(', ')}` : ''}${p.shared ? ' · shared' : ''}`).join('\n')}`;
-      return { text: systems.length ? systems.map(line).join('\n') : 'No systems yet (⚙ › Departments › Systems).', data: { systems } };
+      return { text: systems.length ? systems.map(line).join('\n') : 'No systems yet (⚙ › Projects).', data: { systems } };
     },
 
     async handoff({ text } = {}) {

@@ -25,6 +25,7 @@ import { Mine } from './mine.js';
 import { Standup } from './standup.js';
 import { exportSettings, importSettings } from './settings-io.js';
 import { companyMap, detectComponents } from './components.js';
+import { architecture } from './architecture.js';
 import { detectKind, suggestUses, orderParts, ARTIFACT_KINDS } from './systems.js';
 import { autonomyOf } from './guides.js';
 import { search as ragSearch, createEmbedder, createIndexer } from './rag.js';
@@ -52,7 +53,7 @@ import { zoneInfo, systemZone } from '../public/clock.js';
 import { insideDir as inside, insideDir } from './paths.js';
 import { provisionTeam } from '../bin/team.js';
 
-export const VERSION = '0.27.0';
+export const VERSION = '0.29.1';
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_HOST = '127.0.0.1';
 const MAX_BODY = 16 * 1024 * 1024; // PostToolUse carries the tool's full result
@@ -171,7 +172,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   const expertsNow = () => { if (Date.now() - expertsSeen.at > 3000) { try { expertsSeen = { at: Date.now(), list: store.listExperts() }; } catch { /* closing */ } } return expertsSeen.list; };
   company.expertFor = (tool, input) => expertOfTool(expertsNow(), tool, input);
   const expertsChanged = () => { expertsSeen = { at: 0, list: [] }; bus.emit('experts'); };
-  // the model the office leans on for judgment (⚙ › General › 🧠): the impact of an order (server/intelligence.js)
+  // the model the office leans on for judgment (⚙ › Intelligence): the impact of an order (server/intelligence.js)
   const intel = new Intelligence({ getPrefs: () => store.getPrefs(), ...intelOpt });
   const directives = new DirectiveDesk({ store, registry, hub, pipelines, archive, company, intel });
   // the projects' loops: steps with success criteria, worked through on their own (server/loops.js)
@@ -410,7 +411,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
 
   /**
    * When the office opens inside herdr: the agent, in a new pane. Which one? The one in the settings
-   * (⚙ › General); on automatic, the registered agent of the folder where the office was opened, or
+   * (⚙ › Terminal); on automatic, the registered agent of the folder where the office was opened, or
    * the CLI that folder has configured (or the first one installed).
    */
   async function launchStartAgent({ cwd = process.cwd(), agent: wanted } = {}) {
@@ -835,8 +836,9 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const out = m[2] === 'cancel' ? clarify.cancel(id) : clarify.answer(id, { answers: Array.isArray(b.answers) ? b.answers : [], skip: !!b.skip });
         return json(res, out.ok ? 200 : out.status || 400, out);
       }
-      if (req.method === 'GET' && p === '/v1/prompts') {
-        return json(res, 200, { prompts: store.listPrompts({ agentId: q('agent'), limit: q('limit') || 50 }) });
+      // the history of the prompts you sent (and how each ended); /v1/prompts itself is what agents ask you now
+      if (req.method === 'GET' && p === '/v1/prompts/history') {
+        return json(res, 200, { ok: true, prompts: store.listPrompts({ agentId: q('agent') || undefined, limit: Math.min(200, Number(q('limit')) || 50) }) });
       }
       // What the agents announce: projects and pipelines each session can run.
       if (req.method === 'GET' && p === '/v1/projects') return json(res, 200, { projects: pipelines.projects(q('office')) });
@@ -903,6 +905,9 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const departments = companyMap(store, { name: (o) => officeName(o.id) });
         return json(res, 200, { ok: true, departments, resources: knownResources({ declared: store.listResources(), projects: departments.flatMap((o) => o.projects) }) });
       }
+      // The architecture: the whole map as one graph (departments, projects, repositories, components and
+      // infrastructure, with what uses what) and its review (server/architecture.js)
+      if (req.method === 'GET' && p === '/v1/architecture') return json(res, 200, { ok: true, ...architecture(store, { name: (o) => officeName(o.id) }) });
       // The infrastructure on the map: queues, topics, databases, third-party APIs, schedulers… (server/resources.js)
       if (req.method === 'GET' && p === '/v1/resources') return json(res, 200, { ok: true, resources: store.listResources(), kinds: RESOURCE_KINDS });
       if ((req.method === 'POST' && p === '/v1/resources') || (req.method === 'PUT' && (m = p.match(/^\/v1\/resources\/([^/]+)$/)))) {
@@ -918,8 +923,13 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const out = store.deleteResource(decodeURIComponent(m[1]));
         return json(res, out.ok ? 200 : out.status || 400, out);
       }
-      // The model the office leans on (⚙ › General › 🧠): how it is set, and a small question to try it
-      if (req.method === 'GET' && p === '/v1/intelligence') return json(res, 200, { ok: true, enabled: intel.enabled, model: intel.label, config: intel.config, problem: intel.problem() });
+      // The model the office leans on (⚙ › Intelligence): how it is set, and a small question to try it
+      if (req.method === 'GET' && p === '/v1/intelligence') {
+        // what is missing for it to work, as a code (key, model) or the agent CLI's own error, and said in words
+        const problem = intel.problem();
+        const problemText = !problem ? null : ['key', 'model'].includes(problem) ? t(`intel.problem.${problem}`) : problem;
+        return json(res, 200, { ok: true, enabled: intel.enabled, model: intel.label, config: intel.config, problem, problemText });
+      }
       if (req.method === 'POST' && p === '/v1/intelligence/test') {
         if (!intel.enabled) return json(res, 400, { ok: false, error: t('intel.off') });
         const out = await intel.test();
@@ -1052,7 +1062,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         return json(res, out.ok ? 200 : out.status || 400, out);
       }
       // the impact before it goes: the departments, projects and components it touches, and what is not on the map
-      // (with `think`, the model chosen in ⚙ › General › 🧠 adds its analysis: it takes a while)
+      // (with `think`, the model chosen in ⚙ › Intelligence adds its analysis: it takes a while)
       if (req.method === 'POST' && p === '/v1/directives/plan') {
         const b = await body(req);
         const args = { text: b.text, offices: b.offices, targets: b.targets ?? b.projects, systems: b.systems };

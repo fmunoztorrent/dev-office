@@ -53,7 +53,7 @@ And open `http://127.0.0.1:4320`. `dev-team-office demo --pi --port 4320` runs t
 - **One topic per change**, with its test. Tests go in `test/<topic>.test.js` and their names are Spanish sentences that say what is expected.
 - **No new runtime dependencies.** If one is really needed, explain why in the PR.
 - **UI texts in both languages** (`public/locales/en.js` and `es.js`, with the same keys and the same `{variables}`).
-- **Up-to-date documentation, in both languages:** each English document (`README.md`, `CONTRIBUTING.md`, `docs/<name>.md`) has its Spanish version next to it (`.es.md`); a change to one goes into the other too. Also the CLI help (`cli.help`), if users see the change.
+- **Up-to-date documentation, in both languages:** each English document (`README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `SUPPORT.md`, `CODE_OF_CONDUCT.md`, `docs/<name>.md`) has its Spanish version next to it (`.es.md`), with the same headings; a change to one goes into the other too. `test/docs.test.js` checks every link, anchor and image, and the pairs. The README is the front door and stays short: what a feature does in detail goes in its guide in `docs/` ([the index](docs/README.md)). Also the CLI help (`cli.help`), if users see the change.
 - **Code comments in English.**
 - **Integrations never break their agent:** with the office off they do nothing, always with a time limit and without writing to the agent's output.
 - **The commit message** with a conventional prefix: `feat(herdr): …`, `fix(office): …`, `docs: …`.
@@ -66,7 +66,8 @@ And open `http://127.0.0.1:4320`. `dev-team-office demo --pi --port 4320` runs t
 | To connect another agent | [docs/connect-a-harness.md](docs/connect-a-harness.md): adapter, integration, `setup` |
 | A new event | [`server/office.js`](server/office.js) (`#enrich`), the simulation ([`public/sim.js`](public/sim.js)) and [docs/api.md](docs/api.md) |
 | Something new in the office (furniture, a reaction) | [`public/sim.js`](public/sim.js) for the logic and [`public/game.js`](public/game.js) to draw it in both views (the top-down one uses [`public/iso.js`](public/iso.js)). The terminal is in [`tui/view.js`](tui/view.js) |
-| A setting | [`server/store.js`](server/store.js), [`public/settings-ui.js`](public/settings-ui.js), [`tui/settings.js`](tui/settings.js) and `dev-team-office config` |
+| A setting | [`server/store.js`](server/store.js), [`public/settings-ui.js`](public/settings-ui.js) (a new section: its id in [`public/settings-sections.js`](public/settings-sections.js) and its `settings.nav`, `settings.desc` and `settings.words` in both locales), [`tui/settings.js`](tui/settings.js), `dev-team-office config` and [docs/settings.md](docs/settings.md) |
+| A new guide | `docs/<name>.md` and `docs/<name>.es.md`, listed in [docs/README.md](docs/README.md) and its Spanish version |
 | An MCP tool | [`server/mcp.js`](server/mcp.js) and [docs/mcp.md](docs/mcp.md) |
 | A new team pack | `teams/<pack>/` (a `team.json` and one agent per role, in Pi's format); [`bin/team.js`](bin/team.js) translates it to each harness |
 
