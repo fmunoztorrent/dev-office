@@ -677,14 +677,26 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       }
       // Your settings as a JSON file (server/settings-io.js): to keep them or take them to another machine
       if (req.method === 'GET' && p === '/v1/settings/export') {
-        const data = exportSettings(store, { app: VERSION });
+        // ?skills=0: without your skills' files
+        const data = exportSettings(store, { app: VERSION, home: mine.home, skills: q('skills') !== '0' });
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'content-disposition': `attachment; filename="dev-team-office-settings-${data.exportedAt.slice(0, 10)}.json"`, 'cache-control': 'no-store' });
         return res.end(`${JSON.stringify(data, null, 2)}\n`);
       }
       if (req.method === 'POST' && p === '/v1/settings/import') {
-        const out = importSettings(store, await body(req), { mine });
+        // where the file's skills go: ?skills=global|repos|none and, for repos, &repos=<id or folder>,…
+        const skills = { to: q('skills') || 'global', repos: (q('repos') || '').split(',').map((x) => x.trim()).filter(Boolean) };
+        const out = importSettings(store, await body(req), { mine, skills });
         if (!out.ok) return json(res, 400, out);
         settingsImported(out);
+        return json(res, 200, out);
+      }
+      // Start over what you choose (⚙ › Backup): { parts: ['prefs', 'look', 'company', 'activity', 'archive'] }
+      if (req.method === 'POST' && p === '/v1/reset') {
+        const b = await body(req);
+        const out = store.reset(b.parts);
+        if (!out.ok) return json(res, 400, out);
+        settingsImported({ lang: store.getPrefs().lang });
+        if (out.reset.includes('look')) expertsChanged();
         return json(res, 200, out);
       }
       // The company's offices (teams or domains)
@@ -1013,7 +1025,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         return json(res, out.ok ? 200 : out.status || 400, out);
       }
       // the subject matter experts (server/experts.js): a character who knows a skill
-      if (req.method === 'GET' && p === '/v1/experts') return json(res, 200, { ok: true, experts: store.listExperts(), skills: knownSkills(store, { dirs: mine.list().dirs }) });
+      if (req.method === 'GET' && p === '/v1/experts') return json(res, 200, { ok: true, experts: store.listExperts(), skills: knownSkills(store, { dirs: mine.list().dirs, home: mine.home }) });
       // the quick actions a skill offers, suggested from its SKILL.md (to fill an expert's buttons)
       if (req.method === 'GET' && p === '/v1/experts/suggest') return json(res, 200, { ok: true, actions: suggestExpertActions(store, q('skill'), { dirs: mine.list().dirs }) });
       // an expert's quick action: dispatch its prompt to the project agent that knows the skill

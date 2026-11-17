@@ -333,6 +333,8 @@ const MIGRATIONS = [
 ];
 
 /** The area every project starts in (its name is the language's, while you give it none). */
+/** What can be started over (store.reset). */
+export const RESET_PARTS = ['prefs', 'look', 'company', 'activity', 'archive'];
 export const DEFAULT_AREA = 'general';
 /** How a repository uses another one. */
 export const RELATION_HOWS = ['calls', 'uses', 'consumes', 'reads'];
@@ -512,6 +514,44 @@ export class Store {
     } catch (err) { this.db.exec('ROLLBACK'); return { ok: false, error: t('err.saveFailed', { error: err.message }) }; }
     if (this.getPrefs().view.office === String(id)) this.setPrefs({ view: { office: MAIN_OFFICE } });
     return { ok: true };
+  }
+
+  // ---------------------------------------------------------------- starting over (⚙ › Backup)
+
+  /**
+   * Starts over the parts you choose, in one transaction (nothing half done):
+   *   prefs     the general settings (language, view, theme, models, intelligence…)
+   *   look      the characters' appearance (every office and theme) and the experts
+   *   company   areas, projects (the main office stays, emptied), repositories, relations, infrastructure,
+   *             loops and directives; the repositories' folders are not touched
+   *   activity  the history of briefs, the questions and the dailies
+   *   archive   the archive (notes, decisions, documents…) and its index
+   * Your private skills and tools (⚙ › Mine) are not touched: they live in your folders.
+   * @returns {{ ok, reset: string[] }}
+   */
+  reset(parts = []) {
+    const want = new Set((Array.isArray(parts) ? parts : [parts]).map(String).filter((x) => RESET_PARTS.includes(x)));
+    if (!want.size) return { ok: false, error: t('err.resetNothing') };
+    const run = (sql, ...args) => { try { this.db.prepare(sql).run(...args); } catch (err) { if (!/no such table/.test(err.message)) throw err; } };
+    this.db.exec('BEGIN');
+    try {
+      if (want.has('prefs')) run("DELETE FROM settings WHERE key = 'prefs'");
+      if (want.has('look')) { run("DELETE FROM settings WHERE key = 'appearance' OR key LIKE 'appearance:%' OR key LIKE 'appearance@%'"); run('DELETE FROM experts'); }
+      if (want.has('company')) {
+        for (const tb of ['relations', 'resources', 'components', 'systems', 'loops', 'directives', 'agents', 'projects']) run(`DELETE FROM ${tb}`);
+        run('DELETE FROM offices WHERE id <> ?', MAIN_OFFICE);
+        run("UPDATE offices SET name = '', timezone = NULL, location = NULL, instructions = NULL, autonomy = NULL, area_id = ?, updated_at = ? WHERE id = ?", DEFAULT_AREA, Date.now(), MAIN_OFFICE);
+        run('DELETE FROM areas WHERE id <> ?', DEFAULT_AREA);
+        run("UPDATE areas SET name = '', instructions = '' WHERE id = ?", DEFAULT_AREA);
+        run("DELETE FROM settings WHERE key LIKE 'appearance:%'");
+      }
+      if (want.has('activity')) { for (const tb of ['prompts', 'asks']) run(`DELETE FROM ${tb}`); run("DELETE FROM settings WHERE key LIKE 'standup:%' OR key LIKE 'standupAt:%'"); }
+      if (want.has('archive')) for (const tb of ['knowledge_fts', 'knowledge_chunks', 'knowledge_gaps', 'knowledge']) run(`DELETE FROM ${tb}`);
+      this.db.exec('COMMIT');
+    } catch (err) { this.db.exec('ROLLBACK'); return { ok: false, error: t('err.saveFailed', { error: err.message }) }; }
+    // the office being viewed may be gone
+    if (want.has('company') && !want.has('prefs') && this.getPrefs().view?.office !== MAIN_OFFICE) this.setPrefs({ view: { office: MAIN_OFFICE } });
+    return { ok: true, reset: RESET_PARTS.filter((x) => want.has(x)) };
   }
 
   // ---------------------------------------------------------------- the company's areas

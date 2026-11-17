@@ -43,7 +43,7 @@ test('exportar: lo tuyo (ajustes, departamentos con sus personajes, proyectos co
     assert.deepEqual(p.characters, { backend: { name: 'Bruno', shirt: '#123456' }, devops: { name: 'Rafa B' } });
     assert.deepEqual(x.projects, [{ name: 'Tienda', path: dir, harness: 'claude-code', department: 'pagos', instructions: 'pnpm, no npm.' }]);
     assert.deepEqual(x.relations, []);
-    assert.deepEqual(Object.keys(x).sort(), ['app', 'areas', 'departments', 'experts', 'exportedAt', 'instructions', 'kind', 'mine', 'prefs', 'projects', 'relations', 'resources', 'version'], 'ni la bitácora, ni encargos, ni directivas, ni el archivo');
+    assert.deepEqual(Object.keys(x).sort(), ['app', 'areas', 'departments', 'experts', 'exportedAt', 'instructions', 'kind', 'mine', 'prefs', 'projects', 'relations', 'resources', 'skills', 'version'], 'ni la bitácora, ni encargos, ni directivas, ni el archivo');
     assert.ok(!JSON.stringify(x).includes('algo'), 'nada de la bitácora');
   } finally { await server.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -116,13 +116,20 @@ test('la CLI: settings export a un archivo y settings import en otra máquina (s
     assert.equal(cli(homes[0], 'departments', 'add', 'Pagos', '--instructions', 'Euros.').status, 0);
     assert.equal(cli(homes[0], 'agents', 'add', dir, '--agent', 'pi', '--name', 'tienda', '--office', 'pagos', '--instructions', 'pnpm.').status, 0);
     assert.equal(cli(homes[0], 'config', 'view.mode', 'iso').status, 0);
+    // a skill of yours (Claude Code's personal folder) travels too, and goes to the other one's (global)
+    fs.mkdirSync(path.join(homes[0], '.claude', 'skills', 'revisar-pr'), { recursive: true });
+    fs.writeFileSync(path.join(homes[0], '.claude', 'skills', 'revisar-pr', 'SKILL.md'), '---\nname: revisar-pr\n---\nMira los tests.\n');
+    fs.mkdirSync(path.join(homes[1], '.claude'));
     const file = path.join(homes[0], 'mis-ajustes.json');
     let r = cli(homes[0], 'settings', 'export', '--out', file);
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /Ajustes exportados a/);
     r = cli(homes[1], 'settings', 'import', file);
     assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stdout, /Ajustes importados: \d+ ajustes, 1 áreas, 2 proyectos, 0 personajes, 1 repositorios, 0 relaciones, 0 componentes, 0 proyectos de antes, 0 skills, 0 herramientas, 0 expertos, 0 de infraestructura\./);
+    assert.match(r.stdout, /Ajustes importados: \d+ ajustes, 1 áreas, 2 proyectos, 0 personajes, 1 repositorios, 0 relaciones, 0 skills privadas, 1 skills instaladas, 0 herramientas, 0 expertos, 0 de infraestructura\./);
+    assert.match(r.stdout, /✓ skill revisar-pr en ~\/\.claude\/skills\/revisar-pr/);
+    assert.equal(fs.readFileSync(path.join(homes[1], '.claude', 'skills', 'revisar-pr', 'SKILL.md'), 'utf8'), '---\nname: revisar-pr\n---\nMira los tests.\n');
+    assert.equal(cli(homes[1], 'settings', 'import', file, '--skills', 'otra').status, 1, 'sólo global, repos o none');
     r = cli(homes[1], 'settings', 'export');
     const x = JSON.parse(r.stdout);
     assert.deepEqual(x.prefs.view, { mode: 'iso' });

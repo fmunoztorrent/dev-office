@@ -102,6 +102,14 @@ test('las skills que conoce la empresa (para elegir la del experto) y los expert
   store.saveMine({ kind: 'skill', name: 'mis-commits', title: 'Cómo escribo los commits', body: 'x' });
   const names = knownSkills(store).map((k) => `${k.name}@${k.where}`);
   assert.deepEqual(names, ['mis-commits@mine', 'pagos@tienda'], 'una carpeta sin SKILL.md no es una skill');
+  // yours also: the ones of your other agents (Pi…) and of your Claude Code plugins, in your HOME
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dto-sme-home-'));
+  const skill = (...p) => { fs.mkdirSync(path.join(home, ...p), { recursive: true }); fs.writeFileSync(path.join(home, ...p, 'SKILL.md'), '---\n---\n'); };
+  skill('.pi', 'agent', 'skills', 'mi-deploy');
+  skill('.claude', 'plugins', 'cache', 'acme', 'revisor', '1.0.0', 'skills', 'revisar-pr');
+  const withHome = knownSkills(store, { home }).map((k) => `${k.name}@${k.where}`);
+  assert.deepEqual(withHome, ['mi-deploy@mine', 'mis-commits@mine', 'pagos@tienda', 'revisar-pr@plugin:revisor']);
+  fs.rmSync(home, { recursive: true, force: true });
 
   store.saveExpert({ skill: 'pagos', topic: 'cobros', look: { name: 'Ana', glasses: true } });
   const file = exportSettings(store);

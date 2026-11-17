@@ -464,7 +464,34 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         el('ul', { class: 'hint s-io', id: 's-io' })),
       card(G('cardData'),
         el('dl', { class: 'cfg-facts' }, el('dt', {}, G('dataFile')), el('dd', {}, el('code', {}, tilde(st.data?.office.file || '')))),
-        el('p', { class: 'hint' }, G('dataHint'))));
+        el('p', { class: 'hint' }, G('dataHint'))),
+      resetCard());
+  }
+
+  /** ⟲ Start over: what you choose goes back to how it was the first day (after exporting it, if you want). */
+  function resetCard() {
+    const PARTS = ['prefs', 'look', 'company', 'activity', 'archive'];
+    const chosen = st.resetParts ||= new Set();
+    const go1 = el('button', { type: 'button', class: 'btn danger', disabled: chosen.size ? undefined : true, onclick: async () => {
+      const list = PARTS.filter((x) => chosen.has(x)).map((x) => `• ${G(`reset_${x}`)}`).join('\n');
+      if (!confirm(G('resetConfirm', { list }))) return;
+      const r = await api('POST', '/v1/reset', { parts: [...chosen] });
+      if (!r.ok) return msg(r.error);
+      st.resetParts = null;
+      st.company = st.areas = st.projects = st.experts = null;
+      await load();
+      onSaved?.();
+      msg(G('resetDone'), true);
+      renderBackup();
+    } }, `⟲ ${G('resetBtn')}`);
+    return el('section', { class: 'cfg-card s-reset' },
+      el('h3', {}, `⟲ ${G('resetTitle')}`),
+      el('p', { class: 'hint' }, G('resetHint'), ' ', el('a', { href: '/v1/settings/export', download: '' }, G('resetExportFirst'))),
+      el('div', { class: 's-reset-parts' }, PARTS.map((x) => el('label', { class: 'b-check' },
+        el('input', { type: 'checkbox', checked: chosen.has(x) ? true : undefined, onchange: (e) => { if (e.target.checked) chosen.add(x); else chosen.delete(x); go1.disabled = !chosen.size; } }),
+        el('span', {}, el('b', {}, G(`reset_${x}`)), el('span', { class: 'hint' }, ` — ${G(`resetWhat_${x}`)}`))))),
+      el('p', { class: 'hint' }, G('resetKeeps')),
+      el('div', { class: 's-row' }, go1));
   }
 
   /** ℹ About: the version that is running, where it runs and where to read more. */
@@ -510,6 +537,48 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     ];
   }
 
+  /**
+   * Where a settings file's skills go: { to: 'global' | 'repos' | 'none', repos } — asked only when it brings
+   * some; null if you cancel. Repositories: the registered ones, and the file's (by their folder).
+   */
+  async function skillsWhere(file) {
+    if (!st.projects) { const r = await api('GET', '/v1/agents'); if (r.ok) st.projects = r.agents.filter((a) => a.registered); }
+    const skills = [...(file?.skills || []).map((x) => ({ name: x.name, description: x.description || '' })), ...(file?.mine?.skills || []).map((x) => ({ name: x.name, description: x.title || '' }))]
+      .filter((x) => x && typeof x.name === 'string');
+    if (!skills.length) return { to: 'global', repos: [] };
+    const here = (st.projects || getTargets().filter((x) => x.registered)).map((a) => ({ key: a.id, name: a.name, path: a.path }));
+    const known = new Set(here.map((a) => a.path));
+    const theirs = (file.projects || []).filter((x) => x?.path && !known.has(x.path)).map((x) => ({ key: x.path, name: x.name || x.path, path: x.path, fromFile: true }));
+    const repos = [...here, ...theirs];
+    return new Promise((resolve) => {
+      let to = 'global';
+      const picked = new Set();
+      const dlg = el('dialog', { class: 'brief settings skills-dlg', 'aria-labelledby': 'sk-title' });
+      const list = el('div', { class: 's-skill-repos', hidden: true }, repos.length ? repos.map((a) => el('label', { class: 'b-check' },
+        el('input', { type: 'checkbox', onchange: (e) => { if (e.target.checked) picked.add(a.key); else picked.delete(a.key); } }),
+        el('span', {}, el('b', {}, a.name), el('span', { class: 'hint' }, ` ${tilde(a.path)}${a.fromFile ? ` · ${G('ioSkillsFromFile')}` : ''}`))))
+        : el('p', { class: 'hint' }, G('ioSkillsNoRepos')));
+      const radio = (value) => el('label', { class: 'b-check' },
+        el('input', { type: 'radio', name: 'sk-to', value, checked: value === to ? true : undefined, onchange: () => { to = value; list.hidden = to !== 'repos'; } }),
+        el('span', {}, el('b', {}, G(`ioSkills_${value}`)), el('span', { class: 'hint' }, ` — ${G(`ioSkillsHint_${value}`)}`)));
+      const done = (value) => { dlg.close(); dlg.remove(); resolve(value); };
+      dlg.append(el('form', { method: 'dialog', onsubmit: (e) => { e.preventDefault(); done({ to, repos: to === 'repos' ? [...picked] : [] }); } },
+        el('header', { class: 'brief-head' }, el('span', { class: 'pin', 'aria-hidden': 'true' }), el('h2', { id: 'sk-title' }, G('ioSkillsTitle', { n: skills.length })),
+          el('button', { type: 'button', class: 'brief-x', 'aria-label': t('settings.close'), onclick: () => done(null) }, '✕')),
+        el('div', { class: 'brief-body' },
+          el('ul', { class: 's-skill-names' }, skills.slice(0, 40).map((x) => el('li', { title: x.description }, `🧩 ${x.name}`))),
+          el('div', { class: 's-skill-to' }, ['global', 'repos', 'none'].map(radio)),
+          list,
+          el('p', { class: 'hint' }, G('ioSkillsSafe'))),
+        el('footer', { class: 'brief-foot' },
+          el('button', { type: 'button', class: 'btn ghost', onclick: () => done(null) }, t('settings.offices.cancel')),
+          el('button', { type: 'submit', class: 'btn' }, G('ioSkillsGo')))));
+      dlg.addEventListener('cancel', (e) => { e.preventDefault(); done(null); });
+      document.body.append(dlg);
+      dlg.showModal();
+    });
+  }
+
   /** ⬆ Import: a settings file (server/settings-io.js); what it brings replaces what is here, the rest stays. */
   function importSettingsFile() {
     const input = el('input', { type: 'file', accept: '.json,application/json', onchange: async () => {
@@ -517,14 +586,19 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       if (!file) return;
       let body;
       try { body = JSON.parse(await file.text()); } catch { return msg(t('err.settingsFile.json')); }
-      const r = await api('POST', '/v1/settings/import', body);
+      // the skills it brings: you choose where they go (or nowhere) before anything is applied
+      const where = await skillsWhere(body);
+      if (!where) return;
+      const r = await api('POST', `/v1/settings/import?skills=${where.to}&repos=${encodeURIComponent(where.repos.join(','))}`, body);
       if (!r.ok) return msg(r.error);
       await load();
       msg(t('settings.general.ioDone', r.applied), true);
       onSaved?.();
       go('backup');
       // what could not be brought (a project whose folder is not on this machine…)
-      if (r.skipped?.length) $('s-io').replaceChildren(...r.skipped.map((x) => el('li', {}, `✖ ${x.what}: ${x.error}`)));
+      $('s-io').replaceChildren(
+        ...(r.installed || []).filter((x) => x.action !== 'same').map((x) => el('li', {}, `✓ ${G('ioSkillIn', { name: x.name, dir: tilde(x.dir) })}`)),
+        ...(r.skipped || []).map((x) => el('li', {}, `✖ ${x.what}: ${x.error}`)));
     } });
     input.click();
   }
@@ -1156,46 +1230,62 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         '+'));
   }
 
+  /**
+   * 🧑 Characters: the team as a row of portraits, and one editor for the one you pick (who they are, how
+   * they look, and its tools: random, back to default, export, import). Light: one character at a time.
+   */
   function renderLook() {
     st.looks ||= Object.fromEntries(ROLE_ORDER.map((r) => [r, Object.fromEntries(APPEARANCE_KEYS.map((k) => [k, personOf(r)[k]]))]));
+    if (!ROLE_ORDER.includes(st.lookRole)) st.lookRole = ROLE_ORDER.find((r) => r === 'tl') || ROLE_ORDER[0];
     const panel = panelOf('look');
-    const cards = ROLE_ORDER.map((role) => {
-      const look = st.looks[role];
-      const canvas = el('canvas', { 'aria-label': LK('preview', { name: look.name }) });
-      const redraw = () => drawSprite(canvas, look, { id: role });
-      // a click on a swatch redraws the card (to mark it); the free picker only the preview while dragging
-      const set = (k, v, again = true) => { look[k] = v; if (again) renderLook(); else redraw(); };
-      const toggle = (k) => el('label', {}, el('input', { type: 'checkbox', checked: look[k] ? true : undefined, onchange: (e) => set(k, e.target.checked, false) }), LK(k));
-      const select = (k, values, label) => el('label', { class: 's-pick' }, el('span', {}, LK(k)),
-        el('select', { 'aria-label': LK('of', { label: LK(k), name: look.name }), onchange: (e) => (k === 'sex' ? (Object.assign(look, lookForSex(e.target.value)), renderLook()) : set(k, e.target.value, false)) },
-          values.map((v) => option(v, label(v), look[k] === v))));
-      redraw();
-      return el('div', { class: 's-look' },
-        canvas,
-        el('div', { class: 'pair' },
-          el('input', { type: 'text', value: look.name, maxlength: 20, 'aria-label': LK('name'), oninput: (e) => { look.name = e.target.value; } }),
-          el('input', { type: 'text', value: look.title, maxlength: 30, 'aria-label': LK('title'), oninput: (e) => { look.title = e.target.value; } })),
-        el('div', { class: 'pair' },
-          currentTheme() === 'anime' ? null : select('sex', SEXES, (v) => LK(`sexes.${v}`)),
-          select('personality', Object.keys(PERSONALITIES), (v) => LK(`personalities.${v}`))),
-        el('div', { class: 'pair' },
-          select('style', STYLES, (v) => LK(`styles.${v}`)),
-          el('div', { class: 's-share' },
-            el('button', { type: 'button', class: 's-mini', title: LK('exportTitle', { name: look.name }), onclick: () => download(role, look) }, LK('export')),
-            el('button', { type: 'button', class: 's-mini', title: LK('importTitle'), onclick: () => upload(role) }, LK('import')))),
-        el('div', { class: 'colors' }, colorField(look, 'skin', set), colorField(look, 'hair', set), colorField(look, 'shirt', set), colorField(look, 'pants', set)),
-        el('div', { class: 'toggles' }, toggle('long'), currentTheme() === 'anime' ? null : toggle('beard'), toggle('glasses')),
-        el('div', { class: 'toggles' },
-          el('span', { class: 'hint', title: VISITORS[role] ? LK('visitorHint') : undefined }, role === 'po' ? `${LK('role', { role })} · ${LK('you')}` : VISITORS[role] ? `${LK('role', { role })} · ${LK('visitor')}` : LK('role', { role })),
-          el('button', { type: 'button', class: 's-mini', title: LK('randomTitle'), onclick: () => { Object.assign(look, randomLook(look.sex)); renderLook(); } }, '🎲'),
-          el('button', { type: 'button', class: 's-mini', title: LK('resetTitle'), onclick: () => { Object.assign(look, defaultLook(role)); renderLook(); } }, '↺')),
-      );
-    });
+    const role = st.lookRole;
+    const look = st.looks[role];
+    const roleText = (r) => (r === 'po' ? `${LK('role', { role: r })} · ${LK('you')}` : VISITORS[r] ? `${LK('role', { role: r })} · ${LK('visitor')}` : LK('role', { role: r }));
+    // the roster: everyone, their portrait, name and title; a click edits them
+    const portraits = [];
+    const roster = el('div', { class: 's-roster', role: 'tablist', 'aria-label': LK('roster') }, ROLE_ORDER.map((r) => {
+      const l = st.looks[r];
+      const c = el('canvas', { 'aria-hidden': 'true' });
+      portraits.push([c, r]);
+      return el('button', { type: 'button', role: 'tab', class: 's-roster-item', 'aria-selected': String(r === role), title: roleText(r), onclick: () => { st.lookRole = r; renderLook(); } },
+        c, el('span', { class: 's-roster-name' }, l.name || '?'), el('span', { class: 's-roster-title' }, l.title || r));
+    }));
+    const big = el('canvas', { class: 's-look-big', 'aria-label': LK('preview', { name: look.name }) });
+    const redraw = () => { drawSprite(big, look, { id: role }); for (const [c, r] of portraits) if (r === role) drawSprite(c, look, { id: r }); };
+    // a click on a swatch redraws the editor (to mark it); the free picker only the preview while dragging
+    const set = (k, v, again = true) => { look[k] = v; if (again) renderLook(); else redraw(); };
+    const toggle = (k) => el('label', {}, el('input', { type: 'checkbox', checked: look[k] ? true : undefined, onchange: (e) => set(k, e.target.checked, false) }), LK(k));
+    const select = (k, values, label) => el('label', { class: 's-pick' }, el('span', {}, LK(k)),
+      el('select', { 'aria-label': LK('of', { label: LK(k), name: look.name }), onchange: (e) => (k === 'sex' ? (Object.assign(look, lookForSex(e.target.value)), renderLook()) : set(k, e.target.value, false)) },
+        values.map((v) => option(v, label(v), look[k] === v))));
+    const editor = el('div', { class: 's-look-editor', role: 'tabpanel' },
+      el('div', { class: 's-look-side' },
+        big,
+        el('p', { class: 'hint', title: VISITORS[role] ? LK('visitorHint') : undefined }, roleText(role)),
+        el('div', { class: 's-look-tools' },
+          el('button', { type: 'button', class: 's-icon', title: LK('randomTitle'), 'aria-label': LK('randomTitle'), onclick: () => { Object.assign(look, randomLook(look.sex)); renderLook(); } }, '🎲'),
+          el('button', { type: 'button', class: 's-icon', title: LK('resetTitle'), 'aria-label': LK('resetTitle'), onclick: () => { Object.assign(look, defaultLook(role)); renderLook(); } }, '↺'),
+          el('button', { type: 'button', class: 's-icon', title: LK('exportTitle', { name: look.name }), 'aria-label': LK('exportTitle', { name: look.name }), onclick: () => download(role, look) }, '⬇'),
+          el('button', { type: 'button', class: 's-icon', title: LK('importTitle'), 'aria-label': LK('importTitle'), onclick: () => upload(role) }, '⬆'))),
+      el('div', { class: 's-look-main' },
+        el('fieldset', { class: 's-fs' }, el('legend', {}, LK('who')),
+          el('div', { class: 'pair' },
+            el('label', { class: 's-pick' }, el('span', {}, LK('name')), el('input', { type: 'text', value: look.name, maxlength: 20, 'aria-label': LK('name'), oninput: (e) => { look.name = e.target.value; } })),
+            el('label', { class: 's-pick' }, el('span', {}, LK('title')), el('input', { type: 'text', value: look.title, maxlength: 30, 'aria-label': LK('title'), oninput: (e) => { look.title = e.target.value; } }))),
+          el('div', { class: 'pair' },
+            select('personality', Object.keys(PERSONALITIES), (v) => LK(`personalities.${v}`)),
+            select('style', STYLES, (v) => LK(`styles.${v}`)))),
+        el('fieldset', { class: 's-fs' }, el('legend', {}, LK('looks')),
+          currentTheme() === 'anime' ? null : el('div', { class: 'pair' }, select('sex', SEXES, (v) => LK(`sexes.${v}`))),
+          el('div', { class: 'colors' }, colorField(look, 'skin', set), colorField(look, 'hair', set), colorField(look, 'shirt', set), colorField(look, 'pants', set)),
+          el('div', { class: 'toggles' }, toggle('long'), currentTheme() === 'anime' ? null : toggle('beard'), toggle('glasses')))));
     // keep the scroll and the focus where they were (a swatch redraws the panel)
     const box = $('cfg-content'), top = box?.scrollTop, focus = document.activeElement?.getAttribute('aria-label');
     put(panel,
-      el('p', { class: 'hint' }, `${getOffice()?.name ? `🏢 ${getOffice().name} · ` : ''}${LK('hint')}`),
-      el('div', { class: 's-looks' }, cards));
+      el('p', { class: 'hint' }, `${getOffice()?.name ? `🧩 ${getOffice().name} · ` : ''}${LK('hint')}`),
+      roster, editor);
+    for (const [c, r] of portraits) drawSprite(c, st.looks[r], { id: r });
+    redraw();
     if (box) box.scrollTop = top;
     if (focus) [...panel.querySelectorAll('[aria-label]')].find((x) => x.getAttribute('aria-label') === focus)?.focus();
   }
@@ -1228,6 +1318,34 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     put(panel, expertsBox());
     box.scrollTop = top;
     if (focus) [...panel.querySelectorAll('[aria-label]')].find((x) => x.getAttribute('aria-label') === focus)?.focus();
+  }
+
+  /**
+   * An expert's skill: picked from the ones the company knows, yours first (private, your agents' folders,
+   * your Claude Code plugins), then the archive's and the projects'; or another one, typed.
+   */
+  function skillPick(x) {
+    const OTHER = '__other__';
+    const skills = st.skills || [];
+    const groupOf = (k) => (k.where === 'mine' ? 'mine' : k.where === 'archive' ? 'archive' : String(k.where).startsWith('plugin:') ? 'plugin' : 'project');
+    const custom = x.otherSkill || (x.skill && !skills.some((k) => k.name === x.skill));
+    const label = (k) => ({ project: `${k.name} · ${k.where}`, plugin: `${k.name} · ${String(k.where).slice(7)}` }[groupOf(k)] || k.name);
+    const pick = el('select', { 'aria-label': XK('skill'), onchange: (e) => {
+      x.otherSkill = e.target.value === OTHER;
+      x.skill = x.otherSkill ? '' : e.target.value;
+      x.dirty = true;
+      renderExperts();
+    } },
+      option('', XK('skillPick'), !x.skill && !custom),
+      ['mine', 'plugin', 'archive', 'project'].map((g) => {
+        const list = skills.filter((k) => groupOf(k) === g);
+        return list.length ? el('optgroup', { label: XK(`skillFrom.${g}`) }, list.map((k) => option(k.name, label(k), !custom && k.name === x.skill))) : null;
+      }),
+      option(OTHER, XK('skillOther'), custom));
+    return el('div', { class: 's-pick s-skill' }, el('span', {}, XK('skill')),
+      el('span', { class: 's-skill-pick' }, pick,
+        custom ? el('input', { type: 'text', value: x.skill, maxlength: 64, placeholder: XK('skillPh'), 'aria-label': XK('skillOther'), oninput: (e) => { x.skill = e.target.value; x.dirty = true; } }) : null),
+      !skills.some((k) => k.where === 'mine') ? el('span', { class: 'hint' }, XK('skillNoneMine')) : null);
   }
 
   function expertsBox() {
@@ -1293,8 +1411,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         el('div', { class: 'pair' },
           el('input', { type: 'text', value: look.name, maxlength: 20, placeholder: XK('namePh'), 'aria-label': LK('name'), oninput: (e) => { look.name = e.target.value; x.dirty = true; } }),
           el('input', { type: 'text', value: look.title, maxlength: 30, placeholder: t('team.titles.sme', { skill: x.skill || '…', g: look.sex }), 'aria-label': LK('title'), oninput: (e) => { look.title = e.target.value; x.dirty = true; } })),
-        el('label', { class: 's-pick s-skill' }, el('span', {}, XK('skill')),
-          el('input', { type: 'text', value: x.skill, list: 's-skills', maxlength: 64, placeholder: XK('skillPh'), 'aria-label': XK('skill'), oninput: (e) => { x.skill = e.target.value; x.dirty = true; } })),
+        skillPick(x),
         el('label', { class: 's-pick s-skill' }, el('span', {}, XK('topic')),
           el('input', { type: 'text', value: x.topic, maxlength: 120, placeholder: XK('topicPh'), 'aria-label': XK('topic'), oninput: (e) => { x.topic = e.target.value; x.dirty = true; } })),
         el('div', { class: 's-actions' },
@@ -1321,7 +1438,6 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     };
     return el('section', { class: 's-experts' },
       el('p', { class: 'hint' }, XK('hint')),
-      el('datalist', { id: 's-skills' }, (st.skills || []).map((k) => el('option', { value: k.name }, k.where ? `${k.name} · ${k.where}` : k.name))),
       list ? el('div', { class: 's-looks' }, list.map(card)) : el('p', { class: 'hint' }, t('settings.loading')),
       el('div', { class: 's-row' }, el('button', { type: 'button', class: 's-mini', disabled: !list, onclick: () => { list.push({ ...expertForm(), dirty: true }); renderExperts(); } }, XK('add'))));
   }

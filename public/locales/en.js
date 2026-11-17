@@ -288,7 +288,7 @@ export default {
   // the analyst reviews a brief before it goes to work (server/clarify.js)
   ingest: { tooBig: 'too big (more than {mb} MB)', convert: 'to read {name} the office needs {tool} installed (or ask an agent to convert it: ✨ Ask an agent)', format: 'the archive does not read .{ext} files (Markdown, text, CSV, JSON, HTML, PDF or Word)', empty: '{name} has no text', url: 'that is not an http(s) address', fetch: 'could not download it: {error}' },
   // the settings as a JSON file (server/settings-io.js): what could not be imported
-  settingsIo: { area: 'Area {name}', relation: 'Relation {from} → {to}', skill: 'Skill {name}', tool: 'Tool {name}', expert: 'Expert in “{skill}”', resource: 'Infrastructure {name}', system: 'Project {name}', systemParts: 'Artifacts of {name} without their repo here: {parts}', department: 'Project {name}', characters: 'Characters of {name}', pref: 'Setting {key}', project: 'Repository {name}', component: 'Component {name} of {project}', instructions: 'Instructions of {path}' },
+  settingsIo: { skillsWhere: 'the skills', skillIn: 'the skill {name} in {where}', area: 'Area {name}', relation: 'Relation {from} → {to}', skill: 'Skill {name}', tool: 'Tool {name}', expert: 'Expert in “{skill}”', resource: 'Infrastructure {name}', system: 'Project {name}', systemParts: 'Artifacts of {name} without their repo here: {parts}', department: 'Project {name}', characters: 'Characters of {name}', pref: 'Setting {key}', project: 'Repository {name}', component: 'Component {name} of {project}', instructions: 'Instructions of {path}' },
   // a directive's impact map (server/components.js)
   impact: {
     ask: 'Does "{what}" exist? In which repository and folder, or must it be created?', none: 'I could not tell which departments or repositories it touches: choose them or name them.', unknownHead: 'It names things that are not on the map:',
@@ -524,6 +524,9 @@ export default {
     waiting: '{agent} is asking you: {summary}', answered: '✋ answered “{answer}” in pane {pane}', cancelled: '✋ question cancelled in pane {pane}',
   },
   err: {
+    skillsNoRepos: 'no registered repository was chosen to install them in',
+    skillInstall: { exists: 'there is already a different skill with that name: it was left as it was', invalid: 'the skill in the file is not valid' },
+    resetNothing: 'choose what to start over',
     pathMissing: 'the path is missing', pathRelative: '{path}: use the full path (e.g. ~/Workspace/my-project)', pathNotFound: '{path}: that folder does not exist',
     harness: 'choose the agent for that path: claude-code, opencode or pi', args: '{name}: args must be a list of strings',
     agentExists: 'that agent is already registered for that path', saveFailed: 'could not save: {error}', agentsMax: 'at most {n} agents',
@@ -689,7 +692,7 @@ export default {
       look: 'How the people of the office being watched look, what they are called and how they answer.',
       experts: 'A character tied to a skill: they come up to the office when an agent uses it.',
       mine: 'What is yours, not the company’s: your private skills and your own tools.',
-      backup: 'Your settings as a file: to keep them, share them or take them to another machine.',
+      backup: 'Your settings as a file (with your skills): to keep them, share them or take them to another machine. And starting over.',
       about: 'The version that is running, where it keeps its data and where to read more.',
     },
     // the words the search finds each section by (besides its name and what it is for)
@@ -709,7 +712,7 @@ export default {
       look: 'character appearance name hair skin shirt personality style export import',
       experts: 'expert sme skill quick actions',
       mine: 'private skills tools scripts personal mcp',
-      backup: 'export import json file backup database migrate',
+      backup: 'export import json file backup database migrate skills reset start over erase clean',
       about: 'version about update docs documentation changelog shortcuts keys help',
     },
     about: {
@@ -733,6 +736,16 @@ export default {
     keys: { field: 'field', change: 'change', action: 'action', save: 'save', close: 'close', tabs: '◂ ▸ switch tab' },
     yes: 'yes', no: 'no',
     general: {
+      ioSkillsTitle: 'It brings {n} skill(s): where do they go?', ioSkills_global: 'In your personal folders', ioSkillsHint_global: 'every session of your agents has them (~/.claude/skills, ~/.agents/skills)',
+      ioSkills_repos: 'In some repositories', ioSkillsHint_repos: 'only the agents working in the ones you pick (their .claude/skills or .agents/skills)', ioSkills_none: 'Nowhere', ioSkillsHint_none: 'the private ones stay in ⚙ › Mine, off; the rest are not installed',
+      ioSkillsFromFile: 'from the file', ioSkillsNoRepos: 'There are no registered repositories yet.', ioSkillsSafe: 'A skill that is already there and is different is never overwritten: it is left as it was, and said.', ioSkillsGo: 'Import', ioSkillIn: 'skill {name} in {dir}',
+      resetTitle: 'Start over', resetHint: 'Choose what goes back to how it was the first day. It cannot be undone:', resetExportFirst: 'export your settings first', resetBtn: 'Start over what I chose',
+      reset_prefs: 'General settings', resetWhat_prefs: 'language, view, theme, models, intelligence, autonomy, context…',
+      reset_look: 'Characters and experts', resetWhat_look: 'how everyone looks and is called, in every project and theme, and the experts',
+      reset_company: 'The company', resetWhat_company: 'areas, projects, registered repositories, their relations, infrastructure, loops and directives (their folders are not touched)',
+      reset_activity: 'The activity', resetWhat_activity: 'the history of briefs, the questions and the dailies',
+      reset_archive: 'The archive', resetWhat_archive: 'notes, decisions, documents, minutes, skills and connectors of the archive, and its index',
+      resetKeeps: 'Your private skills and tools (⚙ › Mine) stay: they live in your folders.', resetConfirm: 'Start over this? It cannot be undone.\n\n{list}', resetDone: 'Done: it is as the first day.',
       cardLanguage: 'Interface', languageHint: 'The language of the game, the log, the terminal and what the office writes to the agents.',
       cardPlace: 'Where the company is', cardView: 'The view', cardLog: 'The log', cardAlerts: 'When they wait for you', alertsHint: 'These two are this browser’s own: they are not saved with the office.',
       clarifyHint: 'Before a brief becomes work, the analyst gives it to the repository’s agent to read (read-only) and brings you only the questions that would change the result.',
@@ -740,7 +753,7 @@ export default {
       autonomyDepts: 'Each department can have its own level: Departments →',
       cardEmbeddings: 'Search by meaning', cardIndex: 'The index', cardData: 'Where everything is kept', dataFile: 'Database',
       dataHint: 'Everything the office knows is in that one SQLite file: copy it to back it all up, history included. The export above carries only your settings.',
-      io: 'Your settings (a JSON file)', ioHint: 'Exports what is yours: the general settings, the departments (with their instructions, autonomy and characters), the registered repositories with their instructions and components, the projects, the infrastructure, what is yours (your skills and tools) and the experts. Not the log, the briefs, the directives, the loops or the archive. Importing replaces what the file brings and leaves the rest; a repository whose folder is not on this machine is skipped.', ioExport: '⬇ Export settings', ioImport: '⬆ Import settings', ioDone: 'Settings imported: {prefs} settings, {areas} areas, {departments} projects, {characters} characters, {projects} repositories, {relations} relations, {components} components, {systems} projects of before, {skills} skills, {tools} tools, {experts} experts, {resources} of infrastructure.',
+      io: 'Your settings (a JSON file)', ioHint: 'Exports what is yours: the general settings, the areas and their projects (with their instructions, autonomy and characters), the registered repositories with their instructions and relations, the infrastructure, the experts and your skills with their files (the private ones, the ones in your agents’ personal folders and the ones your experts use). Not the log, the briefs, the directives, the loops or the archive. Importing replaces what the file brings and leaves the rest; you choose where its skills go; a repository whose folder is not on this machine is skipped.', ioExport: '⬇ Export settings', ioImport: '⬆ Import settings', ioDone: 'Settings imported: {prefs} settings, {areas} areas, {departments} projects, {characters} characters, {projects} repositories, {relations} relations, {skills} private skills, {installed} skills installed, {tools} tools, {experts} experts, {resources} of infrastructure.',
       archive: 'Archive (the agents’ knowledge)', archivePush: 'What the archive knows goes on top of every brief and question (the glossary terms and the most relevant passages)', embeddings: 'Semantic search', embed_off: 'Off: by words only (offline)', embed_ollama: 'Ollama, on this machine', embed_openai: 'An OpenAI-compatible API (OpenAI, Voyage…)', embedModel: 'Embedding model', embedUrl: 'Address', embedOllamaHint: 'Install Ollama and run: ollama pull nomic-embed-text. Nothing leaves this machine.', embedKeyHint: 'Its key goes in the DEV_TEAM_OFFICE_EMBED_KEY environment variable (never in the database). The archive’s text is sent to that API to be embedded.', indexStatus: '🧠 {chunks} chunk(s) indexed · {embedded} with embedding', reindex: '↻ Index it again',
       theme: 'Style', theme_pixel: 'Pixel art (the usual team)', theme_anime: 'Anime (a team of women)', themeHint: 'How the office’s people look. Each style has its own cast, and what you change in ⚙ › Characters stays in the style you are using.', themeAnimeHint: 'A team of adult women in the style of Japanese anime, with their own names, hair styles and outfits (and yours, the PO’s). There are no men here. What you change in ⚙ › Characters stays in this style; the terminal stays in pixel art, with this cast.',
       intel: '🧠 Intelligence', intelHint: 'The model the office leans on to size the impact of an order: how each repo is touched and what it needs that is not on the map (components, repos, queues, databases, APIs…). It only reads and answers; it changes nothing.', intelProvider: 'Provider', intel_off: 'None: only the order’s words', intel_agent: 'One of your agents (its CLI, read-only)', intel_anthropic: 'The Claude API (Anthropic)', intel_openai: 'An OpenAI-compatible API (OpenAI, OpenRouter, LM Studio…)', intel_ollama: 'Ollama, on this machine',
@@ -809,6 +822,7 @@ export default {
       addExisting: '⌕ Pick a known one', pick: 'Choose a repository', pickHint: 'The repositories the office already knows: open sessions (not yet registered) and registered ones.', pickRegistered: 'Registered', pickLoose: 'To register', pickChoose: 'Choose', pickEdit: 'Edit', pickManual: '＋ Type the path instead', pickNone: 'The office does not know any repository yet. Open an agent session in its folder, or type the path.',
     },
     experts: {
+      skillPick: '— which skill —', skillOther: 'Another one (type its name)…', skillFrom: { mine: 'Yours', plugin: 'Your Claude Code plugins', archive: 'The archive’s', project: 'The projects’' }, skillNoneMine: 'You have no skills of your own yet: ⚙ › Mine, or your agents’ personal folders.',
       title: '🎓 Experts', hint: 'An expert (SME) knows a skill: when an agent uses it, they come up the elevator, sit at a free desk with the skill in their badge and leave when the turn ends. For now each one is associated with their skill by hand. The experts are the whole company\'s.',
       namePh: 'Name', skill: 'Skill', skillPh: 'its name, e.g. pci-dss', topic: 'Knows about', topicPh: 'e.g. payments and PCI',
       role: 'expert in the skill “{skill}”', new: 'new: save them so they come', remove: 'Delete the expert', removeConfirm: 'Delete {name}, expert in “{skill}”?',
@@ -816,6 +830,7 @@ export default {
       actionsHint: 'Quick-action buttons: each one sends its task to the agent of the repository that knows the skill.', actionLabel: 'Label', actionPrompt: 'The task to dispatch', actionAdd: '＋ Action', actionRemove: 'Remove the action', actionRun: 'Run', actionSuggest: 'Suggest from the skill', actionSuggested: '{n} action(s) suggested from the skill.', actionNoSuggest: 'No actions found in the skill\'s SKILL.md.', actionSaveFirst: 'Save the expert before running.', actionPromptEmpty: 'The action has no text to dispatch.', actionSent: 'Task sent to the agent.', skillFirst: 'Pick a skill to suggest its actions.',
     },
     look: {
+      roster: 'The team', who: 'Who they are', looks: 'How they look',
       hint: 'How the characters of this office look and what they are called. Each one still stands for its role (QA, backend…).',
       character: 'Character', name: 'Name', title: 'Title', shirt: 'Shirt', pants: 'Pants', hair: 'Hair', skin: 'Skin', long: 'Long hair', beard: 'Beard', glasses: 'Glasses',
       sex: 'Sex', style: 'Style', styles: { normal: 'Normal', concise: 'Concise: straight to the point', explanatory: 'Explanatory: the why, with examples', teacher: 'Teacher: step by step, to learn', formal: 'Formal: like a report' }, export: '⬇ Export', exportTitle: 'Download {name} as JSON, to share them', import: '⬆ Import', importTitle: 'Bring a character from a JSON file into this role', imported: 'Done: {name} imported (Save to keep it).', sexes: { f: 'Female', m: 'Male' }, personality: 'Personality', personalities: { chatty: 'Chatty: talks a lot, at the desk and at the café', focused: 'Focused: barely leaves the desk', anxious: 'Anxious: many doubts, coffee often', calm: 'Calm: takes breaks, no rush', dreamer: 'Dreamer: daydreams while working' }, traits: { chatty: 'chatty', focused: 'focused', anxious: 'anxious', calm: 'calm', dreamer: 'dreamer' }, pickColor: 'Pick a color', moreColors: 'Other color…',
@@ -935,12 +950,13 @@ Usage:
   dev-team-office mcp             The MCP server (stdio) that setup registers in each agent.
   dev-team-office btw "<question>" [--office <id>]
                                   A side question to the agent on duty about the team (like /btw).
-  dev-team-office settings export [--out <file or folder>]
-  dev-team-office settings import <file.json>
-                                  Your settings as JSON: the general ones, the departments (with their instructions and
-                                  characters), the repositories (with their instructions and components), the projects, the
-                                  infrastructure, your skills and tools, and the experts. Importing replaces what the file
-                                  brings, the rest stays.
+  dev-team-office settings export [--out <file or folder>] [--no-skills]
+  dev-team-office settings import <file.json> [--skills global|repos|none] [--repos <repo>,…]
+                                  Your settings as JSON: the general ones, the areas and their projects (with their
+                                  instructions and characters), the repositories (with their instructions and relations),
+                                  the infrastructure, the experts, your tools and your skills with their files. Importing
+                                  replaces what the file brings, the rest stays; its skills go to your personal folders
+                                  (global, the default), to the repositories you name (repos) or nowhere (none).
   dev-team-office daily [--office <id>] [--all]
                                   The daily on demand, to be told the latest: what each one did since the last daily
                                   and what they are on now (in the game they gather at the table). --all: the company's.
@@ -997,7 +1013,7 @@ API: docs/api.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
     paneUsage: 'Usage: dev-team-office pane [--role qa] [--title "tests"] [--agent pi|claude|opencode|codex] -- <command or prompt>',
     teams: 'Teams:', teamNone: '(no team packs shipped)',
     teamUsage: 'Usage: dev-team-office team [list] | dev-team-office team install <team> --agent <pi|claude|opencode|codex> [--project <dir>] [--from <packsRoot>]',
-    settingsUsage: 'Usage: dev-team-office settings export [--out <file>]  ·  settings import <file.json>', settingsExported: 'Settings exported to {file}', btwUsage: 'Usage: dev-team-office btw "<question>" [--office <id>]', 
+    settingsUsage: 'Usage: dev-team-office settings export [--out <file>] [--no-skills]  ·  settings import <file.json> [--skills global|repos|none] [--repos <repo>,…]', skillInstalled: 'skill {name} in {dir}', settingsExported: 'Settings exported to {file}', btwUsage: 'Usage: dev-team-office btw "<question>" [--office <id>]', 
     updateGit: 'Updating the git clone at {dir} (git pull --ff-only)…',
     updateGitFailed: 'Could not update {dir} with git pull --ff-only (local changes, or another branch?): update it by hand, then dev-team-office restart',
     replaced: 'The office {old} that was running was replaced by this one ({version})',

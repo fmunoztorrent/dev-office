@@ -45,6 +45,30 @@ export function expertOfTool(experts, tool, input) {
 // where a project keeps its skills (one folder per skill, with its SKILL.md)
 const PROJECT_SKILL_DIRS = ['.claude/skills', '.agents/skills', '.pi/skills', '.opencode/skills', '.codex/skills', 'skills'];
 
+// the other agents' personal skill folders (Claude Code's and ~/.agents are in server/mine.js)
+export const OTHER_PERSONAL_DIRS = [['.pi', 'agent', 'skills'], ['.config', 'opencode', 'skills'], ['.config', 'opencode', 'skill'], ['.codex', 'skills']];
+
+/**
+ * The skill folders of your installed Claude Code plugins (~/.claude/plugins/cache/<market>/<plugin>/<version>/skills):
+ * [{ dir, plugin }], the newest version of each plugin only.
+ */
+export function pluginSkillDirs(home) {
+  const root = path.join(home, '.claude', 'plugins', 'cache');
+  const ls = (d) => { try { return fs.readdirSync(d, { withFileTypes: true }).filter((x) => x.isDirectory()).map((x) => x.name); } catch { return []; } };
+  const out = [];
+  for (const market of ls(root)) {
+    for (const plugin of ls(path.join(root, market))) {
+      const base = path.join(root, market, plugin);
+      // a plugin's own skills folder, or the one of its newest version
+      if (fs.existsSync(path.join(base, 'skills'))) { out.push({ dir: path.join(base, 'skills'), plugin }); continue; }
+      const versions = ls(base).filter((v) => fs.existsSync(path.join(base, v, 'skills')))
+        .sort((a, b) => fs.statSync(path.join(base, b)).mtimeMs - fs.statSync(path.join(base, a)).mtimeMs);
+      if (versions[0]) out.push({ dir: path.join(base, versions[0], 'skills'), plugin });
+    }
+  }
+  return out.slice(0, 200);
+}
+
 /** The skills in a folder of skills: [names] (each one a folder with its SKILL.md). */
 function skillsIn(dir) {
   try {
@@ -57,12 +81,17 @@ function skillsIn(dir) {
  * folders) and the registered projects' ([{ name, where }], each name once).
  * @param dirs  your personal skill folders (server/mine.js, personalSkillDirs)
  */
-export function knownSkills(store, { dirs = [] } = {}) {
+export function knownSkills(store, { dirs = [], home = null } = {}) {
   const out = new Map();
   const add = (name, where) => { const n = skillName(name); if (n && !out.has(n)) out.set(n, { name: n, where }); };
-  try { for (const k of store.listKnowledge({ kind: 'skill', limit: 500 })) add(k.name || k.title, 'archive'); } catch { /* an archive that cannot be read */ }
+  // yours first: the private ones, your agents' personal folders and your Claude Code plugins
   for (const m of store.listMine('skill')) add(m.name, 'mine');
   for (const d of dirs) for (const n of skillsIn(d.dir || d)) add(n, 'mine');
+  if (home) {
+    for (const d of OTHER_PERSONAL_DIRS) for (const n of skillsIn(path.join(home, ...d))) add(n, 'mine');
+    for (const { dir, plugin } of pluginSkillDirs(home)) for (const n of skillsIn(dir)) add(n, `plugin:${plugin}`);
+  }
+  try { for (const k of store.listKnowledge({ kind: 'skill', limit: 500 })) add(k.name || k.title, 'archive'); } catch { /* an archive that cannot be read */ }
   for (const a of store.listAgents()) for (const sub of PROJECT_SKILL_DIRS) for (const n of skillsIn(path.join(a.path, sub))) add(n, a.name);
   return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
 }

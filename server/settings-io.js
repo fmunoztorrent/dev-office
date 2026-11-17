@@ -11,6 +11,9 @@
 //                instructions of folders that are not registered
 //   systems      the products or business projects (server/systems.js): their team, instructions and artifacts
 //   mine         what is yours (⚙ › Mine): your private skills and your own tools (server/mine.js)
+//   skills       your other skills with their files (server/skill-bundle.js): the ones in your agents'
+//                personal folders and the ones your experts use from a project. On import you choose
+//                where they go: your personal folders, some repositories, or nowhere
 //   experts      the subject matter experts (server/experts.js): who knows each skill, and how they look
 //   resources    the infrastructure on the map (server/resources.js): queues, topics, databases, APIs…,
 //                where each one lives and which project folders use it
@@ -31,7 +34,8 @@ import os from 'node:os';
 import { MAIN_OFFICE, DEFAULT_PREFS } from './store.js';
 import { realDir } from './paths.js';
 import { t } from '../public/i18n.js';
-import { Mine } from './mine.js';
+import { Mine, mineSkillFile, personalSkillDirs } from './mine.js';
+import { collectSkills, installSkills, repoSkillDir } from './skill-bundle.js';
 
 export const SETTINGS_KIND = 'dev-team-office/settings';
 export const SETTINGS_VERSION = 2;
@@ -41,7 +45,7 @@ const PREF_KEYS = Object.keys(DEFAULT_PREFS);
 const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
 
 /** Everything that is the user's, as a JSON-ready object. */
-export function exportSettings(store, { app = '' } = {}) {
+export function exportSettings(store, { app = '', home = null, skills: withSkills = true } = {}) {
   const p = store.getPrefs();
   const prefs = Object.fromEntries(PREF_KEYS.map((k) => [k, structuredClone(p[k])]));
   prefs.view = { mode: p.view.mode }; // only how the game looks: not the floor or office being watched
@@ -69,7 +73,9 @@ export function exportSettings(store, { app = '' } = {}) {
     .map((r) => ({ from: pathOf.get(r.from), to: pathOf.get(r.to), how: r.how, ...(r.note ? { note: r.note } : {}), ...(r.source !== 'you' ? { source: r.source, evidence: r.evidence } : {}) }));
   const experts = (store.listExperts?.() || []).map(({ skill, topic, look, actions }) => ({ skill, ...(topic ? { topic } : {}), ...(Array.isArray(actions) && actions.length ? { actions } : {}), look }));
   const resources = (store.listResources?.() || []).map(({ kind, name, tech, location, state, notes, links }) => ({ kind, name, ...(tech ? { tech } : {}), ...(location ? { location } : {}), ...(state !== 'exists' ? { state } : {}), ...(notes ? { notes } : {}), ...(links.length ? { links } : {}) }));
-  return { kind: SETTINGS_KIND, version: SETTINGS_VERSION, app, exportedAt: new Date().toISOString(), prefs, areas, departments, projects, relations, instructions, mine: { skills: mine('skill'), tools: mine('tool') }, experts, resources };
+  // your skills with their files (only with your HOME: a test never reads the real one)
+  const skills = withSkills && (home || store) ? collectSkills({ store, home }) : [];
+  return { kind: SETTINGS_KIND, version: SETTINGS_VERSION, app, exportedAt: new Date().toISOString(), prefs, areas, departments, projects, relations, instructions, mine: { skills: mine('skill'), tools: mine('tool') }, skills, experts, resources };
 }
 
 /** Is it a settings file? Returns { ok, data } or { ok: false, error } (said in the game's language). */
@@ -87,11 +93,17 @@ export function parseSettings(raw) {
  * and the rest is applied. Returns { ok, applied: { prefs, departments, characters, projects,
  * instructions }, skipped: [{ what, error }], lang? } (lang: it changed the language).
  */
-export function importSettings(store, raw, { mine: yours = new Mine({ store }) } = {}) {
+/**
+ * @param skills  where the file's skills go: { to: 'global' (your personal folders, the default) | 'repos'
+ *                (the registered repositories in `repos`: ids or folders) | 'none', repos: [] }
+ */
+export function importSettings(store, raw, { mine: yours = new Mine({ store }), skills: where = { to: 'global' } } = {}) {
   const parsed = parseSettings(raw);
   if (!parsed.ok) return parsed;
   const d = parsed.data;
-  const applied = { prefs: 0, areas: 0, departments: 0, characters: 0, projects: 0, relations: 0, components: 0, instructions: 0, systems: 0, skills: 0, tools: 0, experts: 0, resources: 0 };
+  const applied = { prefs: 0, areas: 0, departments: 0, characters: 0, projects: 0, relations: 0, components: 0, instructions: 0, systems: 0, skills: 0, tools: 0, experts: 0, resources: 0, installed: 0 };
+  const to = ['global', 'repos', 'none'].includes(where?.to) ? where.to : 'global';
+  const installed = [];
   const skipped = [];
   const skip = (what, error) => skipped.push({ what, error: String(error || '') });
 
@@ -192,11 +204,17 @@ export function importSettings(store, raw, { mine: yours = new Mine({ store }) }
     if (lost.length) skip(t('settingsIo.systemParts', { name: s.name, parts: lost.join(', ') }), t('err.pathNotFound', { path: lost.join(', ') }));
   }
   // what is yours: your skills (installed in your personal folders) and your tools, by name
+  const bundled = [];
   if (isObj(d.mine)) {
     for (const [kind, list] of [['skill', d.mine.skills], ['tool', d.mine.tools]]) {
       for (const e of Array.isArray(list) ? list : []) {
         if (!isObj(e)) continue;
-        const out = yours.save({ kind, name: e.name, title: e.title, body: e.body, enabled: e.enabled !== false, ...(kind === 'tool' ? { config: e.config } : {}) });
+        // a private skill goes to your personal folders only when you said so (global); otherwise it is kept
+        // in ⚙ › Mine, off, and (repos) its SKILL.md goes to the repositories with the others
+        const had = kind === 'skill' ? (store.listMine?.('skill') || []).find((x) => x.name === e.name) : null;
+        const enabled = e.enabled !== false && (kind === 'tool' || to === 'global' || !!had?.enabled);
+        const out = yours.save({ kind, name: e.name, title: e.title, body: e.body, enabled, ...(kind === 'tool' ? { config: e.config } : {}) });
+        if (out.ok && kind === 'skill' && to === 'repos') bundled.push({ name: out.entry.name, files: { 'SKILL.md': mineSkillFile(out.entry) } });
         if (out.ok) applied[`${kind}s`]++; else skip(t(`settingsIo.${kind}`, { name: e.name || '?' }), out.error);
       }
     }
@@ -214,5 +232,21 @@ export function importSettings(store, raw, { mine: yours = new Mine({ store }) }
     const out = store.saveResource({ kind: x.kind, name: x.name, tech: x.tech ?? '', location: x.location ?? '', state: x.state || 'exists', notes: x.notes ?? '', links });
     if (out.ok) applied.resources++; else skip(t('settingsIo.resource', { name: x.name || '?' }), out.error);
   }
-  return { ok: true, applied, skipped, lang: isObj(d.prefs) && d.prefs.lang ? store.getPrefs().lang : undefined };
+  // your other skills, with their files: where you said (never over one that is there and is not the same)
+  const files = (Array.isArray(d.skills) ? d.skills : []).filter((x) => isObj(x));
+  if (to !== 'none' && (files.length || bundled.length)) {
+    let dirs = [];
+    // your personal folders: only with a HOME that was given (never the default one by accident)
+    if (to === 'global') dirs = yours.home ? personalSkillDirs(yours.home).map((x) => ({ dir: x.dir, label: x.dir })) : [];
+    else {
+      const wanted = new Set((Array.isArray(where.repos) ? where.repos : []).map(String));
+      dirs = store.listAgents().filter((a) => wanted.has(a.id) || wanted.has(a.path) || wanted.has(realDir(a.path) || '')).map((a) => ({ dir: repoSkillDir(a), label: a.name }));
+      if (!dirs.length) skip(t('settingsIo.skillsWhere'), t('err.skillsNoRepos'));
+    }
+    for (const r of installSkills([...files, ...bundled], dirs)) {
+      if (r.ok) { if (r.action !== 'same') applied.installed++; installed.push(r); }
+      else skip(t('settingsIo.skillIn', { name: r.name, where: r.label }), t(`err.skillInstall.${r.reason}`));
+    }
+  }
+  return { ok: true, applied, skipped, installed, lang: isObj(d.prefs) && d.prefs.lang ? store.getPrefs().lang : undefined };
 }

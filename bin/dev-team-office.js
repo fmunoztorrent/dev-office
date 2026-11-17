@@ -741,8 +741,8 @@ async function cmdSettings() {
   const live = await runningOffice();
   if (sub === 'export') {
     let data;
-    if (live) data = await api('/v1/settings/export');
-    else { const store = openStore(); data = exportSettings(store, { app: VERSION }); store.close(); }
+    if (live) data = await api(`/v1/settings/export${args.skills === false ? '?skills=0' : ''}`);
+    else { const store = openStore(); data = exportSettings(store, { app: VERSION, home: os.homedir(), skills: args.skills !== false }); store.close(); }
     if (!data?.kind) fail(t('cli.couldNot', { error: data?.error || t('cli.noAnswer') }));
     const json = `${JSON.stringify(data, null, 2)}\n`;
     const out = str(args.out);
@@ -756,11 +756,16 @@ async function cmdSettings() {
     if (!ref) fail(t('cli.settingsUsage'));
     let raw;
     try { raw = JSON.parse(fs.readFileSync(path.resolve(ref), 'utf8')); } catch (err) { fail(err instanceof SyntaxError ? t('err.settingsFile.json') : t('cli.couldNot', { error: err.message })); }
+    // where its skills go: --skills global (your personal folders, the default) | repos (with --repos a,b) | none
+    const to = args.skills === false ? 'none' : str(args.skills) || 'global';
+    if (!['global', 'repos', 'none'].includes(to)) fail(t('cli.settingsUsage'));
+    const repos = (str(args.repos) || '').split(',').map((x) => x.trim()).filter(Boolean).map((x) => (x.includes('/') || x.startsWith('~') ? path.resolve(x.replace(/^~(?=$|\/)/, os.homedir())) : x));
     let out;
-    if (live) out = await api('/v1/settings/import', raw);
-    else { const store = openStore(); out = importSettings(store, raw); store.close(); }
+    if (live) out = await api(`/v1/settings/import?skills=${to}&repos=${encodeURIComponent(repos.join(','))}`, raw);
+    else { const store = openStore(); out = importSettings(store, raw, { skills: { to, repos } }); store.close(); }
     if (!out?.ok) fail(t('cli.couldNot', { error: out?.error || t('cli.noAnswer') }));
     console.log(t('settings.general.ioDone', out.applied));
+    for (const x of out.installed || []) if (x.action !== 'same') console.log(`  ✓ ${t('cli.skillInstalled', { name: x.name, dir: tilde(x.dir) })}`);
     for (const x of out.skipped || []) console.log(`  ✖ ${x.what}: ${x.error}`);
     return;
   }
