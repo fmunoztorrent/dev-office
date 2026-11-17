@@ -30,7 +30,7 @@ test('exportar: lo tuyo (ajustes, departamentos con sus personajes, proyectos co
     assert.match(res.headers.get('content-disposition'), /attachment; filename="dev-team-office-settings-\d{4}-\d{2}-\d{2}\.json"/);
     const x = await res.json();
     assert.equal(x.kind, SETTINGS_KIND);
-    assert.equal(x.version, 1);
+    assert.equal(x.version, 2);
     assert.match(x.app, /^\d+\.\d+\.\d+$/);
     assert.equal(x.prefs.standards, 'Todo con tests.');
     assert.equal(x.prefs.capacity, 5);
@@ -38,10 +38,12 @@ test('exportar: lo tuyo (ajustes, departamentos con sus personajes, proyectos co
     assert.equal(x.prefs.autonomy.clarify, false);
     assert.ok(x.prefs.models?.profiles, 'los perfiles de modelos');
     const p = x.departments.find((o) => o.id === 'pagos');
-    assert.deepEqual([p.name, p.timezone, p.instructions, p.autonomy], ['Pagos', 'Europe/Madrid', 'Todo en euros.', 'guided']);
+    assert.deepEqual([p.name, p.area, p.timezone, p.instructions, p.autonomy], ['Pagos', 'general', 'Europe/Madrid', 'Todo en euros.', 'guided']);
+    assert.deepEqual(x.areas, [{ id: 'general', name: '', instructions: '' }]);
     assert.deepEqual(p.characters, { backend: { name: 'Bruno', shirt: '#123456' }, devops: { name: 'Rafa B' } });
     assert.deepEqual(x.projects, [{ name: 'Tienda', path: dir, harness: 'claude-code', department: 'pagos', instructions: 'pnpm, no npm.' }]);
-    assert.deepEqual(Object.keys(x).sort(), ['app', 'departments', 'experts', 'exportedAt', 'instructions', 'kind', 'mine', 'prefs', 'projects', 'resources', 'systems', 'version'], 'ni la bitácora, ni encargos, ni directivas, ni el archivo');
+    assert.deepEqual(x.relations, []);
+    assert.deepEqual(Object.keys(x).sort(), ['app', 'areas', 'departments', 'experts', 'exportedAt', 'instructions', 'kind', 'mine', 'prefs', 'projects', 'relations', 'resources', 'version'], 'ni la bitácora, ni encargos, ni directivas, ni el archivo');
     assert.ok(!JSON.stringify(x).includes('algo'), 'nada de la bitácora');
   } finally { await server.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -120,7 +122,7 @@ test('la CLI: settings export a un archivo y settings import en otra máquina (s
     assert.match(r.stdout, /Ajustes exportados a/);
     r = cli(homes[1], 'settings', 'import', file);
     assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stdout, /Ajustes importados: \d+ ajustes, 2 departamentos, 0 personajes, 1 repositorios, 0 componentes, 0 proyectos, 0 skills, 0 herramientas, 0 expertos, 0 de infraestructura\./);
+    assert.match(r.stdout, /Ajustes importados: \d+ ajustes, 1 áreas, 2 proyectos, 0 personajes, 1 repositorios, 0 relaciones, 0 componentes, 0 proyectos de antes, 0 skills, 0 herramientas, 0 expertos, 0 de infraestructura\./);
     r = cli(homes[1], 'settings', 'export');
     const x = JSON.parse(r.stdout);
     assert.deepEqual(x.prefs.view, { mode: 'iso' });

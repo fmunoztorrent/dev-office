@@ -789,12 +789,13 @@ async function cmdArchitecture() {
     if (!g?.ok) fail(t('cli.couldNot', { error: g?.error || t('cli.noAnswer') }));
   } else {
     const store = openStore();
-    try { g = architecture(store, { name: (o) => o.name || t('offices.main') }); } finally { store.close(); }
+    try { g = architecture(store, { name: (o) => o.name || t('offices.main'), areaName: (a) => a.name || t('areas.default') }); } finally { store.close(); }
   }
   if (args.json) return console.log(JSON.stringify({ nodes: g.nodes, edges: g.edges, findings: g.findings, stats: g.stats }, null, 2));
   console.log(architectureText(g, {
     say: (key, vars) => t(`arch.text.${key}`, vars),
     how: (h) => (has(`arch.text.how.${h}`) ? t(`arch.text.how.${h}`) : h),
+    relHow: (h) => (has(`arch.how.${h}`) ? t(`arch.how.${h}`) : h),
     finding: (f) => (has(`arch.findings.${f.code}`) ? t(`arch.findings.${f.code}`, f.vars) : f.code),
   }));
 }

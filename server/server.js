@@ -38,7 +38,8 @@ import { expertOfTool, knownSkills, skillAgent, suggestExpertActions } from './e
 import { Intelligence } from './intelligence.js';
 import { E2EDesk } from './e2e.js';
 import { knownResources, RESOURCE_KINDS } from './resources.js';
-import { openStore, dbFile, MAIN_OFFICE } from './store.js';
+import { openStore, dbFile, MAIN_OFFICE, RELATION_HOWS } from './store.js';
+import { inferRelations, explainInfra } from './explore.js';
 import { Weather, findPlaces } from './weather.js';
 import { Herdr, paneRole, quote } from './herdr.js';
 import { clip, normRole } from './roles.js';
@@ -193,30 +194,10 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     });
   };
   const systemsChanged = () => { systemsSeen = { at: 0, list: [] }; bus.emit('systems'); };
-  /** A system saved from the settings: { id?, name, office | team: 'new', instructions, parts, move? }. */
-  const saveSystem = (b = {}) => {
-    let office = b.office;
-    let created = null;
-    // a team of its own: a new department with the system's name (its repos move to it, if you say so)
-    if (b.team === 'new') {
-      const o = store.createOffice({ name: String(b.name || '').trim() });
-      if (!o.ok) return o;
-      created = o.office;
-      office = o.office.id;
-    }
-    const out = store.saveSystem({ ...b, office });
-    if (!out.ok) { if (created) store.deleteOffice(created.id); return out; }
-    if (created && b.move !== false) {
-      // only the repos that are not artifacts of another department's systems
-      const others = store.listSystems().filter((s) => s.id !== out.system.id);
-      for (const p of out.system.parts) {
-        const a = store.listAgents().find((x) => x.path === p.project);
-        if (a && !others.some((s) => s.parts.some((q) => q.project === p.project))) store.updateAgent(a.id, { office: created.id });
-      }
-    }
-    if (created) officesChanged();
-    systemsChanged();
-    return { ...out, office: created };
+  /** The areas with their projects (ids), the default one first. */
+  const areasPublic = () => {
+    const offices = store.listOffices();
+    return store.listAreas().map((a) => ({ ...a, name: a.name || t('areas.default'), custom: !!a.name, projects: offices.filter((o) => o.area === a.id).map((o) => o.id) }));
   };
   const startedAt = Date.now();
   const bus = new EventEmitter(); // changes the interfaces see: settings, appearance, weather, offices, log
@@ -790,7 +771,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const dir = String((await body(req)).path || '').trim().replace(/^~(?=$|\/)/, os.homedir());
         if (!path.isAbsolute(dir)) return json(res, 400, { ok: false, error: t('err.fullPath') });
         const d = detectHarness(dir);
-        return json(res, 200, { ok: true, exists: d.exists, name: d.name, harnesses: d.harnesses, kinds: d.kinds, entries: d.entries.map((e) => ({ id: e.id, label: e.label, harnesses: e.harnesses })) });
+        return json(res, 200, { ok: true, exists: d.exists, name: d.name, kind: d.exists ? detectKind(dir) : null, harnesses: d.harnesses, kinds: d.kinds, entries: d.entries.map((e) => ({ id: e.id, label: e.label, harnesses: e.harnesses })) });
       }
       // The office team for the roles an agent lacks (`join` asks for it): { team?: pack }
       if (req.method === 'POST' && (m = p.match(/^\/v1\/agents\/([^/]+)\/team$/))) {
@@ -907,7 +888,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       }
       // The architecture: the whole map as one graph (departments, projects, repositories, components and
       // infrastructure, with what uses what) and its review (server/architecture.js)
-      if (req.method === 'GET' && p === '/v1/architecture') return json(res, 200, { ok: true, ...architecture(store, { name: (o) => officeName(o.id) }) });
+      if (req.method === 'GET' && p === '/v1/architecture') return json(res, 200, { ok: true, ...architecture(store, { name: (o) => officeName(o.id), areaName: (a) => a.name || t('areas.default') }) });
       // The infrastructure on the map: queues, topics, databases, third-party APIs, schedulers… (server/resources.js)
       if (req.method === 'GET' && p === '/v1/resources') return json(res, 200, { ok: true, resources: store.listResources(), kinds: RESOURCE_KINDS });
       if ((req.method === 'POST' && p === '/v1/resources') || (req.method === 'PUT' && (m = p.match(/^\/v1\/resources\/([^/]+)$/)))) {
@@ -963,12 +944,59 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const order = orderParts(proposed);
         return json(res, 200, { ok: true, parts: proposed, order: order.ok ? order.order : null, error: order.ok ? undefined : order.error });
       }
-      if ((req.method === 'POST' && p === '/v1/systems') || (req.method === 'PUT' && (m = p.match(/^\/v1\/systems\/([^/]+)$/)))) {
-        const out = saveSystem({ ...(await body(req)), ...(m ? { id: decodeURIComponent(m[1]) } : {}) });
+      // a system as they were before (a script from an earlier version): it becomes a project and relations
+      if (req.method === 'POST' && p === '/v1/systems') {
+        const out = store.saveSystem(await body(req));
+        if (out.ok) { officesChanged(); systemsChanged(); }
         return json(res, out.ok ? (out.created ? 201 : 200) : 400, out);
       }
-      if (req.method === 'DELETE' && (m = p.match(/^\/v1\/systems\/([^/]+)$/))) {
+      if ((req.method === 'PUT' || req.method === 'DELETE') && (m = p.match(/^\/v1\/systems\/([^/]+)$/))) {
         const out = store.deleteSystem(decodeURIComponent(m[1]));
+        return json(res, out.status || 410, out);
+      }
+      // the company's areas: each one groups projects (⚙ › Company)
+      if (req.method === 'GET' && p === '/v1/areas') return json(res, 200, { ok: true, areas: areasPublic() });
+      if (req.method === 'POST' && p === '/v1/areas') {
+        const out = store.createArea(await body(req));
+        if (out.ok) officesChanged();
+        return json(res, out.ok ? 201 : 400, out);
+      }
+      if ((m = p.match(/^\/v1\/areas\/([^/]+)$/)) && (req.method === 'PUT' || req.method === 'DELETE')) {
+        const id = decodeURIComponent(m[1]);
+        const out = req.method === 'PUT' ? store.updateArea(id, await body(req)) : store.deleteArea(id);
+        if (out.ok) officesChanged();
+        return json(res, out.ok ? 200 : out.status || 400, out);
+      }
+      // what each repository uses of another (⚙ › Map, ⚙ › Repositories): declared, or found exploring
+      if (req.method === 'GET' && p === '/v1/relations') return json(res, 200, { ok: true, relations: store.listRelations(q('agent') || null), hows: RELATION_HOWS });
+      if (req.method === 'POST' && p === '/v1/relations') {
+        const out = store.saveRelation(await body(req));
+        if (out.ok) systemsChanged();
+        return json(res, out.ok ? (out.created ? 201 : 200) : 400, out);
+      }
+      // exploring the folders (server/explore.js): the relations their code says, saved as found (yours stay yours)
+      if (req.method === 'POST' && p === '/v1/relations/explore') {
+        const agents = store.listAgents();
+        const projects = companyMap(store).flatMap((o) => o.projects);
+        const found = inferRelations(agents, { resources: knownResources({ declared: store.listResources(), projects }) });
+        const have = new Set(store.listRelations().map((r) => `${r.from}>${r.to}`));
+        const added = [], skipped = [];
+        for (const f of found) {
+          if (have.has(`${f.from}>${f.to}`)) { skipped.push(f); continue; }
+          const out = store.saveRelation({ ...f, source: 'found' });
+          if (out.ok) added.push(out.relation); else skipped.push({ ...f, error: out.error });
+        }
+        if (added.length) systemsChanged();
+        return json(res, 200, { ok: true, found: found.length, added, skipped });
+      }
+      // what a repository does with a technology it uses: where, how and what for (server/explore.js)
+      if (req.method === 'GET' && p === '/v1/resources/explain') {
+        const a = store.getAgent(q('repo') || '');
+        if (!a) return json(res, 404, { ok: false, error: t('err.unknownAgent') });
+        return json(res, 200, { ok: true, repo: a.id, ...explainInfra(a.path, q('tech') || '') });
+      }
+      if (req.method === 'DELETE' && (m = p.match(/^\/v1\/relations\/([^/]+)$/))) {
+        const out = store.deleteRelation(decodeURIComponent(m[1]));
         if (out.ok) systemsChanged();
         return json(res, out.ok ? 200 : out.status || 400, out);
       }

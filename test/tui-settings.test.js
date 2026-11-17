@@ -27,8 +27,8 @@ test('desde la terminal: ⚙ → Personajes → renombrar a Tomás → ctrl+s gu
     const { gearCell } = computeLayout(cols, rows); // the ⚙ goes inside the scene, top right
     type(`\x1b[<0;${gearCell.col + 2};${gearCell.row + 1}M`); // 1-based clicks, in the middle of « ⚙ »
     await until(() => stdout.out.includes('⚙ Ajustes') && stdout.out.includes('Idioma'));
-    type('\x1b[C'); // tabs: General → Offices
-    await until(() => stdout.out.includes('Agregar departamento'));
+    type('\x1b[C'); // tabs: General → Projects
+    await until(() => stdout.out.includes('Agregar proyecto'));
     type('\x1b[C'); // → Repositorios
     await until(() => stdout.out.includes('Repositorios registrados'));
     type('\x1b[C'); // → Personajes

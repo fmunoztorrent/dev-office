@@ -341,7 +341,7 @@ const TOOLS = [
   {
     name: 'get_architecture',
     title: 'The company\'s architecture',
-    description: 'How everything on the office\'s map relates, from a component up to the whole company: each department with its repositories and their components, each project (a product) with which artifact uses which and the order a change goes in, the infrastructure (queues, topics, databases, third-party APIs…) with who publishes, consumes, reads or calls it, and a review of what deserves a look (a queue nobody consumes, a repository in no project, an artifact without a repository…). Read it before a change that crosses repositories.',
+    description: 'How everything on the office\'s map relates, from a repository up to the whole company: each area with its projects, each project with its repositories in the order a change goes, what each repository uses of another (it calls its API, uses it as a library, consumes its events, reads its data) and who uses it, the infrastructure (queues, topics, databases, caches, third-party APIs…) with who publishes, consumes, reads or calls it, and a review of what deserves a look (a queue nobody consumes, a project whose repositories nothing relates…). Read it before a change that crosses repositories.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, openWorldHint: false },
   },
@@ -836,7 +836,7 @@ export function createMcp({ base = 'http://127.0.0.1:4317', socket = null, versi
       const { architecture, architectureText } = await import('./architecture.js');
       let g;
       if (await running()) g = okOr(await api('/v1/architecture'));
-      else g = architecture(local());
+      else g = architecture(local(), { name: (o) => o.name || 'Main office', areaName: (a) => a.name || 'General' });
       return { text: architectureText(g), data: { nodes: g.nodes, edges: g.edges, findings: g.findings, stats: g.stats } };
     },
 

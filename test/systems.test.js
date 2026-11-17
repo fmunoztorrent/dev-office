@@ -62,6 +62,9 @@ test('el tipo de un artefacto sale de su carpeta: Next es frontend, Express back
   fs.writeFileSync(path.join(go, 'go.mod'), 'module cobros');
   assert.equal(detectKind(go), 'backend');
   assert.equal(detectKind(repo('notas')), 'other');
+  // React alone is a screen too; a library that only asks for it is not
+  assert.equal(detectKind(repo('loyalty-web', { dependencies: { react: '18' } })), 'frontend');
+  assert.equal(detectKind(repo('botones', { name: '@acme/botones', main: 'index.js', peerDependencies: { react: '18' } })), 'library');
 });
 
 test('el orden: primero lo que otros usan; sin decir qué usa cada uno, se propone por capas; un círculo no se acepta', () => {
@@ -75,27 +78,37 @@ test('el orden: primero lo que otros usan; sin decir qué usa cada uno, se propo
   assert.deepEqual(suggestUses([{ name: 'app', kind: 'mobile' }, { name: 'api', kind: 'backend' }])[0].uses, ['api']);
 });
 
-test('un sistema se valida: sus repos registrados, sus tipos, sin nombres repetidos ni círculos; un repo de otro departamento es compartido', () => {
-  const { store, pagos, plataforma, core, bff, system } = payments();
+test('un proyecto: sus repos, los que usan de otro proyecto (compartidos), sus tipos y lo que usa cada uno; dentro de él, sin círculos', () => {
+  const { store, pagos, plataforma, core, bff, web, system } = payments();
   try {
+    // the system of before became the project Pagos: its repos, and the core it uses (Platform's, shared)
     assert.equal(system.office, pagos.id);
-    assert.deepEqual(system.parts.map((p) => [p.name, p.kind, p.uses]), [['web', 'frontend', ['bff']], ['bff', 'bff', ['core']], ['core', 'backend', []]]);
-    assert.equal(core.office, plataforma.id, 'el core sigue siendo de Plataforma');
-    const bad = (parts) => store.saveSystem({ name: 'X', parts }).error;
-    assert.match(bad([{ name: 'a', project: '/no/registrado' }]), /repositorio desconocido/);
-    assert.match(bad([{ name: 'a', project: bff.id, kind: 'nave' }]), /uno de: frontend/);
-    assert.match(bad([{ name: 'a', project: bff.id }, { name: 'A', project: core.id }]), /mismo nombre/);
-    assert.match(bad([{ name: 'a', project: bff.id, uses: ['b'] }, { name: 'b', project: core.id, uses: ['a'] }]), /círculo/);
-    const otro = store.saveSystem({ name: 'Caja', parts: [] }).system;
-    assert.match(store.saveSystem({ id: otro.id, name: 'pagos' }).error, /ya hay un proyecto/, 'el nombre es único (sin mayúsculas)');
-    assert.equal(store.saveSystem({ name: 'PAGOS', instructions: 'otra' }).system.id, system.id, 'sin id, el del mismo nombre se actualiza');
-    store.saveSystem({ id: system.id, name: 'Pagos', instructions: 'Los montos van en centavos.' });
-    // the system an artifact is in, from its folder
+    assert.deepEqual(system.parts.map((p) => [p.name, p.kind, p.uses, !!p.shared]), [['pagos-bff', 'bff', ['pagos-core'], false], ['pagos-web', 'frontend', ['pagos-bff'], false], ['pagos-core', 'backend', [], true]]);
+    assert.equal(store.getAgent(core.id).office, plataforma.id, 'el core sigue siendo de Plataforma');
+    assert.deepEqual(store.listRelations().map((r) => [r.from, r.to, r.how, r.source]), [[web.id, bff.id, 'calls', 'you'], [bff.id, core.id, 'calls', 'you']]);
+    // a relation is checked: known repositories, not itself, how, and no circle inside a project
+    assert.match(store.saveRelation({ from: bff.id, to: '/no/registrado' }).error, /repositorio desconocido/);
+    assert.match(store.saveRelation({ from: bff.id, to: bff.id }).error, /no se usa a sí mismo/);
+    assert.match(store.saveRelation({ from: bff.id, to: web.id, how: 'adora' }).error, /uno de: calls/);
+    assert.match(store.saveRelation({ from: bff.id, to: web.id }).error, /no puede usar «pagos-web»: dentro de un proyecto/);
+    // between projects it may (the core calling back the bff is Platform's business)
+    const back = store.saveRelation({ from: core.id, to: bff.id, how: 'consumes', note: 'eventos de reembolso' });
+    assert.equal(back.ok, true, back.error);
+    assert.equal(store.saveRelation({ from: core.id, to: bff.id, how: 'calls' }).created, false, 'el mismo par se cambia');
+    assert.equal(store.deleteRelation(back.relation.id).ok, true);
+    // the kind you say, or the detected one
+    assert.match(store.updateAgent(bff.id, { kind: 'nave' }).error, /uno de: frontend/);
+    assert.equal(store.updateAgent(web.id, { kind: null }).agent.kind, null);
+    assert.equal(store.getSystem(pagos.id).parts.find((p) => p.name === 'pagos-web').kind, 'frontend', 'detectado de su carpeta');
+    // the project a folder is in: its own first, then the ones that use it
     const [hit] = store.systemsOf(path.join(bff.path, 'src'));
-    assert.deepEqual([hit.system.name, hit.part.name], ['Pagos', 'bff']);
-    // deleting its department leaves it with the main one
-    store.deleteOffice(pagos.id);
-    assert.equal(store.getSystem(system.id).office, 'main');
+    assert.deepEqual([hit.system.name, hit.part.name], ['Pagos', 'pagos-bff']);
+    assert.deepEqual(store.systemsOf(core.path).map((x) => x.system.name), ['Plataforma', 'Pagos']);
+    // deleting a repository forgets its relations
+    store.deleteAgent(web.id);
+    assert.deepEqual(store.listRelations().map((r) => r.from), [bff.id]);
+    // the systems of before are not written any more
+    assert.equal(store.deleteSystem(pagos.id).status, 410);
   } finally { store.close(); }
 });
 
@@ -103,7 +116,7 @@ test('un encargo a un artefacto lleva quién es en su sistema, qué usa y quién
   const { store, bff, dirs } = payments();
   try {
     const head = guideText(guideFor(store, bff.path));
-    assert.match(head, /^🧩 Artefacto bff \(BFF\) del proyecto Pagos · usa core · lo usan web$/m);
+    assert.match(head, /^🧩 Artefacto pagos-bff \(BFF\) del proyecto Pagos · usa pagos-core · lo usan pagos-web$/m);
     assert.match(head, /📋 Indicaciones del proyecto «Pagos»:\n│ Los montos van en centavos\./);
     // the folders it may read (what it uses), without changing them
     const brief = scoped('Agrega el endpoint de reembolsos', bff.path, head, [dirs.core]);
@@ -187,10 +200,10 @@ test('el impacto sigue las dependencias: cambiar el core alcanza al BFF y al fro
     const map = companyMap(store);
     const viaCore = mapImpact(map, 'Que el core redondee los montos', { targets: [core.id] });
     const by = Object.fromEntries(viaCore.departments.flatMap((o) => o.projects).map((p) => [p.name, p]));
-    assert.deepEqual([by['pagos-bff'].why, by['pagos-bff'].via, by['pagos-web'].why], ['uses', 'core', 'uses']);
+    assert.deepEqual([by['pagos-bff'].why, by['pagos-bff'].via, by['pagos-web'].why], ['uses', 'pagos-core', 'uses']);
     assert.deepEqual(new Set(viaCore.targets), new Set([core.id, bff.id, web.id]));
-    assert.match(impactText(viaCore), /📁 pagos-bff — usa core, que cambia/);
-    assert.match(impactText(viaCore), /🧩 Pagos: web ↺ · bff ↺ · core ✱/);
+    assert.match(impactText(viaCore), /📁 pagos-bff — usa pagos-core, que cambia/);
+    assert.match(impactText(viaCore), /🧩 Pagos: pagos-bff ↺ · pagos-web ↺ · pagos-core ✱$/);
     const named = mapImpact(map, 'En el sistema Pagos, mostrar el IVA');
     assert.deepEqual(new Set(named.targets), new Set([core.id, bff.id, web.id]));
     // the core is Platform's: it comes in through the system (its department is not named)
@@ -209,40 +222,44 @@ test('el código que ninguna regla reclama es del personaje del tipo de su artef
   assert.equal(roleForTool('Edit', { file_path: '/r/src/money.test.ts' }, 'frontend'), 'qa', 'las reglas propias del archivo ganan');
 });
 
-test('por la API: un sistema con equipo propio, el encargo al sistema y el personaje según el artefacto', async () => {
+test('por la API: un proyecto con sus repos y sus relaciones, el encargo al proyecto y el personaje según el repo', async () => {
   const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false, places: false });
   const call = (method, p, body) => fetch(server.url + p, { method, headers: { 'content-type': 'application/json' }, body: body && JSON.stringify(body) }).then(async (r) => ({ status: r.status, ...(await r.json()) }));
   try {
+    const area = (await call('POST', '/v1/areas', { name: 'Tecnología', instructions: 'Todo pasa por revisión.' })).area;
+    const caja = (await call('POST', '/v1/offices', { name: 'Caja', area: 'Tecnología' })).office;
+    assert.equal(caja.area, area.id);
     const web = repo('caja-web', { name: 'caja-web', dependencies: { next: '15', 'react-dom': '19' } });
     const api = repo('caja-api', { name: 'caja-api', dependencies: { express: '4' } });
-    const a1 = (await call('POST', '/v1/agents', { path: web, harness: 'claude-code', name: 'caja-web', bin: '/nonexistent/claude' })).agent;
-    const a2 = (await call('POST', '/v1/agents', { path: api, harness: 'claude-code', name: 'caja-api', bin: '/nonexistent/claude' })).agent;
-    // the form's proposal: kinds from each folder, and what each one uses
-    const sug = await call('POST', '/v1/systems/suggest', { parts: [{ name: 'web', project: a1.id }, { name: 'api', project: a2.id }] });
-    assert.deepEqual(sug.parts.map((p) => [p.name, p.kind, p.uses]), [['web', 'frontend', ['api']], ['api', 'backend', []]]);
-    assert.deepEqual(sug.order, ['api', 'web']);
-    // a team of its own: a new department, and its repos move to it
-    const out = await call('POST', '/v1/systems', { name: 'Caja', team: 'new', parts: sug.parts });
-    assert.equal(out.status, 201, out.error);
-    assert.equal(out.office.name, 'Caja');
-    assert.deepEqual(server.store.listAgents().map((a) => a.office), [out.office.id, out.office.id]);
+    const a1 = (await call('POST', '/v1/agents', { path: web, harness: 'claude-code', name: 'caja-web', office: caja.id, bin: '/nonexistent/claude' })).agent;
+    const a2 = (await call('POST', '/v1/agents', { path: api, harness: 'claude-code', name: 'caja-api', office: caja.id, bin: '/nonexistent/claude' })).agent;
+    // the web calls the api
+    const rel = await call('POST', '/v1/relations', { from: a1.id, to: a2.id, how: 'calls', note: 'los cobros' });
+    assert.equal(rel.status, 201, rel.error);
+    assert.deepEqual((await call('GET', '/v1/relations')).relations.map((r) => [r.from, r.to, r.note]), [[a1.id, a2.id, 'los cobros']]);
     const list = await call('GET', '/v1/systems');
-    assert.deepEqual(list.systems[0].order, ['api', 'web']);
-    assert.equal(list.systems[0].officeName, 'Caja');
+    assert.deepEqual([list.systems[0].name, list.systems[0].order, list.systems[0].officeName], ['Caja', ['caja-api', 'caja-web'], 'Caja']);
+    // the area groups its projects
+    assert.deepEqual((await call('GET', '/v1/areas')).areas.map((a) => [a.name, a.projects]), [['General', ['main']], ['Tecnología', ['caja']]]);
     // a frontend repo's code is the frontend's (a file no rule claims)
     const [ev] = server.company.ingest('claude-code', { session_id: 'c1', cwd: web, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(web, 'src', 'lib', 'money.ts') }, tool_use_id: 'u1' });
     assert.equal(ev.role, 'frontend');
-    // a brief to the system: a directive to its artifacts, in order (the api goes first)
-    const brief = await call('POST', `/v1/systems/${out.system.id}/brief`, { text: 'Pagar con QR' });
+    // a brief to the project: a directive to its repositories, in order (the api goes first)
+    const brief = await call('POST', `/v1/systems/${caja.id}/brief`, { text: 'Pagar con QR' });
     assert.equal(brief.status, 201, brief.error);
     assert.deepEqual(brief.directive.parts.map((p) => [p.name, p.status === 'waiting' ? 'waiting' : 'sent']), [['caja-api', 'sent'], ['caja-web', 'waiting']]);
     assert.deepEqual(brief.directive.parts[1].after, ['caja-api']);
     // the handoff from an unknown folder
     assert.equal((await call('POST', '/v1/handoff', { cwd: '/otra', text: 'x' })).status, 404);
-    // the settings file carries it
+    // the settings file carries the area, the project's area and the relation
     const file = await call('GET', '/v1/settings/export');
-    assert.deepEqual(file.systems.map((s) => [s.name, s.parts.length]), [['Caja', 2]]);
-    assert.equal((await call('DELETE', `/v1/systems/${out.system.id}`)).ok, true);
+    assert.deepEqual([file.areas.find((a) => a.id === area.id).instructions, file.departments.find((o) => o.id === caja.id).area], ['Todo pasa por revisión.', area.id]);
+    assert.deepEqual(file.relations.map((r) => [r.from, r.to, r.how]), [[web, api, 'calls']]);
+    // deleting the area sends its projects to the general one
+    assert.equal((await call('DELETE', `/v1/areas/${area.id}`)).ok, true);
+    assert.equal(server.store.getOffice(caja.id).area, 'general');
+    assert.equal((await call('DELETE', '/v1/areas/general')).ok, false, 'la general queda');
+    assert.equal((await call('DELETE', `/v1/relations/${rel.relation.id}`)).ok, true);
   } finally { await server.close(); }
 });
 
@@ -259,7 +276,7 @@ test('el MCP: list_systems (también con la oficina apagada) y handoff, que nece
   try {
     const call = async (name, args = {}) => (await mcp.handle({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } })).result;
     const list = await call('list_systems');
-    assert.match(list.content[0].text, /^Ventas: core → web\n  web \[frontend\] .*ventas-web · uses core\n  core \[backend\] .*ventas-core/);
+    assert.match(list.content[0].text, /^Ventas: ventas-core → ventas-web\n  ventas-core \[backend\] .*ventas-core\n  ventas-web \[frontend\] .*ventas-web · uses ventas-core/);
     const h = await call('handoff', { text: 'POST /orders' });
     assert.ok(h.isError);
     assert.match(h.content[0].text, /office is not running/);

@@ -23,7 +23,7 @@ test('la base: oficinas con nombre, zona horaria y ubicación; la principal no s
   let r = store.createOffice({ name: 'Pagos', timezone: 'Europe/Madrid', location: 'Madrid' });
   assert.equal(r.ok, true, r.error);
   assert.deepEqual([r.office.id, r.office.name, r.office.timezone, r.office.location], ['pagos', 'Pagos', 'Europe/Madrid', 'Madrid']);
-  for (const [bad, rx] of [[{}, /nombre/], [{ name: 'pagos' }, /ya hay un departamento/], [{ name: 'X', timezone: 'Marte/Olympus' }, /zona horaria desconocida/]]) {
+  for (const [bad, rx] of [[{}, /nombre/], [{ name: 'pagos' }, /ya hay un proyecto/], [{ name: 'X', timezone: 'Marte/Olympus' }, /zona horaria desconocida/]]) {
     assert.match(store.createOffice(bad).error, rx, JSON.stringify(bad));
   }
   assert.equal(store.updateOffice('pagos', { timezone: null }).office.timezone, null);
@@ -33,7 +33,7 @@ test('la base: oficinas con nombre, zona horaria y ubicación; la principal no s
   const dir = tmp();
   const a = store.createAgent({ path: dir, harness: 'pi', office: 'Pagos' });
   assert.equal(a.agent.office, 'pagos');
-  assert.match(store.createAgent({ path: dir, harness: 'claude', office: 'nada' }).error, /departamento \(oficina\) desconocido/);
+  assert.match(store.createAgent({ path: dir, harness: 'claude', office: 'nada' }).error, /proyecto desconocido/);
   assert.equal(store.setAppearance({ qa: { name: 'Pilar' } }, 'pagos').ok, true);
   assert.deepEqual(store.getAppearance('pagos'), { qa: { name: 'Pilar' } });
   assert.deepEqual(store.getAppearance(), {}, 'cada oficina tiene sus personajes');
@@ -51,7 +51,7 @@ test('los ajustes generales se validan y se guardan', () => {
   assert.deepEqual([p.lang, p.timezone, p.weather, p.herdr.launch, p.herdr.direction, p.herdr.startAgent, p.log.life, p.view.office], ['es', null, true, true, 'right', 'auto', false, 'main']);
   assert.equal(store.setPrefs({ timezone: 'Asia/Tokyo', herdr: { direction: 'down' }, log: { life: true } }).ok, true);
   assert.deepEqual([store.getPrefs().timezone, store.getPrefs().herdr.direction, store.getPrefs().herdr.launch, store.getPrefs().log.life], ['Asia/Tokyo', 'down', true, true]);
-  for (const [bad, rx] of [[{ lang: 'fr' }, /idioma/], [{ timezone: 'Nada/Nada' }, /zona horaria/], [{ weather: 'sí' }, /weather/], [{ herdr: { direction: 'up' } }, /direction/], [{ view: { office: 'x' } }, /oficina/], [{ color: 1 }, /ajuste desconocido/]]) {
+  for (const [bad, rx] of [[{ lang: 'fr' }, /idioma/], [{ timezone: 'Nada/Nada' }, /zona horaria/], [{ weather: 'sí' }, /weather/], [{ herdr: { direction: 'up' } }, /direction/], [{ view: { office: 'x' } }, /proyecto desconocido/], [{ color: 1 }, /ajuste desconocido/]]) {
     assert.match(store.setPrefs(bad).error, rx, JSON.stringify(bad));
   }
   assert.equal(store.getPrefs().timezone, 'Asia/Tokyo', 'lo inválido no toca nada');

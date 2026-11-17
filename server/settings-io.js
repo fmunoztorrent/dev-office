@@ -34,7 +34,7 @@ import { t } from '../public/i18n.js';
 import { Mine } from './mine.js';
 
 export const SETTINGS_KIND = 'dev-team-office/settings';
-export const SETTINGS_VERSION = 1;
+export const SETTINGS_VERSION = 2;
 // the general settings that are the user's (not where they are looking right now)
 const PREF_KEYS = Object.keys(DEFAULT_PREFS);
 
@@ -46,8 +46,10 @@ export function exportSettings(store, { app = '' } = {}) {
   const prefs = Object.fromEntries(PREF_KEYS.map((k) => [k, structuredClone(p[k])]));
   prefs.view = { mode: p.view.mode }; // only how the game looks: not the floor or office being watched
   const agents = store.listAgents();
+  // the areas, and each project (an office, kept under its old name in the file) with its area and its people
+  const areas = (store.listAreas?.() || []).map((a) => ({ id: a.id, name: a.name, instructions: a.instructions || '' }));
   const departments = store.listOffices().map((o) => ({
-    id: o.id, name: o.name, timezone: o.timezone, location: o.location, instructions: o.instructions || '', autonomy: o.autonomy,
+    id: o.id, name: o.name, area: o.area, timezone: o.timezone, location: o.location, instructions: o.instructions || '', autonomy: o.autonomy,
     characters: store.getAppearance(o.id) || {},
   }));
   const declared = store.listComponents?.() || [];
@@ -55,16 +57,19 @@ export function exportSettings(store, { app = '' } = {}) {
     const components = declared.filter((c) => c.project === realDir(a.path)).map((c) => ({ name: c.name, path: c.path, ...(c.description ? { description: c.description } : {}) }));
     return {
       name: a.name, path: a.path, harness: a.harness, ...(a.bin ? { bin: a.bin } : {}), ...(a.args ? { args: a.args } : {}),
-      department: a.office, instructions: a.instructions || '', ...(components.length ? { components } : {}),
+      department: a.office, ...(a.kind ? { kind: a.kind } : {}), instructions: a.instructions || '', ...(components.length ? { components } : {}),
     };
   });
   const registered = new Set(agents.map((a) => a.path));
   const instructions = (store.listProjectInstructions?.() || []).filter((x) => !registered.has(x.path));
   const mine = (kind) => (store.listMine?.(kind) || []).map((e) => ({ name: e.name, title: e.title, body: e.body, enabled: e.enabled, ...(e.config ? { config: e.config } : {}) }));
-  const systems = (store.listSystems?.() || []).map((s) => ({ name: s.name, department: s.office, instructions: s.instructions, parts: s.parts.map(({ name, project, component, path: sub, kind, uses }) => ({ name, project, ...(component ? { component } : {}), ...(sub ? { path: sub } : {}), kind, uses })) }));
+  // what each repository uses of another, by their folders
+  const pathOf = new Map(agents.map((a) => [a.id, a.path]));
+  const relations = (store.listRelations?.() || []).filter((r) => pathOf.has(r.from) && pathOf.has(r.to))
+    .map((r) => ({ from: pathOf.get(r.from), to: pathOf.get(r.to), how: r.how, ...(r.note ? { note: r.note } : {}), ...(r.source !== 'you' ? { source: r.source, evidence: r.evidence } : {}) }));
   const experts = (store.listExperts?.() || []).map(({ skill, topic, look, actions }) => ({ skill, ...(topic ? { topic } : {}), ...(Array.isArray(actions) && actions.length ? { actions } : {}), look }));
   const resources = (store.listResources?.() || []).map(({ kind, name, tech, location, state, notes, links }) => ({ kind, name, ...(tech ? { tech } : {}), ...(location ? { location } : {}), ...(state !== 'exists' ? { state } : {}), ...(notes ? { notes } : {}), ...(links.length ? { links } : {}) }));
-  return { kind: SETTINGS_KIND, version: SETTINGS_VERSION, app, exportedAt: new Date().toISOString(), prefs, departments, projects, instructions, systems, mine: { skills: mine('skill'), tools: mine('tool') }, experts, resources };
+  return { kind: SETTINGS_KIND, version: SETTINGS_VERSION, app, exportedAt: new Date().toISOString(), prefs, areas, departments, projects, relations, instructions, mine: { skills: mine('skill'), tools: mine('tool') }, experts, resources };
 }
 
 /** Is it a settings file? Returns { ok, data } or { ok: false, error } (said in the game's language). */
@@ -86,15 +91,26 @@ export function importSettings(store, raw, { mine: yours = new Mine({ store }) }
   const parsed = parseSettings(raw);
   if (!parsed.ok) return parsed;
   const d = parsed.data;
-  const applied = { prefs: 0, departments: 0, characters: 0, projects: 0, components: 0, instructions: 0, systems: 0, skills: 0, tools: 0, experts: 0, resources: 0 };
+  const applied = { prefs: 0, areas: 0, departments: 0, characters: 0, projects: 0, relations: 0, components: 0, instructions: 0, systems: 0, skills: 0, tools: 0, experts: 0, resources: 0 };
   const skipped = [];
   const skip = (what, error) => skipped.push({ what, error: String(error || '') });
 
-  // the departments first: the prefs and the projects may name them
+  // the areas first: the projects name them
+  const areaIds = new Map(); // the file's id → the id here
+  for (const a of Array.isArray(d.areas) ? d.areas : []) {
+    if (!isObj(a) || !a.id) continue;
+    const here = a.id === 'general' ? store.findArea('general') : store.getArea(a.id) || (a.name ? store.findArea(a.name) : null);
+    const out = here ? store.updateArea(here.id, { name: here.id === 'general' ? here.name : a.name, instructions: a.instructions ?? '' }) : store.createArea({ name: a.name, instructions: a.instructions ?? '' });
+    if (!out.ok) { skip(t('settingsIo.area', { name: a.name || a.id }), out.error); continue; }
+    applied.areas++;
+    areaIds.set(a.id, out.area.id);
+  }
+  // then the projects (the departments of before): the prefs and the repositories may name them
   const ids = new Map(); // the file's id → the id here
   for (const o of Array.isArray(d.departments) ? d.departments : []) {
     if (!isObj(o) || !o.id) continue;
-    const fields = { name: o.name, timezone: o.timezone ?? null, location: o.location ?? null, instructions: o.instructions ?? '', autonomy: o.autonomy ?? null };
+    const area = o.area ? areaIds.get(o.area) || (store.findArea(o.area)?.id) || undefined : undefined;
+    const fields = { name: o.name, timezone: o.timezone ?? null, location: o.location ?? null, instructions: o.instructions ?? '', autonomy: o.autonomy ?? null, ...(area ? { area } : {}) };
     const here = store.getOffice(o.id) || (o.name ? store.findOffice(o.name) : null);
     const out = here ? store.updateOffice(here.id, o.id === MAIN_OFFICE ? { ...fields, name: o.name ?? here.name } : fields) : store.createOffice({ id: o.id, ...fields });
     if (!out.ok) { skip(t('settingsIo.department', { name: o.name || o.id }), out.error); continue; }
@@ -129,7 +145,7 @@ export function importSettings(store, raw, { mine: yours = new Mine({ store }) }
     const dir = String(a.path).replace(/^~(?=$|\/)/, os.homedir());
     if (!path.isAbsolute(dir) || !fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory()) { skip(t('settingsIo.project', { name: a.name || a.path }), t('err.pathNotFound', { path: a.path })); continue; }
     const office = ids.get(a.department) || (store.getOffice(a.department) ? a.department : MAIN_OFFICE);
-    const fields = { name: a.name, path: dir, harness: a.harness, office, instructions: a.instructions ?? '', ...(a.bin !== undefined ? { bin: a.bin } : {}), ...(a.args !== undefined ? { args: a.args } : {}) };
+    const fields = { name: a.name, path: dir, harness: a.harness, office, instructions: a.instructions ?? '', ...(a.kind !== undefined ? { kind: a.kind } : {}), ...(a.bin !== undefined ? { bin: a.bin } : {}), ...(a.args !== undefined ? { args: a.args } : {}) };
     const here = mine.find((x) => x.path === realDir(dir) && x.harness === (a.harness === 'claude' ? 'claude-code' : a.harness));
     const out = here ? store.updateAgent(here.id, fields) : store.createAgent(fields);
     if (!out.ok) { skip(t('settingsIo.project', { name: a.name || a.path }), out.error); continue; }
@@ -147,7 +163,16 @@ export function importSettings(store, raw, { mine: yours = new Mine({ store }) }
     const out = store.setProjectInstructions(x.path, x.instructions ?? '');
     if (out.ok) applied.instructions++; else skip(t('settingsIo.instructions', { path: x.path }), out.error);
   }
-  // the systems: with the artifacts whose repo is registered here (what they used of the others is dropped)
+  // what each repository uses of another: both folders have to be here
+  const byPath = (p) => store.listAgents().find((x) => x.path === realDir(String(p || '').replace(/^~(?=$|\/)/, os.homedir())));
+  for (const r of Array.isArray(d.relations) ? d.relations : []) {
+    if (!isObj(r)) continue;
+    const from = byPath(r.from), to = byPath(r.to);
+    if (!from || !to) { skip(t('settingsIo.relation', { from: r.from || '?', to: r.to || '?' }), t('err.pathNotFound', { path: !from ? r.from : r.to })); continue; }
+    const out = store.saveRelation({ from: from.id, to: to.id, how: r.how, note: r.note ?? '', source: r.source, evidence: r.evidence ?? '' });
+    if (out.ok) applied.relations++; else skip(t('settingsIo.relation', { from: from.name, to: to.name }), out.error);
+  }
+  // the systems of a file from an earlier version: each one becomes a project and its relations
   const here = store.listAgents();
   for (const s of Array.isArray(d.systems) ? d.systems : []) {
     if (!isObj(s) || !s.name) continue;

@@ -1,72 +1,70 @@
 // The company's architecture as a picture, without the DOM (shared by the web view and the tests):
 //
 //   archView(graph, scope)   what one level shows of the graph (server/architecture.js): the whole company,
-//                            a department, a project or a repository. Each level keeps what is its own and
+//                            an area, a project or a repository. Each level keeps what is its own and
 //                            brings in, marked as external, whatever it uses or is used by.
-//   layoutArch(view)         that view laid out in lanes (a department each, and the infrastructure below)
-//                            and columns (who uses goes to the left of what it uses: web → bff → core → db).
-//   archNeighbors(graph, id) what a node uses, who uses it (near and far), its infrastructure and projects.
+//   layoutArch(view)         that view laid out in lanes (an area, a project or the repository, and the
+//                            infrastructure below) and columns (who uses goes to the left of what it uses:
+//                            web → bff → core → db).
+//   archNeighbors(graph, id) what a node uses, who uses it (near and far), its infrastructure, its project
+//                            and its area.
 //
-// Scopes: { type: 'company' } | { type: 'dept', id } | { type: 'system', id } | { type: 'repo', id } (the
-// ids are the office's, the project's and the repository's own).
+// Scopes: { type: 'company' } | { type: 'area', id } | { type: 'project', id } | { type: 'repo', id } (the
+// ids are the area's, the project's and the repository's own).
 
 import { KIND_ICON, RESOURCE_ICON } from './impact.js';
 
 const NODE = { w: 176, h: 46 };
 const GAP = { x: 70, y: 14 };
 const LANE = { pad: 14, head: 30, gap: 16 };
-const LABELS = { kind: (k) => k, resKind: (k) => k, how: (h) => h, infra: 'Infrastructure', whole: 'whole repository', unknown: 'No repository', components: (n) => `${n}` };
+const LABELS = { kind: (k) => k, resKind: (k) => k, how: (h) => h, infra: 'Infrastructure', repos: (n) => `${n} repos`, relations: (n) => `${n}` };
 
 const index = (g) => new Map((g?.nodes || []).map((n) => [n.id, n]));
-/** The repository a node belongs to (itself, for a repository). */
-const repoIdOf = (n) => (n?.type === 'repo' ? n.id : n?.type === 'component' ? n.repo : null);
 
-/** The scope a node opens: a department, a project or a repository (a component opens its repository). */
+/** The scope a node opens: an area, a project or a repository. */
 export function scopeOf(node) {
   if (!node) return null;
-  if (node.type === 'dept') return { type: 'dept', id: node.key };
-  if (node.type === 'system') return { type: 'system', id: node.key };
+  if (node.type === 'area') return { type: 'area', id: node.key };
+  if (node.type === 'project') return { type: 'project', id: node.key };
   if (node.type === 'repo') return { type: 'repo', id: node.key };
-  if (node.type === 'component') return { type: 'repo', id: node.repo.replace(/^repo:/, '') };
   return null;
 }
 
-/** Where a scope is: [{ type: 'company' }, { type: 'dept', id, name }, …] down to it. */
+/** Where a scope is: [{ type: 'company' }, { type: 'area', id, name }, { type: 'project', … }, { type: 'repo', … }] down to it. */
 export function archCrumbs(g, scope = { type: 'company' }) {
   const idx = index(g);
   const out = [{ type: 'company' }];
-  const dept = (id) => { const d = idx.get(`dept:${id}`); if (d) out.push({ type: 'dept', id, name: d.name }); };
-  if (scope.type === 'dept') dept(scope.id);
-  else if (scope.type === 'system') { const s = idx.get(`sys:${scope.id}`); if (s) { dept(s.dept); out.push({ type: 'system', id: scope.id, name: s.name }); } }
-  else if (scope.type === 'repo') { const r = idx.get(`repo:${scope.id}`); if (r) { dept(r.dept); out.push({ type: 'repo', id: scope.id, name: r.name }); } }
+  const area = (id) => { const a = idx.get(`area:${id}`); if (a) out.push({ type: 'area', id, name: a.name }); };
+  const project = (id) => { const p = idx.get(`project:${id}`); if (p) { area(p.area); out.push({ type: 'project', id, name: p.name }); } };
+  if (scope.type === 'area') area(scope.id);
+  else if (scope.type === 'project') project(scope.id);
+  else if (scope.type === 'repo') { const r = idx.get(`repo:${scope.id}`); if (r) { project(r.project); out.push({ type: 'repo', id: scope.id, name: r.name }); } }
   return out;
 }
 
 /**
- * What a scope shows: { scope, lanes: [{ id, label, kind: 'dept' | 'self' | 'infra' | 'unknown', own }],
+ * What a scope shows: { scope, lanes: [{ id, label, kind: 'area' | 'project' | 'self' | 'infra', own }],
  * nodes: [{ id, ref (the graph's node), type, label, sub, icon, lane, state: 'own' | 'external' | 'missing'
  * | 'planned' | 'detected', n? (its turn when a change goes through the project), shared? }],
- * edges: [{ from, to, kind: 'uses' | 'link', label }] }. `stack`: also the technologies each repository's
- * folder says it uses (Postgres, Kafka…), not only the named infrastructure.
+ * edges: [{ from, to, kind: 'uses' | 'link', label, found?, relation? }] }. `stack`: also the technologies
+ * each repository's folder says it uses (Postgres, Kafka…), not only the named infrastructure.
  */
 export function archView(g, scope = { type: 'company' }, { stack = false, labels = {} } = {}) {
   const L = { ...LABELS, ...labels };
   const idx = index(g);
   const all = (type) => (g?.nodes || []).filter((n) => n.type === type);
-  const depts = all('dept');
   const nodes = new Map(), edges = [], lanes = [];
   const lane = (id, label, kind, own = false) => { if (!lanes.some((l) => l.id === id)) lanes.push({ id, label, kind, own }); return id; };
-  const deptLane = (key, own = false) => lane(`dept:${key}`, idx.get(`dept:${key}`)?.name || key, 'dept', own);
+  const projectLane = (key, own = false) => lane(`project:${key}`, idx.get(`project:${key}`)?.name || key, 'project', own);
   const put = (n) => { if (!nodes.has(n.id)) nodes.set(n.id, n); return nodes.get(n.id); };
-  const edge = (from, to, kind, label = '') => {
+  const edge = (from, to, kind, label = '', extra = {}) => {
     if (!from || !to || from === to || !nodes.has(from) || !nodes.has(to)) return;
     const have = edges.find((e) => e.from === from && e.to === to && e.kind === kind);
-    if (have) { if (label && !have.label.split(' · ').includes(label)) have.label = [have.label, label].filter(Boolean).join(' · '); } else edges.push({ from, to, kind, label });
+    if (have) { if (label && !have.label.split(' · ').includes(label)) have.label = [have.label, label].filter(Boolean).join(' · '); } else edges.push({ from, to, kind, label, ...extra });
   };
-  const comps = (repoId) => all('component').filter((c) => c.repo === repoId);
-  const repoNode = (r, state = 'own', laneId = deptLane(r.dept, state === 'own')) => put({
-    id: r.id, ref: r.id, type: 'repo', label: r.name, icon: KIND_ICON[r.kind] || KIND_ICON.other, lane: laneId, state: r.exists === false ? 'missing' : state, shared: !!r.shared, systems: r.systems || [],
-    sub: [r.kind && r.kind !== 'other' ? L.kind(r.kind) : '', comps(r.id).length ? `🧩 ${L.components(comps(r.id).length)}` : ''].filter(Boolean).join(' · '),
+  const repoNode = (r, state = 'own', laneId = projectLane(r.project, state === 'own')) => put({
+    id: r.id, ref: r.id, type: 'repo', label: r.name, icon: KIND_ICON[r.kind] || KIND_ICON.other, lane: laneId, state: r.exists === false ? 'missing' : state, shared: !!r.shared,
+    sub: r.kind && r.kind !== 'other' ? L.kind(r.kind) : '',
   });
   const resNode = (r) => put({
     id: r.id, ref: r.id, type: 'resource', label: r.name, icon: RESOURCE_ICON[r.kind] || RESOURCE_ICON.other, lane: lane('infra', L.infra, 'infra'),
@@ -74,7 +72,7 @@ export function archView(g, scope = { type: 'company' }, { stack = false, labels
     sub: r.techOnly ? L.resKind(r.kind) : [L.resKind(r.kind), r.tech && r.tech !== r.name ? r.tech : ''].filter(Boolean).join(' · '),
   });
   const wanted = (r) => r && (stack || !r.techOnly);
-  // the infrastructure of the repositories in view (`via`: which node of the view stands for each repository)
+  // the infrastructure of the repositories in view (`via`: which nodes of the view stand for each repository)
   const infraFor = (via) => {
     for (const e of (g?.edges || []).filter((x) => x.kind === 'link')) {
       const r = idx.get(e.to);
@@ -85,59 +83,69 @@ export function archView(g, scope = { type: 'company' }, { stack = false, labels
     }
   };
   const uses = (g?.edges || []).filter((e) => e.kind === 'uses');
-  const roll = (id) => repoIdOf(idx.get(id));
+  const relEdge = (e, from = e.from, to = e.to) => edge(from, to, 'uses', L.how(e.how || 'calls'), { found: e.source === 'found', relation: e.relation || null });
+  const reposOf = (key) => all('repo').filter((r) => r.project === key);
 
-  if (scope.type === 'dept') {
-    deptLane(scope.id, true);
-    const own = all('repo').filter((r) => r.dept === scope.id);
-    const mine = new Set(own.map((r) => r.id));
-    for (const r of own) repoNode(r);
+  if (scope.type === 'area') {
+    // its projects, each a lane with its repositories; from outside, what they use or is used by them
+    const projects = all('project').filter((p) => p.area === scope.id);
+    const mine = new Set();
+    for (const p of projects) { projectLane(p.key, true); for (const r of reposOf(p.key)) { repoNode(r); mine.add(r.id); } }
     for (const e of uses) {
-      const a = roll(e.from), b = roll(e.to);
-      if (!mine.has(a) && !mine.has(b)) continue;
-      for (const id of [a, b]) if (!mine.has(id)) repoNode(idx.get(id), 'external');
-      edge(a, b, 'uses', e.label);
+      if (!mine.has(e.from) && !mine.has(e.to)) continue;
+      for (const id of [e.from, e.to]) if (!mine.has(id)) repoNode(idx.get(id), 'external');
+      relEdge(e);
     }
     infraFor((id) => (mine.has(id) ? [id] : []));
-  } else if (scope.type === 'system') {
-    const s = idx.get(`sys:${scope.id}`);
-    if (s) {
-      deptLane(s.dept, true);
-      const viewId = (p) => `part:${p.name}`;
-      for (const p of s.parts) {
-        const t = idx.get(p.node);
-        const repo = idx.get(repoIdOf(t));
-        put({
-          id: viewId(p), ref: p.node, type: t?.type || 'repo', label: p.name, icon: KIND_ICON[p.kind] || KIND_ICON.other,
-          lane: repo ? deptLane(repo.dept, repo.dept === s.dept) : lane('unknown', L.unknown, 'unknown'),
-          state: p.missing ? 'missing' : repo?.exists === false ? 'missing' : 'own', shared: !!p.shared, n: s.order.indexOf(p.name) + 1,
-          sub: [p.kind !== 'other' ? L.kind(p.kind) : '', repo ? `${repo.name}${t?.type === 'component' && t.path ? `/${t.path}` : ''}` : ''].filter(Boolean).join(' · '),
-        });
+  } else if (scope.type === 'project') {
+    // its repositories in the order a change goes, and the ones of other projects it uses (shared)
+    const p = idx.get(`project:${scope.id}`);
+    if (p) {
+      projectLane(p.key, true);
+      const mine = new Set();
+      for (const part of p.parts) {
+        const r = idx.get(part.node);
+        if (!r) continue;
+        const own = r.project === p.key;
+        const n = repoNode(r, own ? 'own' : 'external');
+        n.n = p.order.indexOf(part.name) + 1;
+        if (own) mine.add(r.id);
       }
-      for (const p of s.parts) for (const u of p.uses) edge(viewId(p), `part:${u}`, 'uses');
-      infraFor((repoId) => s.parts.filter((p) => repoIdOf(idx.get(p.node)) === repoId).map(viewId));
+      // who uses its repositories from other projects
+      for (const e of uses) if (mine.has(e.to) && !nodes.has(e.from)) repoNode(idx.get(e.from), 'external');
+      for (const e of uses) if (nodes.has(e.from) && nodes.has(e.to) && (mine.has(e.from) || mine.has(e.to) || p.parts.some((x) => x.node === e.from))) relEdge(e);
+      infraFor((id) => (nodes.has(id) && (mine.has(id) || nodes.get(id).n) ? [id] : []));
     }
   } else if (scope.type === 'repo') {
     const r = idx.get(`repo:${scope.id}`);
     if (r) {
       const self = lane('self', r.name, 'self', true);
-      const mine = new Set([r.id, ...comps(r.id).map((c) => c.id)]);
-      put({ id: r.id, ref: r.id, type: 'repo', label: r.name, icon: KIND_ICON[r.kind] || KIND_ICON.other, lane: self, state: r.exists === false ? 'missing' : 'own', shared: !!r.shared, sub: L.whole });
-      for (const c of comps(r.id)) put({ id: c.id, ref: c.id, type: 'component', label: c.name, icon: KIND_ICON[c.kind] || '🧩', lane: self, state: 'own', sub: c.path || (c.kind !== 'other' ? L.kind(c.kind) : '') });
+      repoNode(r, 'own', self);
       for (const e of uses) {
-        if (!mine.has(e.from) && !mine.has(e.to)) continue;
-        // inside the repository: each component; outside: the other repository, whole
-        const end = (id) => (mine.has(id) ? id : roll(id));
-        for (const id of [e.from, e.to]) if (!mine.has(id) && idx.get(roll(id))) repoNode(idx.get(roll(id)), 'external');
-        edge(end(e.from), end(e.to), 'uses', e.label);
+        if (e.from !== r.id && e.to !== r.id) continue;
+        const other = idx.get(e.from === r.id ? e.to : e.from);
+        if (other) repoNode(other, 'external');
+        relEdge(e);
       }
       infraFor((id) => (id === r.id ? [r.id] : []));
     }
   } else {
-    for (const d of depts) deptLane(d.key, true);
-    for (const r of all('repo')) repoNode(r);
-    for (const e of uses) edge(roll(e.from), roll(e.to), 'uses', e.label);
-    infraFor((id) => [id]);
+    // the whole company: an area per lane, each project a box; between projects, what their repositories use
+    for (const a of all('area')) {
+      const projects = all('project').filter((p) => p.area === a.key);
+      if (!projects.length) continue;
+      const id = lane(`area:${a.key}`, a.name, 'area', true);
+      for (const p of projects) {
+        const n = reposOf(p.key).length;
+        put({ id: p.id, ref: p.id, type: 'project', label: p.name, icon: '🧩', lane: id, state: 'own', sub: L.repos(n) });
+      }
+    }
+    const projectOf = (repoId) => `project:${idx.get(repoId)?.project}`;
+    for (const e of uses) {
+      const a = projectOf(e.from), b = projectOf(e.to);
+      if (a !== b) edge(a, b, 'uses', L.how(e.how || 'calls'));
+    }
+    infraFor((id) => (idx.get(id) ? [projectOf(id)] : []));
     // declared infrastructure nobody is linked to yet: on the map all the same
     for (const r of all('resource')) if (r.source === 'declared') resNode(r);
   }
@@ -262,36 +270,35 @@ export function layoutArch(view) {
 }
 
 /**
- * What surrounds a node of the graph: { uses, usedBy (direct), reach (everything a change of it reaches:
- * who uses it, near or far), infra: [{ node, how }], systems, components, repo, dept }, each a list of
- * graph nodes. A repository answers for its components too.
+ * What surrounds a node of the graph: { node, uses, usedBy (direct, each { node, how, note, source,
+ * relation }), reach (everything a change of it reaches: who uses it, near or far), infra: [{ node, how }],
+ * users (a resource's), repos (a project's or an area's), projects (an area's, or the ones a repository
+ * composes), project, area }.
  */
 export function archNeighbors(g, id) {
   const idx = index(g);
   const n = idx.get(id);
-  const empty = { node: n || null, uses: [], usedBy: [], reach: [], infra: [], users: [], systems: [], components: [], repo: null, dept: null };
+  const empty = { node: n || null, uses: [], usedBy: [], reach: [], infra: [], users: [], repos: [], projects: [], project: null, area: null };
   if (!n) return empty;
   const uses = (g.edges || []).filter((e) => e.kind === 'uses');
   const links = (g.edges || []).filter((e) => e.kind === 'link');
-  const group = (x) => (n.type === 'repo' ? repoIdOf(idx.get(x)) : x); // a repository: its components' relations too
-  const uniq = (list) => [...new Set(list)].filter((x) => x && x !== id).map((x) => idx.get(x)).filter(Boolean);
-  const direct = (from) => uniq(uses.filter((e) => group(from ? e.from : e.to) === id).map((e) => (n.type === 'repo' ? repoIdOf(idx.get(from ? e.to : e.from)) : from ? e.to : e.from)));
+  const rel = (e, end) => ({ node: idx.get(e[end]), how: e.how, note: e.note || '', source: e.source || 'you', relation: e.relation || null, evidence: e.evidence || '' });
   const reach = new Set();
-  const walk = (x) => { for (const e of uses) if (group(e.to) === x || e.to === x) { const u = n.type === 'repo' ? repoIdOf(idx.get(e.from)) : e.from; if (u !== id && !reach.has(u)) { reach.add(u); walk(u); } } };
-  walk(id);
-  const repo = idx.get(repoIdOf(n)) || null;
-  const systems = (g.nodes || []).filter((s) => s.type === 'system' && (n.type === 'system' ? false : n.type === 'dept' ? s.dept === n.key : s.parts.some((p) => p.node === id || (n.type === 'repo' && repoIdOf(idx.get(p.node)) === id))));
+  const walk = (x) => { for (const e of uses) if (e.to === x && e.from !== id && !reach.has(e.from)) { reach.add(e.from); walk(e.from); } };
+  if (n.type === 'repo') walk(id);
+  const project = n.type === 'repo' ? idx.get(`project:${n.project}`) : n.type === 'project' ? n : null;
+  const area = idx.get(`area:${project?.area || (n.type === 'area' ? n.key : '')}`) || null;
   return {
     node: n,
-    uses: n.type === 'system' || n.type === 'dept' || n.type === 'resource' ? [] : direct(true),
-    usedBy: n.type === 'system' || n.type === 'dept' || n.type === 'resource' ? [] : direct(false),
-    reach: uniq([...reach]),
-    infra: links.filter((e) => e.from === (repo?.id || id)).map((e) => ({ node: idx.get(e.to), how: e.how })).filter((x) => x.node),
+    uses: n.type === 'repo' ? uses.filter((e) => e.from === id).map((e) => rel(e, 'to')).filter((x) => x.node) : [],
+    usedBy: n.type === 'repo' ? uses.filter((e) => e.to === id).map((e) => rel(e, 'from')).filter((x) => x.node) : [],
+    reach: [...reach].map((x) => idx.get(x)).filter(Boolean),
+    infra: n.type === 'repo' ? links.filter((e) => e.from === id).map((e) => ({ node: idx.get(e.to), how: e.how })).filter((x) => x.node) : [],
     users: n.type === 'resource' ? links.filter((e) => e.to === id).map((e) => ({ node: idx.get(e.from), how: e.how })).filter((x) => x.node) : [],
-    systems,
-    components: n.type === 'repo' ? (g.nodes || []).filter((c) => c.type === 'component' && c.repo === id) : [],
-    repos: n.type === 'dept' ? (g.nodes || []).filter((r) => r.type === 'repo' && r.dept === n.key) : n.type === 'system' ? uniq(n.parts.map((p) => repoIdOf(idx.get(p.node)))) : [],
-    repo: n.type === 'component' ? repo : null,
-    dept: idx.get(`dept:${n.dept || repo?.dept}`) || null,
+    repos: n.type === 'project' ? n.order.map((name) => n.parts.find((p) => p.name === name)).filter(Boolean).map((p) => ({ node: idx.get(p.node), shared: p.shared, uses: p.uses })).filter((x) => x.node)
+      : n.type === 'area' ? (g.nodes || []).filter((r) => r.type === 'repo' && n.projects.includes(r.project)).map((node) => ({ node })) : [],
+    projects: n.type === 'area' ? n.projects.map((k) => idx.get(`project:${k}`)).filter(Boolean) : n.type === 'repo' ? (n.projects || []).map((k) => idx.get(`project:${k}`)).filter(Boolean) : [],
+    project: n.type === 'repo' ? project : null,
+    area: n.type === 'area' ? null : area,
   };
 }

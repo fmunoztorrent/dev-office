@@ -65,9 +65,9 @@ test('las indicaciones van arriba del encargo, bajo la línea 📁, y la oficina
     const g = guideFor(store, path.join(dir, 'src'));
     assert.deepEqual([g.department.name, g.project.name], ['Pagos', 'tienda']);
     const head = guideText(g);
-    assert.equal(head, '📋 Indicaciones del departamento «Pagos»:\n│ Montos en centavos.\n📋 Indicaciones del repositorio «tienda»:\n│ pnpm, no npm.\n│\n│ Tests: pnpm test.');
+    assert.equal(head, '📋 Indicaciones del proyecto «Pagos»:\n│ Montos en centavos.\n📋 Indicaciones del repositorio «tienda»:\n│ pnpm, no npm.\n│\n│ Tests: pnpm test.');
     const brief = scoped('Agregar paginación', dir, head);
-    assert.match(brief, /^📁 Trabaja sólo dentro de .*\n📋 Indicaciones del departamento «Pagos»:\n│ Montos en centavos\.\n📋 Indicaciones del repositorio «tienda»:\n│ pnpm, no npm\.\n│\n│ Tests: pnpm test\.\n\nAgregar paginación$/);
+    assert.match(brief, /^📁 Trabaja sólo dentro de .*\n📋 Indicaciones del proyecto «Pagos»:\n│ Montos en centavos\.\n📋 Indicaciones del repositorio «tienda»:\n│ pnpm, no npm\.\n│\n│ Tests: pnpm test\.\n\nAgregar paginación$/);
     assert.equal(unguided(brief), 'Agregar paginación');
     assert.equal(unguided(scoped('Solo el alcance', dir)), 'Solo el alcance', 'sin indicaciones, como antes');
     assert.equal(scoped('Sin nada', null, ''), 'Sin nada');
@@ -98,7 +98,7 @@ test('en el servidor: el encargo para Claude, el título de la sesión y la preg
     const sent = server.hub.submit({ text: 'Agregar paginación', agent: 'claude-code', session: 'sess-q' });
     assert.equal(sent.ok, true, sent.error);
     const stop = await call(server.url, 'POST', '/v1/hooks/claude-code', { session_id: 'sess-q', cwd: dir, hook_event_name: 'Stop' });
-    assert.match(stop.body.task.text, /^📋 Modo autónomo: .*\n📋 Indicaciones del departamento «Pagos»:\n│ Montos en centavos\.\n📋 Indicaciones del repositorio «tienda»:\n│ pnpm, no npm\.\n\nAgregar paginación$/);
+    assert.match(stop.body.task.text, /^📋 Modo autónomo: .*\n📋 Indicaciones del proyecto «Pagos»:\n│ Montos en centavos\.\n📋 Indicaciones del repositorio «tienda»:\n│ pnpm, no npm\.\n\nAgregar paginación$/);
 
     // the question: the instructions and the style of whom it was asked (a concise QA)
     assert.equal((await call(server.url, 'PUT', '/v1/settings', { office: 'pagos', appearance: { qa: { style: 'concise' } } })).status, 200);

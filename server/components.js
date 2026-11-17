@@ -95,14 +95,15 @@ export function companyMap(store, { name = (o) => o.name } = {}) {
   const declared = store.listComponents();
   const systems = store.listSystems?.() || [];
   return store.listOffices().map((o) => ({
-    id: o.id, name: name(o),
+    id: o.id, name: name(o), area: o.area,
     projects: agents.filter((a) => a.office === o.id).map((a) => {
       const own = declared.filter((c) => c.project === realDir(a.path)).map((c) => ({ id: c.id, name: c.name, path: c.path, description: c.description, declared: true }));
       const auto = detectComponents(a.path).filter((c) => !own.some((x) => x.path && x.path === c.path) && !own.some((x) => words(x.name) === words(c.name)));
-      return { id: a.id, name: a.name, path: a.path, harness: a.harness, kind: detectKind(a.path), infra: detectInfra(a.path), components: [...own, ...auto.map((c) => ({ ...c, declared: false }))] };
+      return { id: a.id, name: a.name, path: a.path, harness: a.harness, kind: a.kind || detectKind(a.path), infra: detectInfra(a.path), components: [...own, ...auto.map((c) => ({ ...c, declared: false }))] };
     }),
-    // the systems this department answers for (their artifacts may be repos of other departments: shared)
-    systems: systems.filter((s) => s.office === o.id).map((s) => ({ id: s.id, name: s.name, instructions: s.instructions, parts: s.parts })),
+    // the project as an order of its repositories (and the ones of others it uses: shared), when it has
+    // several: one alone orders nothing
+    systems: systems.filter((s) => s.office === o.id && s.parts.length > 1).map((s) => ({ id: s.id, name: s.name, instructions: s.instructions, parts: s.parts })),
   }));
 }
 

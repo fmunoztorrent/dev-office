@@ -37,7 +37,7 @@ test('el archivo: notas, skills y conectores validados; una skill con el mismo n
   for (const [bad, rx] of [
     [{ kind: 'meme', title: 'x' }, /tipo desconocido/], [{ kind: 'note' }, /ponle un título/],
     [{ kind: 'connector', name: 'jira', title: 'Jira' }, /un comando .* o una URL/], [{ kind: 'connector', name: 'x', title: 'X', url: 'ftp://x' }, /http/],
-    [{ kind: 'note', title: 'x', office: 'nada' }, /departamento \(oficina\) desconocido/],
+    [{ kind: 'note', title: 'x', office: 'nada' }, /proyecto desconocido/],
   ]) assert.match(store.createKnowledge(bad).error, rx, JSON.stringify(bad));
 
   const s1 = store.createKnowledge({ kind: 'skill', name: 'Deploy Staging', title: 'Desplegar a staging', body: '1. npm run deploy' });
@@ -174,7 +174,7 @@ test('una directiva va a cada proyecto elegido, sigue sus tareas y deja su acta 
   desk.on('ended', (d) => ended.push(d));
 
   assert.match(desk.create({ text: 'x' }).error, /elige al menos/);
-  assert.match(desk.create({ text: 'x', offices: ['marte'] }).error, /departamento \(oficina\) desconocido/);
+  assert.match(desk.create({ text: 'x', offices: ['marte'] }).error, /proyecto desconocido/);
   assert.match(desk.create({ text: '' }).error, /vacía/);
 
   const out = desk.create({ text: 'Que todas las APIs expongan /health', offices: ['Pagos'], targets: [api.id] });
@@ -401,7 +401,7 @@ test('los estándares de la empresa (del CTO) y la autonomía de cada departamen
   store.setPrefs({ standards: 'Commits convencionales.\nCada endpoint en OpenAPI.' });
   const g = guideFor(store, dir);
   assert.equal(g.office, 'pagos');
-  assert.equal(guideText(g), '📋 Estándares de la empresa (los del CTO):\n│ Commits convencionales.\n│ Cada endpoint en OpenAPI.\n📋 Indicaciones del departamento «Pagos»:\n│ Montos en centavos.');
+  assert.equal(guideText(g), '📋 Estándares de la empresa (los del CTO):\n│ Commits convencionales.\n│ Cada endpoint en OpenAPI.\n📋 Indicaciones del proyecto «Pagos»:\n│ Montos en centavos.');
   assert.equal(unguided(`📁 x\n${guideText(g)}\n\nLa tarea`), 'La tarea');
   // autonomy: the company's, unless the department has its own
   assert.deepEqual(autonomyOf(store, 'pagos'), { clarify: true, autonomous: true, level: null });

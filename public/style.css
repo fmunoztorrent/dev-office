@@ -1132,3 +1132,54 @@ ol.arch-list { list-style: decimal; padding-left: 20px; }
 .pulse-track { height: 4px; background: #0b0c14; }
 .pulse-bar { height: 100%; width: 100%; background: #ffd166; transition: width 1s linear; }
 @media (prefers-reduced-motion: reduce) { .pulse-bar { transition: none; } }
+
+/* ⚙ › Company: its areas, each with its projects (a floor with its people) and their repositories */
+.s-area { display: grid; gap: 8px; }
+.s-area-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.s-area-head h3 { margin: 0; }
+.s-grow { flex: 1; }
+.s-projects { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+.s-project.viewing { box-shadow: 0 0 0 2px var(--ink), inset 4px 0 0 #2a9d8f; }
+.s-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.s-chip { font: 12.5px "Space Grotesk", sans-serif; border: 0; background: #f1ead4; box-shadow: 0 0 0 1px #c8b98a; padding: 2px 8px; cursor: pointer; color: var(--ink); }
+.s-chip:hover { background: #ffd166; }
+.s-chip.add { background: none; box-shadow: none; color: #6c757d; outline: 1px dashed #c8b98a; outline-offset: -1px; }
+.s-card-acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.s-card-acts .s-mini { padding: 3px 8px; font-size: 12.5px; }
+.s-inline-form { padding: 8px 10px; background: #fbf8ee; box-shadow: inset 3px 0 0 #e9c46a; }
+.s-inline-form h4 { margin: 0; font: 18px "VT323", monospace; }
+
+/* ⚙ › Repositories: one light row each, grouped by area and project; the details in its window */
+.s-repos { display: grid; gap: 12px; }
+.s-repo-group { display: grid; gap: 4px; }
+.s-repo-group h4 { margin: 4px 0 2px; font: 18px "VT323", monospace; color: var(--ink); }
+.s-repo { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: #fff; box-shadow: 0 0 0 1px #d6cba8; min-width: 0; }
+.s-repo:hover { box-shadow: 0 0 0 2px var(--ink); }
+.s-repo-ic { font-size: 18px; width: 1.4em; text-align: center; }
+.s-repo-main { display: grid; min-width: 0; flex: 1; }
+.s-repo-main b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s-repo-main .hint { margin: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s-repo-acts { display: flex; gap: 2px; opacity: .55; }
+.s-repo:hover .s-repo-acts, .s-repo:focus-within .s-repo-acts { opacity: 1; }
+.s-icon { border: 0; background: none; color: var(--ink); font: 15px/1 "Space Grotesk", sans-serif; cursor: pointer; padding: 4px 6px; border-radius: 3px; }
+.s-icon:hover { background: #ffd166; }
+.s-icon.danger:hover { background: #ffd0d6; }
+.repo-dlg .b-field { grid-template-columns: 96px 1fr; }
+.s-repo-body { overflow: auto; padding: 10px 16px; display: grid; gap: 12px; }
+.s-fs { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; }
+.s-fs legend, .s-fs > summary { font: 19px "VT323", monospace; color: var(--ink); padding: 0 0 4px; }
+.s-fs textarea { width: 100%; box-sizing: border-box; }
+.s-need { box-shadow: 0 0 0 2px #e76f51 !important; }
+.s-rel-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; }
+.s-rel-list li { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.s-repo-form .brief-foot .s-msg { margin-right: auto; color: #c1121f; font-size: 13px; }
+@media (max-width: 560px) { .s-projects { grid-template-columns: 1fr; } .s-repo-acts { opacity: 1; } }
+.arch-explore { justify-self: start; padding: 5px 14px; }
+.arch-uses { display: block; }
+.arch-uses dt { margin-top: 6px; font-size: 12px; font-weight: 600; color: #6c757d; }
+.arch-uses dd { margin: 2px 0 0; }
+.arch-evidence { font: 11.5px/1.35 ui-monospace, Menlo, monospace; background: #f6f3e9; padding: 3px 6px; margin-top: 2px; overflow-wrap: anywhere; box-shadow: inset 2px 0 0 #e9c46a; }
+.s-comp-btn { font: inherit; font-size: 13px; cursor: pointer; color: var(--ink); }
+.s-comp-btn:hover, .s-comp-btn.on { background: #ffd166; border-style: solid; }
+.s-usage { margin-top: 8px; padding: 8px 10px; background: #fff; box-shadow: 0 0 0 2px var(--ink); display: grid; gap: 8px; }
+.s-usage h4 { margin: 0; font: 18px "VT323", monospace; }

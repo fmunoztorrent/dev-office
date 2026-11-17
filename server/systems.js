@@ -64,6 +64,8 @@ function guessKind(dir) {
   if (said(/(^|[-_.])bff($|[-_.])/)) return 'bff';
   if (uses(MOBILE_DEPS) || has(dir, 'ios', 'android', 'pubspec.yaml')) return 'mobile';
   if (uses(FRONT_DEPS) && !uses(SERVER_DEPS)) return 'frontend';
+  // React alone is a screen too, unless it only asks for it (a component library) or its name says otherwise
+  if ((deps.react && !pkg?.peerDependencies?.react && !uses(SERVER_DEPS)) || said(/(^|[-_.])(web|front|frontend|site|portal)$/)) return 'frontend';
   if ((uses(WORKER_DEPS) && !uses(SERVER_DEPS)) || said(/(^|[-_.])(worker|consumer|jobs?|cron)($|[-_.])/)) return 'worker';
   if (uses(SERVER_DEPS) || has(dir, 'go.mod', 'pom.xml', 'build.gradle', 'build.gradle.kts', 'Gemfile', 'manage.py', 'composer.json') || said(/(^|[-_.])(api|core|service|svc|server|backend)($|[-_.])/)) return 'backend';
   if (has(dir, 'dbt_project.yml', 'airflow.cfg', 'dags') || said(/(^|[-_.])(etl|data|warehouse|dbt)($|[-_.])/)) return 'data';

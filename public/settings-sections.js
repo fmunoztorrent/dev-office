@@ -4,8 +4,7 @@
 
 export const SETTINGS_GROUPS = [
   ['office', ['general', 'game']],
-  ['company', ['company', 'offices', 'repos']],
-  ['architecture', ['architecture', 'projects', 'infra']],
+  ['company', ['company', 'repos', 'infra', 'architecture']],
   ['agents', ['autonomy', 'context', 'models', 'intelligence', 'archive', 'terminal']],
   ['people', ['look', 'experts']],
   ['yours', ['mine']],

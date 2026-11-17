@@ -1,14 +1,17 @@
-// The instructions to work with a project: the company's standards (the CTO's, for every project),
-// its department's (the office it belongs to) and its own (its folder's), like a ChatGPT or Claude
+// The instructions to work with a repository: the company's standards (the CTO's, for everything), its
+// area's, its project's (the office it belongs to) and its own (its folder's), like a ChatGPT or Claude
 // project's. They go at the top of every brief, pipeline, directive and question that reaches that
-// project's agent, right under the 📁 scope line:
+// repository's agent, right under the 📁 scope line:
 //
 //   📁 Work only inside ~/shop: …
 //   📋 The company's standards (the CTO's):
 //   │ Conventional commits. Every endpoint documented in OpenAPI.
-//   📋 Instructions of the department «Payments»:
+//   📋 Instructions of the area «Technology»:
+//   │ Everything goes through code review.
+//   📋 Instructions of the project «Payments»:
 //   │ Every amount in cents. Never log card numbers.
-//   📋 Instructions of the project «shop»:
+//   🧩 shop (frontend) of the project Payments · uses payments-bff
+//   📋 Instructions of the repository «shop»:
 //   │ pnpm, not npm. Tests: pnpm test.
 //
 //   <the brief>
@@ -40,13 +43,18 @@ export function guideFor(store, dir, office = null) {
   const folder = registered?.path || (dir ? realDir(dir) : null);
   const own = folder ? store.getProjectInstructions(folder) : '';
   const dept = store.getOffice?.(registered?.office || office || '') || null;
+  const area = dept?.area ? store.getArea?.(dept.area) : null;
   const standards = store.getPrefs?.().standards || '';
   // the systems it is an artifact of (server/systems.js): their instructions, and what the artifact is in each
-  const systems = folder ? (store.systemsOf?.(dir || folder) || []).map(({ system, parts }) => ({ id: system.id, name: system.name, text: system.instructions || '', lines: parts.map((p) => artifactLine(system, p)) })) : [];
+  // (only when it says something: a project of several repositories, or one that uses or is used by another)
+  const related = (system, p) => system.parts.length > 1 || p.uses?.length || (store.listRelations?.(p.agent) || []).length;
+  const systems = folder ? (store.systemsOf?.(dir || folder) || []).filter(({ system, parts }) => system.instructions || parts.some((p) => related(system, p)))
+    .map(({ system, parts }) => ({ id: system.id, name: system.name, text: system.instructions || '', lines: parts.map((p) => artifactLine(system, p)) })) : [];
   return {
     company: standards ? { text: standards } : null,
     office: dept?.id || registered?.office || office || null,
     project: own ? { name: registered?.name || path.basename(folder), path: folder, text: own } : null,
+    area: area?.instructions ? { id: area.id, name: area.name || t('areas.default'), text: area.instructions } : null,
     department: dept?.instructions ? { id: dept.id, name: dept.name || t('offices.main'), text: dept.instructions } : null,
     systems,
   };
@@ -57,6 +65,7 @@ export function guideText(g) {
   const block = (title, text) => [`${GUIDE_MARK}${title}`, ...String(text).split('\n').map((l) => `${GUIDE_LINE} ${l}`.trimEnd())];
   return [
     ...(g?.company ? block(t('guide.company'), g.company.text) : []),
+    ...(g?.area ? block(t('guide.area', { name: g.area.name }), g.area.text) : []),
     ...(g?.department ? block(t('guide.department', { name: g.department.name }), g.department.text) : []),
     ...(g?.systems || []).flatMap((s) => [...s.lines, ...(s.text ? block(t('guide.system', { name: s.name }), s.text) : [])]),
     ...(g?.project ? block(t('guide.project', { name: g.project.name }), g.project.text) : []),

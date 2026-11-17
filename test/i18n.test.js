@@ -80,7 +80,10 @@ test('cada sección de los ajustes tiene su nombre, para qué es y las palabras 
     for (const id of SETTINGS_SECTIONS) for (const k of ['nav', 'desc', 'words']) assert.ok(dict.settings[k][id]?.length > 2, `${k}.${id}`);
     for (const k of ['nav', 'desc', 'words']) assert.deepEqual(Object.keys(dict.settings[k]).sort(), [...SETTINGS_SECTIONS].sort(), k);
     // the review's findings (server/architecture.js) each have their sentence
-    for (const code of ['emptyDept', 'repoMissing', 'systemOrder', 'partNoRepo', 'emptySystem', 'sharedRepo', 'repoNoProject', 'resourceUnused', 'resourcePlanned', 'noConsumer', 'noPublisher', 'resourceDetected', 'noProjects']) assert.ok(dict.arch.findings[code], code);
+    const codes = [...fs.readFileSync(new URL('../server/architecture.js', import.meta.url), 'utf8').matchAll(/finding\('(?:warn|info)', '(\w+)'/g)].map((m) => m[1]);
+    assert.ok(codes.length > 5);
+    for (const code of codes) assert.ok(dict.arch.findings[code], code);
+    assert.deepEqual(Object.keys(dict.arch.findings).sort(), [...new Set(codes)].sort(), 'ni de más ni de menos');
   }
 });
 

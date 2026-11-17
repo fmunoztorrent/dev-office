@@ -1,13 +1,14 @@
-// 🗺 The architecture, drawn (⚙ › Architecture): the company's map as a diagram you can walk, level by
-// level (public/architecture.js scopes it and lays it out; server/architecture.js builds the graph).
+// 🗺 The architecture, drawn (⚙ › Map): the company's map as a diagram you can walk, level by level
+// (public/architecture.js scopes it and lays it out; server/architecture.js builds the graph).
 //
-//   the company     every department with its repositories, who uses whom across them, and the infrastructure
-//   a department    its repositories, and from outside only what they use or uses them
-//   a project       its artifacts in the order a change goes, and the infrastructure of their repositories
-//   a repository    its components, the repositories around it and its stack
+//   the company     every area with its projects, and what each project uses of another
+//   an area         its projects with their repositories, and from outside what they use or is used by them
+//   a project       its repositories in the order a change goes (and the ones of others it uses)
+//   a repository    what it uses, who uses it, its infrastructure and its stack
 //
 // Click a node to see what it uses, who uses it and what a change of it reaches; open it to go one level
-// down. Below, the review: what on the map deserves a look.
+// down. A repository's panel relates it to another one (or 🔗 and a click on the other); 🔍 explores the
+// folders and finds what their code says. Below, the review: what on the map deserves a look.
 
 import { t } from './i18n.js';
 import { archView, layoutArch, archNeighbors, archCrumbs, scopeOf } from './architecture.js';
@@ -16,11 +17,10 @@ import { tildeHome } from './targets.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
 const A = (k, v) => t(`arch.${k}`, v);
-const TYPE_ICON = { dept: '👥', system: '🧩', repo: '📦', component: '🧱', resource: '🗄' };
+const TYPE_ICON = { area: '🏛', project: '🧩', repo: '📦', resource: '🗄' };
 const HARNESS = { pi: 'Pi', 'claude-code': 'Claude Code', opencode: 'OpenCode', codex: 'Codex' };
-const LANE_ICON = { dept: '👥', infra: '🗄', self: '📦', unknown: '❓' };
-// a color per project: the dots on the repositories that are its artifacts
-const HUES = ['#e76f51', '#2a9d8f', '#457b9d', '#b5179e', '#e9c46a', '#6a994e', '#7b2cbf', '#bc6c25'];
+const LANE_ICON = { area: '🏛', project: '🧩', infra: '🗄', self: '📦' };
+const HOWS = ['calls', 'uses', 'consumes', 'reads'];
 
 function el(tag, attrs = {}, ...children) {
   const e = document.createElement(tag);
@@ -44,13 +44,14 @@ const sameScope = (a, b) => a?.type === b?.type && (a?.id || '') === (b?.id || '
  * @param api      (method, path, body) => the office's answer
  * @param onGo     (section, { edit }) => open another settings section, on that thing's form
  * @param onPrompt (target) => a brief to a repository or a project (`system:<id>`)
+ * @param say      (text, ok) => a line in the settings' footer
  */
-export function createArchitecture({ api, onGo, onPrompt } = {}) {
-  const st = { graph: null, scope: { type: 'company' }, stack: null, selected: null, zoom: 1, fit: true, box: null, error: '' };
+export function createArchitecture({ api, onGo, onPrompt, say = () => {} } = {}) {
+  const st = { graph: null, scope: { type: 'company' }, stack: null, selected: null, zoom: 1, fit: true, box: null, error: '', connect: null, exploring: false, explain: new Map() };
 
   const labels = () => ({
-    kind: (k) => t(`system.kinds.${k}`), resKind: (k) => t(`infra.kinds.${k}`), how: (h) => t(`infra.how.${h}`),
-    infra: A('lane.infra'), whole: A('whole'), unknown: A('lane.unknown'), components: (n) => String(n),
+    kind: (k) => t(`system.kinds.${k}`), resKind: (k) => t(`infra.kinds.${k}`), how: (h) => (HOWS.includes(h) ? A(`how.${h}`) : t(`infra.how.${h}`)),
+    infra: A('lane.infra'), repos: (n) => A('stats.repos', { n }),
   });
   // a repository shows its stack unless you say otherwise; the bigger levels only the named infrastructure
   const stackOn = () => (st.stack === null ? st.scope.type === 'repo' : st.stack);
@@ -75,13 +76,36 @@ export function createArchitecture({ api, onGo, onPrompt } = {}) {
     if (!scope) return;
     st.scope = scope;
     st.selected = selected;
+    st.connect = null;
     draw();
   }
 
   const nodeOf = (id) => st.graph?.nodes.find((n) => n.id === id) || null;
-  const iconOf = (n) => (n.type === 'resource' ? RESOURCE_ICON[n.kind] || '⚙️' : n.type === 'repo' || n.type === 'component' ? KIND_ICON[n.kind] || TYPE_ICON[n.type] : TYPE_ICON[n.type]);
-  const hue = (sysId) => HUES[Math.max(0, (st.graph?.nodes || []).filter((n) => n.type === 'system').findIndex((n) => n.key === sysId)) % HUES.length];
+  const iconOf = (n) => (n.type === 'resource' ? RESOURCE_ICON[n.kind] || '⚙️' : n.type === 'repo' ? KIND_ICON[n.kind] || TYPE_ICON.repo : TYPE_ICON[n.type]);
   const crumbLabel = (c) => (c.type === 'company' ? `🏢 ${A('company')}` : `${TYPE_ICON[c.type]} ${c.name}`);
+
+  /** Relates two repositories (from → to) and draws the map again. */
+  async function relate(from, to, how = 'calls', note = '') {
+    const r = await api('POST', '/v1/relations', { from: from.replace(/^repo:/, ''), to: to.replace(/^repo:/, ''), how, note });
+    if (!r.ok) { say(r.error, false); return false; }
+    say(A('related', { from: nodeOf(from)?.name || '', to: nodeOf(to)?.name || '' }), true);
+    await load();
+    return true;
+  }
+  async function unrelate(id) {
+    const r = await api('DELETE', `/v1/relations/${encodeURIComponent(id)}`);
+    if (!r.ok) return say(r.error, false);
+    await load();
+  }
+  /** 🔍 Explores the folders: the relations their code says, on the map as found ones. */
+  async function explore() {
+    st.exploring = true; draw();
+    const r = await api('POST', '/v1/relations/explore', {});
+    st.exploring = false;
+    if (!r.ok) { say(r.error, false); return draw(); }
+    say(r.added.length ? A('explored', { n: r.added.length }) : A('exploredNone'), true);
+    await load();
+  }
 
   function draw() {
     const box = st.box;
@@ -106,8 +130,8 @@ export function createArchitecture({ api, onGo, onPrompt } = {}) {
     if (scroll && now) { now.scrollLeft = scroll[0]; now.scrollTop = scroll[1]; }
   }
 
-  /** The node selected (a graph id) is in this view: as itself, or as the artifact that stands for it. */
-  const selectedInView = (view) => view.nodes.some((n) => n.ref === st.selected || n.id === st.selected) || ['dept', 'system'].includes(nodeOf(st.selected)?.type);
+  /** The node selected (a graph id) is in this view, or it is the level itself (an area, a project). */
+  const selectedInView = (view) => view.nodes.some((n) => n.ref === st.selected || n.id === st.selected) || ['area', 'project'].includes(nodeOf(st.selected)?.type);
 
   // ------------------------------------------------------------ where you are, and where you can go
 
@@ -118,8 +142,8 @@ export function createArchitecture({ api, onGo, onPrompt } = {}) {
     const jump = el('select', { class: 'arch-jump', 'aria-label': A('jump'), onchange: (e) => { const [type, ...rest] = e.target.value.split(':'); if (type) go(type === 'company' ? { type } : { type, id: rest.join(':') }); } },
       el('option', { value: '' }, A('jump')),
       el('option', { value: 'company' }, `🏢 ${A('company')}`),
-      group(A('types.dept'), g.nodes.filter((n) => n.type === 'dept'), 'dept'),
-      group(A('types.system'), g.nodes.filter((n) => n.type === 'system'), 'system'),
+      group(A('types.area'), g.nodes.filter((n) => n.type === 'area' && n.projects.length), 'area'),
+      group(A('types.project'), g.nodes.filter((n) => n.type === 'project'), 'project'),
       group(A('types.repo'), g.nodes.filter((n) => n.type === 'repo'), 'repo'));
     return el('div', { class: 'arch-head' },
       el('nav', { class: 'arch-crumbs', 'aria-label': A('crumbs') }, crumbs.map((c, i) => [
@@ -127,7 +151,8 @@ export function createArchitecture({ api, onGo, onPrompt } = {}) {
         i === crumbs.length - 1 ? el('b', { 'aria-current': 'page' }, crumbLabel(c)) : el('button', { type: 'button', class: 'arch-crumb', onclick: () => go(c.type === 'company' ? { type: 'company' } : { type: c.type, id: c.id }) }, crumbLabel(c)),
       ])),
       jump,
-      el('div', { class: 'arch-stats' }, stat(s.departments, 'departments'), stat(s.systems, 'systems'), stat(s.repos, 'repos'), stat(s.components, 'components'), stat(s.resources, 'resources'), stat(s.relations, 'relations')),
+      el('button', { type: 'button', class: 'btn arch-explore', disabled: st.exploring || !s.repos ? true : undefined, title: A('exploreHint'), onclick: explore }, st.exploring ? A('exploring') : `🔍 ${A('explore')}`),
+      el('div', { class: 'arch-stats' }, stat(s.areas, 'areas'), stat(s.projects, 'projects'), stat(s.repos, 'repos'), stat(s.relations, 'relations'), stat(s.resources, 'resources')),
       el('div', { class: 'arch-tools' },
         el('label', { class: 'b-check' }, el('input', { type: 'checkbox', checked: stackOn() ? true : undefined, onchange: (e) => { st.stack = e.target.checked; draw(); } }), A('stack', { n: s.stack })),
         el('span', { class: 'arch-zoom' },
@@ -136,8 +161,10 @@ export function createArchitecture({ api, onGo, onPrompt } = {}) {
           el('button', { type: 'button', class: 's-mini', 'aria-label': A('zoomIn'), onclick: () => { st.fit = false; st.zoom = Math.min(1.6, Math.round((st.zoom + 0.1) * 10) / 10); draw(); } }, '+'),
           el('button', { type: 'button', class: 's-mini', 'aria-pressed': String(st.fit), title: A('fit'), 'aria-label': A('fit'), onclick: () => { st.fit = true; draw(); } }, '↔')),
         el('span', { class: 'arch-legend' },
-          el('span', { class: 'arch-key uses' }, A('legend.uses')), el('span', { class: 'arch-key link' }, A('legend.link')),
-          el('span', { class: 'arch-key ext' }, A('legend.external')))));
+          el('span', { class: 'arch-key uses' }, A('legend.uses')), el('span', { class: 'arch-key found' }, A('legend.found')), el('span', { class: 'arch-key link' }, A('legend.link')),
+          el('span', { class: 'arch-key ext' }, A('legend.external')))),
+      st.connect ? el('p', { class: 'arch-connect', role: 'status' }, `🔗 ${A('connecting', { name: nodeOf(st.connect)?.name || '' })} `,
+        el('button', { type: 'button', class: 's-mini', onclick: () => { st.connect = null; draw(); } }, A('cancel'))) : null);
   }
   const group = (label, list, type) => (list.length ? el('optgroup', { label }, list.map((n) => el('option', { value: `${type}:${n.key}`, selected: sameScope(st.scope, { type, id: n.key }) ? true : undefined }, n.name))) : null);
 
@@ -146,14 +173,16 @@ export function createArchitecture({ api, onGo, onPrompt } = {}) {
   function canvas(l, view) {
     const pad = 10;
     const W = l.width + pad * 2, H = l.height + pad * 2;
-    const s = svg('svg', { class: `arch-svg${l.edges.length <= 14 ? ' few' : ''}`, width: Math.round(W * st.zoom), height: Math.round(H * st.zoom), viewBox: `${-pad} ${-pad} ${W} ${H}`, role: 'group', 'aria-label': A('diagram') });
+    const s = svg('svg', { class: `arch-svg${l.edges.length <= 14 ? ' few' : ''}${st.connect ? ' connecting' : ''}`, width: Math.round(W * st.zoom), height: Math.round(H * st.zoom), viewBox: `${-pad} ${-pad} ${W} ${H}`, role: 'group', 'aria-label': A('diagram') });
     s.append(svg('defs', {},
       svg('marker', { id: 'arch-arrow', viewBox: '0 0 8 8', refX: 7, refY: 4, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, svg('path', { d: 'M0 0 L8 4 L0 8 z' })),
       svg('marker', { id: 'arch-arrow-on', viewBox: '0 0 8 8', refX: 7, refY: 4, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, svg('path', { d: 'M0 0 L8 4 L0 8 z' }))));
     for (const lane of l.lanes) {
-      const open = lane.kind === 'dept' && !(st.scope.type === 'dept' && `dept:${st.scope.id}` === lane.id);
+      // an area's or a project's lane opens it (unless it is the level you are on)
+      const [kind, key] = lane.id.split(':');
+      const open = (lane.kind === 'area' || lane.kind === 'project') && !(st.scope.type === kind && st.scope.id === key);
       const label = svg('text', { class: `arch-lane-t${open ? ' link' : ''}`, x: 12, y: lane.y + 20 }, document.createTextNode(`${LANE_ICON[lane.kind] || ''} ${lane.label}`));
-      if (open) { label.setAttribute('tabindex', '0'); label.setAttribute('role', 'link'); label.onclick = () => go({ type: 'dept', id: lane.id.replace(/^dept:/, '') }); label.onkeydown = (e) => { if (e.key === 'Enter') label.onclick(); }; }
+      if (open) { label.setAttribute('tabindex', '0'); label.setAttribute('role', 'link'); label.onclick = () => go({ type: kind, id: key }); label.onkeydown = (e) => { if (e.key === 'Enter') label.onclick(); }; }
       s.append(svg('g', { class: `arch-lane k-${lane.kind}${lane.own ? ' own' : ''}` },
         svg('rect', { x: 0, y: lane.y, width: lane.w, height: lane.h, rx: 6 }), label,
         lane.empty ? svg('text', { class: 'arch-lane-empty', x: 14, y: lane.y + 46 }, document.createTextNode(A('lane.empty'))) : null));
@@ -161,12 +190,14 @@ export function createArchitecture({ api, onGo, onPrompt } = {}) {
     const sel = st.selected;
     const selView = sel ? view.nodes.filter((n) => n.ref === sel || n.id === sel).map((n) => n.id) : [];
     const near = new Set(selView);
+    // what is picked and not drawn as a box (the project you are in): nothing dims
+    const dimming = selView.length > 0;
     for (const e of l.edges) if (selView.includes(e.from) || selView.includes(e.to)) { near.add(e.from); near.add(e.to); }
     const edges = svg('g', { class: 'arch-edges' });
     for (const e of l.edges) {
       const on = selView.includes(e.from) || selView.includes(e.to);
-      const tip = [nameIn(l, e.from), e.kind === 'uses' ? A('edge.uses') : e.label, nameIn(l, e.to)].join(' ') + (e.kind === 'uses' && e.label ? ` · ${e.label}` : '');
-      edges.append(svg('g', { class: `arch-edge k-${e.kind}${on ? ' on' : ''}${sel && !on ? ' dim' : ''}` },
+      const tip = [nameIn(l, e.from), e.label, nameIn(l, e.to)].join(' ') + (e.found ? ` · ${A('legend.found')}` : '');
+      edges.append(svg('g', { class: `arch-edge k-${e.kind}${e.found ? ' found' : ''}${on ? ' on' : ''}${dimming && !on ? ' dim' : ''}` },
         svg('path', { d: e.d, 'marker-end': `url(#arch-arrow${on ? '-on' : ''})` }, svg('title', {}, document.createTextNode(tip))),
         e.label ? svg('text', { class: 'arch-edge-t', x: e.lx, y: e.ly - 3, 'text-anchor': 'middle' }, document.createTextNode(clip(e.label, 22))) : null));
     }
@@ -174,8 +205,9 @@ export function createArchitecture({ api, onGo, onPrompt } = {}) {
     for (const n of l.nodes) {
       const on = selView.includes(n.id);
       const max = n.n ? 17 : 19;
+      const target = st.connect && n.type === 'repo' && n.ref !== st.connect;
       const g = svg('g', {
-        class: `arch-node t-${n.type} s-${n.state}${on ? ' on' : ''}${sel && !near.has(n.id) ? ' dim' : ''}`, transform: `translate(${n.x} ${n.y})`, tabindex: 0, role: 'button',
+        class: `arch-node t-${n.type} s-${n.state}${on ? ' on' : ''}${target ? ' target' : ''}${dimming && !near.has(n.id) && !st.connect ? ' dim' : ''}`, transform: `translate(${n.x} ${n.y})`, tabindex: 0, role: 'button',
         'aria-label': [n.label, n.sub].filter(Boolean).join(' · '), 'aria-pressed': String(on),
       },
         svg('rect', { width: n.w, height: n.h, rx: 5 }),
@@ -183,14 +215,17 @@ export function createArchitecture({ api, onGo, onPrompt } = {}) {
         svg('text', { class: 'arch-t1', x: 32, y: n.sub ? 19 : 28 }, document.createTextNode(clip(n.label, max))),
         n.sub ? svg('text', { class: 'arch-t2', x: 32, y: 35 }, document.createTextNode(clip(n.sub, 24))) : null,
         n.n ? svg('g', { class: 'arch-turn' }, svg('circle', { cx: n.w - 13, cy: 13, r: 9 }), svg('text', { x: n.w - 13, y: 17, 'text-anchor': 'middle' }, document.createTextNode(String(n.n)))) : null,
-        (n.systems || []).slice(0, 5).map((id, i) => svg('circle', { class: 'arch-dot', cx: n.w - 10 - i * 11, cy: n.h - 9, r: 4, fill: hue(id) }, svg('title', {}, document.createTextNode(nodeOf(`sys:${id}`)?.name || '')))),
         n.shared ? svg('text', { class: 'arch-shared', x: n.w - (n.n ? 34 : 12), y: 17, 'text-anchor': 'end' }, document.createTextNode('⇄'), svg('title', {}, document.createTextNode(A('shared')))) : null,
         svg('title', {}, document.createTextNode([n.label, n.sub, A(`state.${n.state}`)].filter(Boolean).join(' · '))));
-      const pick = () => { st.selected = on ? null : n.ref || n.id; draw(); };
-      const open = () => go(scopeOf(nodeOf(n.ref)), n.ref);
+      // relating: a click on another repository finishes it
+      const pick = async () => {
+        if (st.connect) { if (target) { const from = st.connect; st.connect = null; await relate(from, n.ref); st.selected = from; draw(); } return; }
+        st.selected = on ? null : n.ref || n.id; draw();
+      };
+      const open = () => { if (!st.connect) go(scopeOf(nodeOf(n.ref)), n.ref); };
       g.onclick = pick;
       g.ondblclick = open;
-      g.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (e.shiftKey) open(); else pick(); } };
+      g.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (e.shiftKey) open(); else pick(); } else if (e.key === 'Escape' && st.connect) { st.connect = null; draw(); } };
       s.append(g);
     }
     return el('div', { class: 'arch-canvas', tabindex: 0, 'aria-label': A('diagram') }, s);
@@ -200,64 +235,104 @@ export function createArchitecture({ api, onGo, onPrompt } = {}) {
   // ------------------------------------------------------------ what is selected (or the level itself)
 
   function detail(g, view) {
-    const id = st.selected || (st.scope.type === 'company' ? null : `${{ dept: 'dept', system: 'sys', repo: 'repo' }[st.scope.type]}:${st.scope.id}`);
+    const id = st.selected || (st.scope.type === 'company' ? null : `${st.scope.type}:${st.scope.id}`);
     const n = id ? nodeOf(id) : null;
-    if (!n) return el('aside', { class: 'arch-detail' }, el('h3', {}, `🏢 ${A('company')}`), el('p', { class: 'hint' }, A('pick')), projectsList(g.nodes.filter((x) => x.type === 'system')), deptsList(g));
+    if (!n) return el('aside', { class: 'arch-detail' }, el('h3', {}, `🏢 ${A('company')}`), el('p', { class: 'hint' }, A('pick')), areasList(g));
     const nb = archNeighbors(g, n.id);
-    const link = (x, extra = '') => el('li', {}, el('button', { type: 'button', class: 'arch-ref', onclick: () => focus(x) }, `${iconOf(x)} ${x.name}`), extra ? el('span', { class: 'hint' }, ` ${extra}`) : null);
-    const list = (title, items, extra = () => '') => (items.length ? [el('h4', {}, `${title} (${items.length})`), el('ul', { class: 'arch-list' }, items.map((x) => link(x.node || x, extra(x))))] : null);
+    const link = (x, extra = null) => el('li', {}, el('button', { type: 'button', class: 'arch-ref', onclick: () => focus(x) }, `${iconOf(x)} ${x.name}`), extra);
     const facts = [
-      (n.type === 'repo' || n.type === 'component') && n.kind && n.kind !== 'other' ? [A('f.kind'), t(`system.kinds.${n.kind}`)] : null,
+      n.type === 'repo' && n.kind && n.kind !== 'other' ? [A('f.kind'), t(`system.kinds.${n.kind}`)] : null,
       n.type === 'resource' ? [A('f.kind'), `${t(`infra.kinds.${n.kind}`)}${n.tech && n.tech !== n.name ? ` · ${n.tech}` : ''}`] : null,
       n.type === 'resource' && n.location ? [A('f.where'), n.location] : null,
       n.type === 'resource' ? [A('f.state'), A(`state.${n.state === 'planned' ? 'planned' : n.source === 'detected' ? 'detected' : 'declared'}`)] : null,
-      nb.dept && n.type !== 'dept' ? [A('f.dept'), nb.dept.name] : null,
-      nb.repo ? [A('f.repo'), nb.repo.name] : null,
-      n.path ? [A('f.path'), n.type === 'repo' ? tildeHome(n.path) : n.path] : null,
+      nb.area && n.type !== 'area' ? [A('f.area'), nb.area.name] : null,
+      nb.project ? [A('f.project'), nb.project.name] : null,
+      n.path ? [A('f.path'), tildeHome(n.path)] : null,
       n.type === 'repo' && n.harness ? [A('f.agent'), HARNESS[n.harness] || n.harness] : null,
-      n.type === 'system' ? [A('f.order'), n.order.join(' → ') || '—'] : null,
+      n.type === 'project' ? [A('f.order'), n.order.join(' → ') || '—'] : null,
       n.type === 'repo' && n.exists === false ? [A('f.state'), A('state.missing')] : null,
     ].filter(Boolean);
     const scope = scopeOf(n);
-    const edit = { dept: ['offices', n.key], system: ['projects', n.key], repo: ['repos', n.key], component: ['repos', n.repo?.replace(/^repo:/, '')], resource: n.key ? ['infra', n.key] : ['infra', null] }[n.type];
+    const edit = { area: ['company', `area:${n.key}`], project: ['company', n.key], repo: ['repos', n.key], resource: n.key ? ['infra', n.key] : ['infra', null] }[n.type];
     return el('aside', { class: 'arch-detail' },
       el('h3', {}, `${iconOf(n)} ${n.name}`),
-      el('p', { class: 'arch-type' }, A(`types.${n.type}`), n.shared ? el('span', { class: 's-tag', title: A('sharedHint') }, `⇄ ${A('shared')}`) : null, n.type === 'component' && !n.declared ? el('span', { class: 's-tag kind' }, A('detected')) : null),
+      el('p', { class: 'arch-type' }, A(`types.${n.type}`), n.shared ? el('span', { class: 's-tag', title: A('sharedHint') }, `⇄ ${A('shared')}`) : null),
       el('div', { class: 's-row arch-actions' },
-        scope && !sameScope(scope, st.scope) ? el('button', { type: 'button', class: 's-mini', onclick: () => go(scope, n.type === 'component' ? n.id : null) }, `⤢ ${A('open')}`) : null,
+        scope && !sameScope(scope, st.scope) ? el('button', { type: 'button', class: 's-mini', onclick: () => go(scope) }, `⤢ ${A('open')}`) : null,
         edit ? el('button', { type: 'button', class: 's-mini', onclick: () => onGo?.(edit[0], { edit: edit[1], adopt: n.type === 'resource' && !n.key ? n : null }) }, n.type === 'resource' && !n.key ? A('declare') : `✎ ${A('edit')}`) : null,
         n.type === 'repo' ? el('button', { type: 'button', class: 's-mini', onclick: () => onPrompt?.(n.key) }, `✉ ${A('brief')}`) : null,
-        n.type === 'system' ? el('button', { type: 'button', class: 's-mini', onclick: () => onPrompt?.(`system:${n.key}`) }, `✉ ${A('brief')}`) : null,
+        n.type === 'project' && n.parts.length ? el('button', { type: 'button', class: 's-mini', onclick: () => onPrompt?.(`system:${n.key}`) }, `✉ ${A('brief')}`) : null,
         st.selected ? el('button', { type: 'button', class: 's-mini', onclick: () => { st.selected = null; draw(); } }, A('unselect')) : null),
       el('dl', { class: 'arch-facts' }, facts.map(([k, v]) => [el('dt', {}, k), el('dd', {}, v)])),
-      n.description ? el('p', { class: 'hint' }, n.description) : null,
       n.instructions ? el('p', { class: 's-dept-text' }, n.instructions) : null,
-      list(A('uses'), nb.uses),
-      list(A('usedBy'), nb.usedBy),
+      n.type === 'repo' ? relations(n, nb) : null,
       nb.reach.length > nb.usedBy.length ? [el('h4', {}, `${A('reach')} (${nb.reach.length})`), el('p', { class: 'hint' }, nb.reach.map((x) => x.name).join(' · '))] : null,
-      list(A('infra'), nb.infra, (x) => `· ${t(`infra.how.${x.how}`)}`),
-      list(A('users'), nb.users, (x) => `· ${t(`infra.how.${x.how}`)}`),
-      n.type === 'system' ? [el('h4', {}, `${A('artifacts')} (${n.parts.length})`), el('ol', { class: 'arch-list' }, n.order.map((name) => n.parts.find((p) => p.name === name)).filter(Boolean).map((p) => el('li', {},
-        p.node ? el('button', { type: 'button', class: 'arch-ref', onclick: () => focus(nodeOf(p.node)) }, `${KIND_ICON[p.kind] || ''} ${p.name}`) : el('span', { class: 's-bad' }, `${p.name} · ${A('state.missing')}`),
-        p.uses.length ? el('span', { class: 'hint' }, ` → ${p.uses.join(', ')}`) : null)))] : null,
-      list(A('components'), nb.components),
-      n.type === 'dept' ? list(A('types.repo'), nb.repos) : null,
-      n.type !== 'system' && nb.systems.length ? [el('h4', {}, `${A('projects')} (${nb.systems.length})`), projectsList(nb.systems)] : null);
+      nb.infra.length ? [el('h4', {}, `${A('infra')} (${nb.infra.length})`), el('ul', { class: 'arch-list' }, nb.infra.map((x) => link(x.node, el('span', { class: 'hint' }, ` · ${t(`infra.how.${x.how}`)}`))))] : null,
+      n.type === 'resource' ? usage(n, nb) : null,
+      n.type === 'project' ? [el('h4', {}, `${A('repos')} (${nb.repos.length})`), el('ol', { class: 'arch-list' }, nb.repos.map((x) => link(x.node, el('span', { class: 'hint' }, `${x.shared ? ` ⇄ ${A('shared')}` : ''}${x.uses.length ? ` → ${x.uses.join(', ')}` : ''}`))))] : null,
+      n.type === 'area' ? [el('h4', {}, `${A('projects')} (${nb.projects.length})`), el('ul', { class: 'arch-list' }, nb.projects.map((x) => link(x, el('span', { class: 'hint' }, ` ${x.order.join(' → ')}`))))] : null,
+      n.type === 'repo' && nb.projects.length > 1 ? [el('h4', {}, A('composes')), el('ul', { class: 'arch-list' }, nb.projects.map((x) => link(x)))] : null);
     function focus(x) {
       if (!x) return;
       // already in this picture: just select it; otherwise go to where it is
-      if (view.nodes.some((v) => v.ref === x.id || v.id === x.id)) { st.selected = x.id; draw(); } else go(scopeOf(x) || { type: 'company' }, x.type === 'resource' ? x.id : x.type === 'component' ? x.id : null);
+      if (view.nodes.some((v) => v.ref === x.id || v.id === x.id)) { st.selected = x.id; draw(); } else go(scopeOf(x) || { type: 'company' }, x.type === 'resource' ? x.id : null);
+    }
+    /** A repository's relations: what it uses and who uses it, how and what for; relate it to another one. */
+    function relations(r, nb) {
+      const repos = g.nodes.filter((x) => x.type === 'repo' && x.id !== r.id);
+      const row = (x, out) => el('li', { class: `arch-rel${x.source === 'found' ? ' found' : ''}` },
+        el('button', { type: 'button', class: 'arch-ref', onclick: () => focus(x.node) }, `${iconOf(x.node)} ${x.node.name}`),
+        el('span', { class: 'hint' }, ` · ${A(`how.${x.how}`)}${x.note ? ` · ${x.note}` : ''}`),
+        x.source === 'found' ? el('span', { class: 's-tag kind', title: x.evidence }, `🔍 ${A('found')}`) : null,
+        x.source === 'found' && x.relation ? el('button', { type: 'button', class: 's-mini', title: A('confirmHint'), onclick: () => relate(out ? r.id : x.node.id, out ? x.node.id : r.id, x.how, x.note) }, `✓ ${A('confirm')}`) : null,
+        x.relation ? el('button', { type: 'button', class: 's-x', 'aria-label': A('unrelate', { name: x.node.name }), onclick: () => unrelate(x.relation) }, '✕') : null,
+        x.evidence ? el('div', { class: 'arch-evidence' }, x.evidence) : null);
+      const to = el('select', { 'aria-label': A('relateTo') }, el('option', { value: '' }, A('relateTo')), repos.map((x) => el('option', { value: x.id }, x.name)));
+      const how = el('select', { 'aria-label': A('relateHow') }, HOWS.map((h) => el('option', { value: h }, A(`how.${h}`))));
+      const note = el('input', { type: 'text', maxlength: 300, placeholder: A('relateNote'), 'aria-label': A('relateNote') });
+      return [
+        el('h4', {}, `${A('uses')} (${nb.uses.length})`),
+        nb.uses.length ? el('ul', { class: 'arch-list' }, nb.uses.map((x) => row(x, true))) : el('p', { class: 'hint' }, A('usesNone')),
+        el('h4', {}, `${A('usedBy')} (${nb.usedBy.length})`),
+        nb.usedBy.length ? el('ul', { class: 'arch-list' }, nb.usedBy.map((x) => row(x, false))) : el('p', { class: 'hint' }, A('usedByNone')),
+        el('div', { class: 'arch-relate' },
+          el('span', { class: 'hint' }, A('relateTitle', { name: r.name })),
+          to, how, note,
+          el('div', { class: 's-row' },
+            el('button', { type: 'button', class: 's-mini', onclick: async () => { if (!to.value) return say(A('relatePick'), false); await relate(r.id, to.value, how.value, note.value); } }, `＋ ${A('relate')}`),
+            el('button', { type: 'button', class: 's-mini', title: A('connectHint'), onclick: () => { st.connect = r.id; draw(); } }, `🔗 ${A('connect')}`))),
+      ];
+    }
+    /** A resource: where it is, how each repository uses it and what for (read from their folders). */
+    function usage(res, nb) {
+      const tech = res.tech || res.name;
+      const users = nb.users.filter((x) => x.node.type === 'repo');
+      if (!users.length) return null;
+      const box = el('div', { class: 'arch-usage' });
+      const fill = () => box.replaceChildren(...users.map((u) => {
+        const x = st.explain.get(`${u.node.key}|${tech}`);
+        return el('div', { class: 'arch-use' },
+          el('b', {}, `${iconOf(u.node)} ${u.node.name}`), el('span', { class: 'hint' }, ` · ${t(`infra.how.${u.how}`)}`),
+          !x ? el('p', { class: 'hint' }, '…')
+            : !x.how.length && !x.where.length ? el('p', { class: 'hint' }, A('usageNone'))
+              : el('dl', { class: 'arch-facts arch-uses' },
+                x.purpose.length ? [el('dt', {}, A('usage.for')), el('dd', {}, [...x.purpose.map((p) => A(`purpose.${p}`)), ...(x.details.length ? [x.details.join(', ')] : [])].join(' · '))] : null,
+                x.where.length ? [el('dt', {}, A('usage.where')), el('dd', {}, x.where.map((w) => el('div', { class: 'arch-evidence' }, w.evidence)))] : null,
+                x.how.length ? [el('dt', {}, A('usage.how')), el('dd', {}, x.how.map((w) => el('div', { class: 'arch-evidence' }, w.evidence)))] : null));
+      }));
+      fill();
+      for (const u of users) {
+        const key = `${u.node.key}|${tech}`;
+        if (st.explain.has(key)) continue;
+        api('GET', `/v1/resources/explain?repo=${encodeURIComponent(u.node.key)}&tech=${encodeURIComponent(tech)}`).then((r) => { st.explain.set(key, r.ok ? r : { how: [], where: [], purpose: [], details: [] }); if (box.isConnected) fill(); });
+      }
+      return [el('h4', {}, A('usage.title')), box];
     }
   }
 
-  const projectsList = (systems) => (systems.length ? el('ul', { class: 'arch-list' }, systems.map((s) => el('li', {},
-    el('span', { class: 'arch-hue', style: `background:${hue(s.key)}`, 'aria-hidden': 'true' }),
-    el('button', { type: 'button', class: 'arch-ref', onclick: () => go({ type: 'system', id: s.key }) }, s.name),
-    el('span', { class: 'hint' }, ` ${s.order.join(' → ')}`)))) : null);
-  const reposIn = (g, d) => g.nodes.filter((r) => r.type === 'repo' && r.dept === d.key).length;
-  const deptsList = (g) => el('ul', { class: 'arch-list' }, g.nodes.filter((d) => d.type === 'dept').map((d) => el('li', {},
-    el('button', { type: 'button', class: 'arch-ref', onclick: () => go({ type: 'dept', id: d.key }) }, `👥 ${d.name}`),
-    el('span', { class: 'hint' }, ` ${reposIn(g, d)} ${A('stats.repos', { n: reposIn(g, d) })}`))));
+  const areasList = (g) => el('ul', { class: 'arch-list' }, g.nodes.filter((a) => a.type === 'area' && a.projects.length).map((a) => el('li', {},
+    el('button', { type: 'button', class: 'arch-ref', onclick: () => go({ type: 'area', id: a.key }) }, `🏛 ${a.name}`),
+    el('span', { class: 'hint' }, ` · ${a.projects.map((k) => nodeOf(`project:${k}`)?.name).filter(Boolean).join(', ')}`))));
 
   // ------------------------------------------------------------ the review
 
@@ -266,16 +341,17 @@ export function createArchitecture({ api, onGo, onPrompt } = {}) {
     const show = (f) => {
       const n = f.node ? nodeOf(f.node) : null;
       if (!n) return;
-      if (n.type === 'dept' || n.type === 'system') return go(scopeOf(n));
+      if (n.type === 'area' || n.type === 'project') return go(scopeOf(n));
       if (n.type === 'resource') { if (n.techOnly) st.stack = true; return go(n.users.length === 1 ? scopeOf(nodeOf(n.users[0].id)) : { type: 'company' }, n.id); }
-      go({ type: 'company' }, n.id);
+      go(scopeOf(n), n.id);
     };
     return el('section', { class: 'arch-review' },
       el('h3', {}, `${A('review')} (${list.length})`),
       list.length ? el('ul', { class: 'arch-findings' }, list.map((f) => el('li', { class: `lv-${f.level}` },
         el('span', { class: 'arch-lv', 'aria-hidden': 'true' }, f.level === 'warn' ? '⚠' : 'ℹ'),
         el('span', {}, A(`findings.${f.code}`, f.vars)),
-        f.node ? el('button', { type: 'button', class: 's-mini', onclick: () => show(f) }, A('show')) : f.code === 'noProjects' ? el('button', { type: 'button', class: 's-mini', onclick: () => onGo?.('projects', {}) }, A('createProject')) : null)))
+        f.code === 'noRelations' ? el('button', { type: 'button', class: 's-mini', onclick: explore }, `🔍 ${A('explore')}`) : null,
+        f.node ? el('button', { type: 'button', class: 's-mini', onclick: () => show(f) }, A('show')) : null)))
         : el('p', { class: 'arch-clean' }, `✓ ${A('clean')}`));
   }
 

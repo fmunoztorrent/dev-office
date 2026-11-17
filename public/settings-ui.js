@@ -54,15 +54,15 @@ async function api(method, path, body) {
 }
 
 // The sections and their groups, in the menu's order, are in settings-sections.js.
-const ICON = { general: '⚙', game: '🎮', company: '🏛', offices: '👥', repos: '📦', architecture: '🗺', projects: '🧩', infra: '🗄', autonomy: '🤖', context: '🗜', models: '🎛', intelligence: '🧠', archive: '📚', terminal: '🖥', look: '🧑', experts: '🎓', mine: '🔒', backup: '💾', about: 'ℹ' };
+const ICON = { general: '⚙', game: '🎮', company: '🏛', repos: '📦', architecture: '🗺', infra: '🗄', autonomy: '🤖', context: '🗜', models: '🎛', intelligence: '🧠', archive: '📚', terminal: '🖥', look: '🧑', experts: '🎓', mine: '🔒', backup: '💾', about: 'ℹ' };
 // the sections that keep a draft and save with the button
 const DRAFTS = new Set(['look', 'models']);
 // the ones redrawn when something arrives from the office (they hold no half-written text)
-const LIVE = new Set(['general', 'game', 'offices', 'terminal']);
+const LIVE = new Set(['general', 'game', 'terminal']);
 const DOCS = 'https://github.com/fmunoztorrent/dev-office';
 const fold = (x) => String(x ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-const emptyForm = () => ({ id: null, path: '', harness: '', name: '', bin: '', args: '', office: null, instructions: '', detected: null, touched: false });
+const emptyForm = () => ({ id: null, path: '', harness: '', name: '', bin: '', args: '', office: '', kind: '', instructions: '', detected: null, touched: false });
 const emptyOffice = () => ({ id: null, name: '', timezone: '', location: '', instructions: '', autonomy: '' });
 const AUTONOMY = ['guided', 'balanced', 'autonomous'];
 
@@ -149,6 +149,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   // the map of the architecture (architecture-ui.js): from it you jump to the form of what you picked
   const arch = createArchitecture({
     api,
+    say: (text, ok) => msg(text, ok),
     onPrompt: (id) => onPrompt?.(id),
     onGo: (section, what = {}) => { jumpTo(section, what); },
   });
@@ -205,7 +206,9 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   /** The page's address changed (a link, the back button): the area follows it. */
   function route() {
     const m = location.hash.match(/^#settings(?:\/([\w-]+))?/);
-    if (m) enter(SETTINGS_SECTIONS.includes(m[1]) ? m[1] : st.tab);
+    // the sections of before: departments and projects are in the company now
+    const id = { offices: 'company', projects: 'company' }[m?.[1]] || m?.[1];
+    if (m) enter(SETTINGS_SECTIONS.includes(id) ? id : st.tab);
     else if (st.open) hide();
   }
 
@@ -222,8 +225,14 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   /** From the map: the form of a department, a repository, a project or a resource, ready to edit. */
   function jumpTo(section, { edit = null, adopt = null } = {}) {
     if (section === 'repos' && edit) { const a = (st.projects || getTargets()).find((x) => x.id === edit); go('repos'); if (a) editRepo(a); return; }
-    if (section === 'offices' && edit) { const o = getOffices().find((x) => x.id === edit); if (o) st.office = officeForm(o); go('offices'); $('s-office-form')?.scrollIntoView({ block: 'nearest' }); return; }
-    if (section === 'projects' && edit) { const sys = (st.systems || []).find((x) => x.id === edit); if (sys) st.system = systemDraft(sys); go('projects'); $('s-system-form')?.scrollIntoView({ block: 'nearest' }); return; }
+    if (section === 'company' && edit) {
+      // an area (area:<id>) or a project: its form, open
+      if (String(edit).startsWith('area:')) { const a = (st.areas || []).find((x) => x.id === edit.slice(5)); st.areaForm = { id: edit.slice(5), name: a?.custom ? a.name : '', instructions: a?.instructions || '' }; }
+      else { const o = getOffices().find((x) => x.id === edit); if (o) st.office = officeForm(o); }
+      go('company');
+      $('s-office-form')?.scrollIntoView({ block: 'nearest' });
+      return;
+    }
     if (section === 'infra') { st.resource = adopt ? adoptForm(adopt) : edit ? resourceForm((st.resources || []).find((r) => r.id === edit)) : emptyResource(); go('infra'); $('s-res-form')?.scrollIntoView({ block: 'nearest' }); return; }
     go(section);
   }
@@ -303,6 +312,8 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     if (all) return show(st.tab);
     if (st.tab === 'repos') return loadProjects();
     if (st.tab === 'architecture') return arch.reload();
+    // the company: redrawn, unless you are typing in one of its forms
+    if (st.tab === 'company') return st.office || st.areaForm || (st.company && document.activeElement?.closest?.('[data-panel="company"]')) ? undefined : show('company');
     if (LIVE.has(st.tab)) return show(st.tab);
     // a change that alters the section: drawn again once the new settings are here
     if (st.redraw?.tab === st.tab && JSON.stringify(prefs()) !== st.redraw.from) { st.redraw = null; show(st.tab); }
@@ -386,7 +397,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         el('p', { class: 'hint' }, G('clarifyHint')),
         check(p.autonomy?.autonomous !== false, G('autonomous'), (e) => setPref({ autonomy: { autonomous: e.target.checked } })),
         el('p', { class: 'hint' }, G('autonomousHint'))),
-      el('p', { class: 'hint' }, el('button', { type: 'button', class: 'cfg-link', onclick: () => go('offices') }, G('autonomyDepts'))));
+      el('p', { class: 'hint' }, el('button', { type: 'button', class: 'cfg-link', onclick: () => go('company') }, G('autonomyDepts'))));
   }
 
   /** 🗜 Context: past the limit an agent's context is compacted on its own (server/compact.js). */
@@ -592,101 +603,147 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       list(r.tools), f?.kind === 'tool' ? form() : add('tool'));
   }
 
-  // ------------------------------------------------------------ Oficinas
+  // ------------------------------------------------------------ The company: its areas and their projects
 
-  const officeForm = (o) => ({ id: o.id, name: o.custom ? o.name : '', timezone: o.ownTimezone || '', location: o.location || '', instructions: o.instructions || '', autonomy: o.autonomy || '' });
-
-  /** 🏛 The company: its standards (the CTO's) and how much a department takes at once (operations). */
-  function renderCompany() {
-    const O = (k, v) => t(`settings.offices.${k}`, v);
-    const p = prefs() || {};
-    put(panelOf('company'),
-      card(O('standardsTitle'),
-        el('label', { class: 'note' }, el('span', {}, O('standards')),
-          el('textarea', { id: 's-standards', rows: 6, maxlength: 4000, placeholder: O('standardsPh') }, p.standards || '')),
-        el('p', { class: 'hint' }, O('standardsHint'))),
-      card(O('capacityTitle'),
-        el('label', { class: 'b-field' }, el('span', {}, O('capacity')),
-          el('input', { id: 's-capacity', type: 'number', min: 1, max: 20, value: p.capacity || 3, class: 's-num' })),
-        el('p', { class: 'hint' }, O('capacityHint'))),
-      el('div', { class: 's-row' }, el('button', { type: 'button', class: 'btn', onclick: () => setPref({ standards: $('s-standards').value, capacity: Number($('s-capacity').value) || 3 }) }, O('saveCompany'))));
-  }
+  const O = (k, v) => t(`settings.offices.${k}`, v);
+  const officeForm = (o) => ({ id: o.id, name: o.custom ? o.name : '', area: o.area || 'general', timezone: o.ownTimezone || '', location: o.location || '', instructions: o.instructions || '', autonomy: o.autonomy || '' });
+  const emptyArea = () => ({ id: null, name: '', instructions: '' });
 
   /**
-   * The departments maintainer: each department is an office of the company, with its projects
-   * (repositories and their agents), its people (the characters), its instructions (how to work
-   * there), its time zone and its weather.
+   * 🏛 Company: its standards and capacity, and its areas, each with its projects (an office: a floor with
+   * its people) and their repositories. Everything about the company's shape is here, in one place.
    */
-  function renderOffices() {
-    const panel = panelOf('offices');
-    const O = (k, v) => t(`settings.offices.${k}`, v);
+  function renderCompany() {
+    const panel = panelOf('company');
+    const p = prefs() || {};
+    st.company ||= { standards: p.standards || '', capacity: p.capacity || 3 };
+    st.areaForm ||= null;
+    const areas = st.areas || [{ id: 'general', name: t('areas.default'), custom: false, instructions: '', projects: getOffices().map((o) => o.id) }];
+    const offices = getOffices();
+    const repos = st.projects || getTargets().filter((x) => x.registered);
+    const C = st.company;
+    const projectCard = (o) => {
+      const mine = repos.filter((a) => a.office === o.id);
+      const editing = st.office?.id === o.id;
+      return el('div', { class: `s-project${o.id === here() ? ' viewing' : ''}` },
+        el('div', { class: 's-agent-head' },
+          el('b', {}, `🧩 ${o.name}`), o.id === 'main' ? el('span', { class: 's-tag' }, O('main')) : null,
+          o.autonomy ? el('span', { class: 's-tag kind', title: O(`autonomyHint.${o.autonomy}`) }, `🤖 ${O(`autonomyLevel.${o.autonomy}`)}`) : null,
+          o.instructions ? el('span', { class: 's-tag kind', title: o.instructions }, `📋 ${O('hasInstructions')}`) : null,
+          o.ownTimezone || o.place?.name ? el('span', { class: 'hint' }, [o.ownTimezone ? tzLabel(o.timezone) : '', o.place?.name ? `📍 ${o.place.name}` : ''].filter(Boolean).join(' · ')) : null,
+          o.id === here() ? el('span', { class: 's-ok' }, O('viewing')) : null),
+        el('div', { class: 's-chips' }, mine.length ? mine.map((a) => el('button', { type: 'button', class: 's-chip', title: tilde(a.path), onclick: () => { go('repos'); editRepo(a); } }, `${KIND_ICON[a.kind] || '📦'} ${a.name}`))
+          : el('span', { class: 'hint' }, O('noRepos')),
+          el('button', { type: 'button', class: 's-chip add', onclick: () => { go('repos'); newRepo(o.id); } }, O('addRepo'))),
+        el('div', { class: 's-card-acts' },
+          o.id !== here() ? el('button', { type: 'button', class: 's-mini', title: O('viewHint'), onclick: () => { onView?.(o.id); close(); } }, `👁 ${O('view')}`) : null,
+          el('button', { type: 'button', class: 's-mini', title: O('staffHint'), onclick: () => { if (o.id !== here()) onView?.(o.id); go('look'); } }, `🧑 ${O('staff')}`),
+          el('button', { type: 'button', class: 's-mini', onclick: () => { arch.go({ type: 'project', id: o.id }); go('architecture'); } }, `🗺 ${O('map')}`),
+          mine.length ? el('button', { type: 'button', class: 's-mini', onclick: () => onPrompt?.(`system:${o.id}`) }, `✉ ${O('brief')}`) : null,
+          el('button', { type: 'button', class: 's-mini', 'aria-expanded': String(editing), onclick: () => { st.office = editing ? null : officeForm(o); renderCompany(); } }, `✎ ${O('edit')}`),
+          o.id !== 'main' ? el('button', { type: 'button', class: 's-mini danger', onclick: () => removeOffice(o) }, O('delete')) : null),
+        editing ? projectForm(areas) : null);
+    };
+    const areaCard = (a) => {
+      const projects = offices.filter((o) => (o.area || 'general') === a.id);
+      const editing = st.areaForm?.id === a.id;
+      const adding = st.office && !st.office.id && st.office.area === a.id;
+      return el('section', { class: 'cfg-card s-area' },
+        el('div', { class: 's-area-head' },
+          el('h3', {}, `🏛 ${a.name}`), el('span', { class: 'hint' }, O('projectsCount', { n: projects.length })),
+          el('span', { class: 's-grow' }),
+          el('button', { type: 'button', class: 's-mini', 'aria-expanded': String(editing), onclick: () => { st.areaForm = editing ? null : { id: a.id, name: a.custom ? a.name : '', instructions: a.instructions || '' }; renderCompany(); } }, `✎ ${O('editArea')}`),
+          a.id !== 'general' ? el('button', { type: 'button', class: 's-mini danger', onclick: () => removeArea(a) }, O('deleteArea')) : null),
+        a.instructions && !editing ? el('p', { class: 's-dept-text' }, a.instructions) : null,
+        editing ? areaForm() : null,
+        el('div', { class: 's-projects' }, projects.map(projectCard)),
+        adding ? el('div', { class: 's-project' }, projectForm(areas)) : el('button', { type: 'button', class: 'btn ghost', onclick: () => { st.office = { ...emptyOffice(), area: a.id }; renderCompany(); } }, `＋ ${O('addProject')}`));
+    };
+    put(panel,
+      el('p', { class: 'hint' }, O('companyHint')),
+      card(O('standardsTitle'),
+        el('label', { class: 'note' }, el('span', {}, O('standards')),
+          el('textarea', { rows: 4, maxlength: 4000, placeholder: O('standardsPh'), oninput: (e) => { C.standards = e.target.value; } }, C.standards)),
+        el('p', { class: 'hint' }, O('standardsHint')),
+        el('label', { class: 'b-field' }, el('span', {}, O('capacity')),
+          el('input', { type: 'number', min: 1, max: 20, value: C.capacity, class: 's-num', oninput: (e) => { C.capacity = Number(e.target.value) || 3; } })),
+        el('p', { class: 'hint' }, O('capacityHint')),
+        el('div', { class: 's-row' }, el('button', { type: 'button', class: 'btn', onclick: async () => { const r = await setPref({ standards: C.standards, capacity: C.capacity }); if (r?.ok) st.company = null; } }, O('saveCompany')))),
+      el('h3', { class: 'cfg-sub' }, `🏛 ${O('areasTitle')}`),
+      el('p', { class: 'hint' }, O('areasHint')),
+      areas.map(areaCard),
+      st.areaForm && !st.areaForm.id ? card(O('newArea'), areaForm()) : el('div', { class: 's-row' }, el('button', { type: 'button', class: 'btn', onclick: () => { st.areaForm = emptyArea(); renderCompany(); } }, `＋ ${O('addArea')}`)));
+  }
+
+  /** An area's form: its name and its instructions (they go on top of every brief of its projects). */
+  function areaForm() {
+    const f = st.areaForm;
+    return el('div', { class: 's-form s-inline-form' },
+      el('label', { class: 'b-field' }, el('span', {}, O('areaName')), el('input', { type: 'text', value: f.name, maxlength: 40, placeholder: f.id === 'general' ? t('areas.default') : O('areaNamePh'), oninput: (e) => { f.name = e.target.value; } })),
+      el('label', { class: 'note' }, el('span', {}, O('areaInstructions')), el('textarea', { rows: 3, maxlength: 4000, placeholder: O('areaInstructionsPh'), oninput: (e) => { f.instructions = e.target.value; } }, f.instructions)),
+      el('div', { class: 's-row' },
+        el('button', { type: 'button', class: 'btn', onclick: saveArea }, f.id ? O('saveChanges') : O('addArea')),
+        el('button', { type: 'button', class: 'btn ghost', onclick: () => { st.areaForm = null; renderCompany(); } }, O('cancel'))));
+  }
+
+  /** A project's form (an office: a floor with its people): its name, area, instructions, autonomy and place. */
+  function projectForm(areas) {
+    const f = st.office;
     const p = prefs() || {};
     const company = p.timezone || st.data?.systemZone || '';
-    const projects = st.projects || getTargets().filter((x) => x.registered);
-    const cards = getOffices().map((o) => {
-      const mine = projects.filter((a) => a.office === o.id);
-      const others = projects.filter((a) => a.office !== o.id);
-      return el('div', { class: 's-agent s-dept' },
-        el('div', { class: 's-agent-head' },
-          el('b', {}, o.name), o.id === 'main' ? el('span', { class: 's-tag' }, O('main')) : null,
-          el('span', { class: 's-tag kind' }, tzLabel(o.timezone)),
-          o.instructions ? el('span', { class: 's-tag kind', title: o.instructions }, O('hasInstructions')) : null,
-          o.autonomy ? el('span', { class: 's-tag kind', title: O(`autonomyHint.${o.autonomy}`) }, `🤖 ${O(`autonomyLevel.${o.autonomy}`)}`) : null,
-          o.id === here() ? el('span', { class: 's-ok' }, O('viewing')) : null),
-        el('div', { class: 'hint' }, `${o.place?.name ? `📍 ${o.place.name}` : ''}${o.ownTimezone ? '' : `${o.place?.name ? ' · ' : ''}${O('inherit', { tz: company })}`}`),
-        o.instructions ? el('p', { class: 's-dept-text' }, o.instructions) : null,
-        // its repositories: each one with its agent and its components
-        el('div', { class: 's-dept-k' }, `${O('repos')} (${mine.length})`),
-        el('div', { class: 's-entries' }, mine.length ? mine.map((a) => el('span', { title: a.instructions ? `📋 ${a.instructions}` : undefined },
-          `${a.name} · ${HARNESS_NAME[a.harness] || a.harness}${a.instructions ? ' 📋' : ''}`,
-          el('div', { class: 's-path' }, tilde(a.path)))) : el('span', { class: 'hint' }, O('noRepos'))),
-        el('div', { class: 's-row' },
-          el('button', { type: 'button', class: 's-mini', onclick: () => { st.form = { ...emptyForm(), office: o.id }; go('repos'); $('s-agent-form')?.scrollIntoView({ block: 'nearest' }); } }, O('addRepo')),
-          others.length ? el('select', { class: 's-mini', 'aria-label': O('moveRepo'), onchange: async (e) => {
-            if (!e.target.value) return;
-            const r = await api('PUT', `/v1/agents/${encodeURIComponent(e.target.value)}`, { office: o.id });
-            if (!r.ok) return msg(r.error);
-            onSaved?.();
-            loadProjects();
-          } }, option('', O('moveRepo'), true), others.map((a) => option(a.id, `${a.name} · ${HARNESS_NAME[a.harness] || a.harness}`))) : null),
-        el('div', { class: 's-row' },
-          o.id !== here() ? el('button', { type: 'button', class: 's-mini', onclick: () => { onView?.(o.id); close(); } }, `👁 ${O('view')}`) : null,
-          el('button', { type: 'button', class: 's-mini', onclick: () => { arch.go({ type: 'dept', id: o.id }); go('architecture'); } }, `🗺 ${O('map')}`),
-          el('button', { type: 'button', class: 's-mini', onclick: () => { st.office = officeForm(o); renderOffices(); $('s-office-form')?.scrollIntoView({ block: 'nearest' }); } }, O('edit')),
-          o.id !== 'main' ? el('button', { type: 'button', class: 's-mini danger', onclick: () => removeOffice(o) }, O('delete')) : null));
-    });
-    const f = st.office;
-    const editing = getOffices().find((o) => o.id === f.id);
-    put(panel,
-      el('div', { class: 's-agents' }, cards),
-      el('section', { class: 'cfg-card s-form', id: 's-office-form' },
-        el('h3', {}, editing ? O('editTitle', { name: editing.name }) : O('newTitle')),
-        el('label', { class: 'b-field' }, el('span', {}, O('name')), el('input', { type: 'text', value: f.name, maxlength: 40, oninput: (e) => { f.name = e.target.value; } })),
-        el('label', { class: 'note' }, el('span', {}, O('instructions')),
-          el('textarea', { rows: 4, maxlength: 4000, placeholder: O('instructionsPh'), oninput: (e) => { f.instructions = e.target.value; } }, f.instructions || '')),
-        el('label', { class: 'b-field' }, el('span', {}, O('autonomy')),
-          el('select', { onchange: (e) => { f.autonomy = e.target.value; renderOffices(); } },
-            option('', O('autonomyCompany'), !f.autonomy), AUTONOMY.map((l) => option(l, O(`autonomyLevel.${l}`), f.autonomy === l)))),
-        el('p', { class: 'hint' }, f.autonomy ? O(`autonomyHint.${f.autonomy}`) : O('autonomyCompanyHint')),
+    return el('div', { class: 's-form s-inline-form', id: 's-office-form' },
+      el('h4', {}, f.id ? O('editTitle', { name: getOffices().find((o) => o.id === f.id)?.name || '' }) : O('newTitle')),
+      el('label', { class: 'b-field' }, el('span', {}, O('name')), el('input', { type: 'text', value: f.name, maxlength: 40, placeholder: f.id === 'main' ? t('offices.main') : O('namePh'), oninput: (e) => { f.name = e.target.value; } })),
+      el('label', { class: 'b-field' }, el('span', {}, O('area')),
+        el('select', { onchange: (e) => { f.area = e.target.value; } }, areas.map((a) => option(a.id, a.name, a.id === f.area)))),
+      el('label', { class: 'note' }, el('span', {}, O('instructions')),
+        el('textarea', { rows: 3, maxlength: 4000, placeholder: O('instructionsPh'), oninput: (e) => { f.instructions = e.target.value; } }, f.instructions || '')),
+      el('label', { class: 'b-field' }, el('span', {}, O('autonomy')),
+        el('select', { onchange: (e) => { f.autonomy = e.target.value; renderCompany(); } },
+          option('', O('autonomyCompany'), !f.autonomy), AUTONOMY.map((l) => option(l, O(`autonomyLevel.${l}`), f.autonomy === l)))),
+      el('p', { class: 'hint' }, f.autonomy ? O(`autonomyHint.${f.autonomy}`) : O('autonomyCompanyHint')),
+      el('details', {}, el('summary', {}, O('placeTitle')),
         el('label', { class: 'b-field' }, el('span', {}, O('timezone')),
           el('span', { class: 'tz-field' }, zoneInput({ value: f.timezone, placeholder: O('inherit', { tz: company }), label: O('timezone'), onPick: (z) => {
             // another country: its city is no longer valid
             if (zoneInfo(z || company).country !== zoneInfo(f.timezone || company).country) f.location = '';
-            f.timezone = z || ''; renderOffices();
+            f.timezone = z || ''; renderCompany();
           } }))),
         el('label', { class: 'b-field' }, el('span', {}, O('location')),
           el('span', { class: 'tz-field' }, cityInput({ value: f.location, timezone: f.timezone || company, label: O('location'), onPick: (c) => { f.location = c || ''; },
-            placeholder: !f.timezone && p.city ? O('cityInherit', { city: placeName(p.city) }) : O('locationPh', { city: zoneInfo(f.timezone || company).city || '' }) }))),
-        el('div', { class: 's-row' },
-          el('button', { type: 'button', class: 'btn', onclick: saveOffice }, f.id ? O('saveChanges') : O('add')),
-          f.id ? el('button', { type: 'button', class: 'btn ghost', onclick: () => { st.office = emptyOffice(); renderOffices(); } }, O('cancel')) : null)));
+            placeholder: !f.timezone && p.city ? O('cityInherit', { city: placeName(p.city) }) : O('locationPh', { city: zoneInfo(f.timezone || company).city || '' }) })))),
+      el('div', { class: 's-row' },
+        el('button', { type: 'button', class: 'btn', onclick: saveOffice }, f.id ? O('saveChanges') : O('add')),
+        el('button', { type: 'button', class: 'btn ghost', onclick: () => { st.office = null; renderCompany(); } }, O('cancel'))));
+  }
+
+  async function saveArea() {
+    const f = st.areaForm;
+    const body = { name: f.name, instructions: f.instructions };
+    const r = f.id ? await api('PUT', `/v1/areas/${encodeURIComponent(f.id)}`, body) : await api('POST', '/v1/areas', body);
+    if (!r.ok) return msg(r.error);
+    msg(f.id ? O('areaSaved') : O('areaCreated', { name: r.area.name }), true);
+    st.areaForm = null;
+    await loadProjects();
+  }
+  async function removeArea(a) {
+    if (!confirm(O('confirmDeleteArea', { name: a.name }))) return;
+    const r = await api('DELETE', `/v1/areas/${encodeURIComponent(a.id)}`);
+    if (!r.ok) return msg(r.error);
+    msg(O('areaDeleted'), true);
+    await reloadOffices();
+    await loadProjects();
   }
 
   /** Every department's projects (the page only has the watched office's). */
   async function loadProjects() {
-    const [r, map, sys] = await Promise.all([api('GET', '/v1/agents'), api('GET', '/v1/map'), api('GET', '/v1/systems')]);
+    const [r, map, sys, areas, rels] = await Promise.all([api('GET', '/v1/agents'), api('GET', '/v1/map'), api('GET', '/v1/systems'), api('GET', '/v1/areas'), api('GET', '/v1/relations')]);
     if (!r.ok) return;
-    st.projects = (r.agents || []).filter((a) => a.registered);
+    st.areas = areas.ok ? areas.areas : st.areas;
+    st.relations = rels.ok ? rels.relations : [];
+    // each repository with its kind: the one you said, or the one its folder says
+    const kinds = map.ok ? Object.fromEntries(map.departments.flatMap((o) => o.projects).map((p) => [p.id, p.kind])) : {};
+    st.projects = (r.agents || []).filter((a) => a.registered).map((a) => ({ ...a, kind: a.kind || kinds[a.id] || 'other' }));
     // each project's components (detected from its folder, and the ones declared): the map the directives use
     st.components = map.ok ? Object.fromEntries(map.departments.flatMap((o) => o.projects).map((p) => [p.id, p.components])) : {};
     st.kinds = map.ok ? Object.fromEntries(map.departments.flatMap((o) => o.projects).map((p) => [p.id, p.kind])) : {};
@@ -695,9 +752,8 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     // the infrastructure: the declared ones, and what each project's folder says it uses
     st.resources = map.ok ? map.resources || [] : [];
     if (!st.open) return;
-    if (st.tab === 'offices') renderOffices();
+    if (st.tab === 'company') renderCompany();
     else if (st.tab === 'repos') renderList();
-    else if (st.tab === 'projects') renderProjects();
     else if (st.tab === 'infra') renderInfra();
   }
 
@@ -711,12 +767,42 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   const adoptForm = (r) => ({ ...emptyResource(), kind: r.kind, name: r.name, tech: r.tech || '', links: (r.projects || r.users || []).map((x) => ({ project: String(x.id).replace(/^repo:/, ''), how: x.how || 'uses' })) });
 
   /** 🗄 Infrastructure: what is declared (with who uses it and how), what the repositories say they use, and the form. */
+  /**
+   * How each repository uses a technology, read from its code (GET /v1/resources/explain): what for,
+   * where it is configured and with which library, each with its file and line.
+   */
+  function usageOf(r) {
+    if (!r) return null;
+    const tech = r.tech || r.name;
+    st.explain ||= new Map();
+    const box = el('div', { class: 'arch-usage s-usage' });
+    const fill = () => box.replaceChildren(el('h4', {}, t('arch.usage.title')), ...r.projects.map((u) => {
+      const x = st.explain.get(`${u.id}|${tech}`);
+      return el('div', { class: 'arch-use' },
+        el('b', {}, `📦 ${u.name}`), el('span', { class: 'hint' }, ` · ${t(`infra.how.${u.how}`)}`),
+        !x ? el('p', { class: 'hint' }, '…')
+          : !x.how.length && !x.where.length ? el('p', { class: 'hint' }, t('arch.usageNone'))
+            : el('dl', { class: 'arch-facts arch-uses' },
+              x.purpose.length ? [el('dt', {}, t('arch.usage.for')), el('dd', {}, [...x.purpose.map((p) => t(`arch.purpose.${p}`)), ...(x.details.length ? [x.details.join(', ')] : [])].join(' · '))] : null,
+              x.where.length ? [el('dt', {}, t('arch.usage.where')), el('dd', {}, x.where.map((w) => el('div', { class: 'arch-evidence' }, w.evidence)))] : null,
+              x.how.length ? [el('dt', {}, t('arch.usage.how')), el('dd', {}, x.how.map((w) => el('div', { class: 'arch-evidence' }, w.evidence)))] : null));
+    }));
+    fill();
+    for (const u of r.projects) {
+      const key = `${u.id}|${tech}`;
+      if (st.explain.has(key)) continue;
+      api('GET', `/v1/resources/explain?repo=${encodeURIComponent(u.id)}&tech=${encodeURIComponent(tech)}`).then((x) => { st.explain.set(key, x.ok ? x : { how: [], where: [], purpose: [], details: [] }); if (box.isConnected) fill(); });
+    }
+    return box;
+  }
+
   function renderInfra() {
     const projects = st.projects || getTargets().filter((x) => x.registered);
     const all = st.resources || [];
     const declared = all.filter((r) => r.source === 'declared');
     const named = all.filter((r) => r.source === 'detected' && !r.techOnly);
     const stack = all.filter((r) => r.techOnly);
+    const keyOf = (r) => r.key || r.name;
     const f = st.resource ||= emptyResource();
     const how = (h) => t(`infra.how.${h}`);
     const reload = () => { loadProjects(); };
@@ -782,7 +868,10 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
           el('button', { type: 'button', class: 's-mini', onclick: () => { st.resource = adoptForm(r); again(); } }, R('declare')))))) : null,
       stack.length ? card(R('detected'),
         el('p', { class: 'hint' }, R('stackHint')),
-        el('div', { class: 's-comp-row' }, stack.map((r) => el('span', { class: 's-comp', title: r.projects.map((x) => x.name).join(', ') }, `${RICON[r.kind] || ''} ${r.name} `, el('span', { class: 'hint' }, `← ${r.projects.map((x) => x.name).join(', ')}`))))) : null,
+        // each one opens what its repositories' code says: what for, where and with which library
+        el('div', { class: 's-comp-row' }, stack.map((r) => el('button', { type: 'button', class: `s-comp s-comp-btn${st.infraOpen === keyOf(r) ? ' on' : ''}`, 'aria-expanded': String(st.infraOpen === keyOf(r)), title: R('explainHint'), onclick: () => { st.infraOpen = st.infraOpen === keyOf(r) ? null : keyOf(r); renderInfra(); } },
+          `${RICON[r.kind] || ''} ${r.name} `, el('span', { class: 'hint' }, `← ${r.projects.map((x) => x.name).join(', ')}`)))),
+        st.infraOpen ? usageOf(stack.find((r) => keyOf(r) === st.infraOpen)) : null) : null,
       el('section', { class: 'cfg-card s-form s-res-form', id: 's-res-form' },
         el('h3', {}, f.id ? R('editTitle', { name: f.name }) : R('newTitle')),
         el('label', { class: 'b-field' }, el('span', {}, R('kind')), el('select', { onchange: bind('kind') }, RKINDS.map((k) => option(k, `${RICON[k]} ${t(`infra.kinds.${k}`)}`, k === f.kind)))),
@@ -799,109 +888,6 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
           f.id || f.name || f.links.length ? el('button', { type: 'button', class: 'btn ghost', onclick: () => { st.resource = emptyResource(); again(); } }, R('cancel')) : null)));
   }
 
-  // ------------------------------------------------------------ Projects (server/systems.js)
-
-  const S = (k, v) => t(`settings.projects.${k}`, v);
-  const KIND = (k) => t(`system.kinds.${k}`);
-  const emptySystem = () => ({ id: null, name: '', office: here(), team: '', move: true, instructions: '', parts: [] });
-
-  const systemDraft = (s) => ({ id: s.id, name: s.name, office: s.office, team: '', move: true, instructions: s.instructions || '', parts: s.parts.map((p) => ({ name: p.name, project: p.target || p.project, component: p.component || '', path: p.path || '', kind: p.kind, uses: [...(p.uses || [])] })) });
-
-  /** 🧩 Projects: a product or business project and its artifacts (repositories, or components of one). */
-  function renderProjects() {
-    put(panelOf('projects'), systemsBox(st.projects || getTargets().filter((x) => x.registered)));
-  }
-
-  /** The projects: a card each (its team, the order a change goes in and its artifacts), and the form. */
-  function systemsBox(projects) {
-    const list = st.systems || [];
-    const cards = list.map((s) => el('div', { class: 's-agent s-system' },
-      el('div', { class: 's-agent-head' },
-        el('b', {}, `🧩 ${s.name}`), el('span', { class: 's-tag kind' }, `👥 ${s.officeName || s.office}`),
-        s.instructions ? el('span', { class: 's-tag kind', title: s.instructions }, S('hasInstructions')) : null),
-      el('div', { class: 's-sys-order' }, el('span', { class: 'hint' }, `${t('arch.f.order')}: `), s.order.join('  →  ')),
-      el('ul', { class: 's-sys-parts' }, s.parts.map((p) => el('li', {},
-        el('b', {}, `${KIND_ICON[p.kind] || ''} ${p.name}`), ` · ${KIND(p.kind)} · `,
-        el('span', { class: 'hint', title: p.target ? tilde(artifactFolder(p)) : undefined }, `${p.repo}${p.path ? `/${p.path}` : ''}`),
-        p.uses?.length ? ` · ${t('system.uses', { list: p.uses.join(', ') })}` : '',
-        p.shared ? el('span', { class: 's-tag', title: S('sharedHint') }, S('shared')) : null,
-        p.target ? null : el('span', { class: 's-tag danger' }, S('noRepo'))))),
-      el('div', { class: 's-row' },
-        el('button', { type: 'button', class: 's-mini', onclick: () => { onPrompt?.(`system:${s.id}`); } }, `✉ ${S('brief')}`),
-        el('button', { type: 'button', class: 's-mini', onclick: () => { arch.go({ type: 'system', id: s.id }); go('architecture'); } }, `🗺 ${t('settings.offices.map')}`),
-        el('button', { type: 'button', class: 's-mini', onclick: () => { st.system = systemDraft(s); renderProjects(); $('s-system-form')?.scrollIntoView({ block: 'nearest' }); } }, S('edit')),
-        el('button', { type: 'button', class: 's-mini danger', onclick: async () => {
-          if (!confirm(S('confirmDelete', { name: s.name }))) return;
-          const r = await api('DELETE', `/v1/systems/${encodeURIComponent(s.id)}`);
-          if (!r.ok) return msg(r.error);
-          msg(S('deleted'), true);
-          loadProjects();
-        } }, S('delete')))));
-    return [
-      el('p', { class: 'hint' }, S('hint')),
-      list.length ? el('div', { class: 's-agents' }, cards) : el('p', { class: 'cfg-empty' }, S('none')),
-      systemForm(projects),
-    ];
-  }
-
-  function systemForm(projects) {
-    const f = st.system ||= emptySystem();
-    const kinds = st.kindList || ['other'];
-    const rerender = () => { renderProjects(); $('s-system-form')?.scrollIntoView({ block: 'nearest' }); };
-    const compsOf = (id) => (st.components?.[id] || []);
-    const partRow = (p, i) => {
-      const others = f.parts.filter((x, j) => j !== i && x.name);
-      return el('div', { class: 's-sys-part' },
-        el('input', { type: 'text', value: p.name, maxlength: 60, placeholder: S('partName'), 'aria-label': S('partName'), oninput: (e) => { const was = p.name; p.name = e.target.value; for (const x of f.parts) x.uses = x.uses.map((u) => (u === was ? p.name : u)); } }),
-        el('select', { 'aria-label': S('repo'), onchange: (e) => { p.project = e.target.value; p.component = ''; p.path = ''; const a = projects.find((x) => x.id === p.project); if (!p.name && a) p.name = a.name; p.kind = st.kinds?.[p.project] || p.kind; rerender(); } },
-          option('', S('pickRepo'), !p.project), projects.map((a) => option(a.id, `${a.name} · ${HARNESS_NAME[a.harness] || a.harness} · ${tilde(a.path)}`, a.id === p.project))),
-        compsOf(p.project).length ? el('select', { 'aria-label': S('component'), onchange: (e) => { const c = compsOf(p.project).find((x) => x.name === e.target.value); p.component = c?.name || ''; p.path = c?.path || ''; if (c?.kind && c.kind !== 'other') p.kind = c.kind; rerender(); } },
-          option('', S('wholeRepo'), !p.component), compsOf(p.project).map((c) => option(c.name, `🧩 ${c.name}`, c.name === p.component))) : null,
-        el('select', { 'aria-label': S('kind'), onchange: (e) => { p.kind = e.target.value; } }, kinds.map((k) => option(k, KIND(k), k === p.kind))),
-        others.length ? el('span', { class: 's-sys-uses' }, el('span', { class: 'hint' }, S('uses')),
-          others.map((x) => el('label', { class: 'b-check' }, el('input', { type: 'checkbox', checked: p.uses.includes(x.name) ? true : undefined, onchange: (e) => { p.uses = e.target.checked ? [...p.uses, x.name] : p.uses.filter((u) => u !== x.name); } }), x.name))) : null,
-        el('button', { type: 'button', class: 's-x', 'aria-label': S('removePart'), onclick: () => { f.parts.splice(i, 1); for (const x of f.parts) x.uses = x.uses.filter((u) => u !== p.name); rerender(); } }, '✕'));
-    };
-    return el('section', { class: 'cfg-card s-form', id: 's-system-form' },
-      el('h3', {}, f.id ? S('editTitle', { name: f.name }) : S('newTitle')),
-      el('label', { class: 'b-field' }, el('span', {}, S('name')), el('input', { type: 'text', value: f.name, maxlength: 60, placeholder: S('namePh'), oninput: (e) => { f.name = e.target.value; } })),
-      el('label', { class: 'b-field' }, el('span', {}, S('team')),
-        el('select', { onchange: (e) => { if (e.target.value === '@new') { f.team = 'new'; } else { f.team = ''; f.office = e.target.value; } rerender(); } },
-          getOffices().map((o) => option(o.id, o.name, !f.team && o.id === f.office)), option('@new', S('ownTeam'), f.team === 'new'))),
-      f.team === 'new' ? el('label', { class: 'b-check' }, el('input', { type: 'checkbox', checked: f.move ? true : undefined, onchange: (e) => { f.move = e.target.checked; } }), S('moveRepos')) : null,
-      el('p', { class: 'hint' }, S('teamHint')),
-      el('label', { class: 'note' }, el('span', {}, S('instructions')),
-        el('textarea', { rows: 3, maxlength: 4000, placeholder: S('instructionsPh'), oninput: (e) => { f.instructions = e.target.value; } }, f.instructions || '')),
-      el('div', { class: 's-dept-k' }, `${S('parts')} (${f.parts.length})`),
-      el('div', { class: 's-sys-form-parts' }, f.parts.map(partRow)),
-      el('div', { class: 's-row' },
-        el('button', { type: 'button', class: 's-mini', onclick: () => { f.parts.push({ name: '', project: '', component: '', path: '', kind: 'other', uses: [] }); rerender(); } }, S('addPart')),
-        f.parts.length > 1 ? el('button', { type: 'button', class: 's-mini', title: S('suggestHint'), onclick: async () => {
-          const r = await api('POST', '/v1/systems/suggest', { parts: f.parts.filter((p) => p.project), redo: true });
-          if (!r.ok) return msg(r.error);
-          f.parts = r.parts.map((p) => ({ ...p, uses: p.uses || [] }));
-          msg(r.order ? S('order', { order: r.order.join(' → ') }) : r.error, !!r.order);
-          rerender();
-        } }, S('suggest')) : null),
-      el('div', { class: 's-row' },
-        el('button', { type: 'button', class: 'btn', onclick: saveSystem }, f.id ? S('save') : S('create')),
-        f.id || f.parts.length || f.name ? el('button', { type: 'button', class: 'btn ghost', onclick: () => { st.system = emptySystem(); rerender(); } }, S('cancel')) : null));
-  }
-
-  async function saveSystem() {
-    const f = st.system;
-    const body = { name: f.name, office: f.office, instructions: f.instructions, parts: f.parts.filter((p) => p.project).map(({ name, project, component, path: sub, kind, uses }) => ({ name: name || project, project, component, path: sub, kind, uses })), ...(f.team === 'new' ? { team: 'new', move: f.move } : {}) };
-    // a new one never replaces another with its name (the API's POST updates the one with that name)
-    const same = (x) => String(x || '').replace(/\s+/g, ' ').trim().toLowerCase();
-    if (!f.id && (st.systems || []).some((x) => same(x.name) === same(f.name))) return msg(t('err.systemExists', { name: f.name.trim() }));
-    const r = f.id ? await api('PUT', `/v1/systems/${encodeURIComponent(f.id)}`, body) : await api('POST', '/v1/systems', body);
-    if (!r.ok) return msg(r.error);
-    msg(r.office ? S('createdTeam', { name: r.system.name, team: r.office.name }) : S('saved', { name: r.system.name }), true);
-    st.system = emptySystem();
-    if (r.office) { await load(); onSaved?.(); }
-    loadProjects();
-  }
-
   /** The departments, as the API returns them: redrawn now, without waiting for the WebSocket's message. */
   async function reloadOffices() {
     const r = await api('GET', '/v1/offices');
@@ -910,14 +896,14 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
 
   async function saveOffice() {
     const f = st.office;
-    const body = { name: f.name, timezone: f.timezone || null, location: f.location || null, instructions: f.instructions || '', autonomy: f.autonomy || null };
+    const body = { name: f.name, area: f.area || 'general', timezone: f.timezone || null, location: f.location || null, instructions: f.instructions || '', autonomy: f.autonomy || null };
     const r = f.id ? await api('PUT', `/v1/offices/${encodeURIComponent(f.id)}`, body) : await api('POST', '/v1/offices', body);
     if (!r.ok) return msg(r.error);
     msg(f.id ? t('settings.offices.updated') : t('settings.offices.created', { name: r.office.name }), true);
-    st.office = emptyOffice();
+    st.office = null;
     await reloadOffices();
     await load();
-    if (st.tab === 'offices') renderOffices();
+    await loadProjects();
   }
 
   async function removeOffice(o) {
@@ -925,23 +911,27 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     const r = await api('DELETE', `/v1/offices/${encodeURIComponent(o.id)}`);
     if (!r.ok) return msg(r.error);
     msg(t('settings.offices.deleted'), true);
-    if (st.office.id === o.id) st.office = emptyOffice();
+    if (st.office?.id === o.id) st.office = null;
     await reloadOffices();
+    await loadProjects();
   }
 
   // ------------------------------------------------------------ Repositories (the maintainer)
 
   const A = (k, v) => t(`settings.repos.${k}`, v);
 
+  /**
+   * 📦 Repositories: every project's, in rows grouped by area and project (light: the details are in the
+   * repository's window, ✎). Adding one asks which project it belongs to: it never lands in one by itself.
+   */
   function renderRepos() {
     put(panelOf('repos'),
       el('p', { class: 'hint' }, A('hint')),
       el('div', { class: 's-row' },
-        el('button', { type: 'button', class: 'btn', onclick: () => openRepoPicker() }, A('addExisting'))),
-      el('div', { id: 's-agent-list', class: 's-agents' }),
-      el('section', { class: 'cfg-card' }, el('h3', { id: 's-form-title' }), el('div', { id: 's-agent-form', class: 's-form' })));
+        el('button', { type: 'button', class: 'btn', onclick: () => newRepo() }, `＋ ${A('addOne')}`),
+        el('button', { type: 'button', class: 'btn ghost', onclick: () => openRepoPicker() }, A('addExisting'))),
+      el('div', { id: 's-agent-list', class: 's-repos' }));
     renderList();
-    renderForm();
   }
 
   function renderList() {
@@ -949,61 +939,88 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     if (!box) return;
     const targets = getTargets();
     const offices = getOffices();
-    const officeName = (id) => offices.find((o) => o.id === id)?.name || id;
-    // every department's repositories (the page itself only knows the watched office's), and the watched
-    // office's open sessions nobody registered
     const registered = st.projects || targets.filter((x) => x.registered);
     const loose = targets.filter((x) => !x.registered);
-    const card = (a) => el('div', { class: 's-agent' },
-      el('div', { class: 's-agent-head' },
-        el('b', {}, a.name), el('span', { class: 's-tag' }, HARNESS_NAME[a.harness] || a.harness),
-        ...a.kinds.map((k) => el('span', { class: 's-tag kind' }, k)),
-        offices.length > 1 && !a.registered ? el('span', { class: 's-tag' }, `🏢 ${officeName(a.office)}`) : null,
-        a.instructions ? el('span', { class: 's-tag kind', title: a.instructions }, A('hasInstructions')) : null,
-        a.sessions.some((x) => x.live) ? el('span', { class: 's-ok' }, A('sessionOpen')) : null,
-        !a.exists ? el('span', { class: 's-bad' }, A('pathMissing')) : !a.available ? el('span', { class: 's-bad' }, A('cliMissing', { agent: HARNESS_NAME[a.harness] })) : null),
-      el('div', { class: 'hint' }, tilde(a.path)),
-      el('div', { class: 's-entries' }, a.entries.map((e) => el('span', { title: e.description || '' }, e.label))),
-      el('div', { class: 's-row' },
-        el('button', { type: 'button', class: 's-mini', onclick: () => onPrompt?.(a.id) }, A('sendPrompt')),
-        a.registered
-          ? [el('button', { type: 'button', class: 's-mini', onclick: () => { arch.go({ type: 'repo', id: a.id }); go('architecture'); } }, `🗺 ${t('settings.offices.map')}`),
-            el('button', { type: 'button', class: 's-mini', onclick: () => edit(a) }, A('edit')),
-            el('button', { type: 'button', class: 's-mini danger', onclick: () => remove(a) }, A('delete'))]
-          : el('button', { type: 'button', class: 's-mini', onclick: () => { st.form = { ...emptyForm(), path: a.path, harness: a.harness, office: a.office, touched: true }; renderForm(); detect(); } }, A('register'))));
-    const depts = offices.map((o) => [o, registered.filter((a) => a.office === o.id)]).filter(([, list]) => list.length);
+    const status = (a) => (!a.exists ? el('span', { class: 's-bad', title: A('pathMissing') }, `⚠ ${A('pathMissingShort')}`)
+      : !a.available ? el('span', { class: 's-bad', title: A('cliMissing', { agent: HARNESS_NAME[a.harness] }) }, `⚠ ${A('cliMissingShort')}`)
+        : a.sessions?.some((x) => x.live) ? el('span', { class: 's-ok' }, `● ${A('sessionOpenShort')}`) : null);
+    const uses = (a) => (st.relations || []).filter((r) => r.from === a.id).map((r) => registered.find((x) => x.id === r.to)?.name).filter(Boolean);
+    const row = (a) => el('div', { class: 's-repo', title: tilde(a.path) },
+      el('span', { class: 's-repo-ic', 'aria-hidden': 'true' }, KIND_ICON[a.kind] || '📦'),
+      el('span', { class: 's-repo-main' },
+        el('b', {}, a.name),
+        el('span', { class: 'hint' }, [a.kind && a.kind !== 'other' ? t(`system.kinds.${a.kind}`) : '', HARNESS_NAME[a.harness] || a.harness, uses(a).length ? `→ ${uses(a).join(', ')}` : ''].filter(Boolean).join(' · '))),
+      a.instructions ? el('span', { class: 's-tag kind', title: a.instructions }, '📋') : null,
+      status(a),
+      el('span', { class: 's-repo-acts' },
+        el('button', { type: 'button', class: 's-icon', title: A('sendPrompt'), 'aria-label': `${A('sendPrompt')} · ${a.name}`, onclick: () => onPrompt?.(a.id) }, '✉'),
+        el('button', { type: 'button', class: 's-icon', title: t('settings.offices.map'), 'aria-label': `${t('settings.offices.map')} · ${a.name}`, onclick: () => { arch.go({ type: 'repo', id: a.id }); go('architecture'); } }, '🗺'),
+        el('button', { type: 'button', class: 's-icon', title: A('edit'), 'aria-label': `${A('edit')} · ${a.name}`, onclick: () => editRepo(a) }, '✎'),
+        el('button', { type: 'button', class: 's-icon danger', title: A('delete'), 'aria-label': `${A('delete')} · ${a.name}`, onclick: () => remove(a) }, '🗑')));
+    const areas = st.areas || [{ id: 'general', name: t('areas.default') }];
+    const groups = areas.map((ar) => [ar, offices.filter((o) => (o.area || 'general') === ar.id).map((o) => [o, registered.filter((a) => a.office === o.id)]).filter(([, list]) => list.length)]).filter(([, projects]) => projects.length);
     put(box,
       !registered.length ? el('p', { class: 'cfg-empty' }, A('noneWeb'))
-        : depts.length > 1 ? depts.map(([o, list]) => [el('h3', { class: 'cfg-sub' }, `👥 ${o.name} `, el('span', { class: 'hint' }, `(${list.length})`)), list.map(card)])
-          : registered.map(card),
-      loose.length ? [el('h3', { class: 'cfg-sub' }, A('loose')), loose.map(card)] : null);
+        : groups.map(([ar, projects]) => el('div', { class: 's-repo-area' },
+          areas.length > 1 ? el('h3', { class: 'cfg-sub' }, `🏛 ${ar.name}`) : null,
+          projects.map(([o, list]) => el('div', { class: 's-repo-group' },
+            el('h4', {}, `🧩 ${o.name} `, el('span', { class: 'hint' }, `(${list.length})`)),
+            list.map(row))))),
+      loose.length ? [el('h3', { class: 'cfg-sub' }, A('loose')), loose.map((a) => el('div', { class: 's-repo', title: tilde(a.path) },
+        el('span', { class: 's-repo-ic', 'aria-hidden': 'true' }, '◌'),
+        el('span', { class: 's-repo-main' }, el('b', {}, tilde(a.path)), el('span', { class: 'hint' }, HARNESS_NAME[a.harness] || a.harness)),
+        el('span', { class: 's-repo-acts' }, el('button', { type: 'button', class: 's-mini', onclick: () => openRepo({ ...emptyForm(), path: a.path, harness: a.harness, office: '', touched: true }) }, A('register')))))] : null);
+  }
+
+  /** A new repository's window: its project chosen by you (`office` only when you came from a project). */
+  const newRepo = (office = '') => openRepo({ ...emptyForm(), office });
+  // its kind: the one you said (ownKind), or '' to keep the one its folder says
+  const editRepo = (a) => openRepo({ ...emptyForm(), id: a.id, path: a.path, harness: a.harness, name: a.name, office: a.office, kind: a.ownKind || '', bin: a.bin || '', args: (a.args || []).join(' '), instructions: a.instructions || '', touched: true });
+  function openRepo(form) {
+    st.form = form;
+    let dlg = $('s-repo-dialog');
+    if (!dlg) { dlg = el('dialog', { id: 's-repo-dialog', class: 'brief settings repo-dlg', 'aria-labelledby': 's-form-title' }); document.body.append(dlg); }
+    dlg.onclose = () => { if (st.form === form) st.form = emptyForm(); };
+    renderForm();
+    if (!dlg.open) dlg.showModal();
+    if (form.path) detect();
   }
 
   /** The picker of repositories the office already knows (open sessions and registered ones). */
   function openRepoPicker(office) {
-    const pk = $('pick-repo');
-    const list = $('pk-list');
+    // its window, made the first time (like the repository's)
+    let pk = $('pick-repo');
+    if (!pk) {
+      pk = el('dialog', { id: 'pick-repo', class: 'brief settings pick-repo', 'aria-labelledby': 'pk-title' });
+      document.body.append(pk);
+    }
+    const list = el('div', { class: 's-agents', id: 'pk-list' });
+    put(pk, el('form', { method: 'dialog' },
+      el('header', { class: 'brief-head' }, el('span', { class: 'pin', 'aria-hidden': 'true' }),
+        el('h2', { id: 'pk-title' }, A('pick')),
+        el('button', { type: 'button', class: 'brief-x', 'aria-label': t('settings.close'), onclick: () => pk.close() }, '✕')),
+      el('div', { class: 'brief-body' }, el('p', { class: 'hint' }, A('pickHint')), list),
+      el('footer', { class: 'brief-foot' },
+        el('button', { type: 'button', class: 'btn ghost', onclick: () => { pk.close(); startManualForm(); } }, A('pickManual')),
+        el('button', { type: 'button', class: 'btn ghost', onclick: () => pk.close() }, A('cancel')))));
     const targets = getTargets();
     const offices = getOffices();
-    st.pickOffice = office || here();
-    const registered = targets.filter((x) => x.registered);
+    st.pickOffice = office || '';
+    const registered = st.projects || targets.filter((x) => x.registered);
     const loose = targets.filter((x) => !x.registered);
     const officeName = (id) => offices.find((o) => o.id === id)?.name || id;
     const row = (a, act) => el('div', { class: 's-agent' },
       el('div', { class: 's-agent-head' },
         el('b', {}, a.name), el('span', { class: 's-tag' }, HARNESS_NAME[a.harness] || a.harness),
-        offices.length > 1 ? el('span', { class: 's-tag' }, `🏢 ${officeName(a.office)}`) : null,
+        offices.length > 1 ? el('span', { class: 's-tag' }, `🧩 ${officeName(a.office)}`) : null,
         !a.exists ? el('span', { class: 's-bad' }, A('pathMissing')) : null),
       el('div', { class: 'hint' }, tilde(a.path)),
       el('div', { class: 's-row' }, act));
     const pick = (a) => () => {
       pk.close();
-      show('repos');
-      if (a.registered) { edit(a); return; }
-      st.form = { ...emptyForm(), path: a.path, harness: a.harness, office: a.office, touched: true };
-      renderForm();
-      detect();
-      $('s-agent-form')?.scrollIntoView({ block: 'nearest' });
+      if (st.tab !== 'repos') go('repos');
+      if (a.registered) { editRepo(a); return; }
+      openRepo({ ...emptyForm(), path: a.path, harness: a.harness, office: '', touched: true });
     };
     put(list,
       registered.length ? [el('h3', {}, A('pickRegistered')), registered.map((a) => row(a, el('button', { type: 'button', class: 's-mini', onclick: pick(a) }, A('pickEdit'))))] : null,
@@ -1014,43 +1031,71 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
 
   /** The picker's "type the path" action: the empty form, in the repositories tab. */
   function startManualForm() {
-    st.form = { ...emptyForm(), office: st.pickOffice || here() };
-    show('repos');
-    $('s-agent-form')?.scrollIntoView({ block: 'nearest' });
+    if (st.tab !== 'repos') go('repos');
+    newRepo(st.pickOffice || '');
   }
 
+  /** The repository's window: what it is, its project, its agent and kind; its instructions; what it uses; advanced. */
   function renderForm() {
     const f = st.form;
-    const box = $('s-agent-form');
-    if (!box) return;
-    f.office ||= here();
-    $('s-form-title').textContent = f.id ? A('editTitle', { name: f.name || f.id }) : A('add');
+    const dlg = $('s-repo-dialog');
+    if (!dlg) return;
     let timer = null;
-    const pathInput = el('input', { type: 'text', value: f.path, placeholder: A('pathPhWeb'), 'aria-label': A('pathLabel'),
+    const pathInput = el('input', { type: 'text', value: f.path, placeholder: A('pathPhWeb'), 'aria-label': A('pathLabel'), required: true,
       oninput: (e) => { f.path = e.target.value; clearTimeout(timer); timer = setTimeout(detect, 350); } });
     const d = f.detected;
     const offices = getOffices();
-    put(box,
-      el('label', { class: 'b-field' }, el('span', {}, A('path')), pathInput),
-      el('p', { class: 'hint', id: 's-detected' }, !d ? A('detectHint')
-        : !d.exists ? A('detectNone')
-          : A('detected', { what: [...d.kinds, ...(d.harnesses.length ? [d.harnesses.map((h) => HARNESS_NAME[h]).join(' + ')] : [])].join(' · ') || A('noHarness'), n: d.entries.length })),
-      el('label', { class: 'b-field' }, el('span', {}, A('agent')),
-        el('select', { 'aria-label': A('cliLabel'), onchange: (e) => { f.harness = e.target.value; f.touched = true; } },
-          option('', A('choose'), !f.harness), ...Object.entries(HARNESS_NAME).map(([id, label]) => option(id, label + (d?.harnesses?.includes(id) ? A('configured') : ''), id === f.harness)))),
-      el('label', { class: 'b-field' }, el('span', {}, A('name')), el('input', { type: 'text', value: f.name, placeholder: A('namePh'), maxlength: 40, oninput: (e) => { f.name = e.target.value; } })),
-      el('label', { class: 'b-field' }, el('span', {}, A('office')),
-        el('select', { onchange: (e) => { f.office = e.target.value; } }, offices.map((o) => option(o.id, o.name, o.id === f.office)))),
-      // how to work with this project: it goes with every brief, pipeline and question to its folder
-      el('label', { class: 'note' }, el('span', {}, A('instructions')),
-        el('textarea', { rows: 4, maxlength: 4000, placeholder: A('instructionsPh'), oninput: (e) => { f.instructions = e.target.value; } }, f.instructions || '')),
-      el('details', {}, el('summary', {}, A('advanced')),
-        el('label', { class: 'b-field' }, el('span', {}, A('bin')), el('input', { type: 'text', value: f.bin, placeholder: A('binPh'), oninput: (e) => { f.bin = e.target.value; } })),
-        el('label', { class: 'b-field' }, el('span', {}, A('args')), el('input', { type: 'text', value: f.args, placeholder: A('argsPh'), oninput: (e) => { f.args = e.target.value; } })),
-        el('p', { class: 'hint' }, A('argsHint'))),
-      el('div', { class: 's-row' },
-        el('button', { type: 'button', class: 'btn', onclick: save }, f.id ? A('saveChanges') : A('addAgent')),
-        el('button', { type: 'button', class: 'btn ghost', onclick: () => { st.form = emptyForm(); renderForm(); } }, A('cancel'))));
+    const areas = st.areas || [{ id: 'general', name: t('areas.default') }];
+    const detectedKind = d?.kind || (st.projects || []).find((x) => x.id === f.id)?.kind || '';
+    const repos = (st.projects || []).filter((x) => x.id !== f.id);
+    const mine = f.id ? (st.relations || []).filter((r) => r.from === f.id) : [];
+    const relTo = el('select', { 'aria-label': A('relTo') }, option('', A('relTo'), true), repos.map((x) => option(x.id, x.name, false)));
+    const relHow = el('select', { 'aria-label': A('relHow') }, ['calls', 'uses', 'consumes', 'reads'].map((h) => option(h, t(`arch.how.${h}`), h === 'calls')));
+    put(dlg,
+      el('form', { method: 'dialog', class: 's-repo-form', onsubmit: (e) => { e.preventDefault(); save(); } },
+        el('header', { class: 'brief-head' }, el('span', { class: 'pin', 'aria-hidden': 'true' }), el('h2', { id: 's-form-title' }, f.id ? A('editTitle', { name: f.name || f.id }) : A('add')),
+          el('button', { type: 'button', class: 'brief-x', 'aria-label': A('cancel'), onclick: () => dlg.close() }, '✕')),
+        el('div', { class: 's-repo-body', id: 's-agent-form' },
+          el('fieldset', { class: 's-fs' }, el('legend', {}, A('basics')),
+            el('label', { class: 'b-field' }, el('span', {}, A('path')), pathInput),
+            el('p', { class: 'hint', id: 's-detected' }, !d ? A('detectHint') : !d.exists ? A('detectNone')
+              : A('detected', { what: [...d.kinds, ...(d.harnesses.length ? [d.harnesses.map((h) => HARNESS_NAME[h]).join(' + ')] : [])].join(' · ') || A('noHarness'), n: d.entries.length })),
+            el('label', { class: 'b-field' }, el('span', {}, A('name')), el('input', { type: 'text', value: f.name, placeholder: A('namePh'), maxlength: 40, oninput: (e) => { f.name = e.target.value; } })),
+            // its project: always chosen (grouped by area)
+            el('label', { class: 'b-field' }, el('span', {}, A('project')),
+              el('select', { 'aria-label': A('project'), class: f.office ? '' : 's-need', onchange: (e) => { f.office = e.target.value; f.msg = ''; e.target.classList.toggle('s-need', !f.office); } },
+                option('', A('pickProject'), !f.office),
+                areas.map((ar) => { const list = offices.filter((o) => (o.area || 'general') === ar.id); return list.length ? el('optgroup', { label: ar.name }, list.map((o) => option(o.id, o.name, o.id === f.office))) : null; }))),
+            el('label', { class: 'b-field' }, el('span', {}, A('agent')),
+              el('select', { 'aria-label': A('cliLabel'), onchange: (e) => { f.harness = e.target.value; f.touched = true; } },
+                option('', A('choose'), !f.harness), ...Object.entries(HARNESS_NAME).map(([id, label]) => option(id, label + (d?.harnesses?.includes(id) ? A('configured') : ''), id === f.harness)))),
+            el('label', { class: 'b-field' }, el('span', {}, A('kind')),
+              el('select', { 'aria-label': A('kind'), onchange: (e) => { f.kind = e.target.value; } },
+                option('', detectedKind ? A('kindDetected', { kind: t(`system.kinds.${detectedKind}`) }) : A('kindAuto'), !f.kind),
+                (st.kindList || ['frontend', 'mobile', 'bff', 'backend', 'worker', 'library', 'data', 'infra', 'other']).map((k) => option(k, t(`system.kinds.${k}`), k === f.kind))))),
+          el('fieldset', { class: 's-fs' }, el('legend', {}, A('instructions')),
+            el('textarea', { rows: 4, maxlength: 4000, placeholder: A('instructionsPh'), 'aria-label': A('instructions'), oninput: (e) => { f.instructions = e.target.value; } }, f.instructions || '')),
+          f.id ? el('fieldset', { class: 's-fs' }, el('legend', {}, A('usesTitle')),
+            mine.length ? el('ul', { class: 's-rel-list' }, mine.map((r) => el('li', {},
+              `→ ${repos.find((x) => x.id === r.to)?.name || r.to} · ${t(`arch.how.${r.how}`)}${r.note ? ` · ${r.note}` : ''}`,
+              r.source === 'found' ? el('span', { class: 's-tag kind', title: r.evidence }, `🔍 ${t('arch.found')}`) : null,
+              el('button', { type: 'button', class: 's-x', 'aria-label': t('arch.unrelate', { name: repos.find((x) => x.id === r.to)?.name || '' }), onclick: async () => { const x = await api('DELETE', `/v1/relations/${encodeURIComponent(r.id)}`); if (!x.ok) return msg(x.error); await loadProjects(); renderForm(); } }, '✕'))))
+              : el('p', { class: 'hint' }, A('usesNone')),
+            el('div', { class: 's-row' }, relTo, relHow,
+              el('button', { type: 'button', class: 's-mini', onclick: async () => {
+                if (!relTo.value) return msg(t('arch.relatePick'));
+                const x = await api('POST', '/v1/relations', { from: f.id, to: relTo.value, how: relHow.value });
+                if (!x.ok) return msg(x.error);
+                await loadProjects(); renderForm();
+              } }, `＋ ${t('arch.relate')}`))) : null,
+          el('details', { class: 's-fs' }, el('summary', {}, A('advanced')),
+            el('label', { class: 'b-field' }, el('span', {}, A('bin')), el('input', { type: 'text', value: f.bin, placeholder: A('binPh'), oninput: (e) => { f.bin = e.target.value; } })),
+            el('label', { class: 'b-field' }, el('span', {}, A('args')), el('input', { type: 'text', value: f.args, placeholder: A('argsPh'), oninput: (e) => { f.args = e.target.value; } })),
+            el('p', { class: 'hint' }, A('argsHint')))),
+        el('footer', { class: 'brief-foot' },
+          el('span', { class: 's-msg', id: 's-repo-msg', role: 'status' }, f.msg || ''),
+          el('button', { type: 'button', class: 'btn ghost', onclick: () => dlg.close() }, A('cancel')),
+          el('button', { type: 'submit', class: 'btn' }, f.id ? A('saveChanges') : A('addAgent')))));
   }
 
   async function detect() {
@@ -1062,26 +1107,23 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     if (!f.touched && r.ok && r.harnesses.length) f.harness = r.harnesses[0];
     const focused = document.activeElement?.getAttribute('aria-label');
     renderForm();
-    if (focused) document.querySelector(`#s-agent-form [aria-label="${focused}"]`)?.focus();
-  }
-
-  const editRepo = (a) => edit(a);
-  function edit(a) {
-    st.form = { ...emptyForm(), id: a.id, path: a.path, harness: a.harness, name: a.name, office: a.office, bin: a.bin || '', args: (a.args || []).join(' '), instructions: a.instructions || '', touched: true };
-    renderForm();
-    detect();
-    $('s-agent-form').scrollIntoView({ block: 'nearest' });
+    if (focused) document.querySelector(`#s-repo-dialog [aria-label="${focused}"]`)?.focus();
   }
 
   async function save() {
     const f = st.form;
-    const body = { path: f.path, harness: f.harness, name: f.name, office: f.office || here(), bin: f.bin || null, args: f.args.trim() ? f.args.trim().split(/\s+/) : null, instructions: f.instructions };
+    // the window's line (kept in the form: a redraw while it detects the path does not lose it)
+    const say = (text) => { f.msg = text; const m = $('s-repo-msg'); if (m) m.textContent = text; };
+    // its project, always chosen: a repository never lands in one by itself
+    if (!f.office) { say(t('err.pickProject')); $('s-repo-dialog')?.querySelector('select.s-need')?.focus(); return; }
+    const body = { path: f.path, harness: f.harness, name: f.name, office: f.office, kind: f.kind || null, bin: f.bin || null, args: f.args.trim() ? f.args.trim().split(/\s+/) : null, instructions: f.instructions };
     const r = f.id ? await api('PUT', `/v1/agents/${encodeURIComponent(f.id)}`, body) : await api('POST', '/v1/agents', body);
-    if (!r.ok) return msg(r.error);
+    if (!r.ok) return say(r.error);
     st.form = emptyForm();
-    renderForm();
+    $('s-repo-dialog')?.close();
     msg(f.id ? A('updated') : A('added', { name: r.agent?.name }), true);
     onSaved?.();
+    loadProjects();
   }
 
   async function remove(a) {
@@ -1367,11 +1409,9 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   const RENDER = {
     general: renderGeneral,
     game: renderGame,
-    company: renderCompany,
-    offices: () => { renderOffices(); loadProjects(); },
+    company: () => { renderCompany(); loadProjects(); },
     repos: () => { renderRepos(); loadProjects(); },
     architecture: () => arch.render(panelOf('architecture')),
-    projects: () => { renderProjects(); loadProjects(); },
     infra: () => { renderInfra(); loadProjects(); },
     autonomy: renderAutonomy,
     context: renderContext,

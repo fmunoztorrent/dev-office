@@ -28,7 +28,7 @@ import { validZone } from '../public/clock.js';
 import { DEFAULT_MODELS, normalizeModels } from '../public/models.js';
 import { SEXES, PERSONALITIES, STYLES } from '../public/sim.js';
 import { realDir, insideDir } from './paths.js';
-import { ARTIFACT_KINDS, PARTS_MAX, orderParts } from './systems.js';
+import { ARTIFACT_KINDS, PARTS_MAX, orderParts, detectKind } from './systems.js';
 import { chunkText } from './chunks.js';
 import { RESOURCE_KINDS, RESOURCE_LINKS } from '../public/impact.js';
 import { THEMES } from '../public/themes.js';
@@ -305,7 +305,40 @@ const MIGRATIONS = [
   // 13 → 14: an expert's quick actions (server/experts.js): buttons that dispatch a task to the
   // project agent that knows the skill, one per recipe the skill offers.
   `ALTER TABLE experts ADD COLUMN actions TEXT NOT NULL DEFAULT '[]';`,
+  // 14 → 15: the company is areas → projects (an office: a floor with its people) → repositories and
+  // infrastructure. A repository says what it is (its kind) and what other repositories it uses (its
+  // relations); the systems of before become projects and relations (Store.migrateSystems).
+  `CREATE TABLE areas (
+     id           TEXT PRIMARY KEY,
+     name         TEXT NOT NULL,
+     instructions TEXT NOT NULL DEFAULT '',
+     position     INTEGER NOT NULL DEFAULT 0,
+     created_at   INTEGER NOT NULL,
+     updated_at   INTEGER NOT NULL
+   );
+   ALTER TABLE offices ADD COLUMN area_id TEXT;
+   ALTER TABLE agents ADD COLUMN kind TEXT;
+   CREATE TABLE relations (
+     id         TEXT PRIMARY KEY,
+     from_agent TEXT NOT NULL,                  -- the repository that uses…
+     to_agent   TEXT NOT NULL,                  -- …this one
+     how        TEXT NOT NULL DEFAULT 'calls',  -- calls (its API) | uses (as a library) | consumes (its events) | reads (its data)
+     note       TEXT NOT NULL DEFAULT '',       -- what for, in your words
+     source     TEXT NOT NULL DEFAULT 'you',    -- you | found (by exploring the folders: server/relations.js)
+     evidence   TEXT NOT NULL DEFAULT '',       -- where it was found: file and what it says
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL,
+     UNIQUE (from_agent, to_agent)
+   );`,
 ];
+
+/** The area every project starts in (its name is the language's, while you give it none). */
+export const DEFAULT_AREA = 'general';
+/** How a repository uses another one. */
+export const RELATION_HOWS = ['calls', 'uses', 'consumes', 'reads'];
+const RELATION_SOURCES = ['you', 'found'];
+const AREAS_MAX = 30;
+const RELATIONS_MAX = 600;
 
 // what is yours (⚙ › Mine): how many, how long, and how your tools run
 export const MINE_KINDS = ['skill', 'tool'];
@@ -391,6 +424,7 @@ export function openStore(file = dbFile()) {
     try { db.exec(MIGRATIONS[v]); db.exec(`PRAGMA user_version = ${v + 1}`); db.exec('COMMIT'); } catch (err) { db.exec('ROLLBACK'); throw err; }
   }
   const store = new Store(db, file);
+  store.migrateSystems(); // the systems of before: projects and relations
   store.indexAll({ onlyIfEmpty: true }); // an archive from before the RAG gets its chunks
   if (fresh && file !== ':memory:') store.importLegacy(legacyConfig());
   return store;
@@ -412,8 +446,9 @@ export class Store {
 
   // ---------------------------------------------------------------- oficinas
 
+  // An office is a project: a floor of the building with its people, in an area of the company.
   #office(r) {
-    return r ? { id: r.id, name: r.name, timezone: r.timezone || null, location: r.location || null, instructions: r.instructions || '', autonomy: AUTONOMY_LEVELS.includes(r.autonomy) ? r.autonomy : null, position: r.position, createdAt: r.created_at, updatedAt: r.updated_at } : null;
+    return r ? { id: r.id, name: r.name, area: r.area_id || DEFAULT_AREA, timezone: r.timezone || null, location: r.location || null, instructions: r.instructions || '', autonomy: AUTONOMY_LEVELS.includes(r.autonomy) ? r.autonomy : null, position: r.position, createdAt: r.created_at, updatedAt: r.updated_at } : null;
   }
   listOffices() { return this.db.prepare('SELECT * FROM offices ORDER BY position, created_at').all().map((r) => this.#office(r)); }
   getOffice(id) { return this.#office(this.db.prepare('SELECT * FROM offices WHERE id = ?').get(String(id))); }
@@ -434,7 +469,10 @@ export class Store {
     if (clash) fail(t('err.officeExists'));
     const instructions = o.instructions !== undefined ? String(o.instructions ?? '').trim().slice(0, INSTRUCTIONS_MAX) : current.instructions ?? '';
     const autonomy = o.autonomy !== undefined ? (o.autonomy ? (AUTONOMY_LEVELS.includes(o.autonomy) ? o.autonomy : fail(t('err.autonomy', { levels: AUTONOMY_LEVELS.join(', ') }))) : null) : current.autonomy ?? null;
-    return { name, timezone: tz, location, instructions, autonomy };
+    // its area: by id or name (the default one when nobody says)
+    const areaRef = o.area ?? current.area ?? DEFAULT_AREA;
+    const area = (areaRef === DEFAULT_AREA ? this.#defaultArea() : this.findArea(areaRef)) || fail(t('err.unknownArea', { area: areaRef }));
+    return { name, timezone: tz, location, instructions, autonomy, area: area.id };
   }
 
   createOffice(input = {}) {
@@ -445,8 +483,8 @@ export class Store {
       for (let i = 2; this.getOffice(id); i++) id = `${slug(o.name, 'oficina')}-${i}`;
       const now = Date.now();
       const position = (this.db.prepare('SELECT max(position) AS p FROM offices').get().p ?? 0) + 1;
-      this.db.prepare('INSERT INTO offices (id, name, timezone, location, instructions, autonomy, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .run(id, o.name, o.timezone, o.location, o.instructions || null, o.autonomy, position, now, now);
+      this.db.prepare('INSERT INTO offices (id, name, timezone, location, instructions, autonomy, area_id, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(id, o.name, o.timezone, o.location, o.instructions || null, o.autonomy, o.area, position, now, now);
       return { ok: true, office: this.getOffice(id) };
     });
   }
@@ -456,7 +494,7 @@ export class Store {
       const current = this.getOffice(id);
       if (!current) return { ok: false, error: t('err.unknownOffice', { office: id }), status: 404 };
       const o = this.#cleanOffice(patch, current);
-      this.db.prepare('UPDATE offices SET name = ?, timezone = ?, location = ?, instructions = ?, autonomy = ?, updated_at = ? WHERE id = ?').run(o.name, o.timezone, o.location, o.instructions || null, o.autonomy, Date.now(), current.id);
+      this.db.prepare('UPDATE offices SET name = ?, timezone = ?, location = ?, instructions = ?, autonomy = ?, area_id = ?, updated_at = ? WHERE id = ?').run(o.name, o.timezone, o.location, o.instructions || null, o.autonomy, o.area, Date.now(), current.id);
       return { ok: true, office: this.getOffice(current.id) };
     });
   }
@@ -468,7 +506,6 @@ export class Store {
     this.db.exec('BEGIN');
     try {
       this.db.prepare('UPDATE agents SET office_id = ? WHERE office_id = ?').run(MAIN_OFFICE, String(id));
-      this.db.prepare('UPDATE systems SET office_id = ? WHERE office_id = ?').run(MAIN_OFFICE, String(id));
       this.db.prepare("DELETE FROM settings WHERE key = ? OR key LIKE ?").run(`appearance:${id}`, `appearance:${id}@%`);
       this.db.prepare('DELETE FROM offices WHERE id = ?').run(String(id));
       this.db.exec('COMMIT');
@@ -477,11 +514,76 @@ export class Store {
     return { ok: true };
   }
 
+  // ---------------------------------------------------------------- the company's areas
+
+  #area(r) { return r ? { id: r.id, name: r.name || '', instructions: r.instructions || '', position: r.position, createdAt: r.created_at, updatedAt: r.updated_at } : null; }
+  /** The default area: always there (created the first time it is needed). */
+  #defaultArea() {
+    let a = this.getArea(DEFAULT_AREA);
+    if (!a) {
+      const now = Date.now();
+      this.db.prepare('INSERT INTO areas (id, name, instructions, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(DEFAULT_AREA, '', '', 0, now, now);
+      a = this.getArea(DEFAULT_AREA);
+    }
+    return a;
+  }
+  /** The areas, the default one first. */
+  listAreas() {
+    this.#defaultArea();
+    return this.db.prepare('SELECT * FROM areas ORDER BY position, created_at').all().map((r) => this.#area(r));
+  }
+  getArea(id) { return this.#area(this.db.prepare('SELECT * FROM areas WHERE id = ?').get(String(id))); }
+  /** An area by id or by name (case- and accent-insensitive). */
+  findArea(ref) {
+    if (!ref) return null;
+    if (ref === DEFAULT_AREA) return this.#defaultArea();
+    return this.getArea(ref) || this.listAreas().find((a) => a.name && slug(a.name, '') === slug(ref, '-')) || null;
+  }
+  #cleanArea(a, current = {}) {
+    const name = String(a.name ?? current.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
+    if (!name && current.id !== DEFAULT_AREA) fail(t('err.areaName'));
+    const clash = name && this.listAreas().find((x) => x.id !== current.id && x.name && slug(x.name, '') === slug(name, '-'));
+    if (clash) fail(t('err.areaExists', { name }));
+    const instructions = a.instructions !== undefined ? String(a.instructions ?? '').trim().slice(0, INSTRUCTIONS_MAX) : current.instructions ?? '';
+    return { name, instructions };
+  }
+  createArea(input = {}) {
+    return this.#write(() => {
+      if (this.db.prepare('SELECT count(*) AS n FROM areas').get().n >= AREAS_MAX) fail(t('err.areasMax', { n: AREAS_MAX }));
+      this.#defaultArea();
+      const a = this.#cleanArea(input);
+      let id = slug(a.name, 'area');
+      for (let i = 2; this.getArea(id) || id === DEFAULT_AREA && i === 2; i++) id = `${slug(a.name, 'area')}-${i}`;
+      const now = Date.now();
+      const position = (this.db.prepare('SELECT max(position) AS p FROM areas').get().p ?? 0) + 1;
+      this.db.prepare('INSERT INTO areas (id, name, instructions, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, a.name, a.instructions, position, now, now);
+      return { ok: true, area: this.getArea(id) };
+    });
+  }
+  updateArea(id, patch = {}) {
+    return this.#write(() => {
+      const current = this.findArea(id);
+      if (!current) return { ok: false, status: 404, error: t('err.unknownArea', { area: id }) };
+      const a = this.#cleanArea(patch, current);
+      this.db.prepare('UPDATE areas SET name = ?, instructions = ?, updated_at = ? WHERE id = ?').run(a.name, a.instructions, Date.now(), current.id);
+      return { ok: true, area: this.getArea(current.id) };
+    });
+  }
+  /** Deletes an area: its projects go to the default one (nothing else is touched). */
+  deleteArea(id) {
+    const a = this.findArea(id);
+    if (!a) return { ok: false, status: 404, error: t('err.unknownArea', { area: id }) };
+    if (a.id === DEFAULT_AREA) return { ok: false, error: t('err.defaultArea') };
+    this.db.prepare('UPDATE offices SET area_id = ? WHERE area_id = ?').run(DEFAULT_AREA, a.id);
+    this.db.prepare('DELETE FROM areas WHERE id = ?').run(a.id);
+    return { ok: true };
+  }
+
   // ---------------------------------------------------------------- agentes (mantenedor)
 
   #row(r) {
     if (!r) return null;
-    const a = { id: r.id, name: r.name, path: r.path, harness: r.harness, office: r.office_id || MAIN_OFFICE, instructions: this.getProjectInstructions(r.path), createdAt: r.created_at, updatedAt: r.updated_at };
+    const a = { id: r.id, name: r.name, path: r.path, harness: r.harness, office: r.office_id || MAIN_OFFICE, kind: ARTIFACT_KINDS.includes(r.kind) ? r.kind : null, instructions: this.getProjectInstructions(r.path), createdAt: r.created_at, updatedAt: r.updated_at };
     if (r.bin) a.bin = r.bin;
     const args = json(r.args, null);
     if (Array.isArray(args)) a.args = args;
@@ -509,7 +611,9 @@ export class Store {
     if (args !== null && (!Array.isArray(args) || args.some((x) => typeof x !== 'string'))) fail(t('err.args', { name }));
     const officeRef = a.office ?? current.office ?? MAIN_OFFICE;
     const office = this.findOffice(officeRef) || fail(t('err.unknownOffice', { office: officeRef }));
-    return { name, path: dir, harness, bin, args: args && args.length ? args.slice(0, 30).map((x) => x.slice(0, 300)) : null, office: office.id };
+    // what it is (a frontend, a bff…): the one you say, or null to have it detected from its folder
+    const kind = a.kind !== undefined ? (a.kind ? (ARTIFACT_KINDS.includes(a.kind) ? a.kind : fail(t('err.systemKind', { kinds: ARTIFACT_KINDS.join(', ') }))) : null) : current.kind ?? null;
+    return { name, path: dir, harness, bin, args: args && args.length ? args.slice(0, 30).map((x) => x.slice(0, 300)) : null, office: office.id, kind };
   }
 
   createAgent(input = {}) {
@@ -519,8 +623,8 @@ export class Store {
       let id = slug(input.id || `${a.name}-${a.harness}`);
       for (let i = 2; this.getAgent(id); i++) id = `${slug(`${a.name}-${a.harness}`)}-${i}`;
       const now = Date.now();
-      this.db.prepare('INSERT INTO agents (id, name, path, harness, bin, args, office_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .run(id, a.name, a.path, a.harness, a.bin, a.args && JSON.stringify(a.args), a.office, now, now);
+      this.db.prepare('INSERT INTO agents (id, name, path, harness, bin, args, office_id, kind, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(id, a.name, a.path, a.harness, a.bin, a.args && JSON.stringify(a.args), a.office, a.kind, now, now);
       if (input.instructions !== undefined) this.#instructions(a.path, input.instructions);
       return { ok: true, agent: this.getAgent(id) };
     });
@@ -531,8 +635,8 @@ export class Store {
       const current = this.getAgent(id);
       if (!current) return { ok: false, error: t('err.unknownAgent'), status: 404 };
       const a = this.#clean(patch, current);
-      this.db.prepare('UPDATE agents SET name = ?, path = ?, harness = ?, bin = ?, args = ?, office_id = ?, updated_at = ? WHERE id = ?')
-        .run(a.name, a.path, a.harness, a.bin, a.args && JSON.stringify(a.args), a.office, Date.now(), current.id);
+      this.db.prepare('UPDATE agents SET name = ?, path = ?, harness = ?, bin = ?, args = ?, office_id = ?, kind = ?, updated_at = ? WHERE id = ?')
+        .run(a.name, a.path, a.harness, a.bin, a.args && JSON.stringify(a.args), a.office, a.kind, Date.now(), current.id);
       if (patch.instructions !== undefined) this.#instructions(a.path, patch.instructions);
       return { ok: true, agent: this.getAgent(current.id) };
     });
@@ -540,7 +644,61 @@ export class Store {
 
   deleteAgent(id) {
     const r = this.db.prepare('DELETE FROM agents WHERE id = ?').run(String(id));
+    if (r.changes) this.db.prepare('DELETE FROM relations WHERE from_agent = ? OR to_agent = ?').run(String(id), String(id));
     return r.changes ? { ok: true } : { ok: false, error: t('err.unknownAgent'), status: 404 };
+  }
+
+  // ---------------------------------------------------------------- relations between repositories
+
+  #relation(r) { return r ? { id: r.id, from: r.from_agent, to: r.to_agent, how: r.how, note: r.note || '', source: r.source, evidence: r.evidence || '', createdAt: r.created_at, updatedAt: r.updated_at } : null; }
+  /** What each repository uses of another (of one repository, with `agent`: what it uses and what uses it). */
+  listRelations(agent = null) {
+    const rows = agent ? this.db.prepare('SELECT * FROM relations WHERE from_agent = ? OR to_agent = ? ORDER BY created_at').all(String(agent), String(agent)) : this.db.prepare('SELECT * FROM relations ORDER BY created_at').all();
+    return rows.map((r) => this.#relation(r));
+  }
+  getRelation(id) { return this.#relation(this.db.prepare('SELECT * FROM relations WHERE id = ?').get(String(id))); }
+
+  /**
+   * Says that a repository uses another: { from, to (ids or folders), how?, note?, source?, evidence? }.
+   * The same pair again changes it. Inside one project what they use cannot go in a circle (it is the
+   * order a change goes in). Returns { ok, relation, created }.
+   */
+  saveRelation(input = {}) {
+    return this.#write(() => {
+      const agents = this.listAgents();
+      const find = (ref) => agents.find((x) => x.id === ref || x.path === ref || (ref && realDir(x.path) === realDir(String(ref))));
+      const from = find(input.from) || fail(t('err.unknownProject', { project: input.from || '?' }));
+      const to = find(input.to) || fail(t('err.unknownProject', { project: input.to || '?' }));
+      if (from.id === to.id) fail(t('err.relationSelf'));
+      const how = input.how || 'calls';
+      if (!RELATION_HOWS.includes(how)) fail(t('err.relationHow', { hows: RELATION_HOWS.join(', ') }));
+      const source = RELATION_SOURCES.includes(input.source) ? input.source : 'you';
+      const current = this.db.prepare('SELECT * FROM relations WHERE from_agent = ? AND to_agent = ?').get(from.id, to.id);
+      if (!current && this.db.prepare('SELECT count(*) AS n FROM relations').get().n >= RELATIONS_MAX) fail(t('err.relationsMax', { n: RELATIONS_MAX }));
+      // inside one project: no circle (the order a change goes in)
+      if (from.office === to.office) {
+        const mine = agents.filter((x) => x.office === from.office);
+        const edges = this.listRelations().filter((r) => r.from !== from.id || r.to !== to.id).concat([{ from: from.id, to: to.id }]);
+        const order = orderParts(mine.map((x) => ({ name: x.id, uses: edges.filter((r) => r.from === x.id && mine.some((y) => y.id === r.to)).map((r) => r.to) })));
+        if (!order.ok) fail(t('err.relationCycle', { from: from.name, to: to.name }));
+      }
+      const note = String(input.note ?? (current?.note || '')).trim().slice(0, 300);
+      const evidence = String(input.evidence ?? (current?.evidence || '')).trim().slice(0, 500);
+      const now = Date.now();
+      if (current) {
+        // what you said stays yours: exploring again does not turn it into a finding
+        const keep = current.source === 'you' ? 'you' : source;
+        this.db.prepare('UPDATE relations SET how = ?, note = ?, source = ?, evidence = ?, updated_at = ? WHERE id = ?').run(how, note, keep, evidence, now, current.id);
+        return { ok: true, relation: this.getRelation(current.id), created: false };
+      }
+      const id = `r${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+      this.db.prepare('INSERT INTO relations (id, from_agent, to_agent, how, note, source, evidence, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, from.id, to.id, how, note, source, evidence, now, now);
+      return { ok: true, relation: this.getRelation(id), created: true };
+    });
+  }
+  deleteRelation(id) {
+    const r = this.db.prepare('DELETE FROM relations WHERE id = ?').run(String(id));
+    return r.changes ? { ok: true } : { ok: false, status: 404, error: t('err.unknownRelation') };
   }
 
   // ---------------------------------------------------------------- a project's instructions (per folder)
@@ -645,86 +803,138 @@ export class Store {
     return { ok: true, entry: e };
   }
 
-  // ---------------------------------------------------------------- the systems (server/systems.js)
+  // ---------------------------------------------------------------- the projects, as the systems of before (server/systems.js)
 
-  #system(r) {
-    return r ? { id: r.id, name: r.name, office: r.office_id, instructions: r.instructions || '', parts: json(r.parts, []) || [], createdAt: r.created_at, updatedAt: r.updated_at } : null;
+  // A project is an office (a floor with its people) and its repositories: each one an artifact with
+  // its kind (the one you say, or detected from its folder) and what it uses of the others (its
+  // relations). The code that orders a change (server/directives.js) and draws the map reads it as the
+  // systems it used to keep in a table of their own.
+  #projectSystem(o, agents = this.listAgents(), relations = this.listRelations()) {
+    if (!o) return null;
+    const own = agents.filter((a) => a.office === o.id);
+    if (!own.length) return null;
+    // what composes it: its repositories, and the ones of other projects they use (a shared core), up to PARTS_MAX
+    const ids = new Set(own.map((a) => a.id));
+    for (let grew = true; grew && ids.size < PARTS_MAX;) {
+      grew = false;
+      for (const r of relations) if (ids.has(r.from) && !ids.has(r.to) && ids.size < PARTS_MAX && agents.some((a) => a.id === r.to)) { ids.add(r.to); grew = true; }
+    }
+    const mine = [...own, ...agents.filter((a) => ids.has(a.id) && a.office !== o.id)];
+    // each repository once, by its name (two agents of the same folder: by its harness too)
+    const names = new Map();
+    for (const a of mine) names.set(a.id, [...names.values()].includes(a.name) ? `${a.name} (${a.harness})` : a.name);
+    let parts = mine.map((a) => ({ name: names.get(a.id), project: realDir(a.path), component: '', path: '', kind: a.kind || detectKind(a.path), agent: a.id, ...(a.office !== o.id ? { shared: true, owner: a.office } : {}),
+      uses: relations.filter((r) => r.from === a.id && names.has(r.to)).map((r) => names.get(r.to)) }));
+    // what they use inside the project is the order a change goes in: never a circle
+    if (!orderParts(parts).ok) parts = parts.map((x) => ({ ...x, uses: [] }));
+    return { id: o.id, name: o.name || t('offices.main'), office: o.id, area: o.area, instructions: '', parts, createdAt: o.createdAt, updatedAt: o.updatedAt };
   }
-  /** The systems (of one department, with `office`). */
+  /** The projects with repositories (of one, with `office`), as systems: { id, name, office, area, parts }. */
   listSystems(office = null) {
-    const rows = office ? this.db.prepare('SELECT * FROM systems WHERE office_id = ? ORDER BY name').all(String(office)) : this.db.prepare('SELECT * FROM systems ORDER BY name').all();
-    return rows.map((r) => this.#system(r));
+    const agents = this.listAgents();
+    const relations = this.listRelations();
+    const offices = office ? [this.getOffice(office)].filter(Boolean) : this.listOffices();
+    return offices.map((o) => this.#projectSystem(o, agents, relations)).filter(Boolean);
   }
-  getSystem(id) { return this.#system(this.db.prepare('SELECT * FROM systems WHERE id = ?').get(String(id))); }
-  /** A system by its id or its name. */
-  findSystem(ref) { return this.getSystem(ref) || this.#system(this.db.prepare('SELECT * FROM systems WHERE name = ? COLLATE NOCASE').get(String(ref ?? '').trim())); }
+  getSystem(id) { return this.#projectSystem(this.getOffice(id)); }
+  /** A project by its id or its name. */
+  findSystem(ref) { return this.#projectSystem(this.findOffice(String(ref ?? '').trim())); }
 
   /**
-   * Saves a system: { id?, name, office, instructions, parts: [{ name, project (id or folder of a registered
-   * project), component?, kind, uses? }] }. Without `id`, one with that name is updated. Returns { ok, system, created }.
+   * A system as they were before (a settings file from an earlier version): { name, office, instructions,
+   * parts: [{ name, project, kind, uses }] }. It becomes a project with that name (the one there is, or a
+   * new one in the area of its department), its repositories move to it from that department, each one
+   * keeps its kind, and what each used becomes a relation. Returns { ok, system, created }.
    */
   saveSystem(input = {}) {
-    return this.#write(() => {
-      const name = String(input.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
-      if (!name) fail(t('err.systemName'));
-      const current = input.id ? this.getSystem(input.id) : this.findSystem(name);
-      if (input.id && !current) fail(t('err.unknownSystem', { system: input.id }));
-      const clash = this.findSystem(name);
-      if (clash && clash.id !== current?.id) fail(t('err.systemExists', { name }));
-      const office = input.office ?? current?.office ?? MAIN_OFFICE;
-      if (!this.getOffice(office)) fail(t('err.unknownOffice', { office }));
-      const instructions = String(input.instructions ?? current?.instructions ?? '').trim().slice(0, INSTRUCTIONS_MAX);
-      const raw = Array.isArray(input.parts) ? input.parts : current?.parts || [];
-      if (raw.length > PARTS_MAX) fail(t('err.systemParts', { n: PARTS_MAX }));
-      const agents = this.listAgents();
-      const parts = raw.map((p) => {
-        const pname = String(p?.name ?? '').trim().slice(0, 60);
-        if (!pname) fail(t('err.systemPartName'));
-        const a = agents.find((x) => x.id === p.project || x.path === p.project || realDir(x.path) === realDir(String(p.project || '')));
-        if (!a) fail(t('err.unknownProject', { project: p?.project || '?' }));
-        const kind = p.kind || 'other';
-        if (!ARTIFACT_KINDS.includes(kind)) fail(t('err.systemKind', { kinds: ARTIFACT_KINDS.join(', ') }));
-        const uses = [...new Set((Array.isArray(p.uses) ? p.uses : []).map((u) => String(u).trim()).filter(Boolean))];
-        // a monorepo's component: its folder inside the repo
-        const sub = String(p.path ?? '').trim().replace(/^\.?\/+|\/+$/g, '').slice(0, 200);
-        if (sub.split('/').includes('..') || path.isAbsolute(sub)) fail(t('err.componentPath'));
-        return { name: pname, project: realDir(a.path), component: String(p.component ?? '').trim().slice(0, 60), path: sub, kind, uses };
-      });
-      if (new Set(parts.map((p) => p.name.toLowerCase())).size !== parts.length) fail(t('err.systemPartTwice'));
-      const order = orderParts(parts);
-      if (!order.ok) fail(order.error);
-      const now = Date.now();
-      if (current) {
-        this.db.prepare('UPDATE systems SET name = ?, office_id = ?, instructions = ?, parts = ?, updated_at = ? WHERE id = ?').run(name, office, instructions, JSON.stringify(parts), now, current.id);
-        return { ok: true, system: this.getSystem(current.id), created: false };
-      }
-      const id = `s${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-      this.db.prepare('INSERT INTO systems (id, name, office_id, instructions, parts, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, name, office, instructions, JSON.stringify(parts), now, now);
-      return { ok: true, system: this.getSystem(id), created: true };
-    });
+    const name = String(input.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
+    if (!name) return { ok: false, error: t('err.systemName') };
+    const out = this.#adoptSystem({ name, office: input.office, instructions: input.instructions, parts: Array.isArray(input.parts) ? input.parts : [] });
+    return out || { ok: false, error: t('err.systemName') };
   }
-
-  deleteSystem(id) {
-    const r = this.db.prepare('DELETE FROM systems WHERE id = ?').run(String(id));
-    return r.changes ? { ok: true } : { ok: false, status: 404, error: t('err.unknownSystem', { system: id }) };
-  }
+  /** Projects are deleted as what they are: an office (deleteOffice). */
+  deleteSystem(id) { return { ok: false, status: 410, error: t('err.systemGone', { id }) }; }
 
   /**
-   * The systems a folder is an artifact of: [{ system, part, parts }]. `part`: the deepest artifact folder
-   * that contains it (a monorepo's component, inside its repo); `parts`: that one, or, at the root of a
-   * repo with several artifacts, all of them.
+   * The project a folder is a repository of: [{ system, part, parts }] (none, or one: a repository has
+   * one project, even if others use it).
    */
   systemsOf(dir) {
     if (!dir) return [];
-    const out = [];
-    const folder = (p) => (p.path ? path.join(p.project, p.path) : p.project);
-    const root = realDir(dir);
-    for (const s of this.listSystems()) {
-      const mine = s.parts.filter((p) => insideDir(dir, folder(p))).sort((a, b) => folder(b).length - folder(a).length);
-      const parts = mine.length ? [mine[0]] : s.parts.filter((p) => p.project === root);
-      if (parts.length) out.push({ system: s, part: parts[0], parts });
+    const a = this.listAgents().filter((x) => insideDir(dir, x.path)).sort((x, y) => y.path.length - x.path.length)[0];
+    if (!a) return [];
+    // its own project first, then the ones that use it (a shared repository)
+    return this.listSystems().sort((x, y) => (y.office === a.office) - (x.office === a.office))
+      .map((system) => ({ system, part: system.parts.find((p) => p.agent === a.id) })).filter((x) => x.part).map(({ system, part }) => ({ system, part, parts: [part] }));
+  }
+
+  #adoptSystem({ name, office, instructions = '', parts = [] } = {}, { area = null } = {}) {
+    const D = this.getOffice(office || MAIN_OFFICE) || this.getOffice(MAIN_OFFICE);
+    let P = fold(D.name || '') === fold(name) ? D : this.findOffice(name);
+    let created = false;
+    if (!P) {
+      const made = this.createOffice({ name, area: area || (D.id === MAIN_OFFICE ? DEFAULT_AREA : D.area) });
+      if (!made.ok) return made;
+      P = made.office;
+      created = true;
+      // its people are the department's (in each style)
+      for (const theme of THEMES) {
+        const look = this.getAppearance(D.id, theme);
+        if (Object.keys(look).length) this.#put(this.#appearanceKey(P.id, theme), look);
+      }
+    } else if (area && P.id !== D.id) this.db.prepare('UPDATE offices SET area_id = ? WHERE id = ?').run(area, P.id);
+    const text = String(instructions || '').trim();
+    if (text && !P.instructions.includes(text)) this.updateOffice(P.id, { instructions: [P.instructions, text].filter(Boolean).join('\n\n') });
+    const agents = this.listAgents();
+    const repoOf = (p) => agents.find((x) => x.id === p?.project || (p?.project && realDir(x.path) === realDir(String(p.project))));
+    for (const p of parts) {
+      const a = repoOf(p);
+      if (!a) continue;
+      // its repositories leave the department for the project (a shared one stays where it was)
+      if (a.office === D.id && P.id !== D.id) { this.db.prepare('UPDATE agents SET office_id = ? WHERE id = ?').run(P.id, a.id); a.office = P.id; }
+      if (p.kind && p.kind !== 'other' && ARTIFACT_KINDS.includes(p.kind) && !a.kind) { this.db.prepare('UPDATE agents SET kind = ? WHERE id = ?').run(p.kind, a.id); a.kind = p.kind; }
     }
-    return out;
+    for (const p of parts) {
+      const a = repoOf(p);
+      for (const u of Array.isArray(p.uses) ? p.uses : []) {
+        const b = repoOf(parts.find((x) => x.name === u));
+        if (a && b && a.id !== b.id) this.saveRelation({ from: a.id, to: b.id, how: 'calls', source: 'you' });
+      }
+    }
+    return { ok: true, system: this.getSystem(P.id), created };
+  }
+
+  /**
+   * The systems of an earlier version become the company's projects: each department that answered for
+   * several (or for one with another name) becomes an area with a project per system, its repositories
+   * go with their project, and what each artifact used becomes a relation. Runs once, when there are any.
+   */
+  migrateSystems() {
+    let rows;
+    try { rows = this.db.prepare('SELECT * FROM systems ORDER BY created_at').all(); } catch { return; }
+    if (!rows.length) return;
+    this.#defaultArea();
+    const byOffice = new Map();
+    for (const r of rows) {
+      const sys = { name: r.name, office: r.office_id, instructions: r.instructions || '', parts: json(r.parts, []) || [] };
+      if (!byOffice.has(r.office_id)) byOffice.set(r.office_id, []);
+      byOffice.get(r.office_id).push(sys);
+    }
+    for (const [officeId, list] of byOffice) {
+      const D = this.getOffice(officeId) || this.getOffice(MAIN_OFFICE);
+      const others = list.filter((x) => fold(x.name) !== fold(D.name || ''));
+      // a department with projects of other names was an area
+      let area = null;
+      if (others.length && D.id !== MAIN_OFFICE && D.name) area = (this.findArea(D.name) || this.createArea({ name: D.name }).area)?.id || null;
+      if (area) this.db.prepare('UPDATE offices SET area_id = ? WHERE id = ?').run(area, D.id);
+      for (const sys of list) this.#adoptSystem(sys, { area });
+      // and nothing of it is left: its instructions are the area's, and the empty office goes
+      if (area && D.id !== MAIN_OFFICE && !list.some((x) => fold(x.name) === fold(D.name || '')) && !this.listAgents().some((a) => a.office === D.id)) {
+        if (D.instructions) this.updateArea(area, { instructions: D.instructions });
+        this.deleteOffice(D.id);
+      }
+    }
+    this.db.prepare('DELETE FROM systems').run();
   }
 
   // ---------------------------------------------------------------- the projects' loops (server/loops.js)

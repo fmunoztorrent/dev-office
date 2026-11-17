@@ -3,7 +3,7 @@
 // area, and the General tab says where (its address).
 //   General      language, time zone and city, real weather, the log, auto-compaction, herdr (agents in
 //                panes) and the default model profile
-//   Offices      the company's offices: name, time zone and city; view, edit, delete
+//   Projects     the company's projects (offices: floors): name, time zone and city; view, edit, delete
 //   Repositories the maintainer: add (full path + the agent that serves it + its department),
 //                delete and send it a prompt; shows what each one's harness brings
 //   Characters   name, title, colors and features of the characters of the office being watched
@@ -49,7 +49,7 @@ const placeName = (location) => parsePlace(location)?.name || String(location ||
 export function createSettings({ http, onSaved, onPrompt, office = () => 'main', onView }) {
   const s = {
     tab: 'general', focus: 0, msg: '', msgOk: false, loading: true, data: null, targets: [], offices: [], prefs: null, herdr: null,
-    form: { path: '', harness: 'claude-code', name: '', office: office() }, looks: null, role: 'tl',
+    form: { path: '', harness: 'claude-code', name: '', office: '' }, looks: null, role: 'tl',
     tzQuery: '', city: emptyCity(), officeForm: emptyOffice(),
   };
 
@@ -93,10 +93,12 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
   // ---------------------------------------------------------------- repositorios
 
   async function addRepo() {
+    // its project, always chosen: a repository never lands in one by itself
+    if (!s.form.office) return say(t('err.pickProject'));
     const r = await api('POST', '/v1/agents', s.form);
     if (!r.ok) return say(r.error);
     say(t('settings.repos.added', { name: r.agent.name }), true);
-    s.form = { path: '', harness: 'claude-code', name: '', office: office() };
+    s.form = { path: '', harness: 'claude-code', name: '', office: '' };
     await loadAgents();
   }
 
@@ -237,7 +239,7 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
       if (!registered.length) f.push({ type: 'info', text: `  ${t('settings.repos.none')}` });
       for (const a of registered) {
         const flags = [a.sessions.some((x) => x.live) && t('settings.repos.open'), !a.exists && t('settings.repos.missing'), a.exists && !a.available && t('settings.repos.notInstalled')].filter(Boolean).join(' ');
-        f.push({ type: 'info', text: `  ${a.name} · ${HARNESS_NAME[a.harness]}${a.kinds.length ? ` · ${a.kinds.join(' + ')}` : ''}${s.offices.length > 1 ? ` · 🏢 ${officeName(a.office)}` : ''} ${flags}`, color: C.ink });
+        f.push({ type: 'info', text: `  ${a.name} · ${HARNESS_NAME[a.harness]}${a.kinds.length ? ` · ${a.kinds.join(' + ')}` : ''}${s.offices.length > 1 ? ` · 🧩 ${officeName(a.office)}` : ''} ${flags}`, color: C.ink });
         f.push({ type: 'info', text: `    ${tilde(a.path)} · ${a.entries.map((e) => e.label).join(', ')}` });
         f.push({ type: 'action', label: '', value: () => t('settings.repos.promptTo', { name: a.name }), run: () => onPrompt?.(a.id) });
         f.push({ type: 'action', label: '', value: () => t('settings.repos.removeOne', { name: a.name }), run: () => removeRepo(a) });
@@ -247,9 +249,9 @@ export function createSettings({ http, onSaved, onPrompt, office = () => 'main',
       f.push({ type: 'select', label: t('settings.repos.agent'), value: () => HARNESS_NAME[s.form.harness], cycle: (d) => { s.form.harness = cycle(HARNESS_IDS, s.form.harness, d); } });
       f.push({ type: 'text', label: t('settings.repos.name'), value: () => s.form.name, placeholder: t('settings.repos.namePh'), edit: (v) => { s.form.name = v.slice(0, 40); } });
       f.push({ type: 'text', label: t('settings.repos.instructions'), value: () => s.form.instructions || '', placeholder: t('settings.repos.instructionsPh'), edit: (v) => { s.form.instructions = v.slice(0, 4000); } });
-      if (s.offices.length > 1) f.push({ type: 'select', label: t('settings.repos.office'), value: () => officeName(s.form.office), cycle: (d) => { s.form.office = cycle(s.offices.map((o) => o.id), s.form.office, d); } });
+      f.push({ type: 'select', label: t('settings.repos.project'), value: () => (s.form.office ? officeName(s.form.office) : t('settings.repos.pickProject')), cycle: (d) => { s.form.office = cycle(['', ...s.offices.map((o) => o.id)], s.form.office, d); } });
       f.push({ type: 'action', label: '', value: () => t('settings.repos.addBtn'), run: () => addRepo() });
-      f.push({ type: 'action', label: '', value: () => t('settings.repos.cancel'), run: () => { s.form = { path: '', harness: 'claude-code', name: '', office: office() }; } });
+      f.push({ type: 'action', label: '', value: () => t('settings.repos.cancel'), run: () => { s.form = { path: '', harness: 'claude-code', name: '', office: '' }; } });
       if (loose.length) {
         f.push({ type: 'heading', text: t('settings.repos.loose') });
         for (const a of loose) f.push({ type: 'info', text: `  ${HARNESS_NAME[a.harness] || a.harness} · ${tilde(a.path)}${a.kinds.length ? ` · ${a.kinds.join(' + ')}` : ''}` });
