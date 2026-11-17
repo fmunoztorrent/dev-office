@@ -29,6 +29,7 @@ test('desde la terminal: clic en la pizarra â†’ elegir el pipeline del agente â†
   }));
 
   const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
+  server.store.setPrefs({ autonomy: { clarify: false } }); // this test is the dispatch itself: the analyst's review is tested in clarify.test.js
   const agent = startFakeAgent({ url: server.url, dir, session: 'pi-tui' }); // like the Pi extension
   await agent.ready;
   await until(() => server.pipelines.projects().length);

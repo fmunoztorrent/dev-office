@@ -21,6 +21,12 @@ const until = async (fn, ms = 8000) => {
 };
 const call = (base, method, p, body) => fetch(base + p, { method, headers: { 'content-type': 'application/json' }, body: body && JSON.stringify(body) }).then((r) => r.json());
 
+// These tests import the real Pi extension, which detects a nested subagent by the
+// DEV_TEAM_OFFICE_PI_PID an enclosing Pi session leaves behind. A test run inside Pi inherits it,
+// so the extension would treat this process as a subagent and never connect. Clear it once: the
+// first import marks this process as the owner again.
+delete process.env.DEV_TEAM_OFFICE_PI_PID;
+
 function tempProject() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dto-int-'));
   fs.mkdirSync(path.join(dir, '.devteam', 'pipelines'), { recursive: true });
