@@ -109,7 +109,7 @@ test('las respuestas: la cola por crear (y quién), la que existe (dónde y qui�
     ];
     // a create without who creates it is not an answer
     out = desk.create({ text, answers: [{ key: 'topic:reembolsos hechos', action: 'create' }, ...rest] });
-    assert.match(out.error, /qué proyecto crea/i);
+    assert.match(out.error, /qué repositorio crea/i);
     assert.equal(fs.existsSync(fresh), false, 'nada a medias: ni la carpeta del repo nuevo');
     assert.equal(store.listAgents().length, 3);
     out = desk.create({ text, answers: [
@@ -225,7 +225,7 @@ test('briefLines: un proyecto lleva lo suyo y lo de nadie; no lo de otro', () =>
     ],
   };
   assert.deepEqual(briefLines(m, 'a', { fresh: [{ name: 'worker', path: 'apps/worker' }] }), [
-    '🧩 Componentes de este proyecto que toca: api (apps/api).',
+    '🧩 Componentes de este repositorio que toca: api (apps/api).',
     '🆕 Componente nuevo «worker» (apps/worker): hay que crearlo como parte de esta directiva.',
     '🗄 Toca 📨 cola «refunds» (SQS) (la consume).',
     '🗄 Toca 🗄 base de datos «ledger» (rds-prod) (la usa).',

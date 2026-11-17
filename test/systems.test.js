@@ -82,7 +82,7 @@ test('un sistema se valida: sus repos registrados, sus tipos, sin nombres repeti
     assert.deepEqual(system.parts.map((p) => [p.name, p.kind, p.uses]), [['web', 'frontend', ['bff']], ['bff', 'bff', ['core']], ['core', 'backend', []]]);
     assert.equal(core.office, plataforma.id, 'el core sigue siendo de Plataforma');
     const bad = (parts) => store.saveSystem({ name: 'X', parts }).error;
-    assert.match(bad([{ name: 'a', project: '/no/registrado' }]), /proyecto desconocido/);
+    assert.match(bad([{ name: 'a', project: '/no/registrado' }]), /repositorio desconocido/);
     assert.match(bad([{ name: 'a', project: bff.id, kind: 'nave' }]), /uno de: frontend/);
     assert.match(bad([{ name: 'a', project: bff.id }, { name: 'A', project: core.id }]), /mismo nombre/);
     assert.match(bad([{ name: 'a', project: bff.id, uses: ['b'] }, { name: 'b', project: core.id, uses: ['a'] }]), /círculo/);

@@ -539,7 +539,30 @@ async function cmdJoin() {
   const r = out.result;
   const text = r.content[0].text.split('\n\n{')[0];
   if (r.isError) fail(text);
-  console.log(text);
+  // the MCP answers the agents in English; the user reads it in their language
+  let data = null;
+  try { data = JSON.parse(r.content[0].text.slice(r.content[0].text.indexOf('\n\n{') + 2)); } catch { /* the agents' text, then */ }
+  console.log(data ? joinText(data) : text);
+}
+
+/** What `join` did, in the user's language: from the data join_office returns. */
+function joinText(d) {
+  const J = (k, v) => t(`cli.join.${k}`, v);
+  const p = d.project;
+  const role = (r) => t(`team.titles.${r}`);
+  const reload = (h, fresh) => (h === 'claude-code' && !fresh ? J('reload.claude-code-warm') : J(`reload.${h}`));
+  const mine = d.team.filter((x) => x.scope === 'project').length;
+  const global = d.team.length - mine;
+  const line = (x) => `  ${x.name}${x.scope === 'project' ? '' : J('globalTag')} → ${x.role ? `${x.character} (${role(x.role)})${x.how === 'declared' ? '' : J('by', { how: J(`how.${x.how}`) })}` : J('noRole')}`;
+  const g = d.given;
+  return [
+    d.running ? J(d.started ? 'started' : 'running', { url: d.url }) : J('notRunning', { what: J(p.registered ? 'registered' : 'saved') }),
+    J(p.registered ? 'added' : 'already', { name: p.name, harness: p.harness, path: tilde(p.path), office: p.office }),
+    ...(g ? [`${g.whole ? J('wholeTeam', { team: g.team, n: g.files.length, dir: path.relative(p.path, g.dir) || g.dir }) : J('someTeam', { roles: g.agents.map((x) => role(x.role)).join(', '), names: g.agents.map((x) => x.name).join(', '), team: g.team, dir: path.relative(p.path, g.dir) || g.dir })} ${reload(p.harness, g.fresh)}`] : []),
+    d.team.length ? `${J('team', { n: mine, global: global ? J('global', { n: global }) : '' })}\n${d.team.slice(0, 30).map(line).join('\n')}` : J('none'),
+    ...(d.roleIssues?.length ? [J('issues', { list: d.roleIssues.join('; ') })] : []),
+    d.running ? `${J('watch', { url: d.url })}${process.env.HERDR_ENV === '1' ? J('watchHerdr') : ''}` : '',
+  ].filter(Boolean).join('\n');
 }
 
 /** A subagent's pane: what it is doing, live (the office opens it by itself inside herdr). */

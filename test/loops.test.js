@@ -223,7 +223,7 @@ test('un loop terminado deja su acta en el archivo; un paso nuevo lo pone en mar
 
 test('validación: proyecto, intervalo, pasos y nombre único', () => {
   const { desk, agent } = setup();
-  assert.match(desk.create({ name: 'X', project: 'nadie', steps: ['a'] }).error, /proyecto desconocido/);
+  assert.match(desk.create({ name: 'X', project: 'nadie', steps: ['a'] }).error, /repositorio desconocido/);
   assert.match(desk.create({ name: 'X', project: agent.id, interval: 0, steps: ['a'] }).error, /intervalo/);
   assert.match(desk.create({ name: 'X', project: agent.id, steps: [''] }).error, /cada paso/);
   assert.match(desk.create({ name: '', project: agent.id }).error, /nombre/);

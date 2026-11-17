@@ -4,6 +4,19 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [0.29.1] - 2026-11-17
+
+The office used for real, from the installer to Claude Code doing the work: what failed there, fixed.
+
+### Fixed
+
+- **A Claude Code session the office starts in the background could not leave its handoff, report a loop's criteria or read what its brief let it read.** In `claude -p` nobody is there to approve a permission, so the `handoff` and `loop_report` calls were denied (the next artifact got the end of the answer instead, and the loop waited for the ✅ lines), and reading the folder of the artifact it uses was blocked. The office now gives those sessions its own MCP tools that the briefs ask for (never the ones that send work or change the company) and reading, only reading, those folders. Tried with Claude Code: a project's brief in order with its handoff, and a loop whose step reported its two criteria.
+- **`dev-team-office join` answered in English**, the MCP's language for the agents. It now speaks yours.
+- **"Project" kept meaning a registered repository** in the executive floor, the impact map, the loops, the archive, ⚙ › Departments and the errors, next to "project" meaning a product. A repository is now a repository everywhere, also in the terminal (`offices`, `agents`), in the work guide and in the briefs' headers.
+- **The new loop's form was squeezed** under a tall empty title: a style meant for each dialog's own card also caught the form inside the loops dialog.
+- `dev-team-office doctor` names the folder where the command really is.
+- The installation guide says where to get herdr.
+
 ## [0.29.0] - 2026-11-17
 
 A review of everything there is against what the docs say: what did not match, what was half done and what nobody used.
@@ -432,7 +445,8 @@ First release meant to be installed from the internet.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
 [Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.28.0...HEAD
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.29.0...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.29.1...HEAD
+[0.29.1]: https://github.com/fmunoztorrent/dev-office/compare/v0.29.0...v0.29.1
 [0.29.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.26.0...v0.27.0

@@ -353,13 +353,27 @@ test('`dev-team-office join` desde la terminal: lo mismo que join_office', async
       child.on('close', (code) => resolve({ code, text }));
     });
     assert.equal(out.code, 0, out.text);
-    assert.match(out.text, /✓ Registered: api — pi at/);
+    // in the user's language (the MCP answers the agents in English; the terminal is the user's)
+    assert.match(out.text, /✓ Registrado: api — pi en .* \(departamento pagos\)/);
     assert.match(out.text, /power-sync → Diego \(Backend\)/);
     // the subagents it brings are Claude Code's: Pi gets the office team in .pi/agents
-    assert.match(out.text, /gave it its team \(Example Team\): 7 subagent\(s\) in \.pi\/agents\/\. Pi uses them from the next subagent call/);
+    assert.match(out.text, /le dio su equipo \(Example Team\): 7 subagente\(s\) en \.pi\/agents\/\. Pi los usa desde la próxima llamada a un subagente/);
     assert.equal(fs.readdirSync(path.join(dir, '.pi', 'agents')).length, 7);
     assert.ok(!out.text.includes('"team"'), 'sin el JSON de la herramienta');
     assert.deepEqual(server.store.listAgents().map((a) => [a.path, a.harness, a.office]), [[dir, 'pi', 'pagos']]);
+    // and in English, for a user who chose it
+    const es = await new Promise((resolve) => {
+      const child = spawn(process.execPath, [BIN, 'join', '--agent', 'pi', '--office', 'Pagos', '--port', String(new URL(server.url).port), '--no-socket'], { cwd: dir, env: { ...process.env, HOME: home, DEV_TEAM_OFFICE_LANG: 'en' }, stdio: ['ignore', 'pipe', 'pipe'] });
+      let text = '';
+      child.stdout.on('data', (d) => { text += d; });
+      child.stderr.on('data', (d) => { text += d; });
+      child.on('close', (code) => resolve({ code, text }));
+    });
+    assert.equal(es.code, 0, es.text);
+    assert.match(es.text, /🏢 Dev Team Office is running at http/);
+    assert.match(es.text, /✓ Already registered: api — pi at .* \(department pagos\)/);
+    assert.match(es.text, /power-sync → Diego \(Backend\)/);
+    assert.match(es.text, /Watch it: open http/);
   } finally {
     await server.close();
   }

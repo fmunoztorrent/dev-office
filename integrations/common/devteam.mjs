@@ -488,9 +488,29 @@ export function modelArgs(harness, model) {
   return ['--model', m]; // pi: provider/model
 }
 
+// The office's own MCP tools a session it launches may use without asking: nobody is there to approve
+// them in a background session (`claude -p`), and the briefs ask for them (the handoff of a project's
+// artifact, a loop step's criteria, a resource it created, the archive). Never the ones that send work
+// or change the company: those stay the user's.
+export const OFFICE_MCP_TOOLS = ['report_activity', 'handoff', 'loop_report', 'declare_resource', 'search_knowledge', 'get_knowledge', 'save_knowledge', 'get_architecture', 'get_instructions', 'list_systems', 'list_projects', 'list_offices', 'list_loops', 'office_status'];
+
+/**
+ * Claude Code's permissions for a session the office launches: the office's MCP tools (registered by
+ * setup, or by the plugin) and reading the folders its brief may read (the artifacts its own uses,
+ * server/systems.js), outside its working folder. Reading only: it never writes there.
+ */
+export function officeAllows(harness, reads = []) {
+  if (harnessId(harness) !== 'claude-code') return [];
+  const real = (d) => { try { return fs.realpathSync(d); } catch { return d; } };
+  const dirs = [...new Set((Array.isArray(reads) ? reads : []).flatMap((d) => { const abs = path.resolve(expandHome(String(d))); return [abs, real(abs)]; }))];
+  const tools = OFFICE_MCP_TOOLS.flatMap((x) => [`mcp__dev-team-office__${x}`, `mcp__plugin_dev-team-office_dev-team-office__${x}`]);
+  return ['--allowedTools', ...tools, ...dirs.map((d) => `Read(/${d}/**)`)];
+}
+
 /**
  * Executable and arguments for a new agent session, without a shell (the task goes as a single
- * argument). opts: { bin, args } of the registered agent; inv.model, the model profile's (if any).
+ * argument). opts: { bin, args } of the registered agent; inv.model, the model profile's (if any);
+ * inv.reads, the folders the brief may read besides its own.
  */
 export function agentCommand(harness, inv, { bin, args } = {}) {
   const h = harnessId(harness);
@@ -499,7 +519,7 @@ export function agentCommand(harness, inv, { bin, args } = {}) {
   if (!exe) return { error: `no encuentro "${bin || HARNESSES[h].bin}" en el PATH`, code: 'missing', bin: bin || HARNESSES[h].bin };
   const extra = Array.isArray(args) ? args.map(String) : null;
   const model = modelArgs(h, inv.model);
-  if (h === 'claude-code') return { exe, argv: ['-p', inv.text, ...model, ...(extra ?? ['--permission-mode', 'acceptEdits'])] };
+  if (h === 'claude-code') return { exe, argv: ['-p', inv.text, ...model, ...(extra ?? ['--permission-mode', 'acceptEdits']), ...officeAllows(h, inv.reads)] };
   if (h === 'opencode') return { exe, argv: inv.command ? ['run', '--command', inv.command, ...model, ...(extra ?? []), inv.args] : ['run', ...model, ...(extra ?? []), inv.text] };
   if (h === 'codex') return { exe, argv: ['exec', ...model, ...(extra ?? ['--sandbox', 'workspace-write']), inv.text] };
   return { exe, argv: ['-p', ...model, ...(extra ?? []), inv.text] };

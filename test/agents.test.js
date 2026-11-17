@@ -11,6 +11,7 @@ import WebSocket from 'ws';
 import { startServer } from '../server/server.js';
 import { errementariProject } from './fixtures/harness.mjs';
 import { startFakeAgent } from './fixtures/fake-agent.mjs';
+import { officeAllows } from '../integrations/common/devteam.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const FAKE_CLAUDE = path.join(here, 'fixtures', 'fake-claude.mjs');
@@ -66,7 +67,8 @@ test('prompt sin sesión abierta: la oficina abre el CLI del agente en su ruta c
     assert.equal(t.text, 'Errementari · bugfix: el SSE no reconecta');
     const run = JSON.parse(fs.readFileSync(log, 'utf8'));
     // `claude -p "/task bug: …"` in the agent's path: Errementari is the one running its pipeline
-    assert.deepEqual(run.args, ['-p', '/task bug: el SSE no reconecta', '--permission-mode', 'acceptEdits']);
+    // the harness command as is, and the office's own tools allowed (nobody approves them in -p)
+    assert.deepEqual(run.args, ['-p', '/task bug: el SSE no reconecta', '--permission-mode', 'acceptEdits', ...officeAllows('claude-code')]);
     assert.equal(fs.realpathSync(run.cwd), fs.realpathSync(dir));
     assert.equal(run.launched, '1');
     // it stays in the agent's history

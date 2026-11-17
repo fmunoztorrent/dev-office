@@ -10,7 +10,7 @@ Esta guía sirve para una máquina en la que todavía no está Dev Team Office. 
 |---|---|---|
 | **Node.js ≥ 22.13** (macOS o Linux) | La oficina, su base SQLite (`node:sqlite`) y su WebSocket. No tiene otras dependencias | Sí |
 | Un agente de código: **Pi**, **Claude Code**, **OpenCode** o **Codex** (también Gemini CLI o Cursor, sólo con MCP) | Hace el trabajo. La oficina lo dibuja y le manda tareas | Sí, al menos uno |
-| **herdr** | Cada agente y cada subagente en su propio pane, con el monitor de actividad al lado | No, pero es la forma recomendada |
+| **[herdr](https://herdr.dev)** | Cada agente y cada subagente en su propio pane, con el monitor de actividad al lado | No, pero es la forma recomendada |
 | Una terminal con *truecolor* (iTerm2, Ghostty, WezTerm, Kitty, VS Code) | El juego en la terminal se ve mejor | No |
 
 Para comprobar Node:

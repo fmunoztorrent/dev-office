@@ -312,13 +312,33 @@ test('invocation y expandClaudeCommand: cómo se arranca cada entrada', () => {
 test('agentCommand: una sesión nueva sin shell y con la tarea como un solo argumento', () => {
   const evil = 'hola"; touch /tmp/pwned-dto; echo "$(whoami)';
   const node = process.execPath;
-  assert.deepEqual(lib.agentCommand('claude', { text: `/task ${evil}` }, { bin: node }), { exe: node, argv: ['-p', `/task ${evil}`, '--permission-mode', 'acceptEdits'] });
+  const allows = lib.officeAllows('claude-code');
+  assert.deepEqual(lib.agentCommand('claude', { text: `/task ${evil}` }, { bin: node }), { exe: node, argv: ['-p', `/task ${evil}`, '--permission-mode', 'acceptEdits', ...allows] });
   assert.deepEqual(lib.agentCommand('opencode', { text: '/task x', command: 'task', args: 'bug: x' }, { bin: node }).argv, ['run', '--command', 'task', 'bug: x']);
   assert.deepEqual(lib.agentCommand('opencode', { text: 'hola' }, { bin: node }).argv, ['run', 'hola']);
   assert.deepEqual(lib.agentCommand('pi', { text: '/architect algo' }, { bin: node, args: ['--model', 'x'] }).argv, ['-p', '--model', 'x', '/architect algo']);
-  assert.deepEqual(lib.agentCommand('claude-code', { text: 'x' }, { bin: node, args: ['--permission-mode', 'auto'] }).argv, ['-p', 'x', '--permission-mode', 'auto']);
+  assert.deepEqual(lib.agentCommand('claude-code', { text: 'x' }, { bin: node, args: ['--permission-mode', 'auto'] }).argv, ['-p', 'x', '--permission-mode', 'auto', ...allows]);
   assert.match(lib.agentCommand('emacs', { text: 'x' }).error, /no sé lanzar/);
   assert.match(lib.agentCommand('pi', { text: 'x' }, { bin: 'no-existe-este-comando-xyz' }).error, /no encuentro/);
+});
+
+test('una sesión de Claude que lanza la oficina puede usar las herramientas de la oficina y leer lo que su encargo le deja, sin preguntar', () => {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dto-reads-')));
+  try {
+    const argv = lib.agentCommand('claude-code', { text: 'x', reads: [dir] }, { bin: process.execPath }).argv;
+    const allowed = argv.slice(argv.indexOf('--allowedTools') + 1);
+    // the tools its briefs ask for (the handoff, a loop's criteria, a resource it created, the archive)…
+    for (const tool of ['handoff', 'loop_report', 'declare_resource', 'save_knowledge', 'get_architecture']) assert.ok(allowed.includes(`mcp__dev-team-office__${tool}`), tool);
+    // …but never the ones that send work or change the company
+    for (const tool of ['send_task', 'send_directive', 'open_pane', 'register_project', 'remove_project', 'run_my_tool']) assert.ok(!allowed.some((x) => x.endsWith(`__${tool}`)), tool);
+    // reading the folders of what its artifact uses (an absolute path in Claude's rules starts with //); never writing there
+    assert.ok(allowed.includes(`Read(/${dir}/**)`));
+    assert.ok(!allowed.some((x) => /^(Edit|Write)\(/.test(x)));
+    assert.equal(argv[1], 'x', 'the brief goes right after -p, before the list');
+    // the other harnesses decide by themselves
+    assert.deepEqual(lib.officeAllows('pi', [dir]), []);
+    assert.deepEqual(lib.agentCommand('codex', { text: 'x', reads: [dir] }, { bin: process.execPath }).argv, ['exec', '--sandbox', 'workspace-write', 'x']);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('perfiles de modelos: el agente arranca con el modelo del perfil y las etapas sin modelo toman el de su rol', () => {

@@ -623,7 +623,7 @@ export async function doctor({ base = 'http://127.0.0.1:4317' } = {}) {
   add(maj > 22 || (maj === 22 && min >= 13), t('doctor.node', { v: process.versions.node }), t('doctor.nodeFix'));
   add(exists(shimPath()), t('doctor.launcher', { path: tilde(shimPath()) }), 'dev-team-office setup');
   const onPath = which('dev-team-office');
-  add(!!onPath, onPath ? t('doctor.onPath', { path: tilde(onPath) }) : t('doctor.notOnPath'), t('doctor.pathFix', { dir: '~/.local/bin' }));
+  add(!!onPath, onPath ? t('doctor.onPath', { path: tilde(onPath) }) : t('doctor.notOnPath'), t('doctor.pathFix', { dir: tilde(process.env.DEV_TEAM_OFFICE_BIN_DIR || path.join(home(), '.local', 'bin')) }));
   let health = null;
   try { health = await (await fetch(`${base}/v1/health`, { signal: AbortSignal.timeout(1500) })).json(); } catch { /* apagada */ }
   add(health?.name === MARK, health?.name === MARK ? t('doctor.running', { url: health.url, version: health.version }) : t('doctor.stopped', { url: base }), 'dev-team-office');
