@@ -418,7 +418,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
           `${a.name} · ${HARNESS_NAME[a.harness] || a.harness}${a.instructions ? ' 📋' : ''}`,
           el('div', { class: 's-path' }, tilde(a.path)))) : el('span', { class: 'hint' }, O('noRepos'))),
         el('div', { class: 's-row' },
-          el('button', { type: 'button', class: 's-mini', onclick: () => { st.form = { ...emptyForm(), office: o.id }; show('repos'); } }, O('addRepo')),
+          el('button', { type: 'button', class: 's-mini', onclick: () => openRepoPicker(o.id) }, O('addRepo')),
           others.length ? el('select', { class: 's-mini', 'aria-label': O('moveRepo'), onchange: async (e) => {
             if (!e.target.value) return;
             const r = await api('PUT', `/v1/agents/${encodeURIComponent(e.target.value)}`, { office: o.id });
@@ -489,28 +489,6 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     if (!$('settings').open) return;
     if (st.tab === 'offices') renderOffices();
     else if (st.tab === 'repos') renderList();
-  }
-
-  /** A project's components: chips (the declared ones can be removed) and ＋ to declare one (name and folder). */
-  function componentsRow(a) {
-    const O = (k, v) => t(`settings.offices.${k}`, v);
-    const list = st.components?.[a.id] || [];
-    const name = el('input', { type: 'text', maxlength: 60, placeholder: O('compName'), 'aria-label': O('compName') });
-    const where = el('input', { type: 'text', maxlength: 200, placeholder: O('compPath'), 'aria-label': O('compPath') });
-    const add = async () => {
-      if (!name.value.trim()) return name.focus();
-      const r = await api('POST', '/v1/components', { project: a.id, name: name.value.trim(), path: where.value.trim() });
-      if (!r.ok) return msg(r.error);
-      msg(O('compAdded', { name: r.component.name }), true);
-      loadProjects();
-    };
-    name.onkeydown = where.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } };
-    return el('div', { class: 's-comp-row' },
-      el('b', {}, `${a.name}:`),
-      list.length ? list.map((c) => el('span', { class: `s-comp${c.declared ? ' own' : ''}`, title: [c.path, c.description, c.declared ? O('compDeclared') : O('compDetected')].filter(Boolean).join(' · ') },
-        `🧩 ${c.name}`,
-        c.declared ? el('button', { type: 'button', class: 's-x', 'aria-label': O('compRemove', { name: c.name }), onclick: async () => { const r = await api('DELETE', `/v1/components/${encodeURIComponent(c.id)}`); if (!r.ok) return msg(r.error); loadProjects(); } }, '✕') : null)) : el('span', { class: 'hint' }, O('compNone')),
-      el('span', { class: 's-comp-add' }, name, where, el('button', { type: 'button', class: 's-mini', onclick: add }, O('compAdd'))));
   }
 
   // ------------------------------------------------------------ Infrastructure (server/resources.js)
@@ -695,6 +673,8 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     const panel = document.querySelector('[data-panel="repos"]');
     put(panel,
       el('p', { class: 'hint' }, A('hint')),
+      el('div', { class: 's-row' },
+        el('button', { type: 'button', class: 'btn', onclick: () => openRepoPicker() }, A('addExisting'))),
       el('div', { id: 's-agent-list', class: 's-agents' }),
       el('h3', { id: 's-form-title' }),
       el('div', { id: 's-agent-form', class: 's-form' }));
@@ -714,13 +694,20 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
       el('div', { class: 's-agent-head' },
         el('b', {}, a.name), el('span', { class: 's-tag' }, HARNESS_NAME[a.harness] || a.harness),
         ...a.kinds.map((k) => el('span', { class: 's-tag kind' }, k)),
-        offices.length > 1 ? el('span', { class: 's-tag' }, `🏢 ${officeName(a.office)}`) : null,
+        a.registered ? el('select', { class: 's-dept', 'aria-label': A('office'), title: A('office'), onchange: async (e) => {
+          if (e.target.value === a.office) return;
+          const r = await api('PUT', `/v1/agents/${encodeURIComponent(a.id)}`, { office: e.target.value });
+          if (!r.ok) return msg(r.error);
+          msg(A('updated'), true);
+          onSaved?.();
+          loadProjects();
+        } }, offices.map((o) => option(o.id, `🏢 ${o.name}`, o.id === a.office)))
+          : (offices.length > 1 ? el('span', { class: 's-tag' }, `🏢 ${officeName(a.office)}`) : null),
         a.instructions ? el('span', { class: 's-tag kind', title: a.instructions }, A('hasInstructions')) : null,
         a.sessions.some((x) => x.live) ? el('span', { class: 's-ok' }, A('sessionOpen')) : null,
         !a.exists ? el('span', { class: 's-bad' }, A('pathMissing')) : !a.available ? el('span', { class: 's-bad' }, A('cliMissing', { agent: HARNESS_NAME[a.harness] })) : null),
       el('div', { class: 'hint' }, tilde(a.path)),
       el('div', { class: 's-entries' }, a.entries.map((e) => el('span', { title: e.description || '' }, e.label))),
-      st.components ? componentsRow(a) : null,
       el('div', { class: 's-row' },
         el('button', { type: 'button', class: 's-mini', onclick: () => onPrompt?.(a.id) }, A('sendPrompt')),
         a.registered
@@ -730,6 +717,46 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     put(box,
       registered.length ? registered.map(card) : el('p', { class: 'hint' }, A('noneWeb')),
       loose.length ? [el('h3', {}, A('loose')), loose.map(card)] : null);
+  }
+
+  /** The picker of repositories the office already knows (open sessions and registered ones). */
+  function openRepoPicker(office) {
+    const pk = $('pick-repo');
+    const list = $('pk-list');
+    const targets = getTargets();
+    const offices = getOffices();
+    st.pickOffice = office || here();
+    const registered = targets.filter((x) => x.registered);
+    const loose = targets.filter((x) => !x.registered);
+    const officeName = (id) => offices.find((o) => o.id === id)?.name || id;
+    const row = (a, act) => el('div', { class: 's-agent' },
+      el('div', { class: 's-agent-head' },
+        el('b', {}, a.name), el('span', { class: 's-tag' }, HARNESS_NAME[a.harness] || a.harness),
+        offices.length > 1 ? el('span', { class: 's-tag' }, `🏢 ${officeName(a.office)}`) : null,
+        !a.exists ? el('span', { class: 's-bad' }, A('pathMissing')) : null),
+      el('div', { class: 'hint' }, tilde(a.path)),
+      el('div', { class: 's-row' }, act));
+    const pick = (a) => () => {
+      pk.close();
+      show('repos');
+      if (a.registered) { edit(a); return; }
+      st.form = { ...emptyForm(), path: a.path, harness: a.harness, office: a.office, touched: true };
+      renderForm();
+      detect();
+      $('s-agent-form')?.scrollIntoView({ block: 'nearest' });
+    };
+    put(list,
+      registered.length ? [el('h3', {}, A('pickRegistered')), registered.map((a) => row(a, el('button', { type: 'button', class: 's-mini', onclick: pick(a) }, A('pickEdit'))))] : null,
+      loose.length ? [el('h3', {}, A('pickLoose')), loose.map((a) => row(a, el('button', { type: 'button', class: 's-mini', onclick: pick(a) }, A('pickChoose'))))] : null,
+      (!registered.length && !loose.length) ? el('p', { class: 'hint' }, A('pickNone')) : null);
+    pk.showModal();
+  }
+
+  /** The picker's "type the path" action: the empty form, in the repositories tab. */
+  function startManualForm() {
+    st.form = { ...emptyForm(), office: st.pickOffice || here() };
+    show('repos');
+    $('s-agent-form')?.scrollIntoView({ block: 'nearest' });
   }
 
   function renderForm() {
@@ -752,8 +779,8 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
         el('select', { 'aria-label': A('cliLabel'), onchange: (e) => { f.harness = e.target.value; f.touched = true; } },
           option('', A('choose'), !f.harness), ...Object.entries(HARNESS_NAME).map(([id, label]) => option(id, label + (d?.harnesses?.includes(id) ? A('configured') : ''), id === f.harness)))),
       el('label', { class: 'b-field' }, el('span', {}, A('name')), el('input', { type: 'text', value: f.name, placeholder: A('namePh'), maxlength: 40, oninput: (e) => { f.name = e.target.value; } })),
-      offices.length > 1 ? el('label', { class: 'b-field' }, el('span', {}, A('office')),
-        el('select', { onchange: (e) => { f.office = e.target.value; } }, offices.map((o) => option(o.id, o.name, o.id === f.office)))) : null,
+      el('label', { class: 'b-field' }, el('span', {}, A('office')),
+        el('select', { onchange: (e) => { f.office = e.target.value; } }, offices.map((o) => option(o.id, o.name, o.id === f.office)))),
       // how to work with this project: it goes with every brief, pipeline and question to its folder
       el('label', { class: 'note' }, el('span', {}, A('instructions')),
         el('textarea', { rows: 4, maxlength: 4000, placeholder: A('instructionsPh'), oninput: (e) => { f.instructions = e.target.value; } }, f.instructions || '')),
@@ -1071,6 +1098,9 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
 
   for (const b of document.querySelectorAll('#settings .tabs button')) b.onclick = () => { msg(''); show(b.dataset.tab); };
   $('settings-close').onclick = $('settings-cancel').onclick = () => $('settings').close();
+  $('pk-close').onclick = () => $('pick-repo').close();
+  $('pk-manual').onclick = () => { $('pick-repo').close(); startManualForm(); };
+  $('pick-repo').addEventListener('click', (e) => { if (e.target === $('pick-repo')) $('pick-repo').close(); });
   $('settings-save').onclick = () => (st.tab === 'look' ? saveLook() : st.tab === 'models' ? setPref({ models: st.models }) : null);
   $('settings-form').onsubmit = (e) => e.preventDefault();
 

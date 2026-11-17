@@ -491,6 +491,23 @@
       </footer>
     </form>
   </dialog>
+  <dialog id="pick-repo" class="brief settings pick-repo" aria-labelledby="pk-title">
+    <form method="dialog">
+      <header class="brief-head">
+        <span class="pin" aria-hidden="true"></span>
+        <h2 id="pk-title" data-i18n="settings.repos.pick">Choose a repository</h2>
+        <button type="button" class="brief-x" id="pk-close" data-i18n-aria="settings.close">✕</button>
+      </header>
+      <div class="brief-body">
+        <p class="hint" id="pk-hint" data-i18n="settings.repos.pickHint">The repositories the office already knows.</p>
+        <div class="s-agents" id="pk-list"></div>
+        <p id="pk-msg" class="b-problem" role="status"></p>
+      </div>
+      <footer class="brief-foot">
+        <button type="button" class="btn ghost" id="pk-manual" data-i18n="settings.repos.pickManual">＋ Type the path instead</button>
+      </footer>
+    </form>
+  </dialog>
   <script type="module" src="/main.js"></script>
 </body>
 </html>

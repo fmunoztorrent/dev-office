@@ -682,7 +682,7 @@ export default {
       newTitle: 'New department', editTitle: 'Edit “{name}”', created: 'Done: “{name}” is now part of the company.', updated: 'Department updated.', deleted: 'Department deleted (its projects moved to the main one).',
       confirmDelete: 'Delete the department “{name}”? Its projects move to the main one; their folders are not touched.', cancel: 'Cancel',
       instructions: 'Instructions', instructionsPh: 'How to work in this department: conventions, what to never do, who to ask… They go with every brief, directive and question to its projects.',
-      repos: 'Repositories', noRepos: 'No repositories yet.', compName: 'component', compPath: 'folder (optional)', compAdd: '＋ Component', compAdded: 'Component "{name}" on the map', compNone: 'a single piece', compDeclared: 'declared by you', compDetected: 'detected in its folder', compRemove: 'Remove {name} from the map', addRepo: '＋ Repository', moveRepo: 'Bring a repository here…', hasInstructions: '📋 with instructions',
+      repos: 'Repositories', noRepos: 'No repositories yet.', addRepo: '＋ Repository', moveRepo: 'Bring a repository here…', hasInstructions: '📋 with instructions',
     },
     repos: {
       instructions: 'Repository instructions', instructionsPh: 'How to work with this repository (for every agent in its folder): commands, conventions, what not to touch… They go with every brief, pipeline and question.', hasInstructions: '📋 instructions',
@@ -699,6 +699,7 @@ export default {
       args: 'Arguments', argsPh: 'e.g. --permission-mode acceptEdits', argsHint: 'Only for new sessions. Claude Code uses --permission-mode acceptEdits when left empty (in the background).',
       added: 'Done: “{name}” now shows up on the board.', updated: 'Repository updated.', removed: '“{name}” deleted (its folder is not touched).',
       confirmDelete: 'Delete the repository “{name}”? It is only removed from the office: its folder is not touched.', deleted: 'Repository deleted.',
+      addExisting: '＋ Repository', pick: 'Choose a repository', pickHint: 'The repositories the office already knows: open sessions (not yet registered) and registered ones.', pickRegistered: 'Registered', pickLoose: 'To register', pickChoose: 'Choose', pickEdit: 'Edit', pickManual: '＋ Type the path instead', pickNone: 'The office does not know any repository yet. Open an agent session in its folder, or type the path.',
     },
     experts: {
       title: '🎓 Experts', hint: 'An expert (SME) knows a skill: when an agent uses it, they come up the elevator, sit at a free desk with the skill in their badge and leave when the turn ends. For now each one is associated with their skill by hand. The experts are the whole company\'s.',

@@ -682,7 +682,7 @@ export default {
       newTitle: 'Nuevo departamento', editTitle: 'Editar «{name}»', created: 'Listo: «{name}» ya es parte de la empresa.', updated: 'Departamento actualizado.', deleted: 'Departamento eliminado (sus proyectos pasaron al principal).',
       confirmDelete: '¿Eliminar el departamento «{name}»? Sus proyectos pasan al principal; sus carpetas no se tocan.', cancel: 'Cancelar',
       instructions: 'Indicaciones', instructionsPh: 'Cómo se trabaja en este departamento: convenciones, lo que nunca se hace, a quién preguntar… Van con cada encargo, directiva y pregunta a sus proyectos.',
-      repos: 'Repositorios', noRepos: 'Todavía sin repositorios.', compName: 'componente', compPath: 'carpeta (opcional)', compAdd: '＋ Componente', compAdded: 'Componente «{name}» en el mapa', compNone: 'una sola pieza', compDeclared: 'declarado por ti', compDetected: 'detectado en su carpeta', compRemove: 'Quitar {name} del mapa', addRepo: '＋ Repositorio', moveRepo: 'Traer un repositorio aquí…', hasInstructions: '📋 con indicaciones',
+      repos: 'Repositorios', noRepos: 'Todavía sin repositorios.', addRepo: '＋ Repositorio', moveRepo: 'Traer un repositorio aquí…', hasInstructions: '📋 con indicaciones',
     },
     repos: {
       instructions: 'Indicaciones del repositorio', instructionsPh: 'Cómo trabajar con este repositorio (para todos los agentes de su carpeta): comandos, convenciones, qué no tocar… Van con cada encargo, pipeline y pregunta.', hasInstructions: '📋 indicaciones',
@@ -699,6 +699,7 @@ export default {
       args: 'Argumentos', argsPh: 'p. ej. --permission-mode acceptEdits', argsHint: 'Sólo para sesiones nuevas. Claude Code usa --permission-mode acceptEdits si no pones nada (en segundo plano).',
       added: 'Listo: «{name}» ya aparece en la pizarra.', updated: 'Repositorio actualizado.', removed: '«{name}» eliminado (su carpeta no se toca).',
       confirmDelete: '¿Eliminar el repositorio «{name}»? Sólo se borra de la oficina: su carpeta no se toca.', deleted: 'Repositorio eliminado.',
+      addExisting: '＋ Repositorio', pick: 'Elegir un repositorio', pickHint: 'Los repositorios que la oficina ya conoce: sesiones abiertas (sin registrar) y registrados.', pickRegistered: 'Registrados', pickLoose: 'Para registrar', pickChoose: 'Elegir', pickEdit: 'Editar', pickManual: '＋ Escribir la ruta a mano', pickNone: 'La oficina todavía no conoce ningún repositorio. Abrí una sesión de un agente en su carpeta, o escribí la ruta.',
     },
     experts: {
       title: '🎓 Expertos', hint: 'Un experto (SME) sabe de una skill: cuando un agente la usa, sube por el ascensor, se sienta en un escritorio libre con la skill en su badge y se va cuando termina el turno. Por ahora cada uno se asocia a mano a su skill. Los expertos son de toda la empresa.',
