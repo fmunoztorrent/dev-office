@@ -42,6 +42,24 @@ flowchart LR
 
 Todo se guarda en un solo archivo SQLite (`node:sqlite`) y no hay **ninguna dependencia en tiempo de ejecución**: el servidor WebSocket es propio y el cliente es el `WebSocket` global de Node.
 
+## Primero el código, los tokens al final
+
+La oficina decide con código todo lo que el código puede decidir, y al modelo le deja sólo la redacción, nunca los hechos. Así es barata, rápida y da lo mismo cada vez:
+
+| Qué | Cómo, sin modelo |
+|---|---|
+| Qué personaje hace cada herramienta, archivo o comando | Reglas (`server/roles.js`), y el tipo del repositorio (`detectKind`, de su carpeta) |
+| Qué está haciendo cada uno, en palabras | `server/humanize.js` («Corriendo los tests», nunca el comando) |
+| Cómo se relacionan los repositorios | `server/explore.js` lee sus carpetas: puertos y URLs, variables de entorno, paquetes, `docker-compose`, colas, con el archivo y la línea que lo dicen |
+| Para qué usa un repositorio una tecnología | `explainInfra`: su librería, dónde se configura y para qué (sesiones, una cola, limitar el tráfico…) |
+| A quién llega un pedido | El mapa de impacto (`server/components.js`): lo que nombra, lo que usa eso, lo que no está en el mapa |
+| De qué repositorio le hablas a alguien, y adónde va una orden al manager | `server/people.js`: nombres y proyectos en el texto |
+| Lo último que hizo alguien | `server/narrator.js` convierte la bitácora en hechos; un modelo rápido (opcional) sólo redacta la frase |
+| Los aprendizajes de la retro | `server/retro.js` los saca de lo que dijo la tarea |
+| La daily | `server/standup.js`, de la bitácora real |
+
+Al modelo se le pregunta sólo donde ayuda el criterio (el impacto de un pedido en `server/intelligence.js`, la revisión de la analista, una pregunta al margen, la frase del narrador), siempre es opcional, y lo que dice se contrasta con los mismos hechos.
+
 ## El mapa del código
 
 ```

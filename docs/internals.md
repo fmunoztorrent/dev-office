@@ -42,6 +42,24 @@ flowchart LR
 
 Everything is kept in one SQLite file (`node:sqlite`), and there are **no runtime dependencies**: the WebSocket server is the office's own and the client is Node's global `WebSocket`.
 
+## Code first, tokens last
+
+The office decides with code whatever code can decide, and leaves a model only the wording, never the facts. That keeps it cheap, fast and the same every time:
+
+| What | How, without a model |
+|---|---|
+| Which character does each tool, file or command | Rules (`server/roles.js`), and the repository's kind (`detectKind`, from its folder) |
+| What each one is doing, in words | `server/humanize.js` (“Running the tests”, never the command) |
+| How repositories relate | `server/explore.js` reads their folders: ports and URLs, env vars, packages, `docker-compose`, queues — with the file and line that says so |
+| What a technology is for in a repository | `explainInfra`: its library, where it is configured, and what for (sessions, a queue, rate limiting…) |
+| Who an order reaches | The impact map (`server/components.js`): what it names, what uses that, what is not on the map |
+| Which repository you are talking about, and where an order to the manager goes | `server/people.js`: names and projects in the text |
+| What someone did lately | `server/narrator.js` turns the log into facts; a fast model (optional) only writes the sentence |
+| The retro's learnings | `server/retro.js` picks them from what the task said |
+| The daily | `server/standup.js`, from the real log |
+
+A model is asked only where judgment helps (an order's impact in `server/intelligence.js`, the analyst's review, a side question, the narrator's sentence), it is always optional, and what it says is checked against the same facts.
+
 ## Code map
 
 ```

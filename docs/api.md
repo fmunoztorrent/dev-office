@@ -50,19 +50,30 @@ An event can say which **office** it goes to (`office`, or `devteam_office` in a
 
 The question is answered by the office's agent on duty (the most recent session, forked and read-only; or the office's registered agent). `status`: `asking` → `answered` | `failed`. In the office they arrive as `btw` events with `phase` `ask`, `answer` or `failed`, and to that office's viewers as `{ type: "ask", ask }`.
 
-## Offices (a company with several teams)
+## Projects and areas (the company)
+
+A project is an **office** in the API (`/v1/offices`): a floor of the building with its people, its instructions and autonomy, in an **area**.
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| `GET` | `/v1/offices` | | `{ ok, offices, view }`: each with `{ id, name, custom, timezone, ownTimezone, location, instructions, autonomy, place, country, city, agents, sessions }`; `view`, the one being watched |
-| `POST` | `/v1/offices` | `{ name, timezone?, location?, instructions?, autonomy? }` (`autonomy`: `guided` \| `balanced` \| `autonomous`; empty or `null`: the company's) | `201 { ok, office }`; the executive floor's operations takes note of it (`{ type: "floor", event: { floor: "exec", kind: "department" } }`) |
+| `GET` | `/v1/areas` | | `{ ok, areas: [{ id, name, instructions, custom, projects: [office ids] }] }` (`general` first: always there) |
+| `POST` | `/v1/areas` | `{ name, instructions? }` | `201 { ok, area }` (`400` if one has that name) |
+| `PUT` · `DELETE` | `/v1/areas/<id>` | `{ name?, instructions? }` · | `{ ok, area }` · `{ ok }`: its projects go to `general`, which cannot be deleted |
+| `GET` · `POST` | `/v1/offices/<id>/retro` | `POST { learnings, task? }` (one per line) | The retro (the meeting table's rug): `GET` answers `{ ok, task: { id, text, status, agent }, suggestions }` (the learnings the office suggests from what the project's last task said, without a model); `POST` saves the ones you keep to the archive (a note tagged `retro`), `{ ok, saved, entry? }`, and the team gathers at the table (`{ kind: "retro", lines }`). With none, nothing is saved |
+| `GET` | `/v1/offices/<id>/narrate?role=<role>&sub=<subagent>&name=&title=` | | What that character did lately in one sentence (the narrator): `{ ok, text, source: model \| rules \| none }`. With `prefs.narrator` on, a fast model writes it from the facts of the log (cached by what it saw); otherwise, by rules. When a turn ends, with the model on, up to three who worked in it say it over them (`{ kind: "narrate", role, text }`) |
+
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| `GET` | `/v1/offices` | | `{ ok, offices, view }`: each with `{ id, name, custom, area, timezone, ownTimezone, location, instructions, autonomy, place, country, city, agents, sessions }`; `view`, the one being watched |
+| `POST` | `/v1/offices` | `{ name, area?, timezone?, location?, instructions?, autonomy? }` (`autonomy`: `guided` \| `balanced` \| `autonomous`; empty or `null`: the company's) | `201 { ok, office }`; the executive floor's operations takes note of it (`{ type: "floor", event: { floor: "exec", kind: "department" } }`) |
 | `GET` | `/v1/offices/<id>` | | `{ ok, office }` |
-| `PUT` | `/v1/offices/<id>` | `{ name?, timezone?, location?, instructions?, autonomy? }` (`null`: the company's / the zone's; `""` removes the instructions) | `{ ok, office }` |
+| `PUT` | `/v1/offices/<id>` | `{ name?, area?, timezone?, location?, instructions?, autonomy? }` (`null`: the company's / the zone's; `""` removes the instructions) | `{ ok, office }` |
 | `DELETE` | `/v1/offices/<id>` | | `{ ok }`; its agents move to the main one (`main`, which cannot be deleted) |
 | `POST` | `/v1/offices/<id>/standup` | | The daily standup now, to be told the latest: what happened **since the office's previous daily** (the first one, the last 24 hours; never more than a week). `{ ok, office, name, date, since, from, lines: [{ role, text }], people: { role: "Diego (Backend)" }, waiting, open, empty, entry, text }`: `from` is since when in words (`"desde las 14:05"`; `null` the first time), each line tells what that character did and what they are on now (`Ahora: …`), and `text` is the whole of it in Markdown. The office's log gets a `standup` event (`{ kind: "standup", role: "manager", text, lines, waiting, open }`, the game gathers the team at the table) and, if something happened, its minutes go to the archive (`entry`: kind `minute`, tag `daily`). It also happens by itself once a day, from 9:30 in the office's time zone. Over WebSocket: `{ type: "standup", all? }` |
 | `POST` | `/v1/standup` | | The company's daily: every department's at once, `{ ok, reports: [ … as above ], text }` |
 
-Each office is a **department**. Its `instructions` (how to work there) and each project folder's go on top of every brief, pipeline, directive and question to its projects, under the 📁 scope line, as `📋 …` lines with the text in `│ …` lines (the office takes that header out of the whiteboard's title):
+Each office is a **project**. Its area's `instructions`, its own (how to work there) and each project folder's go on top of every brief, pipeline, directive and question to its projects, under the 📁 scope line, as `📋 …` lines with the text in `│ …` lines (the office takes that header out of the whiteboard's title):
 
 | Method | Path | Body | Response |
 |---|---|---|---|
@@ -204,9 +215,9 @@ Format and protocol with the agents: [pipelines.md](pipelines.md).
 | `PUT` | `/v1/settings` | `{ prefs?: { … }, appearance?: { role: { name?, title?, sex?, personality?, style?, shirt?, pants?, hair?, skin?, long?, beard?, glasses? } \| null }, office? }` |
 | `GET` | `/v1/characters/<role>?office=<id>` | Answers the character as JSON, to share it: `{ kind: "dev-team-office/character", version: 1, role, name, sex, personality, style, shirt, … }` |
 | `PUT` | `/v1/characters/<role>?office=<id>` | That JSON: it becomes that office's `<role>` (unknown or invalid keys are ignored; `400` if it is not a character) |
-| `GET` | `/v1/settings/export` | Your settings as a JSON file (`attachment`): `{ kind: "dev-team-office/settings", version: 1, app, exportedAt, prefs, departments: [{ id, name, timezone, location, instructions, autonomy, characters }], projects: [{ name, path, harness, bin?, args?, department, instructions, components? }], instructions: [{ path, instructions }], mine: { skills: [{ name, title, body, enabled }], tools: [{ name, title, body, enabled, config }] } }`. Not the history (the log, briefs, directives, dailies, questions), the archive, nor the floor or office being watched (`prefs.view` keeps only `mode`). No secret is stored, so none travels |
-| `POST` | `/v1/settings/import` | That JSON. It merges: what it brings replaces what is here and the rest stays (a department's characters are left as the file has them). Each piece is checked on its own: `{ ok, applied: { prefs, departments, characters, projects, components, instructions, skills, tools }, skipped: [{ what, error }] }` (a project whose folder is not on this machine is skipped; your skills are installed in this machine's personal folders). `400` if it is not a settings file or comes from a newer version |
-
+| `GET` | `/v1/settings/export?skills=0` | Your settings as a JSON file (`attachment`): `{ kind: "dev-team-office/settings", version: 2, app, exportedAt, prefs, areas: [{ id, name, instructions }], departments: [{ id, name, area, timezone, location, instructions, autonomy, characters }], projects: [{ name, path, harness, bin?, args?, department, kind?, instructions }], relations: [{ from, to, how, note? }], instructions: [{ path, instructions }], mine: { skills, tools }, skills: [{ name, from, description, files: { "SKILL.md": "…", … } }], experts, resources }`. `skills` are your skills with their text files (your agents' personal folders and the project skills your experts use; `?skills=0`: none). Not the history (the log, briefs, directives, dailies, questions), the archive, nor the floor or office being watched (`prefs.view` keeps only `mode`). No secret is stored, so none travels |
+| `POST` | `/v1/settings/import?skills=global\|repos\|none&repos=<id or folder>,…` | That JSON. It merges: what it brings replaces what is here and the rest stays. Each piece is checked on its own: `{ ok, applied: { prefs, areas, departments, characters, projects, relations, skills, installed, tools, experts, resources }, installed: [{ name, label, action, dir }], skipped: [{ what, error }] }`. Its skills go to your personal folders (`global`, the default), to the registered repositories in `repos` (`.claude/skills` for Claude Code, `.agents/skills` for the rest) or nowhere (`none`: the private ones stay in ⚙ › Mine, off); a different skill already there is never overwritten (`skipped`). `400` if it is not a settings file or comes from a newer version |
+| `POST` | `/v1/reset` | `{ parts: ["prefs", "look", "company", "activity", "archive"] }` (any of them): back to the first day, in one transaction. `company` leaves the main office empty and never touches the repositories' folders; your private skills and tools stay. `{ ok, reset }`, or `400` with nothing chosen |
 `prefs` (the general settings, all optional when changing them):
 
 | Key | Values |
@@ -225,6 +236,7 @@ Format and protocol with the agents: [pipelines.md](pipelines.md).
 | `standards` | The company's standards (the CTO's), up to 4000 characters: on top of every brief, before the department's and the project's instructions |
 | `capacity` | How many open briefs a department takes at once from a directive (1–20, 3 by default); the rest of its parts wait their turn (`status: "waiting"`) |
 | `compact` | `{ auto: bool, at: number, unit: "tokens" \| "pct" }`: past this much an agent's context is compacted on its own (on, 400 000 tokens by default; `pct`: a share of the model's window, 10–99; tokens: 10k–10M). Changing `unit` without `at` takes that unit's default (80 % or 400k). See [Auto-compaction](#auto-compaction) |
+| `intelligence` · `narrator` | `{ provider: off \| agent \| anthropic \| openai \| ollama, harness, model, url, timeout }`: the model the office judges with, and the fast one that tells in a sentence what each one did (`claude-haiku-5-5` by default with `anthropic`). See [Infrastructure and the office's model](#infrastructure-and-the-offices-model) |
 
 - **Validation:** everything is validated before writing. On an error, the response is `400 { error }` (in the game's language) and nothing is touched.
 - **Live:** when the settings change the server broadcasts `{ type: "prefs", prefs }`; the appearance, `{ type: "appearance", appearance, office }` to whoever watches that office; the agents or sessions, `{ type: "targets", targets }`.
@@ -237,27 +249,30 @@ When an agent's context goes past `prefs.compact` (400k tokens by default), the 
 - **Any other agent in a herdr pane** (Claude Code, Codex…): when its turn ends, `/compact` is typed in its prompt.
 - **Otherwise** (Claude Code in a terminal of its own): the log says so, once, for you to type `/compact`.
 - **The Claude Code sessions the office opens** get the limit as their own (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, or `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` with `pct`): they compact by themselves.
+- **Your own Claude Code sessions and their subagents:** the office keeps the same variable in `~/.claude/settings.json` (`env`, marked `DEV_TEAM_OFFICE_COMPACT`), so Claude Code compacts them (a subagent with the same rule as its conversation). Never over one you set yourself.
 
 Each request leaves an `autocompact` event in the log (`via`: `agent`, `pane`, `manual`, or `failed` when the agent could not and says why). It is asked again after 10 minutes if the context is still past the limit; a compaction (`compact`) resets it. Until its next answer, the context bar shows the session as just compacted (`context.compacted`).
 
-## Systems: a product and its artifacts
+## Relations, and a brief to a project
 
-A system is a product or business project ("Payments"): its artifacts (a registered repo, or one component of one), each with its kind and what it uses, and the team (department) that answers for it.
+A project's repositories, and what each one uses of another (`relations`). `GET /v1/systems` still answers each project with its repositories as a "system" (its `parts`, their kinds, what each uses and the `order`).
 
 | Method | Path | Body |
 |---|---|---|
-| `GET` | `/v1/systems` | `{ systems: [{ id, name, office, officeName, instructions, order: [names], parts: [{ name, project, component, path, kind, uses, target, repo, owner, shared }] }], kinds }` (`order`: the order a change goes in; `shared`: its repo is another department's) |
-| `POST` | `/v1/systems/suggest` | `{ parts: [{ name, project, path?, kind?, uses? }], redo? }`: each one's kind detected from its folder (when it has none) and what each one uses (when it says nothing; `redo`: propose it again), with the `order` |
-| `POST` | `/v1/systems` | `{ name, office \| team: "new", instructions?, parts: [{ name, project (id or folder of a registered project), component?, path?, kind, uses? }], move? }`: creates it (or updates the one with that name). `team: "new"` creates a department with its name and, unless `move: false`, moves its repos to it (the ones that are not in another department's system). `400` on a cycle, an unknown repo or kind |
-| `PUT` · `DELETE` | `/v1/systems/<id>` | Changes it · deletes it (its repos are not touched) |
-| `POST` | `/v1/systems/<id>/brief` | `{ text, title?, from? }`: a directive to its artifacts, in order (see below) |
-| `POST` | `/v1/handoff` | `{ cwd, text }`: an artifact's handoff for the ones that use it (the MCP tool `handoff`): it goes to the running directive part working in that folder. `404` if there is none |
+| `GET` | `/v1/relations` | `{ ok, relations: [{ id, from, to, how, note, source: you \| found, evidence }], hows }` (`from`, `to`: repository ids; `how`: `calls`, `uses`, `consumes` or `reads`) |
+| `POST` | `/v1/relations` | `{ from, to, how?, note? }`: says it (an existing one is updated; one found becomes yours). `400` if it closes a circle inside a project |
+| `DELETE` | `/v1/relations/<id>` | Removes it |
+| `POST` | `/v1/relations/explore` | Reads the registered repositories' folders and infers their relations without a model (ports and URLs it calls, env vars named after another repo, package dependencies, `docker-compose` `depends_on`, queues one publishes and another consumes): `{ ok, found, added: [relation], skipped }`; the new ones have `source: "found"` and their `evidence` (`file:line text`). One you said is never replaced |
+| `GET` | `/v1/resources/explain?repo=<id>&tech=<name>` | How a repository uses a technology (Redis, PostgreSQL, Kafka…), from its code: `{ ok, how: [{ evidence }], where: [{ evidence }], purpose: [sessions \| queue \| pubsub \| rateLimit \| cache \| tables \| …], details }` |
+| `GET` | `/v1/systems` | Each project with repositories, as a system: `{ systems: [{ id, name, office, officeName, instructions, order: [names], parts: [{ name, project, path, kind, uses, owner, shared }] }], kinds }` |
+| `POST` | `/v1/systems/<id>/brief` | `{ text, title?, from? }`: a directive to the project's repositories, in order (see below) |
+| `POST` | `/v1/handoff` | `{ cwd, text }`: a repository's handoff for the ones that use it (the MCP tool `handoff`): it goes to the running directive part working in that folder. `404` if there is none |
 
-- **Kinds:** `frontend`, `mobile`, `bff`, `backend`, `worker`, `library`, `data`, `infra`, `other`. Detected from the folder: Next, Vue, Svelte, Angular… a frontend; react-native or Expo, mobile; Express, Fastify, NestJS, Go, Java… a backend (a `bff` if its name says so); a queue consumer, a worker; Terraform or Helm, infra; dbt or Airflow, data; a package with no server nor screen, a library.
-- **Order:** a directive whose projects are artifacts of a system waits: each part goes after the parts it uses (`after`, with `status: "waiting"` and the reason in `detail`), carries their handoff (`📦 What X left (you use it):`) and the folders it may read (`reads`: the 📁 line says it may read them without changing anything). If one of them fails or is cancelled, the ones that use it are cancelled (`it did not go: X did not finish`). A part with users is asked to leave its handoff (`🤝 … use it and work after you`). Parts carry `after: [names]` and `handoff: bool`.
-- **Impact:** `POST /v1/directives/plan` and `POST /v1/directives` take `systems: [id | name]` (all their artifacts); the map's `systems` say which artifacts are touched (`touched`) and which are reached because they use one (`uses`). A project reached that way has `why: "uses"` and `via` (what it uses that changes); one brought in by naming its system, `why: "system"`.
-- **Briefs:** every brief to an artifact's folder carries, under the 📁 line, `🧩 Artifact <name> (<kind>) of the system <system> · uses … · used by …` and the system's instructions.
+- **Kinds:** `frontend`, `mobile`, `bff`, `backend`, `worker`, `library`, `data`, `infra`, `other`. Detected from the folder (Next, Vue, React… a frontend; react-native or Expo, mobile; Express, Go, Java… a backend, a `bff` if its name says so; a queue consumer, a worker; Terraform or Helm, infra; dbt or Airflow, data; a package with no server nor screen, a library), or the one you set on the repository (`kind` in `POST`/`PUT /v1/agents`).
+- **Order:** each repository goes after the ones it uses (`after`, `status: "waiting"`), carries their handoff and the folders it may read; if one fails or is cancelled, the ones that use it are cancelled.
+- **Impact:** a directive that changes a repository reaches the ones that use it (`why: "uses"`, `via`); naming the project brings in all its repositories.
 - **The character:** code no rule claims (by its path or its command) is done by the kind's character: frontend and mobile, the frontend; infra, DevOps; the rest, the backend.
+- `POST /v1/systems` (a file or client from before) still works: it becomes a project with relations. `PUT`/`DELETE /v1/systems/<id>` answer `410`: edit the project and its relations.
 
 ## Loops: a project worked step by step
 
@@ -322,10 +337,10 @@ The whole map as one graph (server/architecture.js): what the settings' ⚙ › 
 |---|---|---|
 | `GET` | `/v1/architecture` | `{ ok, nodes, edges, findings, stats }` |
 
-- **`nodes`:** `{ id, type, name, key }` and, by type: a department (`dept:<office>`); a repository (`repo:<agent>`: `dept`, `path`, `harness`, `kind`, `exists`, `systems` (the projects it is an artifact of), `shared` (an artifact of another department's project)); a component (`comp:<agent>:<folder>`: `repo`, `path`, `kind`, `declared`); a project (`sys:<id>`: `dept`, `order` (the order a change goes in), `parts: [{ name, kind, node, uses, shared, missing }]`); a resource (`res:<id>`: `kind`, `tech`, `location`, `state`, `source: declared | detected`, `techOnly` (a repository's stack), `users: [{ id, name, how }]`).
-- **`edges`:** `{ from, to, kind: uses, system, label }` (an artifact uses another, in that project) or `{ from, to, kind: link, how }` (a repository and its infrastructure).
-- **`findings`:** the review, the warnings first: `{ level: warn | info, code, node, vars }`. Codes: `noConsumer`, `noPublisher`, `resourceUnused`, `repoMissing`, `partNoRepo`, `systemOrder` (warnings); `sharedRepo`, `repoNoProject`, `resourcePlanned`, `resourceDetected`, `emptySystem`, `emptyDept`, `noProjects` (notes).
-- **`stats`:** `{ departments, repos, components, systems, resources, stack, relations }`.
+- **`nodes`:** `{ id, type, name, key }` and, by type: an area (`area:<id>`: `projects`); a project (`project:<office>`: `area`, `order` (the order a change goes in), `repos`); a repository (`repo:<agent>`: `project`, `path`, `harness`, `kind`, `exists`, `shared` (used by other projects)); a resource (`res:<id>`: `kind`, `tech`, `location`, `state`, `source: declared | detected`, `techOnly` (a repository's stack), `users: [{ id, name, how }]`).
+- **`edges`:** `{ from, to, kind: uses, how, note, source: you | found, relation }` (a repository uses another) or `{ from, to, kind: link, how }` (a repository and its infrastructure).
+- **`findings`:** the review, the warnings first: `{ level: warn | info, code, node, vars }`. Codes: `noConsumer`, `noPublisher`, `resourceUnused`, `repoMissing`, `projectOrder` (warnings); `noRelations`, `relationFound`, `sharedRepo`, `resourcePlanned`, `resourceDetected`, `emptyProject` (notes).
+- **`stats`:** `{ areas, projects, repos, relations, resources, stack }`.
 
 ## Infrastructure and the office's model
 
@@ -338,6 +353,7 @@ The infrastructure on the map (server/resources.js): queues, topics, databases, 
 | `PUT` · `DELETE` | `/v1/resources/<id>` | Changes it (what is not said stays) · removes it |
 | `GET` | `/v1/intelligence` | `{ ok, enabled, model, config: { provider, harness, model, url, timeout }, problem, problemText }`: the model the office leans on (`prefs.intelligence`; `problem`: `key`, `model`, or why its agent cannot be asked; `problemText`, the same in words, which ⚙ › Intelligence shows) |
 | `POST` | `/v1/intelligence/test` | Asks it something tiny: `{ ok, ms, model }`, or `502 { ok: false, error }`; `400` without one |
+| `GET` · `POST` | `/v1/narrator` · `/v1/narrator/test` | The same, for the narrator (`prefs.narrator`) |
 
 - **`prefs.intelligence`:** `{ provider: off | agent | anthropic | openai | ollama, harness, model, url, timeout }` (`timeout` in seconds, 10–600). `agent` runs one of your agents' CLIs read-only in the system's temporary folder (`claude -p --permission-mode plan`, `codex exec --sandbox read-only`, `opencode run --agent plan`, `pi -p --tools read,…`), with `--model` if you give one. `anthropic` calls the Messages API (`anthropic-version: 2026-10-21`, structured output with the analysis' JSON schema; its key in `DEV_TEAM_OFFICE_MODEL_KEY` or `ANTHROPIC_API_KEY`). `openai`: `POST <url>/chat/completions` (its key in `DEV_TEAM_OFFICE_MODEL_KEY` or `OPENAI_API_KEY`). `ollama`: `POST <url>/api/chat`. Keys are never stored.
 - The resources travel in your settings file (`resources`); a link to a folder that is not on the other machine is left out.
@@ -509,6 +525,7 @@ The client can send:
 { "type": "view", "office": "payments" }           // watch another office: its snapshot arrives (and it is saved)
 { "type": "prefs", "prefs": { "lang": "es" } }     // change general settings
 { "type": "ask", "text": "who is on the tests?", "role": "qa", "id": 2 }  // btw (role, session: optional, as in POST /v1/ask): the ack carries { ask } and the answer arrives as { type: "ask", ask }
+{ "type": "order", "text": "add an expiry endpoint to loyalty-core", "id": 3 }  // an order to the manager: right away, to the repository it names (or the project's only one), without the analyst's review; the ack carries { target, said } (also POST /v1/messages)
 { "type": "client", "app": "web" }                  // the web page says it reloads itself when `hello` brings another version
 ```
 

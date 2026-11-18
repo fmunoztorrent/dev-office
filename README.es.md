@@ -24,8 +24,8 @@ Dev Team Office convierte lo que hace un agente de código en un equipo trabajan
 ## Lo principal
 
 - **En vivo, desde cada agente.** Claude Code y Codex (hooks), OpenCode (plugin), Pi (extensión) y cualquier agente con MCP. Cada subagente es un personaje propio. → [La oficina](docs/the-office.es.md)
-- **Dales trabajo.** Un encargo desde la pizarra arranca el pipeline del propio harness (Errementari, comandos, prompts de Pi…). Una directiva desde el piso de la dirección llega a varios departamentos a la vez, después de mapear su impacto. Un loop trabaja un proyecto paso a paso hasta que cumple sus criterios. → [Hacer el trabajo](docs/work.es.md)
-- **Modela tu empresa.** Departamentos, repositorios, proyectos y la infraestructura que comparten, dibujados como un mapa de la arquitectura que recorres desde la empresa entera hasta un componente. → [La empresa](docs/company.es.md)
+- **Dales trabajo.** Un encargo desde la pizarra arranca el pipeline del propio harness (Errementari, comandos, prompts de Pi…). Una directiva desde el piso de la dirección llega a varios proyectos a la vez, después de mapear su impacto. Dile al manager qué hacer y va a trabajo de inmediato. Un loop trabaja un proyecto paso a paso hasta que cumple sus criterios. → [Hacer el trabajo](docs/work.es.md)
+- **Modela tu empresa.** Áreas, proyectos (cada uno un piso con su personal), sus repositorios, lo que cada uno usa de otro —deducido del código, no adivinado— y la infraestructura que comparten (con para qué, dónde y cómo la usa cada uno), dibujado como un mapa de la arquitectura que recorres desde la empresa entera hasta un repositorio. → [La empresa](docs/company.es.md)
 - **Un archivo que leen los agentes.** Notas, decisiones y documentos, buscados por palabras y por significado, arriba de cada encargo. → [El archivo](docs/work.es.md#dos-pisos-más-la-dirección-y-el-archivo)
 - **Tus pruebas E2E, miradas.** Una pantalla chica muestra el navegador bajo prueba, paso a paso, y repite cada prueba. → [Pruebas E2E](docs/e2e.es.md)
 - **Cómoda en la terminal.** Una bitácora, el juego en medios bloques y, dentro de herdr, un monitor de actividad con cada agente y cada subagente en su pane. → [herdr](docs/herdr.es.md)
@@ -81,7 +81,7 @@ La oficina escucha sólo en `127.0.0.1` y en un socket Unix de tu usuario. Nada 
 
 | La vista cenital (`v`) | El mapa de la arquitectura (⚙ › Mapa) |
 |:-:|:-:|
-| <img src=".github/assets/office-iso.jpg" alt="La oficina desde arriba, en isométrico: escritorios, una recién llegada por un subagente, el café y la ciudad detrás del vidrio" width="420"> | <img src=".github/assets/architecture.png" alt="El mapa de la arquitectura: los departamentos como carriles, los repositorios con lo que usa cada uno y la infraestructura abajo" width="420"> |
+| <img src=".github/assets/office-iso.jpg" alt="La oficina desde arriba, en isométrico: escritorios, una recién llegada por un subagente, el café y la ciudad detrás del vidrio" width="420"> | <img src=".github/assets/architecture.png" alt="El mapa de la arquitectura: áreas y proyectos, los repositorios con lo que usa cada uno y la infraestructura abajo" width="420"> |
 
 ## Documentación
 

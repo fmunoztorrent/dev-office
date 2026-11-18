@@ -24,8 +24,8 @@ Dev Team Office turns what a coding agent does into a team at work. Every tool c
 ## Highlights
 
 - **Live, from every agent.** Claude Code and Codex (hooks), OpenCode (plugin), Pi (extension) and any agent with MCP. Each subagent becomes a character of its own. → [The office](docs/the-office.md)
-- **Hand them work.** A brief from the whiteboard starts the harness's own pipeline (Errementari, slash commands, Pi prompts…). A directive from the executive floor reaches several departments at once, after mapping its impact. A loop works a project step by step until its criteria are met. → [Getting work done](docs/work.md)
-- **Model your company.** Departments, repositories, projects and the infrastructure they share, drawn as an architecture map you walk from the whole company down to a component. → [The company](docs/company.md)
+- **Hand them work.** A brief from the whiteboard starts the harness's own pipeline (Errementari, slash commands, Pi prompts…). A directive from the executive floor reaches several projects at once, after mapping its impact. Tell the manager what to do and it goes to work right away. A loop works a project step by step until its criteria are met. → [Getting work done](docs/work.md)
+- **Model your company.** Areas, projects (each a floor with its people), their repositories, what each one uses of another — inferred from the code, not guessed — and the infrastructure they share (with what each one is for, where and how), drawn as an architecture map you walk from the whole company down to a repository. → [The company](docs/company.md)
 - **An archive the agents read.** Notes, decisions and documents, searched by words and by meaning, on top of every brief. → [The archive](docs/work.md#two-more-floors-the-executive-one-and-the-archive)
 - **Your E2E tests, watched.** A small screen shows the browser under test, step by step, and replays each test. → [E2E tests](docs/e2e.md)
 - **At home in the terminal.** A log, the game in half blocks, and inside herdr an activity monitor with each agent and subagent in its own pane. → [herdr](docs/herdr.md)
@@ -81,7 +81,7 @@ The office listens only on `127.0.0.1` and on a Unix socket of your user. Nothin
 
 | The isometric view (`v`) | The architecture map (⚙ › Map) |
 |:-:|:-:|
-| <img src=".github/assets/office-iso.jpg" alt="The office from above, in isometric: desks, a newcomer for a subagent, the café and the city behind the glass" width="420"> | <img src=".github/assets/architecture.png" alt="The architecture map: departments as lanes, repositories with what each one uses, and the infrastructure at the bottom" width="420"> |
+| <img src=".github/assets/office-iso.jpg" alt="The office from above, in isometric: desks, a newcomer for a subagent, the café and the city behind the glass" width="420"> | <img src=".github/assets/architecture.png" alt="The architecture map: areas and projects, repositories with what each one uses, and the infrastructure at the bottom" width="420"> |
 
 ## Documentation
 

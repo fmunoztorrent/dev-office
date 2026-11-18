@@ -2,6 +2,36 @@
 
 All notable changes to Dev Team Office. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/) (while it is `0.x`, a minor version may change behavior).
 
+## [0.31.0] - 2026-11-18
+
+The company as it really is (areas, projects, repositories and how they relate, read from the code), a lighter settings area, and a team that answers like a team.
+
+### Added
+
+- **Areas and projects.** The company is now Company → Area (Technology, Operations…) → Project (Loyalty, Payments…: a floor with its people) → Repositories and infrastructure. ⚙ › **Company** holds the standards, the areas and their projects in one place. A database from before turns its departments and systems into areas, projects and relations by itself.
+- **Relations between repositories.** Say what each one uses of another (the BFF *calls* the core) on the map (🔗 Relate) or in the repository's window, and **🔍 Explore relations** infers them from the code without a model (ports and URLs, env vars, packages, `docker-compose`, queues), each with its file and line, for you to confirm.
+- **What each technology is for.** A detected Redis, PostgreSQL, Kafka… says, per repository, what it is used for (sessions, a queue, rate limiting…), where it is configured and with which library — in ⚙ › Infrastructure and on the map.
+- **The narrator.** What someone did lately, in one concrete sentence on their card (📝), and in their bubble when a turn ends; with a fast model you choose in ⚙ › Intelligence › Narrator (Claude Haiku by default, any OpenAI-compatible API such as a DeepSeek flash, Ollama or an agent's CLI), or by rules without one.
+- **The team answers as a team.** The tech lead finds which repositories you are asking about and answers from them; an order to the manager (without `?`) goes to work right away, to the repository it names; the PM talks product, never code.
+- **The rug calls a daily or a retro.** The retro shows the project's last task with the learnings the office suggests from it; the ones you keep go to the archive.
+- **Hovering someone or their desk** shows what they are on and what you can do.
+- **Your skills travel with your settings.** The exported file carries your skills with their files (your agents' personal folders and the ones your experts use); on import you choose where they go: your personal folders, some repositories, or nowhere (`--skills`, `--repos` in the CLI). A different skill already there is never overwritten.
+- **⟲ Start over** (⚙ › Backup): back to the first day the parts you choose — general settings, characters and experts, the company, the activity, the archive.
+
+### Changed
+
+- **Adding a repository always asks for its project**, in the browser and in the terminal: it never lands in one by itself. Repositories are light rows grouped by area and project; their details open in a window. The component and folder fields are gone.
+- **⚙ › Characters** is a row of portraits and one editor at a time. **Experts** have wider cards and a skill picker with yours first (private, your agents' folders, your Claude Code plugins).
+- **Extras come up when they are needed:** a subagent's task goes to its role's character if they are free; a newcomer comes by the elevator only when that character is busy.
+- **In the top-down view the glass shows the sky**, not another city.
+- **No weather chip in the HUD**, and the connection shows only when it is lost.
+- **Subagents compact too:** the office keeps your auto-compaction limit in Claude Code's settings (`env`, marked as its own; never over one you set), so the sessions you open by hand and their subagents compact where you said.
+
+### Fixed
+
+- **⌕ Pick a known repository did nothing:** its dialog had been lost.
+- **A React app without `react-dom` was not detected as a frontend.**
+
 ## [0.30.0] - 2026-11-17
 
 The office gets a phone to call the company's experts, a card that says what everyone is working on, and every button gathered in a dock.
@@ -460,8 +490,9 @@ First release meant to be installed from the internet.
 - The office as a frontend: agents run the pipelines in their own sessions.
 - Pipelines from the whiteboard, ⚙ Settings and the characters' appearance.
 
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.28.0...HEAD
-[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.29.1...HEAD
+[Unreleased]: https://github.com/fmunoztorrent/dev-office/compare/v0.31.0...HEAD
+[0.31.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.30.0...v0.31.0
+[0.30.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.29.1...v0.30.0
 [0.29.1]: https://github.com/fmunoztorrent/dev-office/compare/v0.29.0...v0.29.1
 [0.29.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/fmunoztorrent/dev-office/compare/v0.27.0...v0.28.0

@@ -50,19 +50,30 @@ Un evento puede decir a qué **oficina** va (`office`, o `devteam_office` en el 
 
 La pregunta la contesta el agente de turno de la oficina (la sesión más reciente, bifurcada y en sólo lectura; o el agente registrado de la oficina). `status`: `asking` → `answered` | `failed`. En la oficina llegan como eventos `btw` con `phase` `ask`, `answer` o `failed`, y a los visores de esa oficina como `{ type: "ask", ask }`.
 
-## Oficinas (una empresa con varios equipos)
+## Proyectos y áreas (la empresa)
+
+Un proyecto es una **oficina** en la API (`/v1/offices`): un piso del edificio con su personal, sus indicaciones y su autonomía, en un **área**.
 
 | Método | Ruta | Cuerpo | Respuesta |
 |---|---|---|---|
-| `GET` | `/v1/offices` | | `{ ok, offices, view }`: cada una con `{ id, name, custom, timezone, ownTimezone, location, instructions, autonomy, place, country, city, agents, sessions }`; `view`, la que se está mirando |
-| `POST` | `/v1/offices` | `{ name, timezone?, location?, instructions?, autonomy? }` (`autonomy`: `guided` \| `balanced` \| `autonomous`; vacía o `null`: la de la empresa) | `201 { ok, office }`; operaciones, en la dirección, toma nota (`{ type: "floor", event: { floor: "exec", kind: "department" } }`) |
+| `GET` | `/v1/areas` | | `{ ok, areas: [{ id, name, instructions, custom, projects: [ids de oficinas] }] }` (`general` primero: siempre está) |
+| `POST` | `/v1/areas` | `{ name, instructions? }` | `201 { ok, area }` (`400` si ya hay una con ese nombre) |
+| `PUT` · `DELETE` | `/v1/areas/<id>` | `{ name?, instructions? }` · | `{ ok, area }` · `{ ok }`: sus proyectos pasan a `general`, que no se elimina |
+| `GET` · `POST` | `/v1/offices/<id>/retro` | `POST { learnings, task? }` (uno por línea) | La retro (la alfombra de la mesa de reuniones): `GET` responde `{ ok, task: { id, text, status, agent }, suggestions }` (los aprendizajes que la oficina sugiere de lo que dijo la última tarea del proyecto, sin modelo); `POST` guarda los que dejas en el archivo (una nota con la etiqueta `retro`), `{ ok, saved, entry? }`, y el equipo se junta en la mesa (`{ kind: "retro", lines }`). Sin ninguno, no se guarda nada |
+| `GET` | `/v1/offices/<id>/narrate?role=<rol>&sub=<subagente>&name=&title=` | | Lo que hizo ese personaje últimamente, en una frase (el narrador): `{ ok, text, source: model \| rules \| none }`. Con `prefs.narrator` encendido, un modelo rápido la escribe desde los hechos de la bitácora (guardada según lo que vio); si no, por reglas. Al terminar un turno, con el modelo encendido, hasta tres de los que trabajaron en él lo dicen sobre su cabeza (`{ kind: "narrate", role, text }`) |
+
+
+| Método | Ruta | Cuerpo | Respuesta |
+|---|---|---|---|
+| `GET` | `/v1/offices` | | `{ ok, offices, view }`: cada una con `{ id, name, custom, area, timezone, ownTimezone, location, instructions, autonomy, place, country, city, agents, sessions }`; `view`, la que se está mirando |
+| `POST` | `/v1/offices` | `{ name, area?, timezone?, location?, instructions?, autonomy? }` (`autonomy`: `guided` \| `balanced` \| `autonomous`; vacía o `null`: la de la empresa) | `201 { ok, office }`; operaciones, en la dirección, toma nota (`{ type: "floor", event: { floor: "exec", kind: "department" } }`) |
 | `GET` | `/v1/offices/<id>` | | `{ ok, office }` |
-| `PUT` | `/v1/offices/<id>` | `{ name?, timezone?, location?, instructions?, autonomy? }` (`null`: la de la empresa / la de la zona; `""` borra las indicaciones) | `{ ok, office }` |
+| `PUT` | `/v1/offices/<id>` | `{ name?, area?, timezone?, location?, instructions?, autonomy? }` (`null`: la de la empresa / la de la zona; `""` borra las indicaciones) | `{ ok, office }` |
 | `DELETE` | `/v1/offices/<id>` | | `{ ok }`; sus agentes pasan a la principal (`main`, que no se elimina) |
 | `POST` | `/v1/offices/<id>/standup` | | La daily ahora, para saber lo último: lo que pasó **desde la daily anterior de la oficina** (la primera, las últimas 24 horas; nunca más de una semana). `{ ok, office, name, date, since, from, lines: [{ role, text }], people: { rol: "Diego (Backend)" }, waiting, open, empty, entry, text }`: `from` es desde cuándo, en palabras (`"desde las 14:05"`; `null` la primera vez), cada línea dice lo que hizo ese personaje y en qué está ahora (`Ahora: …`), y `text` es todo junto en Markdown. La bitácora de la oficina recibe un evento `standup` (`{ kind: "standup", role: "manager", text, lines, waiting, open }`, el juego reúne al equipo en la mesa) y, si pasó algo, su acta va al archivo (`entry`: tipo `minute`, etiqueta `daily`). También ocurre sola una vez al día, desde las 9:30 en la zona horaria de la oficina. Por WebSocket: `{ type: "standup", all? }` |
 | `POST` | `/v1/standup` | | La daily de la empresa: la de todos los departamentos a la vez, `{ ok, reports: [ … como arriba ], text }` |
 
-Cada oficina es un **departamento**. Sus `instructions` (cómo se trabaja ahí) y las de la carpeta de cada proyecto van arriba de cada encargo, pipeline, directiva y pregunta a sus proyectos, bajo la línea 📁 del alcance, como líneas `📋 …` con el texto en líneas `│ …` (la oficina saca esa cabecera del título de la pizarra):
+Cada oficina es un **proyecto**. Las `instructions` de su área, las suyas (cómo se trabaja ahí) y las de la carpeta de cada proyecto van arriba de cada encargo, pipeline, directiva y pregunta a sus proyectos, bajo la línea 📁 del alcance, como líneas `📋 …` con el texto en líneas `│ …` (la oficina saca esa cabecera del título de la pizarra):
 
 | Método | Ruta | Cuerpo | Respuesta |
 |---|---|---|---|
@@ -204,8 +215,9 @@ Formato y protocolo con los agentes: [pipelines.es.md](pipelines.es.md).
 | `PUT` | `/v1/settings` | `{ prefs?: { … }, appearance?: { rol: { name?, title?, sex?, personality?, style?, shirt?, pants?, hair?, skin?, long?, beard?, glasses? } \| null }, office? }` |
 | `GET` | `/v1/characters/<rol>?office=<id>` | Contesta el personaje como JSON, para compartirlo: `{ kind: "dev-team-office/character", version: 1, role, name, sex, personality, style, shirt, … }` |
 | `PUT` | `/v1/characters/<rol>?office=<id>` | Ese JSON: pasa a ser el `<rol>` de esa oficina (las claves desconocidas o inválidas se ignoran; `400` si no es un personaje) |
-| `GET` | `/v1/settings/export` | Tus ajustes como archivo JSON (`attachment`): `{ kind: "dev-team-office/settings", version: 1, app, exportedAt, prefs, departments: [{ id, name, timezone, location, instructions, autonomy, characters }], projects: [{ name, path, harness, bin?, args?, department, instructions, components? }], instructions: [{ path, instructions }], mine: { skills: [{ name, title, body, enabled }], tools: [{ name, title, body, enabled, config }] } }`. No va el historial (la bitácora, los encargos, las directivas, las dailies, las preguntas), el archivo, ni el piso u oficina que se está mirando (`prefs.view` guarda sólo `mode`). No se guarda ningún secreto, así que no viaja ninguno |
-| `POST` | `/v1/settings/import` | Ese JSON. Mezcla: lo que trae reemplaza lo de aquí y lo demás se queda (los personajes de un departamento quedan como en el archivo). Cada pieza se revisa por separado: `{ ok, applied: { prefs, departments, characters, projects, components, instructions, skills, tools }, skipped: [{ what, error }] }` (un proyecto cuya carpeta no está en esta máquina se salta; tus skills se instalan en las carpetas personales de esta máquina). `400` si no es un archivo de ajustes o viene de una versión más nueva |
+| `GET` | `/v1/settings/export?skills=0` | Tus ajustes como archivo JSON (`attachment`): `{ kind: "dev-team-office/settings", version: 2, app, exportedAt, prefs, areas: [{ id, name, instructions }], departments: [{ id, name, area, timezone, location, instructions, autonomy, characters }], projects: [{ name, path, harness, bin?, args?, department, kind?, instructions }], relations: [{ from, to, how, note? }], instructions: [{ path, instructions }], mine: { skills, tools }, skills: [{ name, from, description, files: { "SKILL.md": "…", … } }], experts, resources }`. `skills` son tus skills con sus archivos de texto (las de las carpetas personales de tus agentes y las skills de proyecto que usan tus expertos; `?skills=0`: ninguna). No van el historial (la bitácora, los encargos, las directivas, las dailies, las preguntas), el archivo, ni el piso u oficina que miras (`prefs.view` guarda sólo `mode`). No se guarda ningún secreto, así que ninguno viaja |
+| `POST` | `/v1/settings/import?skills=global\|repos\|none&repos=<id o carpeta>,…` | Ese JSON. Mezcla: lo que trae reemplaza lo de aquí y lo demás queda. Cada pieza se revisa por su cuenta: `{ ok, applied: { prefs, areas, departments, characters, projects, relations, skills, installed, tools, experts, resources }, installed: [{ name, label, action, dir }], skipped: [{ what, error }] }`. Sus skills van a tus carpetas personales (`global`, por defecto), a los repositorios registrados de `repos` (`.claude/skills` para Claude Code, `.agents/skills` para los demás) o a ninguna parte (`none`: las privadas quedan en ⚙ › Mío, apagadas); una skill distinta que ya esté nunca se pisa (`skipped`). `400` si no es un archivo de ajustes o viene de una versión más nueva |
+| `POST` | `/v1/reset` | `{ parts: ["prefs", "look", "company", "activity", "archive"] }` (cualquiera de ellas): vuelve al primer día, en una sola transacción. `company` deja la oficina principal vacía y nunca toca las carpetas de los repositorios; tus skills y herramientas privadas quedan. `{ ok, reset }`, o `400` si no eliges nada |
 
 `prefs` (los ajustes generales, todos opcionales al cambiarlos):
 
@@ -225,6 +237,7 @@ Formato y protocolo con los agentes: [pipelines.es.md](pipelines.es.md).
 | `standards` | Los estándares de la empresa (los del CTO), hasta 4000 caracteres: arriba de cada encargo, antes de las indicaciones del departamento y del proyecto |
 | `capacity` | Cuántos encargos abiertos toma un departamento a la vez de una directiva (1–20, 3 por defecto); el resto de sus partes espera turno (`status: "waiting"`) |
 | `compact` | `{ auto: bool, at: number, unit: "tokens" \| "pct" }`: pasado esto, el contexto de un agente se compacta solo (encendido, 400 000 tokens por defecto; `pct`: una parte de la ventana del modelo, 10–99; tokens: 10k–10M). Cambiar `unit` sin `at` toma el valor por defecto de esa unidad (80 % o 400k). Ver [Autocompactación](#autocompactación) |
+| `intelligence` · `narrator` | `{ provider: off \| agent \| anthropic \| openai \| ollama, harness, model, url, timeout }`: el modelo con que juzga la oficina, y el rápido que cuenta en una frase qué hizo cada uno (`claude-haiku-5-5` por defecto con `anthropic`). Ver [La infraestructura y el modelo de la oficina](#la-infraestructura-y-el-modelo-de-la-oficina) |
 
 - **Validación:** todo se valida antes de escribir. Si hay un error, la respuesta es `400 { error }` (en el idioma del juego) y no se toca nada.
 - **En vivo:** al cambiar los ajustes el servidor difunde `{ type: "prefs", prefs }`; la apariencia, `{ type: "appearance", appearance, office }` a quienes miran esa oficina; los agentes o las sesiones, `{ type: "targets", targets }`.
@@ -237,27 +250,30 @@ Cuando el contexto de un agente pasa `prefs.compact` (400k tokens por defecto), 
 - **Cualquier otro agente en un pane de herdr** (Claude Code, Codex…): cuando termina su turno, se escribe `/compact` en su prompt.
 - **Si no** (Claude Code en una terminal suya): la bitácora te avisa, una vez, para que escribas `/compact`.
 - **Los Claude Code que abre la oficina** reciben el tope como propio (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, o `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` con `pct`): compactan solos.
+- **Tus propias sesiones de Claude Code y sus subagentes:** la oficina deja la misma variable en `~/.claude/settings.json` (`env`, marcada con `DEV_TEAM_OFFICE_COMPACT`), así Claude Code las compacta (a un subagente con la misma regla que a su conversación). Nunca encima de una que pusiste tú.
 
 Cada pedido deja un evento `autocompact` en la bitácora (`via`: `agent`, `pane`, `manual`, o `failed` cuando el agente no pudo y dice por qué). Se vuelve a pedir a los 10 minutos si el contexto sigue sobre el tope; una compactación (`compact`) lo reinicia. Hasta su próxima respuesta, la barra de contexto muestra la sesión como recién compactada (`context.compacted`).
 
-## Sistemas: un producto y sus artefactos
+## Relaciones, y un encargo a un proyecto
 
-Un sistema es un producto o proyecto de negocio («Pagos»): sus artefactos (un repo registrado, o un componente de uno), cada uno con su tipo y lo que usa, y el equipo (departamento) que responde por él.
+Los repositorios de un proyecto, y lo que cada uno usa de otro (`relations`). `GET /v1/systems` todavía responde cada proyecto con sus repositorios como un «sistema» (sus `parts`, sus tipos, qué usa cada uno y el `order`).
 
 | Método | Ruta | Cuerpo |
 |---|---|---|
-| `GET` | `/v1/systems` | `{ systems: [{ id, name, office, officeName, instructions, order: [nombres], parts: [{ name, project, component, path, kind, uses, target, repo, owner, shared }] }], kinds }` (`order`: el orden en que va un cambio; `shared`: su repo es de otro departamento) |
-| `POST` | `/v1/systems/suggest` | `{ parts: [{ name, project, path?, kind?, uses? }], redo? }`: el tipo de cada uno detectado de su carpeta (si no tiene) y lo que usa cada uno (si no dice nada; `redo`: proponerlo de nuevo), con el `order` |
-| `POST` | `/v1/systems` | `{ name, office \| team: "new", instructions?, parts: [{ name, project (id o carpeta de un proyecto registrado), component?, path?, kind, uses? }], move? }`: lo crea (o actualiza el de ese nombre). `team: "new"` crea un departamento con su nombre y, salvo `move: false`, lleva ahí sus repos (los que no están en un sistema de otro departamento). `400` con un círculo, un repo o un tipo desconocido |
-| `PUT` · `DELETE` | `/v1/systems/<id>` | Lo cambia · lo borra (sus repos no se tocan) |
-| `POST` | `/v1/systems/<id>/brief` | `{ text, title?, from? }`: una directiva a sus artefactos, en orden (ver abajo) |
-| `POST` | `/v1/handoff` | `{ cwd, text }`: el traspaso de un artefacto para los que lo usan (la herramienta MCP `handoff`): va a la parte en curso de una directiva que trabaja en esa carpeta. `404` si no hay ninguna |
+| `GET` | `/v1/relations` | `{ ok, relations: [{ id, from, to, how, note, source: you \| found, evidence }], hows }` (`from`, `to`: ids de repositorios; `how`: `calls`, `uses`, `consumes` o `reads`) |
+| `POST` | `/v1/relations` | `{ from, to, how?, note? }`: la dice (una que ya está se actualiza; una encontrada pasa a ser tuya). `400` si cierra un círculo dentro de un proyecto |
+| `DELETE` | `/v1/relations/<id>` | La quita |
+| `POST` | `/v1/relations/explore` | Lee las carpetas de los repositorios registrados y deduce sus relaciones sin modelo (puertos y URLs a los que llama, variables de entorno con el nombre de otro repo, dependencias de paquetes, `depends_on` de `docker-compose`, colas que uno publica y otro consume): `{ ok, found, added: [relación], skipped }`; las nuevas tienen `source: "found"` y su `evidence` (`archivo:línea texto`). Una que dijiste tú nunca se reemplaza |
+| `GET` | `/v1/resources/explain?repo=<id>&tech=<nombre>` | Cómo usa un repositorio una tecnología (Redis, PostgreSQL, Kafka…), desde su código: `{ ok, how: [{ evidence }], where: [{ evidence }], purpose: [sessions \| queue \| pubsub \| rateLimit \| cache \| tables \| …], details }` |
+| `GET` | `/v1/systems` | Cada proyecto con repositorios, como sistema: `{ systems: [{ id, name, office, officeName, instructions, order: [nombres], parts: [{ name, project, path, kind, uses, owner, shared }] }], kinds }` |
+| `POST` | `/v1/systems/<id>/brief` | `{ text, title?, from? }`: una directiva a los repositorios del proyecto, en orden (ver abajo) |
+| `POST` | `/v1/handoff` | `{ cwd, text }`: el traspaso de un repositorio para los que lo usan (la herramienta MCP `handoff`): va a la parte en curso de la directiva que trabaja en esa carpeta. `404` si no hay ninguna |
 
-- **Tipos:** `frontend`, `mobile`, `bff`, `backend`, `worker`, `library`, `data`, `infra`, `other`. Se detectan de la carpeta: Next, Vue, Svelte, Angular… un frontend; react-native o Expo, móvil; Express, Fastify, NestJS, Go, Java… un backend (un `bff` si su nombre lo dice); un consumidor de colas, un worker; Terraform o Helm, infra; dbt o Airflow, datos; un paquete sin servidor ni pantalla, una librería.
-- **Orden:** una directiva cuyos proyectos son artefactos de un sistema espera: cada parte va después de las que usa (`after`, con `status: "waiting"` y el motivo en `detail`), lleva su traspaso (`📦 Lo que dejó X (lo usas):`) y las carpetas que puede leer (`reads`: la línea 📁 dice que puede leerlas sin cambiar nada). Si una de ellas falla o se cancela, las que la usan se cancelan («no partió: X no terminó»). A una parte que otros usan se le pide dejar su traspaso (`🤝 Lo usan …, que trabajan después de ti`). Las partes traen `after: [nombres]` y `handoff: bool`.
-- **Impacto:** `POST /v1/directives/plan` y `POST /v1/directives` aceptan `systems: [id | nombre]` (todos sus artefactos); los `systems` del mapa dicen qué artefactos toca (`touched`) y a cuáles alcanza porque usan uno (`uses`). Un proyecto alcanzado así tiene `why: "uses"` y `via` (lo que usa que cambia); uno que entra porque se nombra su sistema, `why: "system"`.
-- **Encargos:** todo encargo a la carpeta de un artefacto lleva, bajo la línea 📁, `🧩 Artefacto <nombre> (<tipo>) del sistema <sistema> · usa … · lo usan …` y las indicaciones del sistema.
-- **El personaje:** el código que ninguna regla reclama (por su ruta o su comando) lo hace el personaje de su tipo: frontend y móvil, el frontend; infra, DevOps; el resto, el backend.
+- **Tipos:** `frontend`, `mobile`, `bff`, `backend`, `worker`, `library`, `data`, `infra`, `other`. Se detectan de la carpeta (Next, Vue, React… un frontend; react-native o Expo, mobile; Express, Go, Java… un backend, un `bff` si su nombre lo dice; un consumidor de colas, un worker; Terraform o Helm, infra; dbt o Airflow, data; un paquete sin servidor ni pantalla, una librería), o el que le pongas al repositorio (`kind` en `POST`/`PUT /v1/agents`).
+- **Orden:** cada repositorio parte después de los que usa (`after`, `status: "waiting"`), lleva su traspaso y las carpetas que puede leer; si uno falla o se cancela, los que lo usan se cancelan.
+- **Impacto:** una directiva que cambia un repositorio llega a los que lo usan (`why: "uses"`, `via`); nombrar el proyecto trae a todos sus repositorios.
+- **El personaje:** el código que ninguna regla reclama (por su ruta o su comando) lo hace el personaje del tipo: frontend y mobile, el frontend; infra, DevOps; lo demás, el backend.
+- `POST /v1/systems` (un archivo o cliente de antes) sigue funcionando: se convierte en un proyecto con relaciones. `PUT`/`DELETE /v1/systems/<id>` responden `410`: edita el proyecto y sus relaciones.
 
 ## Loops: un proyecto paso a paso
 
@@ -322,10 +338,10 @@ Todo el mapa como un solo grafo (server/architecture.js): lo que dibuja ⚙ › 
 |---|---|---|
 | `GET` | `/v1/architecture` | `{ ok, nodes, edges, findings, stats }` |
 
-- **`nodes`:** `{ id, type, name, key }` y, según el tipo: un departamento (`dept:<oficina>`); un repositorio (`repo:<agente>`: `dept`, `path`, `harness`, `kind`, `exists`, `systems` (los proyectos de los que es artefacto), `shared` (artefacto de un proyecto de otro departamento)); un componente (`comp:<agente>:<carpeta>`: `repo`, `path`, `kind`, `declared`); un proyecto (`sys:<id>`: `dept`, `order` (el orden en que va un cambio), `parts: [{ name, kind, node, uses, shared, missing }]`); un recurso (`res:<id>`: `kind`, `tech`, `location`, `state`, `source: declared | detected`, `techOnly` (el stack de un repositorio), `users: [{ id, name, how }]`).
-- **`edges`:** `{ from, to, kind: uses, system, label }` (un artefacto usa a otro, en ese proyecto) o `{ from, to, kind: link, how }` (un repositorio y su infraestructura).
-- **`findings`:** la revisión, primero los avisos: `{ level: warn | info, code, node, vars }`. Códigos: `noConsumer`, `noPublisher`, `resourceUnused`, `repoMissing`, `partNoRepo`, `systemOrder` (avisos); `sharedRepo`, `repoNoProject`, `resourcePlanned`, `resourceDetected`, `emptySystem`, `emptyDept`, `noProjects` (notas).
-- **`stats`:** `{ departments, repos, components, systems, resources, stack, relations }`.
+- **`nodes`:** `{ id, type, name, key }` y, según el tipo: un área (`area:<id>`: `projects`); un proyecto (`project:<oficina>`: `area`, `order` (el orden en que va un cambio), `repos`); un repositorio (`repo:<agente>`: `project`, `path`, `harness`, `kind`, `exists`, `shared` (lo usan otros proyectos)); un recurso (`res:<id>`: `kind`, `tech`, `location`, `state`, `source: declared | detected`, `techOnly` (el stack de un repositorio), `users: [{ id, name, how }]`).
+- **`edges`:** `{ from, to, kind: uses, how, note, source: you | found, relation }` (un repositorio usa a otro) o `{ from, to, kind: link, how }` (un repositorio y su infraestructura).
+- **`findings`:** la revisión, primero las advertencias: `{ level: warn | info, code, node, vars }`. Códigos: `noConsumer`, `noPublisher`, `resourceUnused`, `repoMissing`, `projectOrder` (advertencias); `noRelations`, `relationFound`, `sharedRepo`, `resourcePlanned`, `resourceDetected`, `emptyProject` (notas).
+- **`stats`:** `{ areas, projects, repos, relations, resources, stack }`.
 
 ## La infraestructura y el modelo de la oficina
 
@@ -338,6 +354,7 @@ La infraestructura en el mapa (server/resources.js): colas, tópicos, bases de d
 | `PUT` · `DELETE` | `/v1/resources/<id>` | Cambiarla (lo que no se dice queda igual) · quitarla |
 | `GET` | `/v1/intelligence` | `{ ok, enabled, model, config: { provider, harness, model, url, timeout }, problem, problemText }`: el modelo en que se apoya la oficina (`prefs.intelligence`; `problem`: `key`, `model`, o por qué no se le puede preguntar a su agente; `problemText`, lo mismo en palabras, que muestra ⚙ › Inteligencia) |
 | `POST` | `/v1/intelligence/test` | Le pregunta algo mínimo: `{ ok, ms, model }`, o `502 { ok: false, error }`; `400` si no hay uno |
+| `GET` · `POST` | `/v1/narrator` · `/v1/narrator/test` | Lo mismo, para el narrador (`prefs.narrator`) |
 
 - **`prefs.intelligence`:** `{ provider: off | agent | anthropic | openai | ollama, harness, model, url, timeout }` (`timeout` en segundos, 10–600). `agent` corre la CLI de uno de tus agentes en sólo lectura en la carpeta temporal del sistema (`claude -p --permission-mode plan`, `codex exec --sandbox read-only`, `opencode run --agent plan`, `pi -p --tools read,…`), con `--model` si le das uno. `anthropic` llama a la API de Messages (`anthropic-version: 2026-10-21`, salida estructurada con el esquema JSON del análisis; su clave en `DEV_TEAM_OFFICE_MODEL_KEY` o `ANTHROPIC_API_KEY`). `openai`: `POST <url>/chat/completions` (su clave en `DEV_TEAM_OFFICE_MODEL_KEY` u `OPENAI_API_KEY`). `ollama`: `POST <url>/api/chat`. Las claves nunca se guardan.
 - Los recursos viajan en tu archivo de ajustes (`resources`); un enlace a una carpeta que no está en la otra máquina se deja fuera.
@@ -508,6 +525,7 @@ El cliente puede enviar:
 { "type": "view", "office": "pagos" }              // mirar otra oficina: llega su snapshot (y queda guardada)
 { "type": "prefs", "prefs": { "lang": "es" } }     // cambiar ajustes generales
 { "type": "ask", "text": "¿quién está con los tests?", "role": "qa", "id": 2 }  // btw (role, session: opcionales, como en POST /v1/ask): el ack trae { ask } y la respuesta llega como { type: "ask", ask }
+{ "type": "order", "text": "agrega a loyalty-core un endpoint de vencimiento", "id": 3 }  // una orden al manager: de inmediato, al repositorio que nombra (o al único del proyecto), sin la revisión de la analista; el ack trae { target, said } (también POST /v1/messages)
 { "type": "client", "app": "web" }                  // la página web dice que se recarga sola cuando `hello` trae otra versión
 ```
 
