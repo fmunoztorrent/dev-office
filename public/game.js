@@ -42,7 +42,7 @@ const hslRgb = (h, s, l) => {
  * @param now   () => Date: the instant (daylight, clock, lunch). The real one by default.
  * @param zone  the office's time zone (null: the system's); changed with sim.setZone
  */
-export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHover, onFloorClick, now: clockNow = () => new Date(), zone = null, view = 'flat', renderer = null } = {}) {
+export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onRugClick, onHover, onFloorClick, now: clockNow = () => new Date(), zone = null, view = 'flat', renderer = null } = {}) {
   const ctx = canvas.getContext('2d');
   let iso = view !== 'flat';
   // the camera fits the whole floor (the office and the hallway, left of it) in the canvas
@@ -1922,6 +1922,11 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     return wx >= ELEVATOR.x && wx <= ELEVATOR.x + ELEVATOR.w && wy >= 8 && wy <= 122;
   };
   const overBoard = (x, y) => (iso ? onBoard(...unapply(BOARD_M(), x, y)) : onBoard(x + LEFT, y));
+  /** Is the pointer over the meeting table's rug (the daily and the retro are called from it)? */
+  const overRug = (x, y) => {
+    const [wx, wy] = iso ? unapply(cam.floor(), x, y) : [x + LEFT, y];
+    return wx >= SPOT.table.x - 130 && wx <= SPOT.table.x + 130 && wy >= SPOT.table.y - 52 && wy <= SPOT.table.y + 74;
+  };
   /** The pointer, in the canvas's own pixels (the front view's world is shifted by LEFT). */
   const toWorld = (e) => {
     const r = canvas.getBoundingClientRect();
@@ -1939,7 +1944,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     hover = agentAt(x, y);
     hoverBoard = !hover && overBoard(x, y);
     hoverRack = !hover && !hoverBoard && !!onRackClick && overRack(x, y);
-    canvas.style.cursor = hover || hoverBoard || hoverRack || overLift(x, y) ? 'pointer' : 'default';
+    canvas.style.cursor = hover || hoverBoard || hoverRack || overLift(x, y) || (!!onRugClick && overRug(x, y)) ? 'pointer' : 'default';
     // who is under the pointer (or whose desk), and where: the page shows what they do and what you can do
     if (was !== hover || hover) onHover?.(hover, { x: e.clientX, y: e.clientY });
   });
@@ -1957,6 +1962,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     if (!who && overLift(x, y)) return onFloorClick?.('office', 'lift');
     if (!who && overBoard(x, y)) return onBoardClick?.();
     if (!who && onRackClick && overRack(x, y)) return onRackClick();
+    if (!who && onRugClick && overRug(x, y)) return onRugClick({ x: e.clientX, y: e.clientY });
     selected = who;
     onSelect?.(selected);
   });

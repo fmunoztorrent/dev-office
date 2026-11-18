@@ -48,6 +48,8 @@ const game = createGame($('office'), {
   onSelect: (id) => ((id === 'po' || id === 'manager') && asking.length ? promptsUi.open() : select(id)),
   onBoardClick: () => (boardView.hasTickets() ? boardView.open() : openBrief()),
   onRackClick: () => servicesUi.open(),
+  // the meeting table's rug: a daily or a retro
+  onRugClick: (at) => rugMenu(at),
   // over someone (or their desk): what they are on now and what you can do with them
   onHover: (id, at) => deskTip(id, at),
   // the shared floors: the board and the screen (directives), the shelves, the rack and the patch panel (the archive), the elevator
@@ -329,6 +331,66 @@ $('attention-all').onclick = () => { renderInbox(); if (!$('inbox').open) $('inb
  * at the table); on the executive floor or the archive, the company's: every department's at once.
  * Each one tells what happened since the previous daily, and what they are on now.
  */
+/** The rug's menu, next to the pointer: call a daily, or a retro of the last task. */
+function rugMenu(at) {
+  let menu = $('rug-menu');
+  if (!menu) { menu = el('div', 'rug-menu'); menu.id = 'rug-menu'; menu.setAttribute('role', 'menu'); $('screen').append(menu); }
+  const item = (label, hint, go) => {
+    const b = el('button', '', label);
+    b.type = 'button'; b.title = hint; b.setAttribute('role', 'menuitem');
+    b.onclick = () => { menu.hidden = true; go(); };
+    return b;
+  };
+  menu.replaceChildren(el('b', '', t('ui.rug.title')), item(`🗣 ${t('ui.rug.daily')}`, t('ui.rug.dailyHint'), openDaily), item(`🔁 ${t('ui.rug.retro')}`, t('ui.rug.retroHint'), openRetro));
+  menu.hidden = false;
+  const box = $('screen').getBoundingClientRect();
+  menu.style.left = `${Math.max(8, Math.min(at.x - box.left, box.width - menu.offsetWidth - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(at.y - box.top, box.height - menu.offsetHeight - 8))}px`;
+  menu.querySelector('button').focus();
+  const away = (e) => { if (!menu.contains(e.target)) { menu.hidden = true; document.removeEventListener('pointerdown', away, true); } };
+  setTimeout(() => document.addEventListener('pointerdown', away, true), 0);
+  menu.onkeydown = (e) => { if (e.key === 'Escape') menu.hidden = true; };
+}
+
+/** The retro: the project's last task, the learnings the office suggests, and the ones you keep go to the archive. */
+async function openRetro() {
+  const id = office?.id || 'main';
+  let dlg = $('retro');
+  if (!dlg) { dlg = document.createElement('dialog'); dlg.id = 'retro'; dlg.className = 'brief retro'; document.body.append(dlg); }
+  const r = await fetch(`/v1/offices/${encodeURIComponent(id)}/retro`).then((x) => x.json()).catch((err) => ({ ok: false, error: err.message }));
+  const text = document.createElement('textarea');
+  text.rows = 7; text.maxLength = 4000; text.placeholder = t('ui.retro.ph');
+  text.value = (r.suggestions || []).map((x) => `- ${x}`).join('\n');
+  const note = el('p', 'b-problem', r.ok ? '' : r.error || '✖');
+  const save = el('button', 'btn', t('ui.retro.save'));
+  save.type = 'submit';
+  const close = el('button', 'btn ghost', t('ui.cancel'));
+  close.type = 'button'; close.onclick = () => dlg.close();
+  const form = document.createElement('form');
+  form.method = 'dialog';
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    save.disabled = true;
+    const out = await fetch(`/v1/offices/${encodeURIComponent(id)}/retro`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ learnings: text.value }) }).then((x) => x.json()).catch((err) => ({ ok: false, error: err.message }));
+    save.disabled = false;
+    if (!out.ok) { note.textContent = out.error || '✖'; return; }
+    dlg.close();
+  };
+  const head = el('header', 'brief-head');
+  head.append(el('span', 'pin', ''), el('h2', '', `🔁 ${t('ui.retro.title')} · ${office?.name || id}`));
+  const body = el('div', 'brief-body');
+  body.append(
+    el('p', 'hint', r.task ? t('ui.retro.about', { task: r.task.text, status: t(`ui.retro.status.${['done', 'failed', 'running'].includes(r.task.status) ? r.task.status : 'other'}`) }) : t('ui.retro.noTask')),
+    el('p', 'hint', r.suggestions?.length ? t('ui.retro.suggested', { n: r.suggestions.length }) : t('ui.retro.write')),
+    text, note);
+  const foot = el('footer', 'brief-foot');
+  foot.append(el('span', 'muted', t('ui.retro.where')), close, save);
+  form.append(head, body, foot);
+  dlg.replaceChildren(form);
+  if (!dlg.open) dlg.showModal();
+  text.focus();
+}
+
 async function openDaily() {
   const dlg = $('daily');
   const company = game.floor !== 'office';
@@ -1037,7 +1099,7 @@ function deskTip(id, at) {
   tip.replaceChildren(
     el('b', '', cfg.name), el('span', 'tip-role', ` · ${role}`),
     el('div', `tip-now${busy ? ' busy' : ''}`, `${busy ? '●' : '○'} ${now}`),
-    el('ul', 'tip-acts', ...acts.map((x) => el('li', '', x))));
+    (() => { const ul = el('ul', 'tip-acts'); ul.append(...acts.map((x) => el('li', '', x))); return ul; })());
   tip.style.color = '';
   tip.style.setProperty('--c', cfg.shirt);
   tip.hidden = false;

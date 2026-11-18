@@ -73,6 +73,7 @@ export default {
     askYou: '{name}, te tengo una pregunta ❓',
     chatReplies: ['¡Anotado! 📝', 'Lo vemos en la daily 👍', 'Entendido 🙌', '¡Buena idea!'],
     btwThinking: ['Mmm, buena pregunta… 🤔', 'Déjame revisar… 🔍', 'Un segundo, lo busco 📚'],
+    retro: { open: '¡Retro! ¿Qué aprendimos de la última?', close: 'Anotado: va al archivo.', none: 'Nada nuevo esta vez. ¡A trabajar!' },
     standup: { visitor: 'De parte de {name} ({role}): {text}', open: '¡Buenos días! Daily: ¿qué hizo cada uno? 🗣', openLater: '¡Daily! ¿Qué hay de nuevo desde la última? 🗣', waiting: '{n} cosa(s) esperan a la PO: {what}', open2: 'Quedan {n} encargo(s) abiertos. ¡Vamos! 💪', close: 'Nada pendiente. ¡Vamos! 💪' },
     clarify: { review: ['Déjame leerlo con calma 🔍', 'Reviso que tengamos todo 📋', 'Antes de partir, lo reviso 🤓'], ask: 'Tengo {n} pregunta(s) antes de empezar 📝', sent: ['Todo claro: ¡a trabajar! 🚀', 'Listo para el equipo 💪'], cancelled: 'Ok, lo dejamos' },
     btwFail: 'No logré averiguarlo 🤷',
@@ -296,7 +297,6 @@ export default {
     newDesc: 'nuevo (lo pidió una directiva)', needAnswers: 'Antes de enviarla, dime qué es {what}: si existe y dónde, si hay que crearlo o si es un departamento nuevo.', badAnswer: '¿Qué es «{what}»? Contesta: existe, crearlo, un repo aparte, un repo nuevo, infraestructura, departamento nuevo o no es parte del proyecto.', deptEmpty: 'Se creó {names}, pero todavía no tiene repositorios: súmale uno (⚙ › Departamentos) y vuelve a enviar la directiva.',
     askInfra: '«{what}» ({kind}): ¿ya existe, y dónde? ¿O hay que crearla, y quién?', whoCreates: '¿Qué repositorio crea «{what}»? Elige uno.', needWhere: '¿Dónde está «{what}»? Escribe su carpeta o la URL de su repositorio.', noFolder: 'No existe la carpeta {path}', repoExists: 'La carpeta {path} ya existe y no está vacía: si ya es un repo, contesta «Es un repo aparte».',
     ui: {
-    tip: { card: 'Clic: su ficha (qué hizo, en qué está)', you: 'Clic: tu ficha (eres la PO)', talk: 'Hablarle a {name} o pedirle algo (desde su ficha)', poke: '👉 Llamarle la atención', answer: '✋ Clic: responder lo que te preguntan' },
       tree: 'Los repos que toca', component: 'componente', expand: '⤢ Ver el detalle', graphTitle: '🗺 El impacto en detalle', task: 'El pedido', unknown: '❓ Sin mapear', dept: '{n} repo(s)',
       thinking: '🧠 {model} analiza el pedido…', thought: '🧠 Analizado con {model} ({s} s)', thinkFailed: '🧠 El análisis de {model} no llegó ({error}): queda el mapa por palabras.', thinkOff: 'Para un análisis más fino (cómo toca cada repo y qué falta), elige un modelo en ⚙ › Inteligencia.', rethink: '🧠 Analizar de nuevo',
       why: 'Por qué', how: 'Cómo lo toca', components: 'Componentes', infra: 'Infraestructura', stack: 'Usa', system: 'Proyecto', path: 'Carpeta', answerBelow: 'Sin mapear: contéstalo abajo.', summary: 'El análisis', usedBy: 'La usan', where: 'Dónde',
@@ -351,6 +351,7 @@ export default {
     sound: 'Un sonido cuando te esperan', notify: 'Una notificación del sistema cuando te esperan', notifyTitle: 'Dev Team Office: te esperan',
   },
   // las indicaciones arriba de un encargo (server/guides.js)
+  retro: { title: 'Retro: {task} ({office})', about: 'Lo que aprendimos de: {task}', noTask: 'la última tarea', tag: 'aprendizaje', source: 'la retro', failed: 'Falló: {detail}', event: 'Retro: {n} aprendizaje(s) al archivo' },
   guide: {
     company: 'Estándares de la empresa (los del CTO):', 
     area: 'Indicaciones del área «{name}»:', department: 'Indicaciones del proyecto «{name}»:', project: 'Indicaciones del repositorio «{name}»:', system: 'Indicaciones del proyecto «{name}»:',
@@ -840,6 +841,9 @@ export default {
     },
   },
   ui: {
+    rug: { title: 'En la mesa de reuniones', daily: 'Daily', dailyHint: 'Qué hizo cada uno desde la última daily, y en qué está', retro: 'Retro', retroHint: 'Lo que aprendimos de la última tarea: va al archivo' },
+    retro: { title: 'Retro', about: 'La última tarea: «{task}» ({status}).', noTask: 'Todavía no hay tareas: escribe igual lo que aprendiste.', suggested: 'La oficina sugiere {n} de lo que dijo la tarea: déjalos, corrígelos o bórralos (uno por línea).', write: '¿Qué aprendieron? Uno por línea.', ph: '- La API de pagos redondea en centavos\n- Los e2e necesitan la semilla antes', save: 'Guardar en el archivo', where: 'Cada línea va al archivo; los próximos encargos la traen.', status: { done: 'terminada', failed: 'falló', running: 'en curso', other: 'sin estado conocido' } },
+    tip: { card: 'Clic: su ficha (qué hizo, en qué está)', you: 'Clic: tu ficha (eres la PO)', talk: 'Hablarle a {name} o pedirle algo (desde su ficha)', poke: '👉 Llamarle la atención', answer: '✋ Clic: responder lo que te preguntan' },
     dock: 'Botones', 
     pulse: { title: '⏱ En qué está cada uno', closes: 'se cierra en {t}', ago: 'hace {t}', waiting: 'te espera: {text}', thinking: 'pensando…' },
     phone: { title: 'Llamar a un experto', key: 'Llamar a un experto (p)', none: 'Todavía no hay expertos: agrégalos en ⚙ › Personajes › Expertos.', placeholder: '¿Qué necesitas?', call: '📞 Llamar', empty: 'Escribe lo que necesitas, o elige una acción.', calling: 'Llamando a {name}…', sent: '{name} se pone en ello: la tarea fue al agente del proyecto que conoce la skill.' },

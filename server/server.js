@@ -21,6 +21,7 @@ import { PipelineHub } from './pipeline.js';
 import { AgentRegistry } from './registry.js';
 import { ClarifyDesk } from './clarify.js';
 import { Compactor, claudeCompactEnv, syncClaudeCompact } from './compact.js';
+import { lastTask, suggestLearnings, saveRetro, learningsOf } from './retro.js';
 import { Mine } from './mine.js';
 import { Standup } from './standup.js';
 import { exportSettings, importSettings } from './settings-io.js';
@@ -720,6 +721,19 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const id = decodeURIComponent(m[1]);
         if (!company.has(id)) return json(res, 404, { ok: false, error: t('err.unknownOffice', { office: id }) });
         return json(res, 200, standup.run(id, { from: t('events.you') }));
+      }
+      // The retro of a project (the rug, at the meeting table): GET its last task and the learnings the office
+      // suggests; POST { learnings, task? }: the ones you keep go to the archive, and the team gathers
+      if ((m = p.match(/^\/v1\/offices\/([^/]+)\/retro$/)) && (req.method === 'GET' || req.method === 'POST')) {
+        const id = decodeURIComponent(m[1]);
+        if (!company.has(id)) return json(res, 404, { ok: false, error: t('err.unknownOffice', { office: id }) });
+        const task = lastTask({ hub, store, office: id });
+        if (req.method === 'GET') return json(res, 200, { ok: true, task, suggestions: suggestLearnings(task) });
+        const b = await body(req);
+        const out = saveRetro({ archive, office: id, officeName: company.info(id)?.name, task: b.task && typeof b.task === 'object' ? b.task : task, learnings: b.learnings, from: t('events.you') });
+        if (!out.ok) return json(res, 400, out);
+        company.ingest('generic', { session: 'office', office: id, kind: 'retro', text: t('retro.event', { n: out.saved }), lines: learningsOf(b.learnings).slice(0, 6) });
+        return json(res, 200, out);
       }
       if ((m = p.match(/^\/v1\/offices\/([^/]+)$/))) {
         const id = decodeURIComponent(m[1]);

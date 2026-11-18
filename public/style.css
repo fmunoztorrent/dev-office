@@ -1222,3 +1222,9 @@ ol.arch-list { list-style: decimal; padding-left: 20px; }
 .desk-tip .tip-now.busy { color: #8ef0c0; }
 .desk-tip .tip-acts { margin: 0; padding: 4px 0 0; list-style: none; border-top: 1px dashed #ffffff26; display: grid; gap: 1px; font-size: 12px; color: #ffd166; }
 .desk-tip .tip-acts li::before { content: "› "; color: #aab3c8; }
+.rug-menu { position: absolute; z-index: 31; display: grid; gap: 4px; padding: 8px; background: rgba(18, 20, 33, .95); box-shadow: 0 0 0 2px #0b0c14, 4px 4px 0 #0006; }
+.rug-menu b { font: 17px/1 "VT323", monospace; color: #ffd166; padding: 0 2px 2px; }
+.rug-menu button { font: 14px "Space Grotesk", sans-serif; text-align: left; padding: 6px 12px; border: 0; background: #2a2f48; color: #e9edf7; cursor: pointer; }
+.rug-menu button:hover, .rug-menu button:focus-visible { background: #ffd166; color: #1b1f33; outline: none; }
+.retro .brief-body { display: grid; gap: 8px; padding: 10px 16px; }
+.retro textarea { width: 100%; box-sizing: border-box; font: 14px/1.4 "Space Grotesk", sans-serif; }

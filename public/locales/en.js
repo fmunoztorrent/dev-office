@@ -73,6 +73,7 @@ export default {
     askYou: '{name}, I have a question for you ❓',
     chatReplies: ['Noted! 📝', "Let's cover it at the daily 👍", 'Got it 🙌', 'Good idea!'],
     btwThinking: ['Hmm, good question… 🤔', 'Let me check… 🔍', 'One sec, looking it up 📚'],
+    retro: { open: 'Retro! What did we learn from the last one?', close: 'Noted: it goes to the archive.', none: 'Nothing new this time. Back to work!' },
     standup: { visitor: 'From {name} ({role}): {text}', open: 'Good morning! Daily: what did each one do? 🗣', openLater: 'Daily! What is new since the last one? 🗣', waiting: '{n} thing(s) waiting for the PO: {what}', open2: '{n} brief(s) still open. Let’s go! 💪', close: 'Nothing pending. Let’s go! 💪' },
     clarify: { review: ['Let me read it carefully 🔍', 'Checking we have everything 📋', 'Before starting, let me review it 🤓'], ask: 'I have {n} question(s) before we start 📝', sent: ['All clear: to work! 🚀', 'Ready for the team 💪'], cancelled: 'Ok, we drop it' },
     btwFail: "I couldn't find out 🤷",
@@ -296,7 +297,6 @@ export default {
     newDesc: 'new (a directive asked for it)', needAnswers: 'Before it goes, tell me what {what} is: whether it exists and where, whether it must be created, or whether it is a new department.', badAnswer: 'What is "{what}"? Answer: it exists, create it, a separate repo, a new repo, infrastructure, a new department, or not part of the project.', deptEmpty: '{names} was created, but it has no repositories yet: add one (⚙ › Departments) and send the directive again.',
     askInfra: '"{what}" ({kind}): does it exist already, and where? Or must it be created, and by whom?', whoCreates: 'Which repository creates "{what}"? Pick one.', needWhere: 'Where is "{what}"? Write its folder or its repository’s URL.', noFolder: 'The folder {path} does not exist', repoExists: 'The folder {path} exists and is not empty: if it is a repo already, answer “It is a separate repo”.',
     ui: {
-    tip: { card: 'Click: their card (what they did, what they are on)', you: 'Click: your card (you are the PO)', talk: 'Talk to {name} or ask for something (from their card)', poke: '👉 Get their attention', answer: '✋ Click: answer what they ask you' },
       tree: 'The repos it touches', component: 'component', expand: '⤢ See the detail', graphTitle: '🗺 The impact in detail', task: 'The order', unknown: '❓ Not on the map', dept: '{n} repo(s)',
       thinking: '🧠 {model} is analyzing the order…', thought: '🧠 Analyzed with {model} ({s} s)', thinkFailed: '🧠 The analysis by {model} did not come ({error}): the map by words stays.', thinkOff: 'For a finer analysis (how each repo is touched and what is missing), choose a model in ⚙ › Intelligence.', rethink: '🧠 Analyze again',
       why: 'Why', how: 'How it is touched', components: 'Components', infra: 'Infrastructure', stack: 'Uses', system: 'Project', path: 'Folder', answerBelow: 'Not on the map: answer it below.', summary: 'The analysis', usedBy: 'Used by', where: 'Where',
@@ -351,6 +351,7 @@ export default {
     sound: 'A sound when they wait for you', notify: 'A system notification when they wait for you', notifyTitle: 'Dev Team Office: waiting for you',
   },
   // the instructions on top of a brief (server/guides.js)
+  retro: { title: 'Retro: {task} ({office})', about: 'What we learned from: {task}', noTask: 'the last task', tag: 'learning', source: 'the retro', failed: 'It failed: {detail}', event: 'Retro: {n} learning(s) to the archive' },
   guide: {
     company: 'The company’s standards (the CTO’s):', 
     area: 'Instructions of the area «{name}»:', department: 'Instructions of the project «{name}»:', project: 'Instructions of the repository «{name}»:', system: 'Instructions of the project «{name}»:',
@@ -840,6 +841,9 @@ export default {
     },
   },
   ui: {
+    rug: { title: 'At the meeting table', daily: 'Daily', dailyHint: 'What each one did since the last daily, and what they are on', retro: 'Retro', retroHint: 'What we learned from the last task: it goes to the archive' },
+    retro: { title: 'Retro', about: 'The last task: “{task}” ({status}).', noTask: 'No task yet: write what you learned anyway.', suggested: 'The office suggests {n} from what the task said: keep, correct or erase them (one per line).', write: 'What did you learn? One per line.', ph: '- The payments API rounds in cents\n- The e2e need the seed first', save: 'Save to the archive', where: 'Each line goes to the archive; the next briefs bring it.', status: { done: 'done', failed: 'failed', running: 'in progress', other: 'last state unknown' } },
+    tip: { card: 'Click: their card (what they did, what they are on)', you: 'Click: your card (you are the PO)', talk: 'Talk to {name} or ask for something (from their card)', poke: '👉 Get their attention', answer: '✋ Click: answer what they ask you' },
     dock: 'Buttons', 
     pulse: { title: '⏱ What everyone is on', closes: 'closes in {t}', ago: '{t} ago', waiting: 'waiting for you: {text}', thinking: 'thinking…' },
     phone: { title: 'Call an expert', key: 'Call an expert (p)', none: 'No experts yet: add them in ⚙ › Characters › Experts.', placeholder: 'What do you need from them?', call: '📞 Call', empty: 'Write what you need, or pick an action.', calling: 'Calling {name}…', sent: '{name} is on it: the task went to the project agent that knows the skill.' },

@@ -1024,6 +1024,17 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         scene('standup', members, say, { spot: SPOT.table, gap: 3600 });
         break;
       }
+      // The retro (server/retro.js): the team gathers at the table and the manager reads what was learned
+      case 'retro': {
+        const members = ['manager', 'tl', 'backend', 'frontend', 'qa'].filter((r) => agents[r] && !agents[r].hidden && !agents[r].lunch);
+        for (const id of members) interrupt(agents[id]);
+        const others = members.filter((r) => r !== 'manager');
+        const say = [['manager', T('sim.retro.open')], ...(ev.lines || []).map((l, i) => [others[i % Math.max(1, others.length)] || 'manager', l])];
+        say.push(['manager', ev.lines?.length ? T('sim.retro.close') : T('sim.retro.none')]);
+        banner = { text: `🔁 ${ev.text}`, tone: 'chat', until: now + 8000 };
+        scene('standup', members, say, { spot: SPOT.table, gap: 3600 });
+        break;
+      }
       // The analyst reviews your brief before it goes to work (server/clarify.js): she thinks it over
       // and, if something only you know is missing, she brings you her questions and waits at your
       // desk, hand up, until you answer.
