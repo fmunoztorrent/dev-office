@@ -17,6 +17,7 @@ import { t } from '../public/i18n.js';
 import { which, piAgentDir } from '../integrations/common/devteam.mjs';
 import { install, claudeHooks } from './install.js';
 import { syncSkills, removeSkills, skillsState } from './skills.js';
+import { syncClaudeCompact } from '../server/compact.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const MARK = 'dev-team-office';
@@ -359,7 +360,8 @@ export const AGENTS = {
         integration: fileStep(path.join(officeDir(), 'claude-code', 'hook.mjs')),
         hooks: {
           apply: (ctx) => mergeHooks(settings, claudeHooks(`${sq(ctx.shim)} hook claude-code`), ctx),
-          remove: (ctx) => unmergeHooks(settings, ctx),
+          // and the auto-compaction threshold the office kept in its env (server/compact.js), if it was ours
+          remove: (ctx) => { const out = unmergeHooks(settings, ctx); if (!ctx?.dry) syncClaudeCompact(settings, { compact: { auto: false } }); return out; },
           check: () => hooksIn(settings),
         },
         mcp: claudeMcp(),

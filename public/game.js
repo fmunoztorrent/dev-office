@@ -183,8 +183,9 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
   function drawSkirting() { R(0, 122, CAFE.x, 4, '#9aa3ae'); R(0, 125, CAFE.x, 1, '#7d8692'); } // skirting board
 
   // The glass wall: the landscape (sky.js) with its glass on top, between the ceiling beam and the skirting.
-  function drawGlass(now, light) {
-    drawOutdoor(outdoor({ date: scene.date, weather: scene.weather, light, now, x0: GLASS.x0, x1: GLASS.x1, top: GLASS.top, bottom: GLASS.bottom }));
+  // skyOnly: the top-down view already looks at the city from above, so its glass shows only the sky.
+  function drawGlass(now, light, skyOnly = false) {
+    drawOutdoor(outdoor({ date: scene.date, weather: scene.weather, light, now, x0: GLASS.x0, x1: GLASS.x1, top: GLASS.top, bottom: GLASS.bottom, skyOnly }));
     R(GLASS.x0, 0, GLASS.x1 - GLASS.x0, GLASS.top, '#262c42');               // ceiling beam
     R(GLASS.x0, GLASS.top - 1, GLASS.x1 - GLASS.x0, 1, '#1b1f33');
     R(GLASS.x0, GLASS.bottom, GLASS.x1 - GLASS.x0, 116 - GLASS.bottom, '#3a4158'); // window sill
@@ -1392,11 +1393,11 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     side(BW.front, 0, H, 1, '#7d8692');
     side(520, 30, 600, 92, '#1b1f33'); side(524, 34, 596, 88, '#3f73f0'); side(536, 46, 584, 76, '#ffd166');  // a picture
     side(640, 40, 690, 86, '#1b1f33'); side(644, 44, 686, 82, '#e9ecf5'); side(650, 56, 680, 60, '#2a9d8f'); side(650, 66, 672, 70, '#ef476f');
-    // the back wall: the bathroom and the elevator, the window with the city, the sign, the alarm and the café
+    // the back wall: the bathroom and the elevator, the window with the sky, the sign, the alarm and the café
     ctx.save();
     use(cam.front(BACK));
     ctx.beginPath(); ctx.rect(LEFT, 0, WORLD_W, BACK); ctx.clip();
-    drawGlass(now, light);
+    drawGlass(now, light, true);
     drawSign(t);
     drawWallBlock();
     drawLeftBackWall(now);
@@ -1903,6 +1904,15 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
       const d = Math.hypot(mx - hx, my - hy);
       if (d < bestD) { best = a.id; bestD = d; }
     }
+    if (best) return best;
+    // nobody there: their desk (the team's, even when they are away from it) is theirs too
+    for (const a of Object.values(scene.team)) {
+      const s = a.cfg?.seat;
+      if (!s) continue;
+      const [dx, dy] = apply(iso ? cam.billboard(s.x, s.y, ...anchor({ ...a, x: s.x, y: s.y })) : FLAT, s.x, s.y - 30);
+      const d = Math.hypot(mx - dx, my - dy);
+      if (d < bestD + (iso ? 16 * SP : 16)) { best = a.id; bestD = d; }
+    }
     return best;
   }
   /** Is the pointer over the whiteboard? (in the isometric view, it is mapped to the whiteboard's plane) */
@@ -1930,9 +1940,10 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onHove
     hoverBoard = !hover && overBoard(x, y);
     hoverRack = !hover && !hoverBoard && !!onRackClick && overRack(x, y);
     canvas.style.cursor = hover || hoverBoard || hoverRack || overLift(x, y) ? 'pointer' : 'default';
-    if (was !== hover) onHover?.(hover);
+    // who is under the pointer (or whose desk), and where: the page shows what they do and what you can do
+    if (was !== hover || hover) onHover?.(hover, { x: e.clientX, y: e.clientY });
   });
-  canvas.addEventListener('mouseleave', () => { hover = null; hoverBoard = false; hoverRack = false; });
+  canvas.addEventListener('mouseleave', () => { hover = null; hoverBoard = false; hoverRack = false; onHover?.(null); });
   canvas.addEventListener('click', (e) => {
     const [x, y] = toWorld(e);
     if (floor !== 'office') {

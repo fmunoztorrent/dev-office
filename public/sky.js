@@ -334,13 +334,15 @@ export function skyLife({ t, light: L, weather: w, x0, x1, top, low, lod = 'full
  * @param lod 'full' (browser) or 'low' (terminal: fewer small details)
  * @param glass false: only the landscape, without the glass (the top-down view's backdrop)
  * @param arc   how high above the horizon the sun climbs at noon (the moon, a little less)
+ * @param skyOnly only the sky (sun, moon, stars, clouds, what flies, rain): the top-down view looks at the
+ *              city from above already, so its glass shows what is over it, not another city
  * @returns {{ shapes: Array<[x, y, w, h, color, alpha, fixed]>, flash: number }}
  */
-export function outdoor({ date = new Date(), weather, light, now = 0, x0 = 0, x1 = 704, top = 6, bottom = 108, lod = 'full', glass = true, arc = 66 } = {}) {
+export function outdoor({ date = new Date(), weather, light, now = 0, x0 = 0, x1 = 704, top = 6, bottom = 108, lod = 'full', glass = true, arc = 66, skyOnly = false } = {}) {
   const w = weather || simulatedWeather(date);
   const L = light || daylight(date, w);
   const low = lod === 'low';
-  const W = x1 - x0, HZ = bottom - 22; // horizon: the base of the hills
+  const W = x1 - x0, HZ = skyOnly ? bottom + 4 : bottom - 22; // horizon: the base of the hills (none: only sky)
   const out = [];
   // fixed: in the terminal it is drawn even if it is smaller than a pixel (rain, stars, drops)
   const R = (x, y, ww, hh, c, a = 1, fixed = false) => {
@@ -410,7 +412,7 @@ export function outdoor({ date = new Date(), weather, light, now = 0, x0 = 0, x1
   const far = fog ? 0.8 : 0.35;
   const rock = haze(0x8396b8, far), snowC = haze(0xeef3fb, far);
   const snowline = snowing ? 0.7 : SNOWLINE[sea];
-  for (const [x, h] of lay.mountains) {
+  if (!skyOnly) for (const [x, h] of lay.mountains) {
     R(x, HZ - h, 2, h + 2, rock);
     const cap = Math.max(0, h - 48 * (1 - snowline));
     if (cap > 0) R(x, HZ - h, 2, Math.min(h, cap), snowC);
@@ -469,82 +471,85 @@ export function outdoor({ date = new Date(), weather, light, now = 0, x0 = 0, x1
     } else if (f.kind === 'satellite') R(x, y, 1, 1, 0xeef2ff, 0.75, true);
   }
 
-  // the city: buildings with windows (at night, some lit)
-  const base = bottom - 12;
-  for (const b of lay.buildings) {
-    const body = haze(b.c, fog ? 0.5 : 0.12);
-    R(b.x, base - b.h, b.w, b.h, body);
-    R(b.x, base - b.h, b.w, 1, mixc(body, 0xffffff, 0.12));
-    if (snowy) R(b.x, base - b.h - 1, b.w, 2, lit(0xf2f5fa));
-    if (b.antenna) {
-      R(b.x + Math.floor(b.w / 2), base - b.h - 7, 1, 7, body);
-      if (L.night > 0.4 && Math.floor(t * 1.2 + b.seed) % 2) R(b.x + Math.floor(b.w / 2), base - b.h - 8, 1, 1, 0xff3b3b, 1, true);
-    }
-    if (low && L.night < 0.4) continue;
-    const phase = Math.floor(t / 20);
-    for (let wy = base - b.h + 3; wy < base - 3; wy += 6) {
-      for (let wx = b.x + 2; wx < b.x + b.w - 2; wx += 5) {
-        const id = b.seed + wx * 0.37 + wy * 1.91;
-        if (L.night > 0.4) {
-          const on = hash(id + (hash(id) < 0.1 ? phase : 0)) < 0.32;
-          if (on) R(wx, wy, 2, 3, 0xffd98a, 0.85 * L.night, low);
-        } else R(wx, wy, 2, 3, mixc(body, 0xd6e6f5, 0.3));
+  // the ground: none in the top-down view (only sky)
+  if (!skyOnly) {
+    // the city: buildings with windows (at night, some lit)
+    const base = bottom - 12;
+    for (const b of lay.buildings) {
+      const body = haze(b.c, fog ? 0.5 : 0.12);
+      R(b.x, base - b.h, b.w, b.h, body);
+      R(b.x, base - b.h, b.w, 1, mixc(body, 0xffffff, 0.12));
+      if (snowy) R(b.x, base - b.h - 1, b.w, 2, lit(0xf2f5fa));
+      if (b.antenna) {
+        R(b.x + Math.floor(b.w / 2), base - b.h - 7, 1, 7, body);
+        if (L.night > 0.4 && Math.floor(t * 1.2 + b.seed) % 2) R(b.x + Math.floor(b.w / 2), base - b.h - 8, 1, 1, 0xff3b3b, 1, true);
+      }
+      if (low && L.night < 0.4) continue;
+      const phase = Math.floor(t / 20);
+      for (let wy = base - b.h + 3; wy < base - 3; wy += 6) {
+        for (let wx = b.x + 2; wx < b.x + b.w - 2; wx += 5) {
+          const id = b.seed + wx * 0.37 + wy * 1.91;
+          if (L.night > 0.4) {
+            const on = hash(id + (hash(id) < 0.1 ? phase : 0)) < 0.32;
+            if (on) R(wx, wy, 2, 3, 0xffd98a, 0.85 * L.night, low);
+          } else R(wx, wy, 2, 3, mixc(body, 0xd6e6f5, 0.3));
+        }
       }
     }
-  }
 
-  // the street with cars (at night, street lamps and car lights)
-  const roadY = base;
-  R(x0, roadY, W, 5, lit(0x50555f));
-  for (let x = x0; x < x1; x += 16) R(x, roadY + 2, 6, 1, lit(0xd8d8c0), 0.7);
-  for (let i = 0; i < 4; i++) {
-    const dir = i % 2 ? 1 : -1, span = W + 40, sp = 26 + hash(i + 3.3) * 22;
-    const pos = (((hash(i + 1.7) * span + dir * t * sp) % span) + span) % span;
-    const cx = Math.round(x0 - 20 + pos), cy = roadY + (dir > 0 ? 0 : 2);
-    R(cx, cy, 12, 3, lit(CARS[i % CARS.length]));
-    R(cx + 3, cy - 2, 6, 2, lit(mixc(CARS[i % CARS.length], 0x223040, 0.5)));
-    if (L.night > 0.3) {
-      const front = dir > 0 ? cx + 12 : cx - 1;
-      R(front, cy + 1, 1, 1, 0xfff3c8, 1, true);
-      if (!low) R(dir > 0 ? front + 1 : front - 8, cy + 1, 8, 1, 0xfff3c8, 0.18 * L.night);
-      R(dir > 0 ? cx - 1 : cx + 12, cy + 1, 1, 1, 0xff3b3b, 1, true);
+    // the street with cars (at night, street lamps and car lights)
+    const roadY = base;
+    R(x0, roadY, W, 5, lit(0x50555f));
+    for (let x = x0; x < x1; x += 16) R(x, roadY + 2, 6, 1, lit(0xd8d8c0), 0.7);
+    for (let i = 0; i < 4; i++) {
+      const dir = i % 2 ? 1 : -1, span = W + 40, sp = 26 + hash(i + 3.3) * 22;
+      const pos = (((hash(i + 1.7) * span + dir * t * sp) % span) + span) % span;
+      const cx = Math.round(x0 - 20 + pos), cy = roadY + (dir > 0 ? 0 : 2);
+      R(cx, cy, 12, 3, lit(CARS[i % CARS.length]));
+      R(cx + 3, cy - 2, 6, 2, lit(mixc(CARS[i % CARS.length], 0x223040, 0.5)));
+      if (L.night > 0.3) {
+        const front = dir > 0 ? cx + 12 : cx - 1;
+        R(front, cy + 1, 1, 1, 0xfff3c8, 1, true);
+        if (!low) R(dir > 0 ? front + 1 : front - 8, cy + 1, 8, 1, 0xfff3c8, 0.18 * L.night);
+        R(dir > 0 ? cx - 1 : cx + 12, cy + 1, 1, 1, 0xff3b3b, 1, true);
+      }
     }
-  }
-  for (const lx of lay.lamps) {
-    R(lx, roadY - 14, 1, 14, lit(0x2b2f3a));
-    R(lx - 1, roadY - 15, 4, 2, L.night > 0.4 ? 0xffe2a0 : lit(0x3a3f4a));
-    if (L.night > 0.4 && !low) disc(lx + 1, roadY - 12, 7, 0xffe2a0, 0.1 * L.night);
-  }
+    for (const lx of lay.lamps) {
+      R(lx, roadY - 14, 1, 14, lit(0x2b2f3a));
+      R(lx - 1, roadY - 15, 4, 2, L.night > 0.4 ? 0xffe2a0 : lit(0x3a3f4a));
+      if (L.night > 0.4 && !low) disc(lx + 1, roadY - 12, 7, 0xffe2a0, 0.1 * L.night);
+    }
 
-  // the park: grass and trees that change with the season (in winter, leafless)
-  R(x0, roadY + 5, W, bottom - roadY - 5, lit(snowy ? 0xf2f5fa : GRASS[sea]));
-  const palette = TREE_COLORS[sea];
-  const sway = Math.min(2, w.wind / 15);
-  for (const tr of lay.trees) {
-    const i = tr.seed, tx = tr.x, ty = bottom - 2;
-    R(tx, ty - 10, 2, 10, lit(0x5a4030));
-    const dx = Math.round(Math.sin(t * 1.4 + i) * sway);
-    if (!palette.length) { // invierno: ramas desnudas
-      for (const [bx, by, bh] of [[-4, -16, 6], [3, -17, 7], [-1, -20, 6], [-6, -13, 3], [5, -13, 3]]) R(tx + bx + dx, ty + by, 1, bh, lit(0x5a4636));
-      if (snowy) for (const [bx, by] of [[-4, -17], [3, -18], [-1, -21]]) R(tx + bx + dx - 1, ty + by, 3, 1, lit(0xf2f5fa));
-      continue;
+    // the park: grass and trees that change with the season (in winter, leafless)
+    R(x0, roadY + 5, W, bottom - roadY - 5, lit(snowy ? 0xf2f5fa : GRASS[sea]));
+    const palette = TREE_COLORS[sea];
+    const sway = Math.min(2, w.wind / 15);
+    for (const tr of lay.trees) {
+      const i = tr.seed, tx = tr.x, ty = bottom - 2;
+      R(tx, ty - 10, 2, 10, lit(0x5a4030));
+      const dx = Math.round(Math.sin(t * 1.4 + i) * sway);
+      if (!palette.length) { // invierno: ramas desnudas
+        for (const [bx, by, bh] of [[-4, -16, 6], [3, -17, 7], [-1, -20, 6], [-6, -13, 3], [5, -13, 3]]) R(tx + bx + dx, ty + by, 1, bh, lit(0x5a4636));
+        if (snowy) for (const [bx, by] of [[-4, -17], [3, -18], [-1, -21]]) R(tx + bx + dx - 1, ty + by, 3, 1, lit(0xf2f5fa));
+        continue;
+      }
+      const [leaf, light] = palette[Math.floor(tr.tone * palette.length)];
+      const cx = tx + 1 + dx, cy = ty - 10 - tr.r + 3;
+      disc(cx, cy, tr.r, lit(leaf));
+      disc(cx - 2, cy - 2, Math.max(2, tr.r - 4), lit(light));
+      if (sea === 'spring') for (let k = 0; k < 6; k++) R(cx - tr.r + 2 + Math.floor(hash(i + k) * (tr.r * 2 - 3)), cy - tr.r + 2 + Math.floor(hash(i + k + 9) * (tr.r * 2 - 3)), 1, 1, lit(0xf6a9c9), 1, low);
+      if (snowy) R(cx - tr.r + 2, cy - tr.r, tr.r * 2 - 3, 2, lit(0xf2f5fa));
     }
-    const [leaf, light] = palette[Math.floor(tr.tone * palette.length)];
-    const cx = tx + 1 + dx, cy = ty - 10 - tr.r + 3;
-    disc(cx, cy, tr.r, lit(leaf));
-    disc(cx - 2, cy - 2, Math.max(2, tr.r - 4), lit(light));
-    if (sea === 'spring') for (let k = 0; k < 6; k++) R(cx - tr.r + 2 + Math.floor(hash(i + k) * (tr.r * 2 - 3)), cy - tr.r + 2 + Math.floor(hash(i + k + 9) * (tr.r * 2 - 3)), 1, 1, lit(0xf6a9c9), 1, low);
-    if (snowy) R(cx - tr.r + 2, cy - tr.r, tr.r * 2 - 3, 2, lit(0xf2f5fa));
-  }
-  // leaves falling in autumn, petals in spring
-  if ((sea === 'autumn' || sea === 'spring') && !WET.has(w.kind) && !low) {
-    for (let i = 0; i < 8; i++) {
-      const span = bottom - top - 40, fall = (hash(i + 4.4) * span + t * (8 + hash(i) * 6)) % span;
-      const lx = x0 + ((hash(i + 2.2) * W + t * (6 + w.wind * 0.3) + Math.sin(t + i) * 4) % W);
-      R(lx, top + 40 + fall, 2, 1, sea === 'autumn' ? lit([0xd9822b, 0xc4562b, 0xe2b13c][i % 3]) : lit(0xf6a9c9), 0.9);
+    // leaves falling in autumn, petals in spring
+    if ((sea === 'autumn' || sea === 'spring') && !WET.has(w.kind) && !low) {
+      for (let i = 0; i < 8; i++) {
+        const span = bottom - top - 40, fall = (hash(i + 4.4) * span + t * (8 + hash(i) * 6)) % span;
+        const lx = x0 + ((hash(i + 2.2) * W + t * (6 + w.wind * 0.3) + Math.sin(t + i) * 4) % W);
+        R(lx, top + 40 + fall, 2, 1, sea === 'autumn' ? lit([0xd9822b, 0xc4562b, 0xe2b13c][i % 3]) : lit(0xf6a9c9), 0.9);
+      }
     }
-  }
 
+  }
   // fog: bands that hide what is far away
   if (fog) {
     const fc = mixc(0xd9dde3, 0x3a4056, L.night);

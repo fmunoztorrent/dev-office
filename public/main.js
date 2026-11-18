@@ -14,9 +14,7 @@ import { renderImpact, impactQuestions } from './impact-ui.js';
 import { createE2E } from './e2e-ui.js';
 import './renderers/plan.js'; // the reference renderer (public/scene.js): ?renderer=plan
 import { drawSprite } from './sprite.js';
-import { season, isSouth, daylight, weatherIcon } from './sky.js';
 import { t, ta, setLanguage, onLanguage, getLanguage, timeOf } from './i18n.js';
-import { countryName } from './clock.js';
 import { thresholdOf, kTokens } from './compact.js';
 
 const $ = (id) => document.getElementById(id);
@@ -50,6 +48,8 @@ const game = createGame($('office'), {
   onSelect: (id) => ((id === 'po' || id === 'manager') && asking.length ? promptsUi.open() : select(id)),
   onBoardClick: () => (boardView.hasTickets() ? boardView.open() : openBrief()),
   onRackClick: () => servicesUi.open(),
+  // over someone (or their desk): what they are on now and what you can do with them
+  onHover: (id, at) => deskTip(id, at),
   // the shared floors: the board and the screen (directives), the shelves, the rack and the patch panel (the archive), the elevator
   onFloorClick: (floor, what) => {
     if (what === 'lift') return openLift();
@@ -86,7 +86,6 @@ onLanguage(() => {
   renderContext();
   renderTeam();
   renderOffices();
-  renderWeather();
   onTasks(tasks);
   onRuns(runs);
   if ($('brief').open) renderBrief();
@@ -146,7 +145,7 @@ function connect() {
     if (msg.type === 'prompts' && msg.office === office?.id) onPrompts(msg.prompts);
     if (msg.type === 'clarify' && msg.clarify?.office === office?.id) onClarify(msg.clarify);
     if (msg.type === 'snapshot' || msg.type === 'appearance') { applyAppearance((msg.state || msg).appearance || {}); game.floors.setYou(TEAM.po); renderTeam(); renderSheet(true); settings?.appearanceChanged?.(); }
-    if (msg.type === 'snapshot' || msg.type === 'weather') { game.sim.setWeather((msg.state ? msg.state.weather : msg.weather) || null); renderWeather(); }
+    if (msg.type === 'snapshot' || msg.type === 'weather') { game.sim.setWeather((msg.state ? msg.state.weather : msg.weather) || null); }
     if (msg.type === 'event') onEvent(msg.event, msg.session);
     if (msg.type === 'ask') onAsk(msg.ask);
     if (msg.type === 'tasks') onTasks(msg);
@@ -477,7 +476,6 @@ function onOffices(list, current) {
   if (office) { game.sim.setZone(office.timezone); game.sim.setPlace(office.place); }
   renderOffices();
   if (changed) sysLine(t('ui.viewing', { name: office.name, tz: office.timezone }));
-  renderWeather();
   settings?.refresh?.();
 }
 
@@ -594,25 +592,13 @@ function onHerdr(st) {
   renderPanes();
 }
 
-// The weather in the HUD: the same one seen through the glass wall (real or simulated).
-function renderWeather() {
-  const w = game.sim.weather, now = game.sim.date();
-  const icon = weatherIcon(w, daylight(now, w).night);
-  const temp = Number.isFinite(w.temp) ? `${Math.round(w.temp)}°` : '';
-  const el = $('wx');
-  el.hidden = false;
-  el.textContent = icon; // just the icon: the temperature is in its tooltip
-  const place = w.place || office?.place?.name || office?.city || t('ui.here');
-  const country = office?.country ? `, ${countryName(office.country, getLanguage())}` : '';
-  const where = w.source === 'open-meteo' ? t('ui.weatherReal', { place: `${place}${country}` }) : `${t('ui.weatherSim')} · ${place}${country}`;
-  el.title = t('ui.weatherTitle', { label: t(`weather.${w.kind}`), temp: temp ? `, ${temp}C` : '', season: t(`season.${season(now, isSouth(w.lat, zone() || undefined))}`), where });
-}
-setInterval(renderWeather, 60_000);
 
+// The connection: said only when it is lost (connected is the normal state, it needs no chip)
 function setConn(on) {
   $('conn').className = `conn ${on ? 'on' : 'off'}`;
   $('conn').textContent = t(on ? 'conn.live' : 'conn.offline');
   $('conn').dataset.i18n = on ? 'conn.live' : 'conn.offline';
+  $('conn').hidden = on;
 }
 
 function onSnapshot(state) {
@@ -1033,6 +1019,35 @@ $('say-text').onkeydown = (e) => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('sheet-say').requestSubmit(); }
 };
 
+// ---------------------------------------------------------------- the desk's card (hovering someone)
+
+/** What someone is on now and what you can do with them: a small card next to the pointer. */
+function deskTip(id, at) {
+  const tip = $('desk-tip');
+  const a = id ? who(id) : null;
+  if (!a || !at || $('settings') && !$('settings').hidden) { tip.hidden = true; return; }
+  const cfg = a.cfg;
+  const busy = ['working', 'thinking', 'red', 'blocked', 'waiting'].includes(a.state);
+  const now = busy ? `${moodOf(a)}${a.text ? `: ${a.text}` : ''}` : a.tag?.text ? `${moodOf(a)} · ${a.tag.text}` : moodOf(a);
+  const role = a.ghost ? t(a.specialist ? 'ui.visitorOf' : 'ui.newcomerOf', { role: personOf(a.role)?.title || a.role, project: a.project || '' }).replace(/ · $/, '') : cfg.title;
+  const acts = id === 'po' || id === 'manager' ? (asking.length ? [t('ui.tip.answer')] : []) : [];
+  acts.push(id === 'po' ? t('ui.tip.you') : t('ui.tip.card'));
+  if (id !== 'po') acts.push(t('ui.tip.talk', { name: cfg.name }), t('ui.tip.poke'));
+  if (a.badges?.size) acts.push(t('ui.subagents', { n: a.badges.size }));
+  tip.replaceChildren(
+    el('b', '', cfg.name), el('span', 'tip-role', ` · ${role}`),
+    el('div', `tip-now${busy ? ' busy' : ''}`, `${busy ? '●' : '○'} ${now}`),
+    el('ul', 'tip-acts', ...acts.map((x) => el('li', '', x))));
+  tip.style.color = '';
+  tip.style.setProperty('--c', cfg.shirt);
+  tip.hidden = false;
+  // next to the pointer, inside the screen
+  const box = $('screen').getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+  const x = Math.min(at.x - box.left + 16, box.width - w - 8), y = at.y - box.top + 18 + h > box.height ? at.y - box.top - h - 12 : at.y - box.top + 18;
+  tip.style.left = `${Math.max(8, x)}px`;
+  tip.style.top = `${Math.max(8, y)}px`;
+}
+
 // ---------------------------------------------------------------- tasks for the agents
 
 function onTasks(snap) {
@@ -1355,7 +1370,6 @@ document.addEventListener('keydown', (e) => {
 });
 
 applyI18n();
-renderWeather();
 const welcome = sysLine(t('ui.welcome'));
 onLanguage(() => { welcome.textContent = t('ui.welcome'); });
 connect();

@@ -283,6 +283,7 @@ test('lo que hace el harness se ve en la oficina: tests rojos → pesadillas de 
 test('lo que hace el harness se ve en la oficina: el subagente de backend teclea; errores seguidos incendian el servidor', () => {
   const { sim, run } = office(19);
   run(3);
+  for (const role of ['backend']) sim.handle({ kind: 'tool_start', role, session: 'main', tool: 'Edit', text: 'En lo suyo' }); // the role's own character is busy: a newcomer comes
   sim.handle({ kind: 'subagent_start', role: 'backend', subId: 's1', text: 'Implementar el endpoint de pagos' });
   run(20);
   const diego = sim.agents.backend;
@@ -497,6 +498,7 @@ test('las charlas hablan de lo que pasa: quién hace qué, cómo va el tablero y
 test('cada subagente es alguien nuevo que llega, trabaja en un puesto temporal y se va al terminar', () => {
   const { sim, said, run } = office(4);
   run(2);
+  for (const role of ['backend', 'qa', 'frontend']) sim.handle({ kind: 'tool_start', role, session: 'main', tool: 'Edit', text: 'En lo suyo' }); // the role's own character is busy: a newcomer comes
   for (const [subId, role] of [['a', 'backend'], ['b', 'qa'], ['c', 'frontend']]) sim.handle({ kind: 'subagent_start', role, subId, text: `parte ${subId}` });
   const [a, b, c] = sim.ghosts;
   assert.deepEqual([a.x, a.y, a.fade, a.seated], [ELEVATOR.spot.x, ELEVATOR.spot.y, 0, false], 'sale del ascensor, todavía invisible');
@@ -508,7 +510,7 @@ test('cada subagente es alguien nuevo que llega, trabaja en un puesto temporal y
   assert.ok(said.some((x) => x.who === 'manager' && x.text.startsWith(`${a.cfg.name}, `)), 'Marco le lleva la tarjeta');
   sim.handle({ kind: 'tool_start', role: 'backend', subId: 'a', tool: 'Bash', text: 'Corriendo los tests' });
   assert.equal(a.state, 'working');
-  assert.notEqual(sim.agents.backend.state, 'working', 'Diego no: el trabajo del subagente es del nuevo');
+  assert.ok(!sim.agents.backend.history.some((h) => h.text === 'Corriendo los tests'), 'Diego no: el trabajo del subagente es del nuevo');
   sim.handle({ kind: 'subagent_end', role: 'backend', subId: 'a', text: 'listo' });
   assert.ok(a.leaving && /me voy/.test(a.bubble?.text), 'se despide');
   run(30);
@@ -520,8 +522,30 @@ test('cada subagente es alguien nuevo que llega, trabaja en un puesto temporal y
   assert.ok(sim.journal.some((j) => j.kind === 'newcomer') && sim.journal.some((j) => j.kind === 'farewell'));
 });
 
+test('los extras aparecen según la necesidad: el primer subagente de un rol lo toma su personaje si está libre', () => {
+  const { sim, run } = office(9);
+  run(2);
+  // Diego (backend) is free: the first backend subagent is his, nobody comes up
+  sim.handle({ kind: 'subagent_start', role: 'backend', subId: 'b1', session: 's', text: 'el endpoint' });
+  assert.equal(sim.ghosts.length, 0, 'sin extras: Diego estaba libre');
+  assert.ok(sim.agents.backend.badges.has('b1'), 'Diego lo tiene');
+  sim.handle({ kind: 'tool_start', role: 'backend', subId: 'b1', session: 's', tool: 'Edit', text: 'Editando el endpoint' });
+  assert.equal(sim.agents.backend.history[0].text, 'Editando el endpoint', 'sus herramientas son de Diego');
+  // a second one while Diego is busy: now a newcomer comes up by the elevator
+  sim.handle({ kind: 'subagent_start', role: 'backend', subId: 'b2', session: 's', text: 'la migración' });
+  assert.deepEqual(sim.ghosts.map((g) => g.subId), ['b2'], 'Diego ya estaba ocupado: llega un extra');
+  // Diego's ends: he is free again, and the next one is his
+  sim.handle({ kind: 'subagent_end', role: 'backend', subId: 'b1', session: 's', text: 'listo' });
+  assert.ok(!sim.agents.backend.badges.has('b1'));
+  sim.handle({ kind: 'turn_end', role: 'manager', session: 's' });
+  run(30);
+  sim.handle({ kind: 'subagent_start', role: 'backend', subId: 'b3', session: 's', text: 'otra' });
+  assert.ok(!sim.ghosts.some((g) => g.subId === 'b3'), 'libre otra vez: es de Diego');
+});
+
 test('al terminar el turno del agente se van sus nuevos, aunque el fin de un subagente nunca haya llegado', () => {
   const { sim, run } = office(6);
+  for (const role of ['qa', 'backend']) sim.handle({ kind: 'tool_start', role, session: 'main', tool: 'Edit', text: 'En lo suyo' }); // the role's own character is busy: a newcomer comes
   sim.handle({ kind: 'subagent_start', role: 'qa', subId: 'x', session: 'pi-1', text: 'tests' });
   sim.handle({ kind: 'subagent_start', role: 'backend', subId: 'y', session: 'otra', text: 'api' });
   run(15);
@@ -611,6 +635,7 @@ test('el badge sobre cada personaje: llega con lo que hace su agente y se va al 
   assert.equal(sim.agents.backend.badge, null, 'su sesión terminó el turno');
   assert.equal(sim.agents.qa.badge, '🧪 tests', 'la otra sesión sigue');
   // a newcomer (a subagent) wears its own
+  for (const role of ['frontend']) sim.handle({ kind: 'tool_start', role, session: 'main', tool: 'Edit', text: 'En lo suyo' }); // the role's own character is busy: a newcomer comes
   sim.handle({ kind: 'subagent_start', session: 's2', role: 'frontend', subId: 'sub-1', agentType: 'ex-frontend', text: 'La pantalla de pago', badge: '👥 ex-frontend' });
   assert.equal(sim.ghosts[0].badge, '👥 ex-frontend');
   // without news it goes away by itself

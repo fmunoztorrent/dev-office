@@ -10,6 +10,7 @@
 // And the Claude Code sessions the office opens get the threshold as their own
 // (CLAUDE_CODE_AUTO_COMPACT_WINDOW or CLAUDE_AUTOCOMPACT_PCT_OVERRIDE): they compact by themselves.
 
+import fs from 'node:fs';
 import { t } from '../public/i18n.js';
 import { thresholdOf, kTokens } from '../public/compact.js';
 
@@ -25,6 +26,36 @@ export function claudeCompactEnv(prefs) {
   const c = prefs?.compact;
   if (!c?.auto) return {};
   return c.unit === 'pct' ? { CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: String(c.at) } : { CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(c.at) };
+}
+
+// the variables Claude Code reads its auto-compaction threshold from, and the office's mark next to them
+const CLAUDE_KEYS = ['CLAUDE_AUTOCOMPACT_PCT_OVERRIDE', 'CLAUDE_CODE_AUTO_COMPACT_WINDOW'];
+const CLAUDE_MARK = 'DEV_TEAM_OFFICE_COMPACT';
+
+/**
+ * Your threshold in Claude Code's own settings (~/.claude/settings.json → env), so every Claude Code
+ * compacts where you said: the ones you open by hand too, and their subagents (Claude Code compacts a
+ * subagent with the same rule as its conversation). Only our two variables, marked as ours: one you set
+ * yourself is left as it is. Off: ours are removed. The file is never created: without it, nothing.
+ * @returns 'set' | 'removed' | 'same' | 'yours' | 'none'
+ */
+export function syncClaudeCompact(file, prefs) {
+  if (!file) return 'none';
+  let data;
+  try { data = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return 'none'; }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return 'none';
+  const env = data.env && typeof data.env === 'object' && !Array.isArray(data.env) ? { ...data.env } : {};
+  const ours = env[CLAUDE_MARK] === '1';
+  if (!ours && CLAUDE_KEYS.some((k) => k in env)) return 'yours';
+  for (const k of [...CLAUDE_KEYS, CLAUDE_MARK]) delete env[k];
+  const want = claudeCompactEnv(prefs);
+  if (Object.keys(want).length) Object.assign(env, want, { [CLAUDE_MARK]: '1' });
+  const before = JSON.stringify(data.env || {});
+  const next = { ...data };
+  if (Object.keys(env).length) next.env = env; else delete next.env;
+  if (JSON.stringify(next.env || {}) === before) return 'same';
+  try { fs.writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`); } catch { return 'none'; }
+  return Object.keys(want).length ? 'set' : 'removed';
 }
 
 export class Compactor {

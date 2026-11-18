@@ -20,7 +20,7 @@ import { TaskHub, AGENT_LABEL } from './tasks.js';
 import { PipelineHub } from './pipeline.js';
 import { AgentRegistry } from './registry.js';
 import { ClarifyDesk } from './clarify.js';
-import { Compactor, claudeCompactEnv } from './compact.js';
+import { Compactor, claudeCompactEnv, syncClaudeCompact } from './compact.js';
 import { Mine } from './mine.js';
 import { Standup } from './standup.js';
 import { exportSettings, importSettings } from './settings-io.js';
@@ -90,7 +90,7 @@ class HttpError extends Error {
  *                 says it, so `update` knows whether it can bring the office back by itself
  * @returns {Promise<{company, office, url, socket, command, handleMessage, close, …}>}
  */
-export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {}, clarify: clarifyOpt = {}, rag: ragOpt = {}, standup: standupOpt = {}, mine: mineOpt = {}, loops: loopsOpt = {}, intelligence: intelOpt = {}, e2e: e2eOpt = {}, mode = 'terminal', outdatedAfter = 3000 } = {}) {
+export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {}, clarify: clarifyOpt = {}, rag: ragOpt = {}, standup: standupOpt = {}, mine: mineOpt = {}, loops: loopsOpt = {}, claudeSettings = null, intelligence: intelOpt = {}, e2e: e2eOpt = {}, mode = 'terminal', outdatedAfter = 3000 } = {}) {
   const ownStore = !db || typeof db === 'string';
   const store = ownStore ? openStore(db || dbFile()) : db; // oficinas, agentes, ajustes e historial
   setLanguage(store.getPrefs().lang);
@@ -477,6 +477,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     if (!out.ok) return out;
     if (patch.lang) setLanguage(out.prefs.lang);
     if ('timezone' in patch || 'city' in patch || 'weather' in patch) refreshWeather();
+    if ('compact' in patch) syncClaudeCompact(claudeSettings, out.prefs);
     bus.emit('prefs', out.prefs);
     // another theme: another cast (and its own customizations) in every office
     if (patch.theme && setTheme(out.prefs.theme)) for (const o of company.list()) bus.emit('appearance', o.id, store.getAppearance(o.id));
@@ -487,6 +488,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   /** After importing settings: everything they touch is applied and the interfaces are told. */
   function settingsImported(out) {
     if (out.lang) setLanguage(out.lang);
+    syncClaudeCompact(claudeSettings, store.getPrefs());
     setTheme(store.getPrefs().theme);
     officesChanged();
     bus.emit('prefs', prefs());
@@ -1233,6 +1235,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   // past your threshold, the agent is asked to compact its context (server/compact.js)
   const compactor = new Compactor({ prefs, hub, herdr, company });
   company.on('event', (id, event, session) => compactor.onEvent(id, event, session));
+  // your threshold in your Claude Code's settings too (only the real office passes the file: never a test)
+  syncClaudeCompact(claudeSettings, store.getPrefs());
   // a loop looks at whether its project is working or idle (server/loops.js)
   company.on('event', (id, event, session) => loops.onEvent(id, event, session));
   loops.on('change', (list) => broadcast({ type: 'loops', loops: list }));

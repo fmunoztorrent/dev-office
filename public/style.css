@@ -167,7 +167,6 @@ body[data-floor="exec"] .screen[data-view="flat"] .hud-tl, body[data-floor="arch
 .tz-field input { flex: 1; min-width: 0; }
 .tz-country { white-space: nowrap; }
 /* the weather outside (the same seen through the glass) */
-.wx { font: 18px/1 "VT323", monospace; padding: 4px 10px 3px; background: rgba(18, 20, 33, .82); color: #dfe6f5; box-shadow: 0 0 0 2px #0b0c14, inset 0 0 0 2px #3a3f58; white-space: nowrap; }
 
 /* bottom left: the activity and the work */
 /* the dock: all the buttons, floating at the bottom center in a black box (80 % opacity) with the game's yellow border */
@@ -1216,3 +1215,10 @@ ol.arch-list { list-style: decimal; padding-left: 20px; }
 .s-look-main .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
 .s-look-main .colors { display: grid; gap: 6px; }
 @media (max-width: 640px) { .s-look-editor { grid-template-columns: 1fr; } .s-look-main .pair { grid-template-columns: 1fr; } }
+.desk-tip { position: absolute; z-index: 30; pointer-events: none; min-width: 180px; max-width: 300px; padding: 8px 10px 7px; background: rgba(18, 20, 33, .94); color: #e9edf7; font: 13px/1.35 "Space Grotesk", sans-serif; box-shadow: 0 0 0 2px #0b0c14, inset 3px 0 0 var(--c, #ffd166), 4px 4px 0 #0006; }
+.desk-tip b { color: var(--c, #ffd166); font-size: 14px; }
+.desk-tip .tip-role { color: #aab3c8; font-size: 12px; }
+.desk-tip .tip-now { margin: 4px 0 5px; color: #cfd6e6; }
+.desk-tip .tip-now.busy { color: #8ef0c0; }
+.desk-tip .tip-acts { margin: 0; padding: 4px 0 0; list-style: none; border-top: 1px dashed #ffffff26; display: grid; gap: 1px; font-size: 12px; color: #ffd166; }
+.desk-tip .tip-acts li::before { content: "› "; color: #aab3c8; }

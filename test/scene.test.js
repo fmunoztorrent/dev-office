@@ -23,6 +23,7 @@ function office() {
   sim.handle({ kind: 'task', role: 'po', session: 's1', text: 'Cobrar con tarjeta' });
   sim.handle({ kind: 'tool_start', role: 'sme', expert: { id: 'x1', name: 'Ana', skill: 'pci-dss' }, session: 's1', tool: 'Skill', badge: '🎓 pci-dss' });
   sim.handle({ kind: 'tool_start', role: 'devops', session: 's1', tool: 'Bash', text: 'Construyendo la imagen' });
+  for (const role of ['qa']) sim.handle({ kind: 'tool_start', role, session: 'main', tool: 'Edit', text: 'En lo suyo' }); // the role's own character is busy: a newcomer comes
   sim.handle({ kind: 'subagent_start', role: 'qa', session: 's1', subId: 'sub-1', text: 'Escribir los tests' });
   sim.handle({ kind: 'tool_start', role: 'backend', session: 's1', tool: 'Edit', text: 'Editando pay.js', badge: '✏️ pay.js' });
   run(20);

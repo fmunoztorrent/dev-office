@@ -138,3 +138,20 @@ test('el cielo tiene vida: pájaros, avión y globo de día; murciélagos al ata
   assert.deepEqual(skyLife({ t: 123.4, light: day, weather: clear, x0: 0, x1: 704, top: 6, low: 76 }), skyLife({ t: 123.4, light: day, weather: clear, x0: 0, x1: 704, top: 6, low: 76 }));
   assert.ok(!seen(day, clear, 'low').includes('balloon'));
 });
+
+test('sólo el cielo (el ventanal de la vista cenital): sin cerros, ciudad, calle ni parque; con su sol y su lluvia', () => {
+  const date = new Date(2026, 9, 16, 13);
+  const box = { x0: 0, x1: 320, top: 0, bottom: 120 };
+  const sunny = { kind: 'clear', clouds: 0.05, precip: 0, wind: 5, temp: 20, lat: -33.4, sunrise: 7, sunset: 20 };
+  const full = outdoor({ date, weather: sunny, ...box }).shapes, sky = outdoor({ date, weather: sunny, ...box, skyOnly: true }).shapes;
+  assert.ok(sky.length < full.length / 2, `mucho menos que dibujar (${sky.length} de ${full.length})`);
+  // the ground's colors are not there: no lit window of a building, no road
+  const colors = (s) => new Set(s.map(([, , , , c]) => c));
+  const groundOnly = [...colors(full)].filter((c) => !colors(sky).has(c));
+  assert.ok(groundOnly.length > 5, 'lo del suelo no está');
+  assert.ok(sky.some(([, , , , c, a]) => c === 0xfff6d8 && a > 0.5), 'el sol sí');
+  // the sky reaches the bottom of the glass (no horizon)
+  assert.ok(sky.some(([, y, , h]) => y + h >= box.bottom - 1), 'el cielo llega abajo');
+  const rainy = outdoor({ date, now: 5000, weather: { ...sunny, kind: 'rain', clouds: 0.9, precip: 0.8 }, ...box, skyOnly: true }).shapes;
+  assert.ok(rainy.length > sky.length, 'y si llueve, la lluvia');
+});

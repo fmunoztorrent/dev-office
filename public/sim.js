@@ -719,6 +719,11 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   const chance = (p) => random() < p;
   const agents = Object.fromEntries(Object.entries(TEAM).map(([id, cfg]) => [id, new Agent(id, cfg, now_, random)]));
   const ghosts = new Map(); // subId → the newcomer doing that subagent's work (a translucent extra employee)
+  // subId → the role's own character doing that subagent's work: they were free, so no newcomer was needed
+  const lent = new Map();
+  /** Is a character busy with work (a subagent's task, a turn of their session, a red test, a question)? */
+  const occupied = (a) => a.badges.size > 0 || (['working', 'thinking', 'red', 'blocked', 'waiting'].includes(a.state) && a.stateUntil > simNow)
+    || (!!a.openTurn && simNow - a.openTurn.at < OPEN_TURN_MS);
   let particles = [];
   let board = { title: '', todos: [], status: 'idle', source: '' };
   let banner = null; // { text, tone, until }
@@ -822,7 +827,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   }
 
   function handle(ev) {
-    const ghost = ev.subId ? ghosts.get(ev.subId) : null; // a subagent's events are its newcomer's
+    const ghost = ev.subId ? ghosts.get(ev.subId) || lent.get(ev.subId) || null : null; // a subagent's events are its newcomer's (or its role's character's, if it took it)
     // DevOps and security have no desk: they come up; so does the expert of a skill the agent uses
     const a = ghost || (ev.role === EXPERT_ROLE ? expert(ev) : agents[ev.role] || specialist(ev));
     // a subagent that uses a skill with its expert: the subagent works, and the expert comes to help
@@ -908,7 +913,10 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         break;
       case 'subagent_start': {
         if (!a && !VISITORS[ev.role]) break;
-        const g = ghost || hire(ev);
+        // the role's own character takes it when they are free: a newcomer comes up only when they are busy
+        const own = !ghost && agents[ev.role] && !occupied(agents[ev.role]) ? agents[ev.role] : null;
+        if (own) lent.set(ev.subId, own);
+        const g = ghost?.ghost ? ghost : own || ghost ? null : hire(ev);
         if (g) {
           // a newcomer: Marco brings them the card, and their role's character says hello
           g.badges.set(ev.subId, ev.text);
@@ -933,6 +941,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         if (!a) break;
         if (a.ghost) { note('farewell', ev.role, { name: a.cfg.name }); farewell(a); emit(a.x, a.y - 60, 1, 'check'); break; }
         a.badges.delete(ev.subId);
+        lent.delete(ev.subId);
         a.setState('done', 2500);
         a.say(T('sim.subDone', { text: ev.text }));
         // small note for a finished subtask: the big celebration is saved for 'done' (merge)
@@ -968,10 +977,12 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         turn = turnPhase = null;
         celebrate(ev.text);
         for (const g of ghosts.values()) farewell(g); // the task is over: the newcomers go home
+        releaseLent();
         break;
       case 'session_end':
         agents.manager.say(T('sim.sessionEnd'));
         for (const g of ghosts.values()) farewell(g);
+        releaseLent(ev.session);
         break;
       case 'chat': {
         banner = { text: `💬 ${ev.from}: ${ev.text}`, tone: 'chat', until: now + 7000 };
@@ -1315,6 +1326,15 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     return { text, live: live.includes(text) };
   }
   // ---------------------------------------------------------------- the newcomers (subagents)
+
+  /** The subagents' tasks the roles' own characters took: over (a session's, or all of them). */
+  function releaseLent(session = null) {
+    for (const [k, x] of lent) {
+      if (session && x.openTurn?.session && x.openTurn.session !== session) continue;
+      x.badges.delete(k);
+      lent.delete(k);
+    }
+  }
 
   /** A free hot desk (or a seat at the meeting table, when they are all taken). */
   function seatFor(self = null) {

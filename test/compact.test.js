@@ -5,7 +5,10 @@ import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { startServer } from '../server/server.js';
-import { Compactor, thresholdOf, claudeCompactEnv } from '../server/compact.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { Compactor, thresholdOf, claudeCompactEnv, syncClaudeCompact } from '../server/compact.js';
 import { openStore } from '../server/store.js';
 
 test('el tope: en tokens o en % de la ventana, y nunca uno que no cabe en ella', () => {
@@ -104,4 +107,39 @@ test('de punta a punta: Pi conectado pasa el tope, la oficina se lo pide y la bi
     assert.equal(office.sessionSummary('pi-1').context.compacted, undefined);
     assert.equal(office.sessionSummary('pi-1').context.used, 40_000);
   } finally { await server.close(); }
+});
+
+test('tu tope también en la configuración de tu Claude Code (env): así compactan sus subagentes y las sesiones que abres tú', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dto-claude-'));
+  const file = path.join(dir, 'settings.json');
+  const read = () => JSON.parse(fs.readFileSync(file, 'utf8'));
+  try {
+    assert.equal(syncClaudeCompact(file, { compact: { auto: true, at: 400_000, unit: 'tokens' } }), 'none', 'sin el archivo, nada (nunca se crea)');
+    fs.writeFileSync(file, JSON.stringify({ hooks: { Stop: [] }, env: { FOO: 'bar' } }));
+    assert.equal(syncClaudeCompact(file, { compact: { auto: true, at: 400_000, unit: 'tokens' } }), 'set');
+    assert.deepEqual(read().env, { FOO: 'bar', CLAUDE_CODE_AUTO_COMPACT_WINDOW: '400000', DEV_TEAM_OFFICE_COMPACT: '1' });
+    assert.deepEqual(read().hooks, { Stop: [] }, 'lo demás queda');
+    assert.equal(syncClaudeCompact(file, { compact: { auto: true, at: 400_000, unit: 'tokens' } }), 'same');
+    assert.equal(syncClaudeCompact(file, { compact: { auto: true, at: 60, unit: 'pct' } }), 'set');
+    assert.deepEqual(read().env, { FOO: 'bar', CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: '60', DEV_TEAM_OFFICE_COMPACT: '1' }, 'otra unidad: la otra variable');
+    assert.equal(syncClaudeCompact(file, { compact: { auto: false } }), 'removed');
+    assert.deepEqual(read().env, { FOO: 'bar' });
+    // one you set yourself is yours: never touched
+    fs.writeFileSync(file, JSON.stringify({ env: { CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: '80' } }));
+    assert.equal(syncClaudeCompact(file, { compact: { auto: true, at: 50, unit: 'pct' } }), 'yours');
+    assert.deepEqual(read().env, { CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: '80' });
+
+    // the office keeps it in step: when it starts and when you change ⚙ › Context
+    fs.writeFileSync(file, JSON.stringify({}));
+    const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false, loops: { autostart: false }, claudeSettings: file });
+    try {
+      assert.equal(read().env.CLAUDE_CODE_AUTO_COMPACT_WINDOW, '400000', 'el de siempre: 400k');
+      await fetch(`${server.url}/v1/settings`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prefs: { compact: { auto: true, at: 250_000, unit: 'tokens' } } }) });
+      assert.equal(read().env.CLAUDE_CODE_AUTO_COMPACT_WINDOW, '250000');
+    } finally {
+      await server.close();
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

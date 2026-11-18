@@ -14,16 +14,17 @@
   <main class="stage">
     <div class="screen" id="screen">
       <canvas id="office" width="1216" height="760" data-i18n-aria="ui.canvas"></canvas>
+      <!-- hovering someone (or their desk): what they are on and what you can do (main.js, deskTip) -->
+      <div id="desk-tip" class="desk-tip" role="tooltip" hidden></div>
 
       <!-- HUD: everything goes inside the game screen. Top left, the office selector (only if
-           the company has more than one), the connection and the weather. -->
+           the company has more than one), the connection (only when it is lost) and the context. -->
       <div class="hud hud-tl">
         <label class="office-pick" id="office-pick" data-i18n-title="floors.key">
           <select id="office-select" data-i18n-aria="ui.floor"></select>
         </label>
         <span id="conn" class="conn off">offline</span>
-        <span id="wx" class="wx" hidden></span>
-        <!-- the agent's context as a health bar, next to the weather: it empties as the context fills
+        <!-- the agent's context as a health bar: it empties as the context fills
              up (the focused session's, or the latest that reports it; grey until one does). -->
         <span class="ctx-chip" id="ctx-bar" hidden>
           <span class="ctx-heart" aria-hidden="true">♥</span>

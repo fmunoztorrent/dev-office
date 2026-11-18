@@ -58,6 +58,7 @@ test('flush sólo reescribe lo que cambió', () => {
 test('en la terminal también llegan los nuevos: aparece su escritorio con su nombre, y no quedan puestos vacíos', () => {
   let now = 0;
   const sim = createSim({ clock: () => now });
+  for (const role of ['backend']) sim.handle({ kind: 'tool_start', role, session: 'main', tool: 'Edit', text: 'En lo suyo' }); // the role's own character is busy: a newcomer comes
   sim.handle({ kind: 'subagent_start', role: 'backend', subId: 's1', text: 'pagos' });
   for (let i = 0; i < 400; i++) { now += 50; sim.step(0.05, now); }
   const [nuevo] = sim.ghosts;

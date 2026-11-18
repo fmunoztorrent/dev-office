@@ -38,6 +38,7 @@ test('en el tema anime, los recién llegados también son mujeres', (t) => {
   setTheme('anime');
   let now = 0;
   const sim = createSim({ clock: () => now, random: () => 0.3, wall: () => Date.UTC(2026, 9, 16, 13) });
+  for (const role of ['backend', 'qa', 'tl']) sim.handle({ kind: 'tool_start', role, session: 'main', tool: 'Edit', text: 'En lo suyo' }); // the role's own character is busy: a newcomer comes
   for (const [subId, role] of [['a', 'backend'], ['b', 'qa'], ['c', 'tl']]) sim.handle({ kind: 'subagent_start', role, subId, text: `parte ${subId}` });
   const ghosts = [...sim.ghosts];
   assert.equal(ghosts.length, 3);
