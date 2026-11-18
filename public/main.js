@@ -869,6 +869,13 @@ function say(text) {
     setTimeout(() => talk(p.id, { who: 'them', text: line, by: p.id }), 300);
     return;
   }
+  // the manager: what is not a question is an order, and it goes to work right away
+  if (selected === 'manager') {
+    fetch('/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'order', text: q, office: office?.id || 'main' }) })
+      .then((r) => r.json()).catch((err) => ({ ok: false, error: err.message }))
+      .then((r) => { const line = r?.ok ? r.said : r?.error || '✖'; talk('manager', { who: 'them', text: line, by: 'manager', status: r?.ok ? undefined : 'failed' }); game.agents.manager?.say(line, 4000); });
+    return;
+  }
   send({ type: 'chat', text: q, role: selected === 'po' ? undefined : selected });
 }
 
@@ -921,7 +928,7 @@ function renderTalk() {
   const ol = $('sheet-talk');
   const list = talks.get(selected) || [];
   ol.innerHTML = '';
-  if (!list.length && who()) ol.append(el('li', 'talk-empty', selected === 'po' ? t('ui.talkEmptyTeam') : t('ui.talkEmpty', { name: who().cfg.name })));
+  if (!list.length && who()) ol.append(el('li', 'talk-empty', selected === 'po' ? t('ui.talkEmptyTeam') : selected === 'manager' ? t('ui.talkEmptyManager', { name: who().cfg.name }) : t('ui.talkEmpty', { name: who().cfg.name })));
   for (const x of list.slice(-12)) {
     const by = x.who === 'you' ? null : who(x.by || selected)?.cfg;
     const li = el('li', `${x.who}${x.status ? ` ${x.status}` : ''}`);
@@ -1032,7 +1039,7 @@ function select(id) {
   renderTalk();
   if (id && changed) {
     const p = who(id);
-    $('say-text').placeholder = id === 'po' ? t('ui.talkTeamPh') : t('ui.talkPh', { name: p.cfg.name });
+    $('say-text').placeholder = id === 'po' ? t('ui.talkTeamPh') : id === 'manager' ? t('ui.talkManagerPh', { name: p.cfg.name }) : t('ui.talkPh', { name: p.cfg.name });
     $('say-text').value = '';
     fitSay();
   }
@@ -1055,12 +1062,29 @@ function renderSheet(full) {
     $('sheet-role').textContent = `${role}${a.badges.size ? ` · ${t('ui.subagents', { n: a.badges.size })}` : ''}`;
   }
   $('sheet-mood').textContent = `${moodOf(a)}${a.text && ['working', 'thinking', 'red'].includes(a.state) ? `: ${a.text}` : ''}`;
+  narrateSheet(a);
   if (box.querySelector('.sheet-more').open || full) {
     const ul = $('sheet-history');
     ul.innerHTML = '';
     if (!a.history.length) ul.append(el('li', '', t('ui.nothingYet')));
     for (const h of a.history.slice(0, 8)) ul.append(el('li', '', `${hhmm(h.ts)} — ${h.text}`));
   }
+}
+/** What they did lately, in one sentence (server/narrator.js): asked again only when they did something new. */
+let didFor = '';
+function narrateSheet(a) {
+  const key = `${office?.id || 'main'}:${selected}:${a.history[0]?.ts || 0}`;
+  if (key === didFor) return;
+  didFor = key;
+  const p = $('sheet-did');
+  if (!a.history.length) { p.hidden = true; return; }
+  const q = new URLSearchParams({ role: a.ghost ? a.role : selected, name: a.cfg.name, title: a.cfg.title || '', ...(a.subId ? { sub: a.subId } : {}) });
+  fetch(`/v1/offices/${encodeURIComponent(office?.id || 'main')}/narrate?${q}`).then((r) => r.json()).then((r) => {
+    if (didFor !== key) return;
+    p.hidden = !r?.text;
+    p.textContent = r?.text ? `📝 ${r.text}` : '';
+    p.title = r?.source === 'model' ? t('ui.didModel') : t('ui.didRules');
+  }).catch(() => { p.hidden = true; });
 }
 setInterval(() => { renderSheet(); if ($('work').open) renderTeam(); }, 500);
 $('sheet-close').onclick = () => select(null);

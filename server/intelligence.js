@@ -24,6 +24,12 @@ export const INTEL_DEFAULTS = {
   openai: { url: 'https://api.openai.com/v1', model: '' },
   ollama: { url: 'http://127.0.0.1:11434', model: 'llama3.1' },
 };
+// the narrator's (a short sentence, often): the fast ones
+export const NARRATOR_DEFAULTS = {
+  anthropic: { url: 'https://api.anthropic.com/v1', model: 'claude-haiku-5-5' },
+  openai: { url: 'https://api.openai.com/v1', model: '' },
+  ollama: { url: 'http://127.0.0.1:11434', model: 'llama3.1' },
+};
 const ANTHROPIC_VERSION = '2026-10-21';
 // models that take the server-side fallback on a refusal (another model answers instead of none)
 const FALLBACKS = new Set(['claude-fable-5-2', 'claude-fable-5-1', 'claude-opus-5-5', 'claude-opus-5', 'claude-sonnet-5-5']);
@@ -133,14 +139,15 @@ export class Intelligence {
    * @param fetch     for the tests (the HTTP providers)
    * @param spawn     for the tests (the agent provider)
    */
-  constructor({ getPrefs, fetch: fetchFn = globalThis.fetch, env = process.env, spawn = spawnChild, askCommand = askCmd } = {}) {
-    Object.assign(this, { getPrefs, fetchFn, env, spawn, askCommand });
+  constructor({ getPrefs, fetch: fetchFn = globalThis.fetch, env = process.env, spawn = spawnChild, askCommand = askCmd, prefKey = 'intelligence' } = {}) {
+    Object.assign(this, { getPrefs, fetchFn, env, spawn, askCommand, prefKey });
   }
 
   /** The current setting, with the provider's defaults: { provider, harness, model, url, timeout }. */
   get config() {
-    const c = { provider: 'off', harness: 'claude-code', model: '', url: '', timeout: 120, ...(this.getPrefs?.()?.intelligence || {}) };
-    const d = INTEL_DEFAULTS[c.provider];
+    const c = { provider: 'off', harness: 'claude-code', model: '', url: '', timeout: 120, ...(this.getPrefs?.()?.[this.prefKey] || {}) };
+    // the narrator's default models are the fast ones
+    const d = (this.prefKey === 'narrator' ? NARRATOR_DEFAULTS : INTEL_DEFAULTS)[c.provider];
     return { ...c, model: c.model || d?.model || '', url: String(c.url || d?.url || '').replace(/\/+$/, '') };
   }
   get enabled() { return this.config.provider !== 'off'; }

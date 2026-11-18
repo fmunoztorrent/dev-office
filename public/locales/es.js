@@ -297,6 +297,8 @@ export default {
     newDesc: 'nuevo (lo pidió una directiva)', needAnswers: 'Antes de enviarla, dime qué es {what}: si existe y dónde, si hay que crearlo o si es un departamento nuevo.', badAnswer: '¿Qué es «{what}»? Contesta: existe, crearlo, un repo aparte, un repo nuevo, infraestructura, departamento nuevo o no es parte del proyecto.', deptEmpty: 'Se creó {names}, pero todavía no tiene repositorios: súmale uno (⚙ › Departamentos) y vuelve a enviar la directiva.',
     askInfra: '«{what}» ({kind}): ¿ya existe, y dónde? ¿O hay que crearla, y quién?', whoCreates: '¿Qué repositorio crea «{what}»? Elige uno.', needWhere: '¿Dónde está «{what}»? Escribe su carpeta o la URL de su repositorio.', noFolder: 'No existe la carpeta {path}', repoExists: 'La carpeta {path} ya existe y no está vacía: si ya es un repo, contesta «Es un repo aparte».',
     ui: {
+    talkManagerPh: 'Una orden para el equipo (va a trabajo ya), o una pregunta con ?', talkEmptyManager: 'Dile a {name} qué hacer y va a trabajo de inmediato (al repositorio que nombres, o al único del proyecto). Con ? es una pregunta sobre el equipo, el plan o lo que está bloqueado.',
+    didModel: 'Lo dice tu modelo narrador (⚙ › Inteligencia)', didRules: 'De la bitácora (con un modelo narrador en ⚙ › Inteligencia lo dice mejor)',
       tree: 'Los repos que toca', component: 'componente', expand: '⤢ Ver el detalle', graphTitle: '🗺 El impacto en detalle', task: 'El pedido', unknown: '❓ Sin mapear', dept: '{n} repo(s)',
       thinking: '🧠 {model} analiza el pedido…', thought: '🧠 Analizado con {model} ({s} s)', thinkFailed: '🧠 El análisis de {model} no llegó ({error}): queda el mapa por palabras.', thinkOff: 'Para un análisis más fino (cómo toca cada repo y qué falta), elige un modelo en ⚙ › Inteligencia.', rethink: '🧠 Analizar de nuevo',
       why: 'Por qué', how: 'Cómo lo toca', components: 'Componentes', infra: 'Infraestructura', stack: 'Usa', system: 'Proyecto', path: 'Carpeta', answerBelow: 'Sin mapear: contéstalo abajo.', summary: 'El análisis', usedBy: 'La usan', where: 'Dónde',
@@ -351,6 +353,17 @@ export default {
     sound: 'Un sonido cuando te esperan', notify: 'Una notificación del sistema cuando te esperan', notifyTitle: 'Dev Team Office: te esperan',
   },
   // las indicaciones arriba de un encargo (server/guides.js)
+  people: {
+    repo: '- {name} ({kind}, proyecto {project}): {path}', uses: '  usa: {list}', usedBy: '  lo usan: {list}', instructions: '  cómo se trabaja: {text}',
+    named: 'Los repositorios de los que trata la pregunta ({n}):',
+    whichRepo: '¿Cuál repositorio? Nómbralo: {list}', noRepo: 'Este proyecto todavía no tiene repositorios registrados (⚙ › Repositorios).', onIt: 'Va: {name} se pone a trabajar ahora.',
+    persona: {
+      tl: 'Respondes como el tech lead. Averigua de qué repositorio o repositorios trata la pregunta (los de arriba, por su nombre o por su proyecto) y responde sobre ellos en concreto: lee su código si hace falta, nombra archivos, módulos, endpoints y las dependencias entre ellos, y di en qué repositorio está cada cosa. Si no trata de ninguno, di desde cuál respondiste.',
+      manager: 'Respondes como el manager: sobre quién hace qué, prioridades, el plan y lo que está bloqueado. Corto y práctico. (Una orden sin signo de pregunta va directo a trabajo: esto no es eso.)',
+      analyst: 'Respondes como la PM del proyecto: sobre el producto (quién lo usa, qué problema resuelve, qué hace cada funcionalidad por el usuario, alcance, prioridades y criterios de aceptación), con palabras simples. Nunca entres en detalles técnicos (código, archivos, APIs, librerías): si la pregunta es técnica, di que eso se lo pregunte al tech lead.',
+    },
+  },
+  narrate: { list: '{first} y {last}', withFails: '{what} (fallas: {n})', system: 'Le cuentas al manager de un equipo de software, en UNA frase corta y concreta (máximo 18 palabras, en pasado, en español), qué hizo un miembro del equipo: nombra los archivos, funcionalidades o tests; sin relleno y sin inventar nada que no esté en los hechos. Responde sólo con el objeto JSON {"text": "…"}.', user: 'Quién: {who}\nLo que hizo (de lo más antiguo a lo más nuevo):\n{facts}\nFallas: {fails}' },
   retro: { title: 'Retro: {task} ({office})', about: 'Lo que aprendimos de: {task}', noTask: 'la última tarea', tag: 'aprendizaje', source: 'la retro', failed: 'Falló: {detail}', event: 'Retro: {n} aprendizaje(s) al archivo' },
   guide: {
     company: 'Estándares de la empresa (los del CTO):', 
@@ -688,7 +701,7 @@ export default {
       autonomy: 'Cuánto hace el equipo por su cuenta: si la analista revisa antes cada encargo y si los agentes trabajan hasta el final sin preguntar.',
       context: 'Cuándo se compacta solo el contexto de un agente.',
       models: 'Qué modelo usa cada rol: los perfiles con que parte una sesión nueva o la etapa de un pipeline.',
-      intelligence: 'El modelo en que se apoya la oficina para juzgar: hoy, el impacto de un pedido.',
+      intelligence: 'Los modelos en que se apoya la oficina: uno para juzgar (el impacto de un pedido) y uno rápido, el narrador, para contar en una frase qué hizo cada uno.',
       archive: 'Cómo llega el archivo a los agentes: sus fragmentos arriba de cada encargo, y la búsqueda por significado.',
       terminal: 'herdr: el agente en un pane y cada subagente en el suyo.',
       look: 'Cómo se ve la gente de la oficina que estás mirando, cómo se llama y cómo contesta.',
@@ -708,7 +721,7 @@ export default {
       autonomy: 'autonomía analista aclarar preguntas revisión autónomo',
       context: 'contexto compactar compactación tokens tope límite ventana',
       models: 'modelo perfil rol anthropic opencode proveedor',
-      intelligence: 'inteligencia modelo llm claude openai ollama clave api impacto',
+      intelligence: 'inteligencia modelo llm claude openai ollama clave api impacto narrador haiku deepseek rápido burbuja ficha resumen',
       archive: 'archivo rag embeddings conocimiento búsqueda índice semántica',
       terminal: 'herdr terminal pane subagente dividir lanzar',
       look: 'personaje apariencia aspecto nombre pelo piel camisa personalidad estilo exportar importar',
@@ -738,6 +751,7 @@ export default {
     keys: { field: 'campo', change: 'cambia', action: 'acción', save: 'guardar', close: 'cerrar', tabs: '◂ ▸ cambia de pestaña' },
     yes: 'sí', no: 'no',
     general: {
+      narrator: 'Narrador', narratorHint: 'Un modelo rápido y barato (Claude Haiku, un DeepSeek flash por una API compatible con OpenAI, un Ollama local…) que dice en una frase corta qué hizo cada uno: en su ficha y, al terminar un turno, en su burbuja. Apagado: la oficina lo dice de la bitácora, por reglas.',
       ioSkillsTitle: 'Trae {n} skill(s): ¿dónde van?', ioSkills_global: 'En tus carpetas personales', ioSkillsHint_global: 'las tiene cada sesión de tus agentes (~/.claude/skills, ~/.agents/skills)',
       ioSkills_repos: 'En algunos repositorios', ioSkillsHint_repos: 'sólo los agentes que trabajen en los que elijas (su .claude/skills o .agents/skills)', ioSkills_none: 'En ninguna parte', ioSkillsHint_none: 'las privadas quedan en ⚙ › Mío, apagadas; las demás no se instalan',
       ioSkillsFromFile: 'del archivo', ioSkillsNoRepos: 'Todavía no hay repositorios registrados.', ioSkillsSafe: 'Una skill que ya está y es distinta nunca se pisa: queda como estaba, y se dice.', ioSkillsGo: 'Importar', ioSkillIn: 'skill {name} en {dir}',

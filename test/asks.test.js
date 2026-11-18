@@ -184,3 +184,40 @@ test('una pregunta a un recién llegado (un subagente) vuelve marcada para él: 
   const btw = server.office.log.filter((e) => e.kind === 'btw');
   assert.deepEqual(btw.map((e) => [e.phase, e.role, e.subId]), [['ask', 'backend', 'sub-7'], ['answer', 'backend', 'sub-7']]);
 }));
+
+test('el tech lead sabe de qué repositorios le hablas; la PM habla de producto; el manager responde de equipo', () => withServer(async (server, log) => {
+  const dir = tmp('dto-btw-tl-');
+  const core = tmp('dto-btw-core-');
+  server.store.createOffice({ name: 'Loyalty' });
+  server.company.load();
+  const bff = server.store.createAgent({ path: dir, harness: 'pi', name: 'loyalty-bff', office: 'loyalty', bin: FAKE }).agent;
+  const coreA = server.store.createAgent({ path: core, harness: 'pi', name: 'loyalty-core', office: 'loyalty', bin: FAKE }).agent;
+  server.store.saveRelation({ from: bff.id, to: coreA.id, how: 'calls' });
+  let out = server.asks.ask({ text: '¿cómo valida el token el loyalty core?', office: 'loyalty', role: 'tl' });
+  await out.done;
+  let prompt = readLog(log).at(-1).args.at(-1);
+  assert.match(prompt, /Los repositorios de los que trata la pregunta \(1\):\n- loyalty-core \(/, 'nombrado con espacios en vez de guiones');
+  assert.match(prompt, /lo usan: loyalty-bff/);
+  assert.match(prompt, /Respondes como el tech lead/);
+  out = server.asks.ask({ text: '¿para qué sirven los puntos?', office: 'loyalty', role: 'analyst' });
+  await out.done;
+  prompt = readLog(log).at(-1).args.at(-1);
+  assert.match(prompt, /Respondes como la PM del proyecto[\s\S]*Nunca entres en detalles técnicos/);
+  assert.doesNotMatch(prompt, /Los repositorios de los que trata/, 'la PM no recibe el bloque técnico');
+}));
+
+test('una orden al manager va a trabajo de inmediato, al repositorio que nombra (sin la revisión de la analista)', () => withServer(async (server) => {
+  const a = tmp('dto-ord-a-'), b = tmp('dto-ord-b-');
+  server.store.createOffice({ name: 'Loyalty' });
+  server.company.load();
+  server.store.createAgent({ path: a, harness: 'claude-code', name: 'loyalty-bff', office: 'loyalty', bin: '/nonexistent/claude' });
+  server.store.createAgent({ path: b, harness: 'claude-code', name: 'loyalty-core', office: 'loyalty', bin: '/nonexistent/claude' });
+  const post = (body) => fetch(`${server.url}/v1/messages`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
+  let r = await post({ type: 'order', office: 'loyalty', text: 'Agrega un endpoint de canje' });
+  assert.equal(r.ok, false);
+  assert.match(r.error, /¿Cuál repositorio\? Nómbralo: loyalty-bff, loyalty-core/, 'con dos, pregunta cuál');
+  r = await post({ type: 'order', office: 'loyalty', text: 'Agrega en loyalty-core un endpoint de canje' });
+  assert.equal(r.target, 'loyalty-core', 'el que nombra');
+  assert.match(r.error, /\/nonexistent\/claude/, 'y fue a lanzarlo de inmediato (aquí su CLI no existe)');
+  assert.equal(server.clarify.list?.().length ?? 0, 0, 'la analista no la revisa');
+}));

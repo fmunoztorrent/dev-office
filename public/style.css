@@ -1228,3 +1228,4 @@ ol.arch-list { list-style: decimal; padding-left: 20px; }
 .rug-menu button:hover, .rug-menu button:focus-visible { background: #ffd166; color: #1b1f33; outline: none; }
 .retro .brief-body { display: grid; gap: 8px; padding: 10px 16px; }
 .retro textarea { width: 100%; box-sizing: border-box; font: 14px/1.4 "Space Grotesk", sans-serif; }
+.sheet-did { margin: 3px 0 0; font-size: 12.5px; line-height: 1.35; color: #3d4466; background: #fff6d6; padding: 3px 6px; box-shadow: inset 2px 0 0 #e9c46a; }

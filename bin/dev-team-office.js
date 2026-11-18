@@ -439,10 +439,11 @@ const CONFIG_KEYS = [
   'standards', 'capacity', 'autonomy.clarify', 'autonomy.autonomous', 'compact.auto', 'compact.at',
   'archive.push', 'archive.embeddings', 'archive.model', 'archive.url',
   'intelligence.provider', 'intelligence.harness', 'intelligence.model', 'intelligence.url', 'intelligence.timeout',
+  'narrator.provider', 'narrator.harness', 'narrator.model', 'narrator.url', 'narrator.timeout',
   'herdr.launch', 'herdr.subagents', 'herdr.direction', 'herdr.startAgent',
 ];
 const CONFIG_BOOLS = ['weather', 'log.life', 'autonomy.clarify', 'autonomy.autonomous', 'compact.auto', 'archive.push', 'herdr.launch', 'herdr.subagents'];
-const CONFIG_NUMBERS = ['capacity', 'intelligence.timeout'];
+const CONFIG_NUMBERS = ['capacity', 'intelligence.timeout', 'narrator.timeout'];
 /** A setting as `config` shows it: on/off, the limit with its unit, a long text cut. */
 function configShown(key, value, prefs) {
   if (typeof value === 'boolean') return value ? 'on' : 'off';

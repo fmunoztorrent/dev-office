@@ -22,6 +22,8 @@ import { AgentRegistry } from './registry.js';
 import { ClarifyDesk } from './clarify.js';
 import { Compactor, claudeCompactEnv, syncClaudeCompact } from './compact.js';
 import { lastTask, suggestLearnings, saveRetro, learningsOf } from './retro.js';
+import { Narrator } from './narrator.js';
+import { orderTarget } from './people.js';
 import { Mine } from './mine.js';
 import { Standup } from './standup.js';
 import { exportSettings, importSettings } from './settings-io.js';
@@ -176,6 +178,9 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   const expertsChanged = () => { expertsSeen = { at: 0, list: [] }; bus.emit('experts'); };
   // the model the office leans on for judgment (⚙ › Intelligence): the impact of an order (server/intelligence.js)
   const intel = new Intelligence({ getPrefs: () => store.getPrefs(), ...intelOpt });
+  const intelModel = intel;
+  // the narrator: a fast model of yours (prefs.narrator) or the rules, from the real log (server/narrator.js)
+  const narrator = new Narrator({ model: new Intelligence({ getPrefs: () => store.getPrefs(), ...intelOpt, prefKey: 'narrator' }), company });
   const directives = new DirectiveDesk({ store, registry, hub, pipelines, archive, company, intel });
   // the projects' loops: steps with success criteria, worked through on their own (server/loops.js)
   const { autostart: loopsStart = true, ...loopsRest } = loopsOpt;
@@ -526,6 +531,16 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         return conn ? hub.update(conn.id, msg) : { ok: false, error: t('err.updateWs') };
       case 'task':
         return hub.submit({ office: here, ...publicTask(msg) });
+      // an order to the manager: right away, to the repository it names (or the project's only one), without
+      // the analyst's review (server/people.js)
+      case 'order': {
+        const text = String(msg.text || '').trim();
+        if (!text) return { ok: false, error: t('err.promptEmpty') };
+        const to = orderTarget(store, registry, text, here);
+        if (to.error) return { ok: false, error: to.error };
+        const out = registry.run({ target: to.target.id, text, from: msg.from || t('events.you'), clarified: true });
+        return out.ok ? { ...out, target: to.target.name, said: t('people.onIt', { name: to.target.name }) } : { ...out, target: to.target.name };
+      }
       case 'task_cancel':
         return hub.cancel(msg.id);
       // A prompt for an agent, through an entry of its harness (what the whiteboard sends).
@@ -721,6 +736,12 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         const id = decodeURIComponent(m[1]);
         if (!company.has(id)) return json(res, 404, { ok: false, error: t('err.unknownOffice', { office: id }) });
         return json(res, 200, standup.run(id, { from: t('events.you') }));
+      }
+      // What someone did lately, in one sentence (the narrator): ?role=<role>&sub=<subagent>&name=&title=
+      if (req.method === 'GET' && (m = p.match(/^\/v1\/offices\/([^/]+)\/narrate$/))) {
+        const id = decodeURIComponent(m[1]);
+        if (!company.has(id)) return json(res, 404, { ok: false, error: t('err.unknownOffice', { office: id }) });
+        return json(res, 200, await narrator.line(id, { role: normRole(q('role')) || q('role'), subId: q('sub') || null, name: q('name') || '', title: q('title') || '' }));
       }
       // The retro of a project (the rug, at the meeting table): GET its last task and the learnings the office
       // suggests; POST { learnings, task? }: the ones you keep go to the archive, and the team gathers
@@ -933,13 +954,15 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
         return json(res, out.ok ? 200 : out.status || 400, out);
       }
       // The model the office leans on (⚙ › Intelligence): how it is set, and a small question to try it
-      if (req.method === 'GET' && p === '/v1/intelligence') {
+      if (req.method === 'GET' && (p === '/v1/intelligence' || p === '/v1/narrator')) {
+        const intel = p === '/v1/narrator' ? narrator.model : intelModel;
         // what is missing for it to work, as a code (key, model) or the agent CLI's own error, and said in words
         const problem = intel.problem();
         const problemText = !problem ? null : ['key', 'model'].includes(problem) ? t(`intel.problem.${problem}`) : problem;
         return json(res, 200, { ok: true, enabled: intel.enabled, model: intel.label, config: intel.config, problem, problemText });
       }
-      if (req.method === 'POST' && p === '/v1/intelligence/test') {
+      if (req.method === 'POST' && (p === '/v1/intelligence/test' || p === '/v1/narrator/test')) {
+        const intel = p === '/v1/narrator/test' ? narrator.model : intelModel;
         if (!intel.enabled) return json(res, 400, { ok: false, error: t('intel.off') });
         const out = await intel.test();
         return json(res, out.ok ? 200 : 502, out);
@@ -1249,6 +1272,11 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   // past your threshold, the agent is asked to compact its context (server/compact.js)
   const compactor = new Compactor({ prefs, hub, herdr, company });
   company.on('event', (id, event, session) => compactor.onEvent(id, event, session));
+  // a turn ended: with the narrator's model on, who worked in it says what they did (a bubble)
+  company.on('event', (id, event) => {
+    if (event.kind !== 'turn_end' || !event.session || event.session === 'office') return;
+    narrator.turnEnded(id, event.session, ({ role, text }) => company.ingest('generic', { session: 'office', office: id, kind: 'narrate', role, text })).catch(() => {});
+  });
   // your threshold in your Claude Code's settings too (only the real office passes the file: never a test)
   syncClaudeCompact(claudeSettings, store.getPrefs());
   // a loop looks at whether its project is working or idle (server/loops.js)

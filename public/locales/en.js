@@ -297,6 +297,8 @@ export default {
     newDesc: 'new (a directive asked for it)', needAnswers: 'Before it goes, tell me what {what} is: whether it exists and where, whether it must be created, or whether it is a new department.', badAnswer: 'What is "{what}"? Answer: it exists, create it, a separate repo, a new repo, infrastructure, a new department, or not part of the project.', deptEmpty: '{names} was created, but it has no repositories yet: add one (⚙ › Departments) and send the directive again.',
     askInfra: '"{what}" ({kind}): does it exist already, and where? Or must it be created, and by whom?', whoCreates: 'Which repository creates "{what}"? Pick one.', needWhere: 'Where is "{what}"? Write its folder or its repository’s URL.', noFolder: 'The folder {path} does not exist', repoExists: 'The folder {path} exists and is not empty: if it is a repo already, answer “It is a separate repo”.',
     ui: {
+    talkManagerPh: 'An order for the team (it goes to work now), or a question with ?', talkEmptyManager: 'Tell {name} what to do and it goes to work right away (to the repository you name, or the project’s only one). With ? it is a question about the team, the plan or what is blocked.',
+    didModel: 'Said by your narrator model (⚙ › Intelligence)', didRules: 'From the log (with a narrator model in ⚙ › Intelligence it says it better)',
       tree: 'The repos it touches', component: 'component', expand: '⤢ See the detail', graphTitle: '🗺 The impact in detail', task: 'The order', unknown: '❓ Not on the map', dept: '{n} repo(s)',
       thinking: '🧠 {model} is analyzing the order…', thought: '🧠 Analyzed with {model} ({s} s)', thinkFailed: '🧠 The analysis by {model} did not come ({error}): the map by words stays.', thinkOff: 'For a finer analysis (how each repo is touched and what is missing), choose a model in ⚙ › Intelligence.', rethink: '🧠 Analyze again',
       why: 'Why', how: 'How it is touched', components: 'Components', infra: 'Infrastructure', stack: 'Uses', system: 'Project', path: 'Folder', answerBelow: 'Not on the map: answer it below.', summary: 'The analysis', usedBy: 'Used by', where: 'Where',
@@ -351,6 +353,17 @@ export default {
     sound: 'A sound when they wait for you', notify: 'A system notification when they wait for you', notifyTitle: 'Dev Team Office: waiting for you',
   },
   // the instructions on top of a brief (server/guides.js)
+  people: {
+    repo: '- {name} ({kind}, project {project}): {path}', uses: '  uses: {list}', usedBy: '  used by: {list}', instructions: '  how to work on it: {text}',
+    named: 'The repositories the question is about ({n}):',
+    whichRepo: 'Which repository? Name it: {list}', noRepo: 'This project has no registered repository yet (⚙ › Repositories).', onIt: 'On it: {name} gets to work now.',
+    persona: {
+      tl: 'You answer as the tech lead. Find out which repository or repositories the question is about (the ones listed above, by name or by their project) and answer about them specifically: read their code if needed, name files, modules, endpoints and dependencies between them, and say which repository each thing is in. If it is about none of them, say which one you answered from.',
+      manager: 'You answer as the manager: about who is doing what, priorities, the plan and what is blocked. Short and practical. (An order without a question mark goes straight to work: it is not this.)',
+      analyst: 'You answer as the project’s product manager: about the product (who uses it, what problem it solves, what each feature does for the user, scope, priorities and acceptance criteria), in plain words. Never go into technical detail (code, files, APIs, libraries): if the question is technical, say that the tech lead is the one to ask.',
+    },
+  },
+  narrate: { list: '{first} and {last}', withFails: '{what} (failures: {n})', system: 'You tell a software team manager, in ONE short concrete sentence (max 18 words, past tense, in English), what a team member did: name the files, features or tests; no fluff, no invention beyond the facts. Reply with the JSON object {"text": "…"} only.', user: 'Who: {who}\nWhat they did (oldest first):\n{facts}\nFailures: {fails}' },
   retro: { title: 'Retro: {task} ({office})', about: 'What we learned from: {task}', noTask: 'the last task', tag: 'learning', source: 'the retro', failed: 'It failed: {detail}', event: 'Retro: {n} learning(s) to the archive' },
   guide: {
     company: 'The company’s standards (the CTO’s):', 
@@ -688,7 +701,7 @@ export default {
       autonomy: 'How much the team does on its own: whether the analyst reviews each brief first, and whether the agents work to the end without asking.',
       context: 'When an agent’s context is compacted on its own.',
       models: 'Which model each role uses: the profiles a new session or a pipeline stage starts with.',
-      intelligence: 'The model the office leans on to judge: today, the impact of an order.',
+      intelligence: 'The models the office leans on: one to judge (the impact of an order) and a fast one, the narrator, to tell in a sentence what each one did.',
       archive: 'How the archive reaches the agents: its chunks on top of every brief, and the search by meaning.',
       terminal: 'herdr: the agent in a pane and each subagent in its own.',
       look: 'How the people of the office being watched look, what they are called and how they answer.',
@@ -708,7 +721,7 @@ export default {
       autonomy: 'autonomy analyst clarify questions review autonomous',
       context: 'context compact compaction tokens limit window',
       models: 'model profile role anthropic opencode provider',
-      intelligence: 'intelligence model llm claude openai ollama key api impact',
+      intelligence: 'intelligence model llm claude openai ollama key api impact narrator haiku deepseek fast bubble card summary',
       archive: 'archive rag embeddings knowledge search index semantic',
       terminal: 'herdr terminal pane subagent split launch',
       look: 'character appearance name hair skin shirt personality style export import',
@@ -738,6 +751,7 @@ export default {
     keys: { field: 'field', change: 'change', action: 'action', save: 'save', close: 'close', tabs: '◂ ▸ switch tab' },
     yes: 'yes', no: 'no',
     general: {
+      narrator: 'Narrator', narratorHint: 'A fast, cheap model (Claude Haiku, a DeepSeek flash through an OpenAI-compatible API, a local Ollama…) that says in one short sentence what each one did: on their card and, when a turn ends, in their bubble. Off: the office says it from the log by rules.',
       ioSkillsTitle: 'It brings {n} skill(s): where do they go?', ioSkills_global: 'In your personal folders', ioSkillsHint_global: 'every session of your agents has them (~/.claude/skills, ~/.agents/skills)',
       ioSkills_repos: 'In some repositories', ioSkillsHint_repos: 'only the agents working in the ones you pick (their .claude/skills or .agents/skills)', ioSkills_none: 'Nowhere', ioSkillsHint_none: 'the private ones stay in ⚙ › Mine, off; the rest are not installed',
       ioSkillsFromFile: 'from the file', ioSkillsNoRepos: 'There are no registered repositories yet.', ioSkillsSafe: 'A skill that is already there and is different is never overwritten: it is left as it was, and said.', ioSkillsGo: 'Import', ioSkillIn: 'skill {name} in {dir}',

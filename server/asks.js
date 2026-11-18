@@ -24,6 +24,7 @@ import { childEnv } from './tasks.js';
 import { defaultLook } from '../public/sim.js';
 import { guideFor, guideText } from './guides.js';
 import { contextBlock } from './rag.js';
+import { techLeadContext } from './people.js';
 
 const ANSI = /\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07/g;
 const SOURCE_HARNESS = { 'claude-code': 'claude-code', claude: 'claude-code', codex: 'codex', opencode: 'opencode', pi: 'pi' };
@@ -109,6 +110,8 @@ export class AskDesk extends EventEmitter {
     // what the archive knows about the question (with its ids, to cite them)
     const archive = this.store?.listKnowledge ? contextBlock(this.store, this.#question || '', { office: officeId, project: duty.cwd || null }) : '';
     if (archive) lines.push(archive);
+    // the tech lead: the repositories the question names, each one with what it is, uses and is used by
+    if (role === 'tl') { const named = techLeadContext(this.store, this.#question || ''); if (named) lines.push(named); }
     if (forked) return lines.join('\n');
     if (duty.title) lines.push(t('btw.ctxTask', { task: clip(duty.title, 200) }));
     if (duty.turn) lines.push(t('btw.ctxTurn', { role: t(`team.titles.${duty.turn}`) }));
@@ -136,6 +139,8 @@ export class AskDesk extends EventEmitter {
     return [
       t('btw.promptHead'),
       this.#context(officeId, duty, role, forked),
+      // how the one asked answers: the tech lead from the repositories, the PM about the product…
+      ['tl', 'manager', 'analyst'].includes(role) ? t(`people.persona.${role}`) : '',
       t('btw.promptQuestion', { question }),
       t(`btw.${this.#style(officeId, role)}`, { lang: LANGUAGES[getLanguage()] || 'English' }),
     ].filter(Boolean).join('\n\n');

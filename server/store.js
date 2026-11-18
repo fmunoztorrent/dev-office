@@ -85,6 +85,9 @@ export const DEFAULT_PREFS = {
   // one of your agents' CLIs, read-only (harness, and its model if you want another); anthropic, openai
   // (any compatible API) or ollama: with its model and URL (the key, in an environment variable)
   intelligence: { provider: 'off', harness: 'claude-code', model: '', url: '', timeout: 120 },
+  // the narrator: a fast model (Haiku, a DeepSeek flash…) that says in a short sentence what each one did
+  // (the card's line and their bubble when a turn ends); off: the office says it by rules (server/narrator.js)
+  narrator: { provider: 'off', harness: 'claude-code', model: '', url: '', timeout: 30 },
 };
 
 // The default language (until one is chosen in ⚙): $DEV_TEAM_OFFICE_LANG, otherwise English.
@@ -1222,21 +1225,21 @@ export class Store {
               } else fail(t('err.pref', { key: `archive.${ak}` }));
             }
             break;
-          case 'intelligence':
+          case 'intelligence': case 'narrator':
             if (!isObj(v)) fail(t('err.prefValue', { key: k }));
             for (const [ik, iv] of Object.entries(v)) {
-              if (ik === 'provider') next.intelligence.provider = INTEL_PROVIDERS.includes(iv) ? iv : fail(t('err.prefValue', { key: 'intelligence.provider' }));
-              else if (ik === 'harness') next.intelligence.harness = HARNESS_IDS.includes(iv === 'claude' ? 'claude-code' : iv) ? (iv === 'claude' ? 'claude-code' : iv) : fail(t('err.prefValue', { key: 'intelligence.harness' }));
-              else if (ik === 'model') next.intelligence.model = String(iv ?? '').trim().slice(0, 120);
+              if (ik === 'provider') next[k].provider = INTEL_PROVIDERS.includes(iv) ? iv : fail(t('err.prefValue', { key: `${k}.provider` }));
+              else if (ik === 'harness') next[k].harness = HARNESS_IDS.includes(iv === 'claude' ? 'claude-code' : iv) ? (iv === 'claude' ? 'claude-code' : iv) : fail(t('err.prefValue', { key: `${k}.harness` }));
+              else if (ik === 'model') next[k].model = String(iv ?? '').trim().slice(0, 120);
               else if (ik === 'url') {
                 const u = String(iv ?? '').trim();
-                if (u && !/^https?:\/\/[^\s]+$/i.test(u)) fail(t('err.prefValue', { key: 'intelligence.url' }));
-                next.intelligence.url = u.slice(0, 300);
+                if (u && !/^https?:\/\/[^\s]+$/i.test(u)) fail(t('err.prefValue', { key: `${k}.url` }));
+                next[k].url = u.slice(0, 300);
               } else if (ik === 'timeout') {
                 const n = Number(iv);
-                if (!Number.isInteger(n) || n < 10 || n > 600) fail(t('err.prefValue', { key: 'intelligence.timeout' }));
-                next.intelligence.timeout = n;
-              } else fail(t('err.pref', { key: `intelligence.${ik}` }));
+                if (!Number.isInteger(n) || n < 10 || n > 600) fail(t('err.prefValue', { key: `${k}.timeout` }));
+                next[k].timeout = n;
+              } else fail(t('err.pref', { key: `${k}.${ik}` }));
             }
             break;
           case 'compact': {

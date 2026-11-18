@@ -43,7 +43,7 @@ function excerpt(text, { max = 1200, lines = 14, head = false } = {}) {
   return kept.length > max ? (head ? `${kept.slice(0, max - 1)}…` : `…${kept.slice(-(max - 1))}`) : kept;
 }
 /** Announcements: they are logged but do not change any role's state. */
-const ANNOUNCEMENTS = new Set(['dispatch', 'clarify', 'standup', 'retro', 'pane_open', 'pane_close', 'pane_state', 'service_up', 'service_down', 'autocompact', 'loop', 'e2e']);
+const ANNOUNCEMENTS = new Set(['dispatch', 'clarify', 'standup', 'retro', 'narrate', 'pane_open', 'pane_close', 'pane_state', 'service_up', 'service_down', 'autocompact', 'loop', 'e2e']);
 /** What state a character ends up in after one of its events (shared by the office and the monitor).
  *  A failed tool is not "blocked": the agent reads the error and goes on, so it keeps working.
  *  `null` for announcements, which do not change the state (nor set it to idle). */
@@ -303,6 +303,11 @@ export class Office extends EventEmitter {
         const list = (v) => (Array.isArray(v) ? v.map((x) => clip(x, 120)).filter(Boolean).slice(0, 5) : []);
         return { ...ev, role: 'manager', lines, waiting: list(r.waiting), open: list(r.open), text: clip(r.text, 120) };
       }
+      // the narrator (server/narrator.js): what someone did in the turn that ended, said over them
+      case 'narrate': {
+        const role = normRole(r.role);
+        return role ? { ...ev, role, text: clip(r.text, 160) } : null;
+      }
       // the retro (server/retro.js): the learnings you kept, told at the table
       case 'retro': {
         const lines = (Array.isArray(r.lines) ? r.lines : []).map((l) => clip(l, 200)).filter(Boolean).slice(0, 6);
@@ -408,7 +413,7 @@ export class Office extends EventEmitter {
     if ((ev.kind === 'tool_end' && !ev.ok && ev.phase !== 'red') || ev.kind === 'error') s.errors++;
     // an agent that asks you something with its question tool is waiting for you too
     const asksYou = ev.kind === 'tool_start' && ASK_TOOL.test(ev.tool || '');
-    if (!['chat', 'poke', 'dispatch', 'btw', 'clarify', 'standup', 'retro', 'autocompact', 'loop', 'e2e'].includes(ev.kind)) s.status = asksYou ? 'waiting' : SESSION_STATUS[ev.kind] || 'active';
+    if (!['chat', 'poke', 'dispatch', 'btw', 'clarify', 'standup', 'retro', 'narrate', 'autocompact', 'loop', 'e2e'].includes(ev.kind)) s.status = asksYou ? 'waiting' : SESSION_STATUS[ev.kind] || 'active';
     // what it is waiting for, and since when: the screen's "they are waiting for you" signal
     if (s.status === 'waiting') s.waiting = { text: ev.text || s.waiting?.text || '', since: s.waiting?.since || ev.ts, question: asksYou || !!s.waiting?.question, role: ev.role || null };
     else delete s.waiting;

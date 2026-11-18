@@ -1024,6 +1024,10 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         scene('standup', members, say, { spot: SPOT.table, gap: 3600 });
         break;
       }
+      // The narrator (server/narrator.js): when a turn ends, what they did, in their own bubble
+      case 'narrate':
+        if (a && !a.hidden) a.say(ev.text, 7000);
+        break;
       // The retro (server/retro.js): the team gathers at the table and the manager reads what was learned
       case 'retro': {
         const members = ['manager', 'tl', 'backend', 'frontend', 'qa'].filter((r) => agents[r] && !agents[r].hidden && !agents[r].lunch);

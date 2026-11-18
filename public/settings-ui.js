@@ -267,13 +267,14 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   }
 
   /** 🧠 Intelligence: which model, its address and limit, and a button to try it. */
-  function intelGroup(c) {
-    const PH = { anthropic: ['claude-opus-5-5', 'https://api.anthropic.com/v1'], openai: ['gpt-…', 'https://api.openai.com/v1'], ollama: ['llama3.1', 'http://127.0.0.1:11434'] };
+  function intelGroup(c, key = 'intelligence') {
+    const base = key === 'narrator' ? '/v1/narrator' : '/v1/intelligence';
+    const PH = { anthropic: [key === 'narrator' ? 'claude-haiku-5-5' : 'claude-opus-5-5', 'https://api.anthropic.com/v1'], openai: [key === 'narrator' ? 'deepseek-…-flash' : 'gpt-…', 'https://api.openai.com/v1'], ollama: ['llama3.1', 'http://127.0.0.1:11434'] };
     const result = el('span', { class: 'hint', role: 'status' });
     const test = el('button', { type: 'button', class: 's-mini', onclick: async () => {
       test.disabled = true;
       result.textContent = G('intelTesting');
-      const r = await api('POST', '/v1/intelligence/test', {});
+      const r = await api('POST', `${base}/test`, {});
       test.disabled = false;
       result.textContent = r.ok ? G('intelOk', { model: r.model, s: Math.round((r.ms || 0) / 100) / 10 }) : G('intelFail', { error: r.error || '?' });
     } }, G('intelTest'));
@@ -281,8 +282,8 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     // what is missing for it to work (the key, the model, the agent's CLI), before you try it, and again
     // after each change
     const problem = el('p', { class: 's-bad', role: 'status' });
-    const recheck = () => api('GET', '/v1/intelligence').then((r) => { problem.textContent = r.ok && r.problemText ? `⚠ ${r.problemText}` : ''; });
-    const set = (patch, redraw = false) => setPref({ intelligence: patch }, { redraw }).then((r) => { if (r?.ok && !redraw) recheck(); });
+    const recheck = () => api('GET', base).then((r) => { problem.textContent = r.ok && r.problemText ? `⚠ ${r.problemText}` : ''; });
+    const set = (patch, redraw = false) => setPref({ [key]: patch }, { redraw }).then((r) => { if (r?.ok && !redraw) recheck(); });
     if (on) recheck();
     return [
       el('label', { class: 'b-field' }, el('span', {}, G('intelProvider')),
@@ -431,7 +432,9 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
   function renderIntelligence() {
     const p = prefs();
     if (!p) return;
-    put(panelOf('intelligence'), card(G('intel'), el('p', { class: 'hint' }, G('intelHint')), intelGroup(p.intelligence || { provider: 'off', harness: 'claude-code', model: '', url: '', timeout: 120 })));
+    put(panelOf('intelligence'), card(G('intel'), el('p', { class: 'hint' }, G('intelHint')), intelGroup(p.intelligence || { provider: 'off', harness: 'claude-code', model: '', url: '', timeout: 120 })),
+      // the narrator: a fast model for the short sentences (the card's "what they did", the bubbles at a turn's end)
+      card(G('narrator'), el('p', { class: 'hint' }, G('narratorHint')), intelGroup(p.narrator || { provider: 'off', harness: 'claude-code', model: '', url: '', timeout: 30 }, 'narrator')));
   }
 
   /** 🖥 Terminal: herdr, the agent in a pane and each subagent in its own. */
