@@ -376,7 +376,7 @@ test('operaciones no satura un departamento: toma hasta `capacity` encargos abie
   const desk = new DirectiveDesk({ store, registry, hub, archive: null, company: null });
   const d = desk.create({ text: 'Logger nuevo en todos lados', offices: ['Pagos'] }).directive;
   assert.deepEqual(d.parts.map((p) => p.status), ['running', 'waiting', 'waiting', 'waiting'], 'una cabe (ya tenía uno abierto)');
-  assert.match(d.parts[1].detail, /^el departamento tiene 2 encargo\(s\) abiertos$/);
+  assert.match(d.parts[1].detail, /^el proyecto tiene 2 encargo\(s\) abiertos$/);
   // one ends: the next one goes
   hub.tasks.get('t0').status = 'done';
   hub.emit('change');

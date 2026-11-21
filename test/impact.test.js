@@ -85,7 +85,7 @@ test('el mapa de impacto: departamentos, proyectos y componentes que nombra; lo 
     assert.deepEqual(r.map.departments.find((o) => o.id === 'tienda').projects[0].components.filter((c) => c.impacted).map((c) => c.name), ['web']);
     // chosen by hand: it counts
     assert.deepEqual(desk.plan({ text: 'Actualizar el logger', targets: [tienda.id] }).map.targets, [tienda.id]);
-    assert.match(desk.plan({ text: 'Actualizar el logger' }).text, /No identifiqué qué departamentos ni repositorios toca/);
+    assert.match(desk.plan({ text: 'Actualizar el logger' }).text, /No identifiqué qué proyectos ni repositorios toca/);
   } finally { store.close(); for (const d of dirs) fs.rmSync(d, { recursive: true, force: true }); }
 });
 

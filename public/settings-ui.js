@@ -258,7 +258,8 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     renderNav();
     $('settings').dataset.section = tab;
     $('cfg-crumb').textContent = t(`settings.groups.${groupOf(tab)}`);
-    $('cfg-title').textContent = `${ICON[tab]} ${N(tab)}`;
+    $('cfg-title-ic').textContent = ICON[tab];
+    $('cfg-title').textContent = N(tab);
     $('cfg-desc').textContent = t(`settings.desc.${tab}`);
     for (const p of body.children) p.hidden = p.dataset.panel !== tab;
     $('settings-save').hidden = !DRAFTS.has(tab);
@@ -287,7 +288,7 @@ export function createSettings({ getTargets = () => [], getOffices = () => [], g
     if (on) recheck();
     return [
       el('label', { class: 'b-field' }, el('span', {}, G('intelProvider')),
-        el('select', { onchange: (e) => set({ provider: e.target.value }, true) }, ['off', 'agent', 'anthropic', 'openai', 'ollama'].map((x) => option(x, G(`intel_${x}`), x === c.provider)))),
+        el('select', { onchange: (e) => set({ provider: e.target.value }, true) }, ['off', 'agent', 'anthropic', 'openai', 'ollama'].map((x) => option(x, G(key === 'narrator' && x === 'off' ? 'narr_off' : `intel_${x}`), x === c.provider)))),
       c.provider === 'agent' ? el('label', { class: 'b-field' }, el('span', {}, G('intelHarness')),
         el('select', { onchange: (e) => set({ harness: e.target.value }) }, ['claude-code', 'codex', 'opencode', 'pi'].map((h) => option(h, HARNESS_NAME[h] || h, h === c.harness)))) : null,
       on ? el('label', { class: 'b-field' }, el('span', {}, G('intelModel')), el('input', { type: 'text', value: c.model || '', placeholder: c.provider === 'agent' ? G('intelModelAgent') : PH[c.provider]?.[0] || '', onchange: (e) => set({ model: e.target.value }) })) : null,

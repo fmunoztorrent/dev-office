@@ -467,7 +467,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       case 'reset': company.reset(id); return true;
       case 'demo':
       case 'demo-pi':
-        if (stopDemo) return false;
+        // one demo at a time: a second one says so (not "command not available")
+        if (stopDemo) return 'busy';
         stopDemo = runDemo((p) => company.ingest(action === 'demo' ? 'claude-code' : 'pi', { ...p, office: id }), {
           script: action === 'demo' ? demoScript : piDemoScript, speed: Number(speed) || 1, onEnd: () => (stopDemo = null),
         });
@@ -585,6 +586,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       }
       case 'command': {
         const ok = command(msg.action, { ...msg, office: here });
+        if (ok === 'busy') return { ok: false, error: t('err.demoRunning') };
         return ok ? { ok: true } : { ok: false, error: t('err.unknownCommand', { action: msg.action }) };
       }
       // The viewer chooses which office to watch (and it is saved).

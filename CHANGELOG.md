@@ -2,6 +2,26 @@
 
 All notable changes to Dev Team Office. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/) (while it is `0.x`, a minor version may change behavior).
 
+## [Unreleased]
+
+A polished interface: one design system for every dialog, the settings and the game's chrome, so the office reads as one product.
+
+### Changed
+
+- **One look everywhere.** Every dialog over the game (a brief, work, daily, retro, loops, services, the archive, directives, the impact, E2E, an agent's question, the inbox) shares the same frame: a header, a body that scrolls and a footer, with soft corners and shadows instead of thick ink borders. The pixel font stays only where it belongs to the world (the HUD's chips, the whiteboard, the elevator, the screens); everything you read and fill in uses the interface's font.
+- **Buttons and fields** have one size and one style: primary, secondary and danger buttons; fields with a hairline border, a focus ring and a real arrow on selects; checkboxes and radios that look like themselves.
+- **⚙ Settings** has a cleaner top bar (the search no longer hides the title), each section's icon in its header, its content in cards with a readable width (wider for the map, characters, experts and models), and a section picker that fits on a phone.
+- **The game's chrome:** the dock, the HUD chips, the activity panel, a character's card and the hover tip are glass panels with the same corners and shadows; the badge no longer pulses.
+- **The map and the impact** draw soft boxes with a hairline: what an order touches in amber, the order itself dark, the selected one in the brand's color.
+- **The archive's kinds are pills**, **an agent's options are rows** with their key, and **a loop's form** takes the whole dialog when there are no loops yet.
+- **"Project", not "department",** in every text of the interface (the company is areas and projects since 0.31.0).
+- The README's and the settings guide's screenshots show the new look.
+
+### Fixed
+
+- **Asking for a demo while one is running** says so ("a demo is already running") instead of "command not available: demo".
+- On a phone, a dialog's note goes above its buttons instead of squeezing into a column.
+
 ## [0.31.0] - 2026-11-18
 
 The company as it really is (areas, projects, repositories and how they relate, read from the code), a lighter settings area, and a team that answers like a team.

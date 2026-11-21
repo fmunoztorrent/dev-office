@@ -354,7 +354,7 @@ test('`dev-team-office join` desde la terminal: lo mismo que join_office', async
     });
     assert.equal(out.code, 0, out.text);
     // in the user's language (the MCP answers the agents in English; the terminal is the user's)
-    assert.match(out.text, /✓ Registrado: api — pi en .* \(departamento pagos\)/);
+    assert.match(out.text, /✓ Registrado: api — pi en .* \(proyecto pagos\)/);
     assert.match(out.text, /power-sync → Diego \(Backend\)/);
     // the subagents it brings are Claude Code's: Pi gets the office team in .pi/agents
     assert.match(out.text, /le dio su equipo \(Example Team\): 7 subagente\(s\) en \.pi\/agents\/\. Pi los usa desde la próxima llamada a un subagente/);
@@ -371,7 +371,7 @@ test('`dev-team-office join` desde la terminal: lo mismo que join_office', async
     });
     assert.equal(es.code, 0, es.text);
     assert.match(es.text, /🏢 Dev Team Office is running at http/);
-    assert.match(es.text, /✓ Already registered: api — pi at .* \(department pagos\)/);
+    assert.match(es.text, /✓ Already registered: api — pi at .* \(project pagos\)/);
     assert.match(es.text, /power-sync → Diego \(Backend\)/);
     assert.match(es.text, /Watch it: open http/);
   } finally {

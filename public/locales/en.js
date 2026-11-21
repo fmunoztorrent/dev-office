@@ -292,9 +292,9 @@ export default {
   settingsIo: { skillsWhere: 'the skills', skillIn: 'the skill {name} in {where}', area: 'Area {name}', relation: 'Relation {from} → {to}', skill: 'Skill {name}', tool: 'Tool {name}', expert: 'Expert in “{skill}”', resource: 'Infrastructure {name}', system: 'Project {name}', systemParts: 'Artifacts of {name} without their repo here: {parts}', department: 'Project {name}', characters: 'Characters of {name}', pref: 'Setting {key}', project: 'Repository {name}', component: 'Component {name} of {project}', instructions: 'Instructions of {path}' },
   // a directive's impact map (server/components.js)
   impact: {
-    ask: 'Does "{what}" exist? In which repository and folder, or must it be created?', none: 'I could not tell which departments or repositories it touches: choose them or name them.', unknownHead: 'It names things that are not on the map:',
-    why: { named: 'it names it', chosen: 'you chose it', part: 'it names one of its components', department: 'it names its department', system: 'it is part of the project {via}', uses: 'it uses {via}, which changes', resource: 'it uses {via}, which it names', model: 'the analysis says so' },
-    newDesc: 'new (a directive asked for it)', needAnswers: 'Before it goes, tell me what {what} is: whether it exists and where, whether it must be created, or whether it is a new department.', badAnswer: 'What is "{what}"? Answer: it exists, create it, a separate repo, a new repo, infrastructure, a new department, or not part of the project.', deptEmpty: '{names} was created, but it has no repositories yet: add one (⚙ › Departments) and send the directive again.',
+    ask: 'Does "{what}" exist? In which repository and folder, or must it be created?', none: 'I could not tell which projects or repositories it touches: choose them or name them.', unknownHead: 'It names things that are not on the map:',
+    why: { named: 'it names it', chosen: 'you chose it', part: 'it names one of its components', department: 'it names its project', system: 'it is part of the project {via}', uses: 'it uses {via}, which changes', resource: 'it uses {via}, which it names', model: 'the analysis says so' },
+    newDesc: 'new (a directive asked for it)', needAnswers: 'Before it goes, tell me what {what} is: whether it exists and where, whether it must be created, or whether it is a new project.', badAnswer: 'What is "{what}"? Answer: it exists, create it, a separate repo, a new repo, infrastructure, a new project, or not part of the project.', deptEmpty: '{names} was created, but it has no repositories yet: add one (⚙ › Company) and send the directive again.',
     askInfra: '"{what}" ({kind}): does it exist already, and where? Or must it be created, and by whom?', whoCreates: 'Which repository creates "{what}"? Pick one.', needWhere: 'Where is "{what}"? Write its folder or its repository’s URL.', noFolder: 'The folder {path} does not exist', repoExists: 'The folder {path} exists and is not empty: if it is a repo already, answer “It is a separate repo”.',
     ui: {
     talkManagerPh: 'An order for the team (it goes to work now), or a question with ?', talkEmptyManager: 'Tell {name} what to do and it goes to work right away (to the repository you name, or the project’s only one). With ? it is a question about the team, the plan or what is blocked.',
@@ -410,7 +410,7 @@ export default {
       markMet: 'It is met (your mark stays)', markUnmet: 'It is not met', byYou: 'you',
       criteriaPh: 'One criterion per line · “text :: command that checks it”', stepPh: 'What has to be done in this step?', stepCriteria: 'Its success criteria', stepN: 'Step {n}', removeStep: 'Remove the step',
       saved: 'Saved.', created: 'Loop created: its first step goes now (if the repository is idle).', editTitle: 'Change “{name}”', newTitle: 'New loop',
-      noProjects: 'This department has no registered repositories (⚙ › Repositories).', name: 'Name', project: 'Repository', every: 'Every (min)', triesLabel: 'Tries',
+      noProjects: 'This project has no registered repositories (⚙ › Repositories).', name: 'Name', project: 'Repository', every: 'Every (min)', triesLabel: 'Tries',
       addStepBtn: '＋ Step', cancel: 'Cancel', save: 'Save', create: '🔁 Create the loop',
     },
     minuteTitle: 'Loop “{name}”', minuteProject: 'Repository: {project}', minuteTries: '{n} tries',
@@ -440,7 +440,7 @@ export default {
         think: '🧠 I read the analysis: it touches {n} repo(s) and there are {q} question(s)', thinkFailed: '🧠 The analysis did not come: we go on with the map by words',
         wait: '({n} wait their turn: I won’t overload anyone)',
         split: 'Splitting it across {n} repo(s): {offices}',
-        department: 'New department: {name}. It needs its repositories, its people and its instructions before it can take orders', departmentOk: 'Good: get it ready',
+        department: 'New project: {name}. It needs its repositories, its people and its instructions before it can take orders', departmentOk: 'Good: get it ready',
         tech: ['Making sure each one does it its own way', 'Each team uses its own harness', "Careful not to break the APIs between projects"],
         done: 'Directive accomplished! "{title}" ({done}/{total}) 🎉', trouble: 'The directive "{title}" had trouble: {done} of {total} went well',
       },
@@ -465,7 +465,7 @@ export default {
   },
   exec: {
     from: 'Executive floor',
-    waitTurn: 'the department has {n} brief(s) open',
+    waitTurn: 'the project has {n} brief(s) open',
     waitFor: 'waits for {names} (it uses it)', depFailed: 'it did not go: {name} did not finish', handoffFrom: 'What {name} left (you use it):', noHandoff: 'it left no handoff: check its recent changes in {path} (you may read it).',
     leaveHandoff: '{list} use it and work after you: when you finish, leave the handoff with the MCP tool handoff (what changed in what you expose: endpoints, types, events, and how to try it).',
     brief: '🏛 Directive from the executive floor: "{title}". Also working on it: {others}. Do this repository\'s part.',
@@ -473,23 +473,23 @@ export default {
     newRepo: 'This repository is new (an empty folder): set it up from scratch for what follows (git init, its structure, its README).', createResource: 'Create {what}: create it as part of this work (and, once it exists, declare it with the MCP tool declare_resource).', touchesResource: 'It touches {what} ({how}).', externalRepo: '"{name}" lives in a repository the office does not have: {where}. Do not change it from here: if it is needed, say so in your summary.', analysis: 'According to the analysis: {how}',
     interrupted: 'the office restarted before it ended',
     minuteTitle: 'Minutes: {title}', minuteAsked: 'Asked by: {who}', minuteParts: 'How it ended in each repository:',
-    log: { created: '🏛 Directive "{title}" to {n} repo(s): {offices}', department: '🏛 New department: {name}', ended: '🏛 Directive "{title}": {status} ({done}/{total})' },
+    log: { created: '🏛 Directive "{title}" to {n} repo(s): {offices}', department: '🏛 New project: {name}', ended: '🏛 Directive "{title}": {status} ({done}/{total})' },
     ui: {
       systems: 'Projects (their artifacts go in order):', handoffLeft: 'It left its handoff for the ones that use it',
       company: 'The company · last 7 days',
       health: { ok: 'healthy', warn: 'watch it', bad: 'needs you' },
       co: {
-        col: { dept: 'Department', now: 'Now', autonomy: 'Autonomy', briefs: 'Briefs', ok: 'Without failing', lead: 'Median time' },
+        col: { dept: 'Project', now: 'Now', autonomy: 'Autonomy', briefs: 'Briefs', ok: 'Without failing', lead: 'Median time' },
         waiting: '✋ waiting {min} min', errors: '{n} errors/h', context: 'context {pct}%', fine: 'all good', companyAutonomy: 'the company’s', flow: '{n} ({done} done)', lead: '{min} min',
       },
-      title: '🏛 Directives', text: 'What must they do?', placeholder: 'One order for several departments or repositories: "Every API exposes /health"',
-      scope: 'Who', all: 'all its repositories ({n})', none: 'no registered repositories', noAgents: 'Register each department’s repositories in ⚙ › Departments (or ⚙ › Repositories) to give them directives.',
-      mapBtn: '🗺 See the impact', mapNote: 'It touches {n} repo(s) in {d} department(s): check who gets it (the checked ones) and answer what is not on the map.', answerAll: 'Answer what each thing that is not on the map is (and in which repository, if it exists or must be created)',
-      ans: { pick: '— what is it? —', exists: 'It exists, in the repository…', create: 'Create it, in the repository…', repo: 'It is a separate repo, at…', newRepo: 'It is a new repo: create it at…', resource: 'It is infrastructure (a service, an API…)', department: 'It is a new department', ignore: 'It is not part of the project' }, ansProject: 'repository', ansPath: 'folder (optional)', ansDept: 'department name',
-      infraAns: { pick: '— does it exist? —', exists: 'It exists…', create: 'Create it, by…', ignore: 'It is not part of the project' }, ansWhere: 'its folder or the repo’s URL', ansNewPath: 'the new folder (full path)', ansLocation: 'where it lives (account, cluster, URL…)', ansUsedBy: '— who uses it (optional) —', ansWho: '— which repository creates it —', ansHarness: 'agent', ansOffice: 'department', ansKind: 'what it is', ansHow: 'how',
+      title: '🏛 Directives', text: 'What must they do?', placeholder: 'One order for several projects or repositories: "Every API exposes /health"',
+      scope: 'Who', all: 'all its repositories ({n})', none: 'no registered repositories', noAgents: 'Register each project’s repositories in ⚙ › Company (or ⚙ › Repositories) to give them directives.',
+      mapBtn: '🗺 See the impact', mapNote: 'It touches {n} repo(s) in {d} project(s): check who gets it (the checked ones) and answer what is not on the map.', answerAll: 'Answer what each thing that is not on the map is (and in which repository, if it exists or must be created)',
+      ans: { pick: '— what is it? —', exists: 'It exists, in the repository…', create: 'Create it, in the repository…', repo: 'It is a separate repo, at…', newRepo: 'It is a new repo: create it at…', resource: 'It is infrastructure (a service, an API…)', department: 'It is a new project', ignore: 'It is not part of the project' }, ansProject: 'repository', ansPath: 'folder (optional)', ansDept: 'project name',
+      infraAns: { pick: '— does it exist? —', exists: 'It exists…', create: 'Create it, by…', ignore: 'It is not part of the project' }, ansWhere: 'its folder or the repo’s URL', ansNewPath: 'the new folder (full path)', ansLocation: 'where it lives (account, cluster, URL…)', ansUsedBy: '— who uses it (optional) —', ansWho: '— which repository creates it —', ansHarness: 'agent', ansOffice: 'project', ansKind: 'what it is', ansHow: 'how',
       send: '▶ Make it happen!', recent: 'The latest', empty: 'No directives yet.', pick: 'Pick at least one repository', write: 'Write the directive',
       sent: 'Directive sent to {n} repo(s)', stop: '⏹ Stop', progress: '{done} of {total}', by: 'by {who}',
-      deptPh: 'A department that does not exist yet…', deptAdd: '＋ New department', deptName: 'Write the new department’s name', deptCreated: 'Department “{name}” created: add its repositories, people and instructions in ⚙ › Departments.',
+      deptPh: 'A project that does not exist yet…', deptAdd: '＋ New project', deptName: 'Write the new project’s name', deptCreated: 'Project “{name}” created: add its repositories, people and instructions in ⚙ › Company.',
     },
   },
   archive: {
@@ -547,7 +547,7 @@ export default {
     agentExists: 'that agent is already registered for that path', saveFailed: 'could not save: {error}', agentsMax: 'at most {n} agents',
     unknownAgent: 'unknown agent', unknownGap: 'unknown gap', componentName: 'the component needs a name', componentPath: 'the component\'s folder goes inside the repository (relative, without ..)', unknownComponent: 'unknown component', systemName: 'the project needs a name', unknownSystem: 'unknown project: {system}', systemExists: 'there is already a project called “{name}”', systemParts: 'a project has up to {n} artifacts', systemPartName: 'each artifact needs a name', systemPartTwice: 'two artifacts with the same name', systemKind: 'an artifact’s kind is one of: {kinds}', systemUses: '“{name}” uses “{uses}”, which is not in the project', systemCycle: 'what they use goes in a circle: {names}', handoffEmpty: 'the handoff is empty', noHandoff: 'there is no project brief running in this folder', mineKind: 'it is a skill or a tool (kind: skill | tool)', mineName: 'the name goes in lowercase, with dashes, 2 to 40 characters (starting with a letter)', mineTitle: 'what it does and when to use it is missing', mineScript: 'the tool needs its program', unknownMine: 'no such skill or tool of yours', mineExists: 'you already have one called “{name}”', mineMax: 'you can have up to {n}', mineRun: 'it runs with one of: {runs}', mineParams: 'up to 8 parameters', mineParam: 'the parameter “{name}” goes in lowercase (letters, digits and _) and only once', mineTimeout: 'the limit is 1 to 600 seconds', settingsFile: { json: 'that file is not JSON', kind: 'those are not Dev Team Office settings (its "kind" must be "dev-team-office/settings")', version: 'those settings come from a newer Dev Team Office: update it first (dev-team-office update)' }, character: { json: 'that file is not JSON', kind: 'that is not a Dev Team Office character (its "kind" must be "dev-team-office/character")' }, unknownRole: 'unknown role: {role}', oneOf: '{role}: "{key}" must be one of: {values}', notEditable: '{role}: "{key}" cannot be changed',
     color: '{role}.{key}: use a color like #3f73f0', empty: '{role}.{key} cannot be empty',
-    unknownArea: 'unknown area: {area}', areaName: 'give the area a name', areaExists: 'there is already an area called “{name}”', areasMax: 'at most {n} areas', defaultArea: 'the general area cannot be deleted (its projects would have nowhere to go)', relationSelf: 'a repository does not use itself', relationHow: 'how it uses it is one of: {hows}', relationsMax: 'at most {n} relations', relationCycle: '“{from}” cannot use “{to}”: inside one project what they use cannot go in a circle (it is the order a change goes in)', unknownRelation: 'unknown relation', systemGone: 'projects are departments now: delete the project {id} in ⚙ › Company', pickProject: 'choose the project it belongs to', unknownOffice: 'unknown project: {office}', officeName: 'give the project a name', officeExists: 'there is already a project with that name', autonomy: 'autonomy must be one of: {levels} (or empty: the company’s)',
+    unknownArea: 'unknown area: {area}', areaName: 'give the area a name', areaExists: 'there is already an area called “{name}”', areasMax: 'at most {n} areas', defaultArea: 'the general area cannot be deleted (its projects would have nowhere to go)', relationSelf: 'a repository does not use itself', relationHow: 'how it uses it is one of: {hows}', relationsMax: 'at most {n} relations', relationCycle: '“{from}” cannot use “{to}”: inside one project what they use cannot go in a circle (it is the order a change goes in)', unknownRelation: 'unknown relation', systemGone: 'projects are projects now: delete the project {id} in ⚙ › Company', pickProject: 'choose the project it belongs to', unknownOffice: 'unknown project: {office}', officeName: 'give the project a name', officeExists: 'there is already a project with that name', autonomy: 'autonomy must be one of: {levels} (or empty: the company’s)',
     officesMax: 'at most {n} projects', mainOffice: 'the main project cannot be deleted', timezone: 'unknown time zone: {tz}',
     language: 'unknown language: {lang}', pref: 'unknown setting: {key}', prefValue: '{key}: invalid value',
     taskEmpty: 'the task is empty', taskTooLong: 'the task is longer than {n} characters', taskNoAgent: 'the target agent is missing', cantLaunch: 'I do not know how to launch "{agent}"',
@@ -557,7 +557,7 @@ export default {
     pipelineIssues: 'the pipeline has errors: {issue}', unknownPipeline: 'unknown pipeline', pipelineDone: 'the pipeline is already {status}',
     promptEmpty: 'the prompt is empty', targetUnknown: 'that agent is neither registered nor connected', noEntry: 'the harness of {name} has no entry "{entry}"',
     sessionGone: 'that session is no longer open', needsSession: '“{label}” runs in an open session: open {agent} in {path} with its integration', noPath: '{path} does not exist', notInstalled: 'cannot find "{bin}" in the PATH',
-    invalidMessage: 'invalid message', registerWs: 'register only over WebSocket', updateWs: 'task_update only over WebSocket', unknownCommand: 'command not available: {action}',
+    invalidMessage: 'invalid message', registerWs: 'register only over WebSocket', updateWs: 'task_update only over WebSocket', unknownCommand: 'command not available: {action}', demoRunning: 'a demo is already running: it ends by itself',
     unknownType: 'unknown type: {type}', notFound: 'route not found', fullPath: 'use the full path', hostDenied: 'host not allowed', originDenied: 'origin not allowed',
     tooLarge: 'payload too large', noHerdr: 'you are not inside herdr (HERDR_ENV=1)', unknownService: 'there is no such service', serviceNoLog: 'that service has no log to follow', herdrFailed: 'herdr: {error}', paneMissing: 'the pane is missing',
     promptGone: 'that question is no longer there', promptChanged: 'the question changed on the agent’s screen: this is the one it shows now', promptOption: 'that option does not exist',
@@ -565,7 +565,7 @@ export default {
     knowledgeName: 'give it a name (letters, digits and dashes)', knowledgeExists: 'there is another one named "{name}"', knowledgeMax: 'the archive keeps at most {n} entries',
     connectorUrl: "the connector's URL must start with http:// or https://", connectorHow: 'a connector needs a command (a local MCP server) or a URL (a remote one)',
     unknownKnowledge: 'no such entry in the archive', notInstallable: 'only skills and connectors are installed in a repository', installFailed: 'it was not installed in any repository',
-    pickProjects: 'pick at least one department or registered repository', unknownProject: 'unknown repository: {project}', tooManyProjects: 'at most {n} repositories per directive', unknownDirective: 'no such directive',
+    pickProjects: 'pick at least one project or registered repository', unknownProject: 'unknown repository: {project}', tooManyProjects: 'at most {n} repositories per directive', unknownDirective: 'no such directive',
     loopName: 'give the loop a name', loopExists: 'there already is a loop called “{name}”', loopsMax: 'at most {n} loops', unknownLoop: 'no such loop: {loop}', loopInterval: 'the interval is in minutes, from 1 to 1440', loopTries: 'the tries per step go from 1 to 50', loopSteps: 'the steps are a list', loopStepsMax: 'at most {n} steps', loopStepEmpty: 'each step needs what to do', loopCriteria: 'the criteria are a list', loopCriteriaMax: 'at most {n} criteria', loopCriterionEmpty: 'the criterion is empty', unknownStep: 'no such step: {step}', unknownCriterion: 'no such criterion: {criterion}', loopDone: 'the loop already finished', loopNotRunning: 'the loop is {status}', noLoopHere: 'there is no loop running in this folder', loopNoResults: 'how each criterion is going is missing',
     expertSkill: 'the expert\'s skill: its name, in lowercase (letters, digits, dots and dashes)', unknownExpert: 'no such expert: {expert}', expertExists: 'the skill “{skill}” already has its expert', expertName: 'the expert needs a name', expertsMax: 'at most {n} experts', expertAction: 'each action needs a label and a text', expertActionsMax: 'at most {n} actions per expert', expertNoAgent: 'no registered repository has the skill “{skill}” to send the task to',
     resourceKind: 'its kind is one of: {kinds}', resourceName: 'its name is missing', unknownResource: 'no such infrastructure: {resource}', resourceExists: 'there is already a “{name}” of that kind', resourceHow: 'how it is used is one of: {hows}', resourcesMax: 'at most {n}',
@@ -766,18 +766,18 @@ export default {
       cardPlace: 'Where the company is', cardView: 'The view', cardLog: 'The log', cardAlerts: 'When they wait for you', alertsHint: 'These two are this browser’s own: they are not saved with the office.',
       clarifyHint: 'Before a brief becomes work, the analyst gives it to the repository’s agent to read (read-only) and brings you only the questions that would change the result.',
       autonomousHint: 'Each brief says the agent may decide the small things and go on to the end, instead of stopping to ask.',
-      autonomyDepts: 'Each department can have its own level: Departments →',
+      autonomyDepts: 'Each project can have its own level: ⚙ › Company →',
       cardEmbeddings: 'Search by meaning', cardIndex: 'The index', cardData: 'Where everything is kept', dataFile: 'Database',
       dataHint: 'Everything the office knows is in that one SQLite file: copy it to back it all up, history included. The export above carries only your settings.',
       io: 'Your settings (a JSON file)', ioHint: 'Exports what is yours: the general settings, the areas and their projects (with their instructions, autonomy and characters), the registered repositories with their instructions and relations, the infrastructure, the experts and your skills with their files (the private ones, the ones in your agents’ personal folders and the ones your experts use). Not the log, the briefs, the directives, the loops or the archive. Importing replaces what the file brings and leaves the rest; you choose where its skills go; a repository whose folder is not on this machine is skipped.', ioExport: '⬇ Export settings', ioImport: '⬆ Import settings', ioDone: 'Settings imported: {prefs} settings, {areas} areas, {departments} projects, {characters} characters, {projects} repositories, {relations} relations, {skills} private skills, {installed} skills installed, {tools} tools, {experts} experts, {resources} of infrastructure.',
       archive: 'Archive (the agents’ knowledge)', archivePush: 'What the archive knows goes on top of every brief and question (the glossary terms and the most relevant passages)', embeddings: 'Semantic search', embed_off: 'Off: by words only (offline)', embed_ollama: 'Ollama, on this machine', embed_openai: 'An OpenAI-compatible API (OpenAI, Voyage…)', embedModel: 'Embedding model', embedUrl: 'Address', embedOllamaHint: 'Install Ollama and run: ollama pull nomic-embed-text. Nothing leaves this machine.', embedKeyHint: 'Its key goes in the DEV_TEAM_OFFICE_EMBED_KEY environment variable (never in the database). The archive’s text is sent to that API to be embedded.', indexStatus: '🧠 {chunks} chunk(s) indexed · {embedded} with embedding', reindex: '↻ Index it again',
       theme: 'Style', theme_pixel: 'Pixel art (the usual team)', theme_anime: 'Anime (a team of women)', themeHint: 'How the office’s people look. Each style has its own cast, and what you change in ⚙ › Characters stays in the style you are using.', themeAnimeHint: 'A team of adult women in the style of Japanese anime, with their own names, hair styles and outfits (and yours, the PO’s). There are no men here. What you change in ⚙ › Characters stays in this style; the terminal stays in pixel art, with this cast.',
-      intel: '🧠 Intelligence', intelHint: 'The model the office leans on to size the impact of an order: how each repo is touched and what it needs that is not on the map (components, repos, queues, databases, APIs…). It only reads and answers; it changes nothing.', intelProvider: 'Provider', intel_off: 'None: only the order’s words', intel_agent: 'One of your agents (its CLI, read-only)', intel_anthropic: 'The Claude API (Anthropic)', intel_openai: 'An OpenAI-compatible API (OpenAI, OpenRouter, LM Studio…)', intel_ollama: 'Ollama, on this machine',
+      intel: '🧠 Intelligence', intelHint: 'The model the office leans on to size the impact of an order: how each repo is touched and what it needs that is not on the map (components, repos, queues, databases, APIs…). It only reads and answers; it changes nothing.', intelProvider: 'Provider', intel_off: 'None: only the order’s words', narr_off: 'None: by rules, from the log', intel_agent: 'One of your agents (its CLI, read-only)', intel_anthropic: 'The Claude API (Anthropic)', intel_openai: 'An OpenAI-compatible API (OpenAI, OpenRouter, LM Studio…)', intel_ollama: 'Ollama, on this machine',
       intelHarness: 'Agent', intelModel: 'Model', intelModelAgent: 'its own (optional: another model of its CLI)', intelUrl: 'Address', intelTimeout: 'Limit (seconds)', intelAgentHint: 'It uses that agent’s login; it runs in a neutral folder, read-only, and the office does not count it as work.', intelKeyAnthropic: 'Its key goes in the ANTHROPIC_API_KEY (or DEV_TEAM_OFFICE_MODEL_KEY) environment variable, never in the database. The order and the company’s map (names of repos, components and infrastructure) are sent to that API.', intelKeyOpenai: 'Its key goes in the DEV_TEAM_OFFICE_MODEL_KEY (or OPENAI_API_KEY) environment variable, never in the database. The order and the company’s map are sent to that API.', intelOllamaHint: 'Install Ollama and run: ollama pull llama3.1 (or the model you choose). Nothing leaves this machine.',
       intelTest: '🧪 Try it', intelTesting: 'Asking it…', intelOk: '✓ {model} answered in {s} s', intelFail: '✗ {error}',
       compact: 'The agents’ context', compactAuto: 'Compact it by itself past the limit', compactAt: 'Limit', compact_tokens: 'tokens', compact_pct: '% of its window', compactHint: 'Past the limit, the office asks the agent to compact its context when its turn ends: Pi and OpenCode do it themselves; inside herdr, /compact is typed in its pane; the Claude Code sessions the office opens compact by themselves at that limit. Otherwise the log tells you.',
       autonomy: 'Autonomy', clarify: 'Before a brief goes to work, the analyst checks it has everything (and asks you only what is missing)', autonomous: 'The agents work on their own to the end (they ask only what only you can answer)',
-      language: 'Language', timezone: 'Time zone', tzSystem: 'the system one ({tz})', tzHint: 'The time zone gives the date, the time and the country. Each office can have its own (⚙ › Departments).',
+      language: 'Language', timezone: 'Time zone', tzSystem: 'the system one ({tz})', tzHint: 'The time zone gives the date, the time and the country. Each project can have its own (⚙ › Company).',
       city: 'City', cityZone: 'the time zone’s ({city})', cityHint: 'The city gives the weather, the sun and the moon. Type to search among the cities of the time zone’s country: in Chile, for example, Concepción and Punta Arenas share Santiago’s time zone.',
       cityNone: 'no city like that in {country}', cityOffline: 'no connection: write the city or its coordinates (lat, lon)',
       tzSearch: 'type to search (e.g. Madrid)', country: 'Country', weather: 'Real weather', weatherOn: 'yes (Open-Meteo, free)', weatherOff: 'no (simulated for the season)',
@@ -897,7 +897,7 @@ export default {
     join: {
       started: '🏢 Dev Team Office started at {url}', running: '🏢 Dev Team Office is running at {url}', notRunning: '🏢 Dev Team Office is not running: {what} for when it opens (dev-team-office)',
       saved: 'saved', registered: 'registered',
-      added: '✓ Registered: {name} — {harness} at {path} (department {office})', already: '✓ Already registered: {name} — {harness} at {path} (department {office})',
+      added: '✓ Registered: {name} — {harness} at {path} (project {office})', already: '✓ Already registered: {name} — {harness} at {path} (project {office})',
       wholeTeam: '✓ It had no subagents with a role, so the office gave it its team ({team}): {n} subagent(s) in {dir}/.',
       someTeam: '✓ It had no subagent for {roles}, so the office added {names} from its team ({team}) in {dir}/.',
       reload: { 'claude-code': 'Restart Claude Code to load them (`claude --continue` keeps the conversation).', 'claude-code-warm': 'Claude Code loads them in a few seconds.', opencode: 'Restart OpenCode to load them.', pi: 'Pi uses them from the next subagent call.', codex: 'Start a new Codex session to load them.' },
@@ -928,7 +928,7 @@ Usage:
   dev-team-office watch [url]     Watch an office that is already running (the local one by default).
   dev-team-office status          Is an office running? Shows the version and endpoints.
   dev-team-office demo [--pi]     Plays a sample session (Claude Code, or a Pi TDD flow).
-  dev-team-office offices         The company's departments (offices: teams or domains). Also: departments.
+  dev-team-office offices         The company's projects (offices: each a floor with its people). Also: departments.
   dev-team-office offices add "<name>" [--timezone Europe/Madrid] [--location "Madrid"] [--instructions "<how to work there>"]
   dev-team-office offices set <id> [--name …] [--timezone …] [--location …] [--instructions …]
   dev-team-office offices rm <id>
@@ -980,8 +980,8 @@ Usage:
                                   The daily on demand, to be told the latest: what each one did since the last daily
                                   and what they are on now (in the game they gather at the table). --all: the company's.
   dev-team-office architecture [--json]
-                                  The company's architecture as an outline (also: map): each department with its repositories,
-                                  their components and infrastructure, each project in the order a change goes, and the review.
+                                  The company's architecture as an outline (also: map): each area with its projects, their
+                                  repositories and how they relate, the infrastructure, the order a change goes, and the review.
                                   The same one the agents read with the MCP tool get_architecture. --json: the whole graph.
   dev-team-office e2e -- <command>
                                   Runs your end-to-end tests (Playwright) with the office watching: each test and each
@@ -1025,8 +1025,8 @@ API: docs/api.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
     noAgents: '(no registered repositories)  →  dev-team-office agents add <full path> --agent claude|opencode|pi|codex', openSession: ' · ● session open',
     promptUsage: 'Usage: dev-team-office prompt <id> "<text>" [--pipeline <entry>] [--new]   (the ids: dev-team-office agents)',
     unknownCommand: 'Unknown command: {cmd}',
-    offices: 'Departments:', officeLine: '  {id}  {name}  · {tz}{country}  · {agents} repo(s){viewing}', viewing: '  ← the one being viewed',
-    officeAdded: 'Department created: {id}  ({name}, {tz})', officeSaved: 'Department updated: {id}', agentSaved: 'Repository updated: {id}', agentsUsage: 'Usage: dev-team-office agents [add <full path> --agent … | set <id> | rm <id>] [--name …] [--office …] [--instructions …]', characterUsage: 'Usage: dev-team-office character export <role> [--office <id>] [--out <file>]  ·  character import <file.json> [--role <role>] [--office <id>]', characterRole: 'Which role is it for? Add --role qa|backend|frontend|tl|manager|analyst|designer|po|devops|security', characterExported: '{name} exported to {file}', characterImported: '{name} is now the {role} of {office}', officeRemoved: 'Department deleted: {id} (its repositories moved to the main one)',
+    offices: 'Projects:', officeLine: '  {id}  {name}  · {tz}{country}  · {agents} repo(s){viewing}', viewing: '  ← the one being viewed',
+    officeAdded: 'Project created: {id}  ({name}, {tz})', officeSaved: 'Project updated: {id}', agentSaved: 'Repository updated: {id}', agentsUsage: 'Usage: dev-team-office agents [add <full path> --agent … | set <id> | rm <id>] [--name …] [--office …] [--instructions …]', characterUsage: 'Usage: dev-team-office character export <role> [--office <id>] [--out <file>]  ·  character import <file.json> [--role <role>] [--office <id>]', characterRole: 'Which role is it for? Add --role qa|backend|frontend|tl|manager|analyst|designer|po|devops|security', characterExported: '{name} exported to {file}', characterImported: '{name} is now the {role} of {office}', officeRemoved: 'Project deleted: {id} (its repositories moved to the main one)',
     officesUsage: 'Usage: dev-team-office offices [add "<name>" | set <id> | rm <id>] [--name …] [--timezone …] [--location …]',
     config: 'Settings (in {file}):', configSaved: '{key} = {value}', configUnknown: 'Unknown setting: {key}. The settings: {keys}', configBool: '{key} is on or off', configLimit: 'compact.at is a number of tokens (400k, 400000) or a share of the window (80%)',
     paneUsage: 'Usage: dev-team-office pane [--role qa] [--title "tests"] [--agent pi|claude|opencode|codex] -- <command or prompt>',
@@ -1094,7 +1094,7 @@ API: docs/api.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
     removedProfile: '✓ removed our PATH line from {file}',
     profileAsk: 'Add {dir} to your PATH in {file}, so new terminals find `dev-team-office`?',
     profileAdded: '✓ {file}: new terminals will find `dev-team-office`',
-    keptData: '· kept your data in {path} (repositories, departments, settings): --purge deletes it too',
+    keptData: '· kept your data in {path} (repositories, projects, settings): --purge deletes it too',
     nothing: 'Nothing to remove.',
     done: 'Ready. Open the office with: dev-team-office   ·   check it with: dev-team-office doctor',
     doneNewTerminal: 'Ready. Open a new terminal and run: dev-team-office   ·   right now, in this one: {cmd}',
