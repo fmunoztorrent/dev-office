@@ -4,23 +4,29 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
-A polished interface: one design system for every dialog, the settings and the game's chrome, so the office reads as one product.
+A renderer SDK, so any graphics engine can draw the office, and an interface with two clear voices: the game looks like a game, and the settings like a tool.
+
+### Added
+
+- **The renderer SDK** (`public/sdk/`): the interfaces between the game (what moves and what a click does) and whatever draws it. A renderer registers itself (`registerRenderer`), gets a host (its canvas, its size, the view and the theme) and each frame's scene, and says what is under the pointer (`pick`, or just `project` / `toWorld` and the SDK works it out); the game turns that into an action (`actionOf`: select someone, the whiteboard, the services, the elevator, the rug). Its types are in `public/sdk/index.d.ts`, checked against the real scene by the tests. A renderer that fails while drawing is dropped and the game goes back to its own canvas.
+- **The game's own pixel art is one more renderer** (`canvas`, with its `flat` and `iso` views): its clicks, its views and its theme go through the same interfaces as any other.
+- **A 3D renderer in plain WebGL** (`?renderer=blocks`), as the example of another engine: the office and its people as lit blocks, two cameras (`orbit` and `top`, the `v` key), and every click of the game working through the SDK.
+- **A conformance kit** (`public/sdk/conformance.js`, `node scripts/check-renderer.mjs <module>`): creates a renderer in each of its views, draws sample scenes (frozen: it fails if the renderer changes them), resizes it, asks it what is at points of its canvas and checks that what it draws, projects and picks agree.
+- The world says more: the rugs, a person's height, the whiteboard's writable surface in the world, and what each prop does when clicked (`action`).
 
 ### Changed
 
-- **One look everywhere.** Every dialog over the game (a brief, work, daily, retro, loops, services, the archive, directives, the impact, E2E, an agent's question, the inbox) shares the same frame: a header, a body that scrolls and a footer, with soft corners and shadows instead of thick ink borders. The pixel font stays only where it belongs to the world (the HUD's chips, the whiteboard, the elevator, the screens); everything you read and fill in uses the interface's font.
-- **Buttons and fields** have one size and one style: primary, secondary and danger buttons; fields with a hairline border, a focus ring and a real arrow on selects; checkboxes and radios that look like themselves.
-- **⚙ Settings** has a cleaner top bar (the search no longer hides the title), each section's icon in its header, its content in cards with a readable width (wider for the map, characters, experts and models), and a section picker that fits on a phone.
-- **The game's chrome:** the dock, the HUD chips, the activity panel, a character's card and the hover tip are glass panels with the same corners and shadows; the badge no longer pulses.
-- **The map and the impact** draw soft boxes with a hairline: what an order touches in amber, the order itself dark, the selected one in the brand's color.
-- **The archive's kinds are pills**, **an agent's options are rows** with their key, and **a loop's form** takes the whole dialog when there are no loops yet.
+- **The game looks like a game.** Everything over the office is part of it: the HUD and the dock as pixel panels (an ink outline, a bevel, a hard shadow, the dock's gold border), the activity, a character's card, the tips and the rug's menu in the same voice. Every dialog the game opens (a brief, work, daily, retro, loops, services, the archive, directives, the impact, E2E, an agent's question, the inbox) is a sheet of paper in a wooden frame, pinned, with its title in the pixel font, pixel buttons that sink when pressed, fields outlined in ink, cards with a hard shadow and the brief's prompt on a post-it. They keep one layout (header, a body that scrolls, footer; labels next to their fields, stacked on a phone), and long text stays in the interface's font, to read.
+- **⚙ Settings is a tool:** it keeps the interface's look (hairlines, soft corners, the interface's font), a cleaner top bar (the search no longer hides the title), each section's icon in its header, its content in cards with a readable width, and a section picker that fits on a phone. A dialog opened from the settings looks like them.
+- **Buttons and fields** have one size and one set of kinds (primary, secondary, danger), in both voices.
+- **The archive's kinds are tabs**, **an agent's options are rows** with their key, and **a loop's form** takes the whole dialog when there are no loops yet.
 - **"Project", not "department",** in every text of the interface (the company is areas and projects since 0.31.0).
 - The README's and the settings guide's screenshots show the new look.
 
 ### Fixed
 
 - **Asking for a demo while one is running** says so ("a demo is already running") instead of "command not available: demo".
-- On a phone, a dialog's note goes above its buttons instead of squeezing into a column.
+- On a phone, a dialog's note goes above its buttons instead of squeezing into a column, and a footer with many buttons wraps instead of cutting one off.
 
 ## [0.31.0] - 2026-11-18
 

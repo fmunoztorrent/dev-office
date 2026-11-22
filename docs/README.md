@@ -38,7 +38,7 @@ Dev Team Office shows your coding agents at work as a pixel-art development team
 | Guide | What it covers |
 |---|---|
 | [How it is built](internals.md) | The pieces, how an event travels through them, and the code map |
-| [Rendering](rendering.md) | The scene: the contract between the game and what draws it |
+| [Rendering](rendering.md) | The renderer SDK: the scene, the interfaces between the game and whatever draws it, and how to add an engine |
 | [Conventions](conventions.md) | Code, texts, tests and docs |
 | [Contributing](../CONTRIBUTING.md) | Running it from source, the tests, and how a change gets in |
 

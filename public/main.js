@@ -12,7 +12,8 @@ import { createPhone } from './phone-ui.js';
 import { createPulse } from './pulse-ui.js';
 import { renderImpact, impactQuestions } from './impact-ui.js';
 import { createE2E } from './e2e-ui.js';
-import './renderers/plan.js'; // the reference renderer (public/scene.js): ?renderer=plan
+import './renderers/plan.js'; // the reference renderer of the SDK (public/sdk/index.js): ?renderer=plan
+import './renderers/blocks.js'; // a 3D one, in WebGL: ?renderer=blocks
 import { drawSprite } from './sprite.js';
 import { t, ta, setLanguage, onLanguage, getLanguage, timeOf } from './i18n.js';
 import { thresholdOf, kTokens } from './compact.js';
@@ -43,7 +44,7 @@ let loops = []; // the projects' loops (server/loops.js): the 🔁 chip and its 
 // the whiteboard: with tickets it expands to show them as post-its; without them, a new brief
 // the PO is you: with a question pending, clicking it (or the manager, hand up) opens the questions
 const game = createGame($('office'), {
-  // another renderer of the scene (public/renderers.js), from the address: ?renderer=plan (the canvas's own by default)
+  // another renderer of the SDK (public/sdk/index.js), from the address: ?renderer=plan (the canvas's own by default)
   renderer: new URLSearchParams(location.search).get('renderer'),
   onSelect: (id) => ((id === 'po' || id === 'manager') && asking.length ? promptsUi.open() : select(id)),
   onBoardClick: () => (boardView.hasTickets() ? boardView.open() : openBrief()),
@@ -65,6 +66,7 @@ const boardView = createBoardView({
   // where the small whiteboard is on the page (in either view)
   boardRect: () => {
     const r = $('office').getBoundingClientRect(), b = game.boardBox();
+    if (!b) return null; // a renderer that cannot say where it is: the board just opens
     return { left: r.left + b.x * r.width, top: r.top + b.y * r.height, width: b.w * r.width, height: b.h * r.height };
   },
 });
@@ -1411,12 +1413,14 @@ function toggleFullscreen() {
   else { const root = doc.documentElement; (root.requestFullscreen || root.webkitRequestFullscreen)?.call(root); }
 }
 $('fullscreen').onclick = toggleFullscreen;
-// front or top-down: it switches right away and stays in the settings (the other viewers see it too)
+// front or top-down: it switches right away and stays in the settings (the other viewers see it too). With
+// another renderer (?renderer=…), the next of its views, only on this screen
 function toggleView() {
-  game.setView(game.view === 'iso' ? 'flat' : 'iso');
+  const views = game.views;
+  game.setView(views[(views.indexOf(game.view) + 1) % views.length]);
   $('view-mode').setAttribute('aria-pressed', String(game.view === 'iso'));
   $('screen').dataset.view = game.view;
-  send({ type: 'prefs', prefs: { view: { mode: game.view } } });
+  if (game.view === 'flat' || game.view === 'iso') send({ type: 'prefs', prefs: { view: { mode: game.view } } });
 }
 $('view-mode').onclick = toggleView;
 const onFs = () => $('fullscreen').setAttribute('aria-pressed', String(!!(document.fullscreenElement || document.webkitFullscreenElement)));

@@ -66,6 +66,8 @@ body {
   container-type: inline-size;
 }
 canvas#office { position: absolute; inset: 0; width: 100%; height: 100%; display: block; image-rendering: auto; }
+/* another renderer of the SDK (public/sdk/index.js) draws on its own canvas, over the game's: the clicks stay the game's */
+.renderer-layer { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
 
 /* ---------- HUD inside the screen ---------- */
 .hud { position: absolute; display: flex; gap: 8px; align-items: center; z-index: 2; }
@@ -1318,7 +1320,6 @@ ol.arch-list { list-style: decimal; padding-left: 20px; }
 .arch-findings li { border-radius: 8px; }
 .pr-q, .imp-scroll, .imp-g-scroll { border-radius: var(--r); }
 .e2e-screen, .e2e-shots img { border-radius: 8px; box-shadow: 0 0 0 1px var(--rule-2); }
-.e2e-mini, .e2e-mini-screen { border-radius: 10px; }
 
 /* tags, chips and pills */
 .s-tag { display: inline-flex; align-items: center; padding: 2px 8px; font: 600 11.5px/1.4 var(--font-ui); color: #fff3c4; background: var(--text-1); border-radius: 999px; }
@@ -1378,77 +1379,105 @@ ol.arch-list { list-style: decimal; padding-left: 20px; }
 .retro .brief-body, .skills-dlg .brief-body { gap: 12px; }
 
 /* ---------- the game's chrome: the HUD, the dock and what floats over the office ----------
-   It keeps the game's pixel voice in its numbers and chips, on the same glass, radius and elevation. */
-:is(.ctx-chip, .conn, .svc-chip, .ask-chip, .office-pick) { min-height: 34px; border-radius: 9px; }
-:is(.ctx-chip, .conn, .svc-chip) { background: rgb(16 18 30 / .86); backdrop-filter: blur(6px); box-shadow: 0 0 0 1px #2f3450, 0 6px 18px rgb(0 0 0 / .35); }
-.svc-chip.idle { box-shadow: 0 0 0 1px #2f3450, 0 6px 18px rgb(0 0 0 / .35); }
-.conn { box-shadow: 0 0 0 1px #4a1f2b, 0 6px 18px rgb(0 0 0 / .35); }
-.office-pick { padding: 2px 6px 1px 12px; box-shadow: 0 0 0 1px #c99a2e, inset 0 1px 0 #fff6, 0 6px 18px rgb(0 0 0 / .35); }
-.office-pick:hover { background: var(--brand-hover); }
-.ask-chip { box-shadow: 0 0 0 1px #c99a2e, 0 6px 18px rgb(0 0 0 / .35); }
-.ctx-track { border-radius: 3px; }
-.dock {
-  gap: 8px; padding: 8px; border: 1px solid rgb(255 209 102 / .55); border-radius: 16px;
-  background: rgb(14 16 27 / .86); backdrop-filter: blur(8px);
-  box-shadow: 0 0 0 1px #0b0c14, 0 14px 40px rgb(0 0 0 / .5), inset 0 1px 0 rgb(255 255 255 / .05);
+   Everything over the office is part of the game: pixel panels (an ink outline, a bevel inside and a hard
+   shadow, no rounded corners), the pixel font on titles, numbers, chips and buttons, the gold of the game
+   for what you can press. Long text (the log, what someone says) stays in the interface's font, to read. */
+:root {
+  --g-ink: #0b0c14;                    /* the outline of everything in the game */
+  --g-panel: rgb(18 20 33 / .92);      /* a dark panel over the office */
+  --g-bevel: #3a3f58;                  /* its inner edge */
+  --g-gold: #ffd166;
+  --g-gold-edge: #e0a800;
+  --g-paper: #fdfcf6;                  /* a sheet of paper: a dialog, a character's card */
+  --g-paper-2: #f4f1e8;
+  --g-line: #2b2d42;                   /* ink on paper */
+  --g-muted: #6c6f84;                  /* pencil on paper */
+  --g-cork: #b9895a;
+  --g-drop: 4px 4px 0 2px rgb(0 0 0 / .55);
+  --g-frame: 0 0 0 2px var(--g-ink), inset 0 0 0 2px var(--g-bevel), var(--g-drop);
 }
-.dock .hud-btn { border-radius: 11px; background: rgb(255 255 255 / .04); box-shadow: inset 0 0 0 1px rgb(255 255 255 / .08); transition: background .15s, color .15s, box-shadow .15s, transform .08s; }
-.dock .hud-btn:hover { background: rgb(255 209 102 / .12); color: #fff; filter: none; box-shadow: inset 0 0 0 1px rgb(255 209 102 / .45); }
-.dock .hud-btn:active { transform: translateY(1px); box-shadow: inset 0 0 0 1px rgb(255 209 102 / .45); }
-.dock .hud-btn[aria-pressed="true"], .dock .hud-btn[aria-expanded="true"] { color: var(--phos); background: rgb(125 255 176 / .1); box-shadow: inset 0 0 0 1px rgb(125 255 176 / .5), 0 0 16px rgb(125 255 176 / .18); }
-.dock-tip { border-radius: 9px; padding: 7px 11px; font-size: 12.5px; color: var(--text-1); background: var(--surface); box-shadow: 0 0 0 1px var(--rule-2), 0 10px 28px rgb(0 0 0 / .35); }
-.dock-tip::after { border-top-color: var(--surface); }
-.badge { top: -6px; right: -6px; min-width: 19px; height: 19px; padding: 0 5px; font: 700 11px/19px var(--font-ui); border-radius: 999px; box-shadow: 0 0 0 2px #0e101b; animation: badge-in .25s ease-out; }
-@keyframes badge-in { from { transform: scale(.6); } to { transform: scale(1); } }
+:is(.ctx-chip, .conn, .svc-chip, .ask-chip, .office-pick) { min-height: 34px; border-radius: 0; }
+:is(.ctx-chip, .conn, .svc-chip) { background: var(--g-panel); box-shadow: var(--g-frame); }
+.svc-chip { box-shadow: 0 0 0 2px var(--g-ink), inset 0 0 0 2px #1e4a33, var(--g-drop); }
+.svc-chip.idle { box-shadow: var(--g-frame); }
+.conn { box-shadow: 0 0 0 2px var(--g-ink), inset 0 0 0 2px #4a1f2b, var(--g-drop); }
+.conn.on { box-shadow: 0 0 0 2px var(--g-ink), inset 0 0 0 2px #1e5a45, var(--g-drop); }
+.office-pick { padding: 2px 6px 1px 12px; box-shadow: 0 0 0 2px var(--g-ink), inset 0 -3px 0 var(--g-gold-edge), var(--g-drop); }
+.office-pick:hover { background: #ffe08a; }
+.ask-chip { box-shadow: 0 0 0 2px var(--g-ink), inset 0 -3px 0 var(--g-gold-edge), var(--g-drop); }
+.ctx-track { border-radius: 0; }
+/* the dock: the game's buttons in a black box with its gold border */
+.dock {
+  gap: 8px; padding: 8px 10px; border: 3px solid var(--g-gold); border-radius: 0;
+  background: rgb(0 0 0 / .82);
+  box-shadow: 0 0 0 2px var(--g-ink), 4px 4px 0 2px rgb(0 0 0 / .6);
+}
+.dock .hud-btn { border-radius: 0; background: rgb(18 20 33 / .9); box-shadow: 0 0 0 2px var(--g-ink), inset 0 0 0 2px var(--g-bevel), inset 0 -4px 0 rgb(0 0 0 / .35); transition: color .12s, transform .06s, filter .12s; }
+.dock .hud-btn:hover { color: #fff; filter: drop-shadow(0 0 6px rgb(255 209 102 / .6)); box-shadow: 0 0 0 2px var(--g-ink), inset 0 0 0 2px var(--g-gold), inset 0 -4px 0 rgb(0 0 0 / .35); }
+.dock .hud-btn:active { transform: translate(1px, 2px); box-shadow: 0 0 0 2px var(--g-ink), inset 0 0 0 2px var(--g-gold); }
+.dock .hud-btn[aria-pressed="true"], .dock .hud-btn[aria-expanded="true"] { color: var(--phos); box-shadow: 0 0 0 2px var(--g-ink), inset 0 0 0 2px var(--phos-dim), inset 0 -4px 0 rgb(0 0 0 / .35), 0 0 14px rgb(125 255 176 / .4); }
+/* what a button does: a pixel speech bubble over it */
+.dock-tip { border-radius: 0; padding: 6px 10px 5px; font: 18px/1.05 var(--font-pixel); color: var(--g-line); background: #fffbe8; box-shadow: 0 0 0 2px var(--g-ink), 3px 3px 0 2px rgb(0 0 0 / .5); }
+.dock-tip::after { border-top-color: var(--g-ink); }
+.badge { top: -9px; right: -9px; min-width: 20px; height: 20px; padding: 0 5px; font: 18px/20px var(--font-pixel); color: var(--g-ink); background: var(--g-gold); border-radius: 0; box-shadow: 0 0 0 2px var(--g-ink); animation: badge-pop 1s steps(2) infinite alternate; }
+@keyframes badge-pop { to { transform: translateY(-2px); } }
 
-/* the activity */
-.feed { border-radius: 14px; overflow: hidden; background: rgb(16 18 30 / .94); box-shadow: 0 0 0 1px #2f3450, 0 24px 60px rgb(0 0 0 / .5); }
-.feed-head { padding: 10px 10px 10px 16px; box-shadow: inset 0 -1px 0 #2a2f48; }
-.feed-head h2 { font: 650 15px/1.2 var(--font-ui); letter-spacing: 0; color: #f1f2f8; }
-.feed-btn { border-radius: 6px; padding: 4px 8px; }
-.feed-btn:hover { background: rgb(255 255 255 / .06); }
-.feed-body { padding: 8px 16px 12px; }
+/* the activity: a log on a dark pixel panel */
+.feed { border-radius: 0; overflow: hidden; background: rgb(20 22 36 / .95); box-shadow: 0 0 0 3px var(--g-ink), inset 0 0 0 2px var(--g-bevel), 6px 6px 0 3px rgb(0 0 0 / .6); }
+.feed-head { padding: 8px 8px 7px 14px; box-shadow: inset 0 -2px 0 #2f3450; }
+.feed-head h2 { font: 24px/1 var(--font-pixel); letter-spacing: .5px; color: var(--g-gold); }
+.feed-btn { border-radius: 0; padding: 3px 8px; font: 18px/1 var(--font-pixel); }
+.feed-btn:hover { background: rgb(255 209 102 / .12); color: var(--g-gold); }
+.feed-life { font: 18px/1 var(--font-pixel); }
+.feed .sheet-x { color: #e8e9f1; }
+.feed-body { padding: 8px 14px 12px; }
 .log li { padding: 4px 0; border-bottom-color: rgb(255 255 255 / .05); }
 
-/* a character's sheet */
-.sheet { padding: 14px; gap: 10px; color: var(--text-1); background: var(--surface-2); border-radius: var(--r-lg); box-shadow: var(--e-pop), 0 0 0 1px rgb(255 255 255 / .06); color-scheme: light; }
+/* a character's card: a sheet of paper pinned over the office */
+.sheet { padding: 14px; gap: 10px; color: var(--g-line); background: var(--g-paper-2); border-radius: 0; box-shadow: 0 0 0 3px var(--g-ink), 6px 6px 0 3px rgb(0 0 0 / .6); color-scheme: light; }
 .sheet-head { grid-template-columns: 48px 1fr auto auto; gap: 12px; align-items: center; }
-.sheet-head canvas { width: 48px; height: 75px; border-radius: 8px; box-shadow: 0 0 0 1px var(--rule-2); }
-.sheet-who h2 { font: 700 20px/1.2 var(--font-ui); letter-spacing: -.01em; }
-.sheet-who p { font-size: 12.5px; color: var(--text-3); }
-.sheet-mood { color: var(--text-1) !important; font-weight: 600; }
-.sheet-did { color: var(--text-2); background: var(--brand-wash); padding: 6px 9px; box-shadow: inset 3px 0 0 var(--brand-edge); }
-.sheet-x, .sheet-icon { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border-radius: 8px; font: 17px/1 var(--font-ui); color: var(--text-3); transition: background .15s, color .15s; }
-.sheet-x:hover, .sheet-icon:hover { background: var(--surface-3); color: var(--text-1); transform: none; }
-.sheet-x:focus-visible, .sheet-icon:focus-visible { outline: none; box-shadow: var(--ring); }
-.sheet-more { font-size: 12.5px; color: var(--text-3); }
-.talk { padding: 12px; gap: 10px; background: var(--surface-3); border: 1px solid var(--rule); border-radius: 12px; box-shadow: none; }
-.talk li { padding: 8px 12px; border: 1px solid var(--rule); border-radius: 12px 12px 12px 4px; background: var(--surface); box-shadow: var(--e-1); }
-.talk li.you { border-radius: 12px 12px 4px 12px; background: var(--brand-wash); border-color: #ecd48c; }
-.talk li b { font: 600 11px/1.4 var(--font-ui); letter-spacing: .04em; text-transform: uppercase; color: var(--text-3); margin-bottom: 3px; }
-.say { gap: 8px; }
-.say textarea { border-radius: 12px; }
-.say-go { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--brand-edge); border-radius: 12px; font: 18px/1 var(--font-ui); color: var(--brand-ink); background: var(--brand); box-shadow: var(--e-1); }
-.say-go:hover { background: var(--brand-hover); filter: none; }
-.say-go:focus-visible { outline: none; box-shadow: var(--ring); }
+.sheet-head canvas { width: 48px; height: 75px; border-radius: 0; background: #fff; box-shadow: 0 0 0 2px var(--g-ink), 3px 3px 0 1px rgb(0 0 0 / .25); }
+.sheet-who h2 { font: 30px/1 var(--font-pixel); letter-spacing: .5px; color: var(--g-line); }
+.sheet-who p { font-size: 12.5px; color: var(--g-muted); }
+.sheet-mood { color: var(--g-line) !important; font-weight: 600; }
+.sheet-did { color: var(--g-line); background: #fff3c4; padding: 6px 9px; box-shadow: inset 3px 0 0 var(--g-gold-edge); }
+.sheet-x, .sheet-icon { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border-radius: 0; font: 24px/1 var(--font-pixel); color: var(--g-line); transition: transform .08s; }
+.sheet-x:hover, .sheet-icon:hover { background: rgb(43 45 66 / .08); color: var(--g-line); }
+.sheet-icon:hover { transform: rotate(-12deg); }
+.sheet-x:focus-visible, .sheet-icon:focus-visible { outline: 3px solid #f4a261; outline-offset: 1px; box-shadow: none; }
+.sheet-more { font-size: 12.5px; color: var(--g-muted); }
+.sheet-more summary { font: 18px/1.2 var(--font-pixel); }
+.talk { padding: 12px; gap: 10px; background: #e9e4d6; border: 0; border-radius: 0; box-shadow: inset 0 0 0 2px #d6cfbc; }
+.talk li { padding: 7px 11px; border: 0; border-radius: 0; background: #fff; box-shadow: 0 0 0 2px var(--g-line), 3px 3px 0 1px rgb(0 0 0 / .18); }
+.talk li.you { background: #fff3c4; }
+.talk li b { font: 17px/1 var(--font-pixel); letter-spacing: .3px; text-transform: none; color: var(--g-muted); margin-bottom: 3px; }
+.say { gap: 10px; }
+.sheet .say textarea { border: 0; border-radius: 0; background: #fff; box-shadow: 0 0 0 2px var(--g-line); }
+.sheet .say textarea:focus-visible { outline: 3px solid #f4a261; outline-offset: 2px; box-shadow: 0 0 0 2px var(--g-line); }
+.say-go { width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 0; font: 26px/1 var(--font-pixel); color: var(--g-ink); background: var(--g-gold); box-shadow: 0 0 0 2px var(--g-ink), inset 0 -4px 0 var(--g-gold-edge), 3px 3px 0 1px rgb(0 0 0 / .4); }
+.say-go:hover { background: #ffe08a; filter: none; }
+.say-go:active { transform: translate(2px, 2px); box-shadow: 0 0 0 2px var(--g-ink), inset 0 -2px 0 var(--g-gold-edge); }
+.say-go:focus-visible { outline: 3px solid #f4a261; outline-offset: 2px; }
 
 /* the side question's card, what you are waited for, the status card, the desk's card, the rug's menu */
-.btw-card { padding: 12px 14px; font: 14px/1.5 var(--font-ui); background: var(--surface-2); border-radius: 14px; box-shadow: var(--e-pop); }
-.btw-tag { padding: 2px 8px; border-radius: 999px; font: 600 11px/1.4 var(--font-ui); letter-spacing: .06em; }
-.btw-who { font-size: 13px; color: var(--text-3); }
-.btw-x { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; font: 16px/1 var(--font-ui); color: var(--text-3); }
-.btw-x:hover { background: var(--surface-3); color: var(--text-1); }
-.attention { border-radius: 14px; }
-.attention-go { border-radius: 9px; padding: 9px 16px; }
-.pulse { border-radius: 14px; overflow: hidden; color: var(--text-1); background: var(--surface-2); box-shadow: var(--e-pop); }
-.pulse-head h2 { font: 650 14px/1.2 var(--font-ui); }
-.pulse-list li { border-radius: 8px; background: var(--surface); border: 1px solid var(--rule); }
-.desk-tip, .rug-menu { border-radius: 12px; background: rgb(16 18 30 / .96); backdrop-filter: blur(6px); box-shadow: 0 0 0 1px #2f3450, inset 3px 0 0 var(--c, transparent), 0 16px 40px rgb(0 0 0 / .45); }
-.desk-tip { padding: 10px 12px 9px; }
+.btw-card { padding: 10px 14px 12px; font: 14px/1.5 var(--font-ui); background: var(--g-paper-2); border-radius: 0; box-shadow: 0 0 0 3px var(--g-ink), 5px 5px 0 3px rgb(0 0 0 / .6); }
+.btw-tag { padding: 2px 8px 1px; border-radius: 0; font: 17px/1.1 var(--font-pixel); letter-spacing: 1px; }
+.btw-who { font-size: 13px; color: var(--g-muted); }
+.btw-x { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 0; font: 22px/1 var(--font-pixel); color: var(--g-line); }
+.btw-x:hover { background: rgb(43 45 66 / .08); }
+.attention { border-radius: 0; }
+.attention-go { border-radius: 0; padding: 7px 14px 6px; font: 20px/1 var(--font-pixel); }
+.pulse { border-radius: 0; overflow: hidden; color: var(--g-line); background: var(--g-paper-2); box-shadow: 0 0 0 3px var(--g-ink), 4px 4px 0 3px rgb(0 0 0 / .5); }
+.pulse-head h2 { font: 22px/1 var(--font-pixel); letter-spacing: .3px; }
+.pulse-list li { border-radius: 0; background: #fff; border: 0; box-shadow: 0 0 0 2px var(--g-line); }
+.desk-tip, .rug-menu { border-radius: 0; background: rgb(18 20 33 / .95); box-shadow: 0 0 0 2px var(--g-ink), inset 3px 0 0 var(--c, var(--g-gold)), inset 0 0 0 2px var(--g-bevel), 4px 4px 0 2px rgb(0 0 0 / .55); }
+.desk-tip { padding: 9px 12px 8px 14px; }
+.desk-tip b { font: 20px/1 var(--font-pixel); letter-spacing: .3px; }
 .rug-menu { padding: 10px; gap: 6px; min-width: 220px; }
-.rug-menu b { font: 600 11px/1.4 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; color: #8a90ab; padding: 0 4px 2px; }
-.rug-menu button { border-radius: 8px; padding: 9px 12px; background: rgb(255 255 255 / .05); }
-.e2e-mini { box-shadow: 0 0 0 1px #2f3450, 0 16px 40px rgb(0 0 0 / .45); }
+.rug-menu b { font: 20px/1 var(--font-pixel); letter-spacing: .3px; text-transform: none; color: var(--g-gold); padding: 0 2px 4px; }
+.rug-menu button { border-radius: 0; padding: 8px 12px; font: 20px/1 var(--font-pixel); background: #2a2f48; box-shadow: inset 0 -3px 0 rgb(0 0 0 / .3); }
+.rug-menu button:hover, .rug-menu button:focus-visible { background: var(--g-gold); color: var(--g-ink); }
+.e2e-mini { box-shadow: 0 0 0 3px var(--g-ink), inset 0 0 0 2px var(--g-bevel), 5px 5px 0 3px rgb(0 0 0 / .55); }
 
 /* ---------- the settings' sections, one by one ---------- */
 /* ⚙ › Models: each profile a card; who it is for, as chips; a model per role, its label on top */
@@ -1592,3 +1621,144 @@ ol.arch-list { list-style: decimal; padding-left: 20px; }
   .brief .s-row { flex-wrap: wrap; }
   .brief .s-row > select { flex: 1 1 100%; }
 }
+
+/* ================================================================ the game's skin on its dialogs
+   A dialog opened from the game is part of the game: a sheet of paper in a wooden frame, pinned, its title
+   in the pixel font over a dashed rule, pixel buttons that sink when pressed, fields outlined in ink, and
+   the brief's prompt on a post-it. Its layout (header, body that scrolls, footer; labels and fields; the
+   phone's stacking) is the one every dialog shares. The settings are an area outside the game: their
+   dialogs (.settings), and any dialog while they are open, keep the product's look. */
+:where(body:not(.in-settings)) .brief:not(.settings) {
+  --ink: var(--g-line); --paper: var(--g-paper);
+  --text-1: #2b2d42; --text-2: #4a4f6a; --text-3: #6c6f84;
+  --surface: #fff; --surface-2: var(--g-paper); --surface-3: var(--g-paper-2);
+  --rule: rgb(43 45 66 / .16); --rule-2: var(--g-line);
+  --r-sm: 0; --r: 0; --r-lg: 0;
+  --e-1: 2px 2px 0 rgb(0 0 0 / .14); --e-2: 3px 3px 0 1px rgb(0 0 0 / .16);
+  --ring: 0 0 0 3px #f4a261;
+  --brand-wash: #fff3c4; --brand-edge: var(--g-gold-edge);
+  max-height: calc(100vh - 64px); color: var(--g-line); background: var(--g-paper); border-radius: 0;
+  box-shadow: 0 0 0 3px var(--g-ink), 0 0 0 5px #d9a066, 0 0 0 12px var(--g-cork), 0 0 0 15px var(--g-ink), 10px 10px 0 15px rgb(0 0 0 / .5);
+}
+:where(body:not(.in-settings)) .brief:not(.settings)[open] { animation: g-dlg-in .18s steps(4); }
+@keyframes g-dlg-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+:where(body:not(.in-settings)) .brief:not(.settings)::backdrop { background: rgb(10 11 20 / .66); backdrop-filter: none; }
+:where(body:not(.in-settings)) .brief:not(.settings) > :is(form, .work-card, .pr-sheet, .svc-card, .ar-card, .lp-card, .ig-card, .e2e-card) { max-height: calc(100vh - 64px); }
+:where(body:not(.in-settings)) .brief:not(.settings) .pin { display: block; position: absolute; top: 6px; left: 50%; width: 14px; height: 14px; margin-left: -7px; background: #ef476f; box-shadow: 0 0 0 2px var(--g-ink), inset -3px -3px 0 #b8324f; }
+:where(body:not(.in-settings)) .brief:not(.settings) .brief-head { padding: 22px 14px 12px 22px; border-bottom: 3px dashed rgb(43 45 66 / .2); }
+:where(body:not(.in-settings)) .brief:not(.settings) .brief-head h2 { font: 30px/1 var(--font-pixel); letter-spacing: .5px; color: var(--g-line); }
+:where(body:not(.in-settings)) .brief:not(.settings) .brief-x { width: 34px; height: 34px; border-radius: 0; font: 28px/1 var(--font-pixel); color: var(--g-line); }
+:where(body:not(.in-settings)) .brief:not(.settings) .brief-x:hover { background: rgb(43 45 66 / .08); color: var(--g-ink); }
+:where(body:not(.in-settings)) .brief:not(.settings) .brief-x:focus-visible { outline: 3px solid #f4a261; outline-offset: 1px; box-shadow: none; }
+:where(body:not(.in-settings)) .brief:not(.settings) .brief-foot { background: var(--g-paper-2); border-top: 3px dashed rgb(43 45 66 / .16); padding: 14px 18px 14px 22px; gap: 12px; }
+:where(body:not(.in-settings)) .brief:not(.settings) .brief-foot .muted { font: 18px/1.1 var(--font-pixel); color: var(--g-muted); }
+:where(body:not(.in-settings)) .brief:not(.settings) :is(.b-field > span, .note > span) { font: 21px/1.05 var(--font-pixel); letter-spacing: .3px; color: var(--g-muted); }
+:where(body:not(.in-settings)) .brief:not(.settings) .b-desc { color: var(--g-muted); }
+:where(body:not(.in-settings)) .brief:not(.settings) .b-stages h3 { font: 21px/1.1 var(--font-pixel); letter-spacing: .3px; text-transform: none; color: var(--g-muted); }
+:where(body:not(.in-settings)) .brief:not(.settings) .b-stage { border: 0; border-left: 0; background: #fff; box-shadow: 0 0 0 2px var(--g-line), inset 5px 0 0 var(--c), 3px 3px 0 1px rgb(0 0 0 / .12); padding-left: 14px; }
+:where(body:not(.in-settings)) .brief:not(.settings) .b-stage .n { font: 24px/1 var(--font-pixel); }
+:where(body:not(.in-settings)) .brief:not(.settings) .b-problem { font-weight: 600; }
+
+/* its buttons: pixel ones, gold for what you mean to do, paper for the rest; they sink when pressed */
+:where(body:not(.in-settings)) .brief:not(.settings) .btn {
+  min-height: 38px; padding: 1px 16px 0; font: 22px/1 var(--font-pixel); letter-spacing: .3px; color: var(--g-ink);
+  background: var(--g-gold); border: 0; border-radius: 0;
+  box-shadow: 0 0 0 2px var(--g-ink), inset 0 -4px 0 var(--g-gold-edge), 3px 3px 0 1px rgb(0 0 0 / .32);
+  transition: transform .06s, background .12s;
+}
+:where(body:not(.in-settings)) .brief:not(.settings) .btn:hover { background: #ffe08a; }
+:where(body:not(.in-settings)) .brief:not(.settings) .btn:active { transform: translate(2px, 2px); box-shadow: 0 0 0 2px var(--g-ink), inset 0 -2px 0 var(--g-gold-edge); }
+:where(body:not(.in-settings)) .brief:not(.settings) .btn:focus-visible { outline: 3px solid #f4a261; outline-offset: 3px; box-shadow: 0 0 0 2px var(--g-ink), inset 0 -4px 0 var(--g-gold-edge), 3px 3px 0 1px rgb(0 0 0 / .32); }
+:where(body:not(.in-settings)) .brief:not(.settings) .btn:disabled { opacity: .5; transform: none; box-shadow: 0 0 0 2px var(--g-ink), inset 0 -4px 0 var(--g-gold-edge); }
+:where(body:not(.in-settings)) .brief:not(.settings) .btn.ghost { color: var(--g-line); background: #fff; box-shadow: 0 0 0 2px var(--g-ink), inset 0 -4px 0 #ddd6c4, 3px 3px 0 1px rgb(0 0 0 / .22); }
+:where(body:not(.in-settings)) .brief:not(.settings) .btn.ghost:hover { background: #fffbe8; }
+:where(body:not(.in-settings)) .brief:not(.settings) .btn.ghost:active { box-shadow: 0 0 0 2px var(--g-ink), inset 0 -2px 0 #ddd6c4; }
+:where(body:not(.in-settings)) .brief:not(.settings) .btn.danger { color: #fff; background: #e5484d; box-shadow: 0 0 0 2px var(--g-ink), inset 0 -4px 0 #a72c24, 3px 3px 0 1px rgb(0 0 0 / .32); }
+:where(body:not(.in-settings)) .brief:not(.settings) .btn.danger:hover { background: #ef5b60; }
+:where(body:not(.in-settings)) .brief:not(.settings) :is(.s-mini, .fl-mini, .pr-cancel, .e2e-tabs button, .e2e-controls button, .segmented button) {
+  min-height: 30px; padding: 2px 10px 1px; font: 19px/1 var(--font-pixel); letter-spacing: .2px; color: var(--g-line);
+  background: #fff; border: 0; border-radius: 0; box-shadow: 0 0 0 2px var(--g-line), 2px 2px 0 1px rgb(0 0 0 / .14);
+}
+:where(body:not(.in-settings)) .brief:not(.settings) :is(.s-mini, .fl-mini, .pr-cancel, .e2e-tabs button, .e2e-controls button, .segmented button):hover:not(:disabled) { background: #fffbe8; }
+:where(body:not(.in-settings)) .brief:not(.settings) :is(.s-mini, .fl-mini, .pr-cancel, .e2e-tabs button, .e2e-controls button, .segmented button):active:not(:disabled) { transform: translate(1px, 1px); box-shadow: 0 0 0 2px var(--g-line); }
+:where(body:not(.in-settings)) .brief:not(.settings) :is(.s-mini, .fl-mini, .pr-cancel, .e2e-tabs button, .e2e-controls button, .segmented button):focus-visible { outline: 3px solid #f4a261; outline-offset: 2px; }
+:where(body:not(.in-settings)) .brief:not(.settings) :is(.e2e-tabs button[aria-pressed="true"], .segmented button[aria-checked="true"]) { color: var(--g-gold); background: var(--g-line); }
+
+/* its fields: white, outlined in ink; the brief's prompt is a post-it */
+:where(body:not(.in-settings)) .brief:not(.settings) :is(input[type="text"], input[type="number"], input[type="search"], input[type="url"], input:not([type]), select, textarea) {
+  border: 0; border-radius: 0; background-color: #fff; box-shadow: 0 0 0 2px var(--g-line);
+}
+:where(body:not(.in-settings)) .brief:not(.settings) :is(input[type="text"], input[type="number"], input[type="search"], input[type="url"], input:not([type]), select, textarea):hover { border: 0; box-shadow: 0 0 0 2px var(--g-ink), 2px 2px 0 1px rgb(0 0 0 / .12); }
+:where(body:not(.in-settings)) .brief:not(.settings) :is(input[type="text"], input[type="number"], input[type="search"], input[type="url"], input:not([type]), select, textarea):focus-visible { outline: 3px solid #f4a261; outline-offset: 2px; box-shadow: 0 0 0 2px var(--g-ink); }
+:where(body:not(.in-settings)) .brief:not(.settings) select {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 6 4' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h6v1H5v1H4v1H3v1H2V3H1V2H0z' fill='%232b2d42'/%3E%3C/svg%3E") no-repeat right 12px center #fff;
+}
+:where(body:not(.in-settings)) .brief:not(.settings) :is(input, select, textarea):disabled { background-color: var(--g-paper-2); box-shadow: 0 0 0 2px #b9b4a6; }
+:where(body:not(.in-settings)) .brief:not(.settings) input:is([type="checkbox"], [type="radio"]) { accent-color: var(--g-line); }
+:where(body:not(.in-settings)) .brief:not(.settings) .note textarea { background: #ffe08a; box-shadow: 0 0 0 2px var(--g-line), 4px 4px 0 2px rgb(0 0 0 / .16); }
+:where(body:not(.in-settings)) .brief:not(.settings) .note textarea:hover { background: #ffe597; }
+:where(body:not(.in-settings)) .brief:not(.settings) details summary { font: 20px/1.2 var(--font-pixel); letter-spacing: .3px; color: var(--g-muted); }
+:where(body:not(.in-settings)) .brief:not(.settings) details summary:hover { color: var(--g-line); }
+:where(body:not(.in-settings)) .brief:not(.settings) ::-webkit-scrollbar { width: 12px; height: 12px; }
+:where(body:not(.in-settings)) .brief:not(.settings) ::-webkit-scrollbar-thumb { background: #c9c2ae; box-shadow: inset 0 0 0 2px var(--g-paper); }
+:where(body:not(.in-settings)) .brief:not(.settings) ::-webkit-scrollbar-track { background: transparent; }
+@media (max-width: 560px) {
+  :where(body:not(.in-settings)) .brief:not(.settings) { box-shadow: 0 0 0 2px var(--g-ink), 0 0 0 7px var(--g-cork), 0 0 0 9px var(--g-ink), 6px 6px 0 9px rgb(0 0 0 / .45); }
+  :where(body:not(.in-settings)) .brief:not(.settings) .brief-head { padding: 20px 12px 10px 16px; }
+  :where(body:not(.in-settings)) .brief:not(.settings) .brief-head h2 { font-size: 26px; }
+  :where(body:not(.in-settings)) .brief:not(.settings) .brief-foot { padding: 12px 14px; }
+}
+@media (prefers-reduced-motion: reduce) { :where(body:not(.in-settings)) .brief:not(.settings)[open] { animation: none; } }
+
+/* the game's skin, inside its dialogs: headings and names in the pixel font, cards and rows as paper
+   outlined in ink with a hard shadow, chips and tabs as pixel buttons, keys as keycaps, the counters of the
+   work as a scoreboard. Long text (descriptions, what an agent says, an entry of the archive) stays in the
+   interface's font. */
+:where(body:not(.in-settings)) .brief:not(.settings) :is(.w-h, .phone-who b, .pr-who b, .svc-main b, .lp-fhead b, .daily-body h3, .imp-b-head, .ar-head h3, .lp-head h3, .lp-form h3, .ar-install h4, .work h3) {
+  font: 24px/1.05 var(--font-pixel); letter-spacing: .3px; color: var(--g-line);
+}
+:where(body:not(.in-settings)) .brief:not(.settings) :is(.phone-who b, .pr-who b, .svc-main b, .lp-fhead b) { font-size: 22px; }
+:where(body:not(.in-settings)) .brief:not(.settings) :is(.fl-label, .w-k, .lp-flabel, .lp-form .b-field > span) { font: 20px/1.1 var(--font-pixel); letter-spacing: .3px; color: var(--g-muted); }
+:where(body:not(.in-settings)) .brief:not(.settings) .daily-body h3 small { font: 18px/1 var(--font-pixel); color: var(--g-muted); }
+/* cards and rows */
+:where(body:not(.in-settings)) .brief:not(.settings) :is(.pr-card, .fl-group, .dv-item, .ar-item, .lp-pick, .lp-step, .lp-fstep, .e2e-test, .svc-pick, .ar-read, .phone-card, .daily-body li, .inbox-list li) {
+  border-top: 0; border-right: 0; border-bottom: 0; border-radius: 0; background: #fff;
+  box-shadow: 0 0 0 2px var(--g-line), 3px 3px 0 1px rgb(0 0 0 / .12);
+}
+:where(body:not(.in-settings)) .brief:not(.settings) :is(.pr-card, .fl-group, .ar-item, .lp-pick, .lp-step, .lp-fstep, .e2e-test, .svc-pick, .ar-read) { border-left: 0; }
+:where(body:not(.in-settings)) .brief:not(.settings) :is(.dv-item, .phone-card, .daily-body li, .inbox-list li) { border-left-width: 5px; border-left-style: solid; }
+:where(body:not(.in-settings)) .brief:not(.settings) :is(.ar-item, .lp-pick, .svc-pick, .e2e-test):hover { background: #fffbe8; box-shadow: 0 0 0 2px var(--g-ink), 4px 4px 0 1px rgb(0 0 0 / .18); }
+:where(body:not(.in-settings)) .brief:not(.settings) :is(.ar-item.sel, .lp-pick[aria-pressed="true"], .svc-pick[aria-pressed="true"], .e2e-test.sel) { background: #ffe08a; box-shadow: 0 0 0 2px var(--g-ink), 3px 3px 0 1px rgb(0 0 0 / .2); }
+:where(body:not(.in-settings)) .brief:not(.settings) .lp-step.current { box-shadow: 0 0 0 3px var(--g-gold-edge), 3px 3px 0 2px rgb(0 0 0 / .16); }
+:where(body:not(.in-settings)) .brief:not(.settings) .lp-step.blocked { background: #fff1f2; box-shadow: 0 0 0 2px #c0263e, 3px 3px 0 1px rgb(0 0 0 / .12); }
+:where(body:not(.in-settings)) .brief:not(.settings) :is(.ar-body, .pr-q, .imp-scroll, .imp-g-scroll, .ar-config) { border: 0; border-radius: 0; box-shadow: 0 0 0 2px var(--g-line); }
+:where(body:not(.in-settings)) .brief:not(.settings) :is(.e2e-screen, .e2e-shots img, .phone-portrait) { border-radius: 0; box-shadow: 0 0 0 2px var(--g-line); }
+:where(body:not(.in-settings)) .brief:not(.settings) .lp-detail-msg { border: 0; border-radius: 0; box-shadow: 0 0 0 2px var(--g-gold-edge); }
+/* chips, pills and tabs */
+:where(body:not(.in-settings)) .brief:not(.settings) :is(.fl-pill, .lp-status, .e2e-pill, .s-tag) { border: 0; border-radius: 0; padding: 3px 8px 2px; font: 18px/1 var(--font-pixel); letter-spacing: .3px; box-shadow: 0 0 0 2px rgb(0 0 0 / .16); }
+:where(body:not(.in-settings)) .brief:not(.settings) .ar-tabs button { min-height: 32px; padding: 2px 12px 1px; font: 20px/1 var(--font-pixel); letter-spacing: .3px; color: var(--g-line); background: #fff; border: 0; border-radius: 0; box-shadow: 0 0 0 2px var(--g-line), 2px 2px 0 1px rgb(0 0 0 / .14); }
+:where(body:not(.in-settings)) .brief:not(.settings) .ar-tabs button:hover { background: #fffbe8; }
+:where(body:not(.in-settings)) .brief:not(.settings) .ar-tabs button:focus-visible { outline: 3px solid #f4a261; outline-offset: 2px; box-shadow: 0 0 0 2px var(--g-line); }
+:where(body:not(.in-settings)) .brief:not(.settings) .ar-tabs button[aria-selected="true"] { color: var(--g-gold); background: var(--g-line); }
+:where(body:not(.in-settings)) .brief:not(.settings) .ar-tabs button .fl-dim { font-size: 17px; }
+/* an agent's options, as pixel buttons with their keys */
+:where(body:not(.in-settings)) .brief:not(.settings) .pr-opt { border: 0; border-radius: 0; background: #fff; box-shadow: 0 0 0 2px var(--g-line), 3px 3px 0 1px rgb(0 0 0 / .14); }
+:where(body:not(.in-settings)) .brief:not(.settings) .pr-opt:hover:not(:disabled) { background: #fffbe8; box-shadow: 0 0 0 2px var(--g-ink), 4px 4px 0 1px rgb(0 0 0 / .18); }
+:where(body:not(.in-settings)) .brief:not(.settings) .pr-opt:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 0 0 0 2px var(--g-ink); }
+:where(body:not(.in-settings)) .brief:not(.settings) .pr-opt[aria-current="true"] { background: #ffe08a; box-shadow: 0 0 0 2px var(--g-ink), 3px 3px 0 1px rgb(0 0 0 / .2); }
+:where(body:not(.in-settings)) .brief:not(.settings) .pr-opt:focus-visible { outline: 3px solid #f4a261; outline-offset: 2px; }
+:where(body:not(.in-settings)) .brief:not(.settings) .pr-opt kbd { min-width: 26px; height: 26px; padding: 1px 6px 0; font: 20px/1 var(--font-pixel); color: #fff; background: var(--g-line); border: 0; border-radius: 0; box-shadow: inset 0 -3px 0 rgb(0 0 0 / .45); }
+:where(body:not(.in-settings)) .brief:not(.settings) .pr-opt[aria-current="true"] kbd { color: var(--g-gold); background: var(--g-ink); }
+:where(body:not(.in-settings)) .brief:not(.settings) .inbox-since { font: 18px/1 var(--font-pixel); color: var(--g-muted); }
+/* the work: its counters as a scoreboard, its progress as a pixel bar, its team as rows */
+:where(body:not(.in-settings)) .brief:not(.settings).work .stats dt { font: 18px/1 var(--font-pixel); letter-spacing: .6px; text-transform: uppercase; color: var(--g-muted); }
+:where(body:not(.in-settings)) .brief:not(.settings).work .stats dd { font: 38px/1 var(--font-pixel); color: var(--g-line); }
+:where(body:not(.in-settings)) .brief:not(.settings).work .progress { height: 14px; border-radius: 0; background: #e6e2d6; box-shadow: 0 0 0 2px var(--g-line); position: relative; overflow: hidden; }
+:where(body:not(.in-settings)) .brief:not(.settings).work .progress div { border-radius: 0; background: linear-gradient(#8ef0c0 0 30%, #06d6a0 30%); }
+:where(body:not(.in-settings)) .brief:not(.settings).work .progress::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(to right, transparent 0 calc(5% - 2px), rgb(0 0 0 / .18) calc(5% - 2px) 5%); pointer-events: none; }
+:where(body:not(.in-settings)) .brief:not(.settings).work .team li { border-radius: 0; }
+:where(body:not(.in-settings)) .brief:not(.settings).work .team li:hover, :where(body:not(.in-settings)) .brief:not(.settings).work .team li.sel { background: #fff3c4; box-shadow: inset 3px 0 0 var(--g-gold-edge); }
+:where(body:not(.in-settings)) .brief:not(.settings).work .flow li { font: 17px/1.1 var(--font-pixel); }
+:where(body:not(.in-settings)) .brief:not(.settings) .fl-label { font-size: 22px; color: var(--g-line); }
+:where(body:not(.in-settings)) .brief:not(.settings) .brief-foot { flex-wrap: wrap; row-gap: 10px; }
+:where(body:not(.in-settings)) .brief:not(.settings) #e2e-sum { font: 20px/1 var(--font-pixel); letter-spacing: .3px; }

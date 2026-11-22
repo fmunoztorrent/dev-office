@@ -2,15 +2,16 @@
 // its rooms, doors and furniture from `scene.world`, each person as a dot of their shirt's color with their
 // name, what they say and their badge, the whiteboard's task and the time of day. It is not a game view:
 // it proves the scene is enough to draw the office and is where a new renderer (a 3D one) can start from.
-// Open the game with `?renderer=plan`.
+// It uses the renderer SDK (public/sdk/index.js) and nothing else, and has no pick of its own: it says
+// where the world lands on its canvas (project) and where the pointer is on the floor (toWorld), and the
+// SDK finds what is there. Open the game with `?renderer=plan`.
 
-import { registerRenderer } from '../renderers.js';
-import { peopleOf } from '../scene.js';
+import { registerRenderer, peopleOf } from '../sdk/index.js';
 
 const KIND_COLOR = {
   desk: '#a0703f', hotdesk: '#b48450', whiteboard: '#f8f9fa', tv: '#1b1f33', sofa: '#2c5470', rack: '#3a3f58', table: '#8c5a33',
   plant: '#2a9d8f', counter: '#6d4c41', fridge: '#cfd8dc', espresso: '#455a64', planter: '#52796f', stall: '#adb5bd', sink: '#e0e0e0',
-  cooler: '#90caf9', elevator: '#607d8b', extinguisher: '#d62828',
+  cooler: '#90caf9', elevator: '#607d8b', extinguisher: '#d62828', rug: '#7f6a8c',
 };
 const ROOM_COLOR = { office: '#e9ecef', cafe: '#d7b98e', dining: '#efe1c6', hall: '#5c677d', bathroom: '#dfe7ef' };
 
@@ -66,22 +67,42 @@ export function drawPlan(ctx, scene, w, h) {
   return { rooms: scene.world.rooms.length, props: scene.world.props.length, people: people.map((a) => a.id) };
 }
 
+/** The plan's scale and origin on a canvas of w × h pixels: the whole floor, as big as it fits, centered. */
+function fit(world, w, h) {
+  const { bounds } = world;
+  const k = Math.min(w / (bounds.x1 - bounds.x0), h / (bounds.y1 - bounds.y0));
+  return { k, ox: (w - (bounds.x1 - bounds.x0) * k) / 2, oy: (h - (bounds.y1 - bounds.y0) * k) / 2 };
+}
+
 registerRenderer({
   id: 'plan',
   label: 'Plan (reference)',
-  create(canvas) {
+  sdk: 1,
+  create(host) {
+    const { canvas, world } = host;
     const ctx = canvas.getContext('2d');
-    let last = null;
+    const view = () => {
+      const f = fit(world, canvas.width, canvas.height);
+      return { ...f, x0: world.bounds.x0, y0: world.bounds.y0 };
+    };
     return {
-      draw(scene) { last = scene; drawPlan(ctx, scene, canvas.width, canvas.height); },
-      // a person under the pointer (fractions of the canvas)
-      pick(fx, fy) {
-        if (!last) return null;
-        const { bounds } = last.world;
-        const k = Math.min(canvas.width / (bounds.x1 - bounds.x0), canvas.height / (bounds.y1 - bounds.y0));
-        const x = fx * canvas.width / k + bounds.x0, y = fy * canvas.height / k + bounds.y0;
-        const hit = peopleOf(last).filter((a) => a.pose !== 'hidden' && !a.gone).find((a) => Math.hypot(a.x - x, a.y - y) < 18);
-        return hit ? { person: hit.id } : null;
+      draw(scene) {
+        const { ox, oy } = view();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.fillStyle = '#1b1f33';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.translate(ox, oy);
+        drawPlan(ctx, scene, canvas.width - 2 * ox, canvas.height - 2 * oy);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+      },
+      // a top-down plan: height does not move a point, and the floor is the canvas
+      project(x, y) {
+        const { k, ox, oy, x0, y0 } = view();
+        return { x: (ox + (x - x0) * k) / canvas.width, y: (oy + (y - y0) * k) / canvas.height };
+      },
+      toWorld(fx, fy) {
+        const { k, ox, oy, x0, y0 } = view();
+        return { x: (fx * canvas.width - ox) / k + x0, y: (fy * canvas.height - oy) / k + y0 };
       },
     };
   },

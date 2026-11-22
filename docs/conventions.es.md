@@ -54,6 +54,13 @@ Para agregar algo:
   3. la clave en `dev-team-office config`;
   4. los textos en los dos idiomas.
 
+## Las dos voces de la interfaz
+
+- **El juego se ve como un juego.** Lo que está sobre la oficina (el HUD, el dock, la actividad, la ficha de un personaje, los tips) y cada diálogo que abre usan la piel del juego: paneles en pixel art y papel en un marco de madera, la letra pixel en títulos, etiquetas, chips y botones, contornos de tinta y sombras duras, sin esquinas redondeadas. El texto largo (una descripción, lo que dice alguien, una entrada del archivo) queda en la letra de la interfaz.
+- **Los ajustes se ven como una herramienta:** el área `#settings` y los diálogos que abre (`.brief.settings`) mantienen el estilo de la interfaz (líneas finas, esquinas suaves, la letra de la interfaz).
+- En `public/style.css` las dos comparten la estructura (`.brief-head`, `.brief-body`, `.brief-foot`, `.b-field`, `.btn`); la piel del juego es el bloque limitado a `:where(body:not(.in-settings)) .brief:not(.settings)` y el bloque del cromo del juego (sus tokens son `--g-*`). Algo nuevo sobre el juego va en la voz del juego; algo nuevo en los ajustes, en la de la herramienta.
+- El dibujo mismo pasa por el SDK de renderers ([`rendering.es.md`](rendering.es.md)).
+
 ## Eventos y roles
 
 - Todo lo que entra a la oficina se traduce al **formato genérico** ([`api.es.md`](api.es.md#formato-genérico-de-un-evento)).
