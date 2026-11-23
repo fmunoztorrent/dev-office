@@ -15,7 +15,7 @@ import { createE2E } from './e2e-ui.js';
 import './renderers/plan.js'; // the reference renderer of the SDK (public/sdk/index.js): ?renderer=plan
 import './renderers/blocks.js'; // a 3D one, in WebGL: ?renderer=blocks
 import { drawSprite } from './sprite.js';
-import { watchPixelIcons } from './pixel-icons.js';
+import { watchPixelIcons, selectIcons } from './pixel-icons.js';
 import { t, ta, setLanguage, onLanguage, getLanguage, timeOf } from './i18n.js';
 import { thresholdOf, kTokens } from './compact.js';
 
@@ -552,6 +552,8 @@ function renderOffices() {
   for (const o of offices) sel.append(new Option(`🏢 ${o.name}`, o.id));
   sel.append(new Option(t('floors.name.archive'), FLOOR_VALUE.archive));
   sel.value = game.floor === 'office' ? office?.id || '' : FLOOR_VALUE[game.floor];
+  // each floor's icon in pixel art, in front of the selector (an option only draws text)
+  selectIcons(sel, $('office-pick-icon'));
 }
 // the office asked for, until its snapshot arrives (the elevator does not wait for it)
 let wanted = null;
@@ -560,7 +562,7 @@ function viewOffice(id) {
   wanted = id;
   send({ type: 'view', office: id });
 }
-$('office-select').onchange = (e) => pickFloor(e.target.value);
+$('office-select').onchange = (e) => { selectIcons(e.target, $('office-pick-icon')); pickFloor(e.target.value); };
 /** o: the next floor going down (and from the archive, back to the executive floor). */
 function nextOffice() { moveFloor(1); }
 
@@ -1270,6 +1272,7 @@ function renderBrief() {
   const o = brief.opts = briefOptions({ targets: all, models: prefs?.models }, brief.sel);
   if (all.length) fillByProject($('b-agent'), all, brief.sel.target);
   else fillSelect($('b-agent'), [{ label: t('brief.noAgentWeb') }], 0);
+  selectIcons($('b-agent')); // a system's 🧩 is not drawn by the system's emoji font
   $('b-agent').disabled = !all.length;
   fillSelect($('b-pipeline'), o.entries.length ? o.entries : [{ label: '—' }], Math.max(0, o.entries.indexOf(o.entry)));
   $('b-desc').textContent = o.entry ? [o.entry.description, o.entry.source && o.entry.source !== 'agente' ? `(${o.entry.source})` : ''].filter(Boolean).join(' ')

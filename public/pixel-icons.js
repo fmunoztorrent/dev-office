@@ -1912,6 +1912,25 @@ export function leadingIcon(text) {
  */
 export const KEEP = '.talk, .log, #log, .feed-body, .ar-read, .ar-body, .btw-a, .btw-q, .bv-postit, .daily-body li, .pr-q, .inbox-text span, .sheet-history, .sheet-did, .sheet-say, [data-raw], input, textarea, select, option, script, style';
 
+/**
+ * A <select> draws its options' text itself, so an emoji there would be the system's. The options keep
+ * only their text (each one's icon goes to its data-icon) and, given a `slot` (an element next to the
+ * select, styled as .px), it shows the chosen option's icon in pixel art. Call it after filling the
+ * select and when its value changes.
+ */
+export function selectIcons(sel, slot = null) {
+  for (const o of sel.options) {
+    const { icon, text } = leadingIcon(o.textContent);
+    if (icon) { o.dataset.icon = icon; o.textContent = text; }
+  }
+  if (!slot) return;
+  const name = sel.selectedOptions?.[0]?.dataset.icon || '';
+  slot.hidden = !name;
+  if (!name) return;
+  slot.classList.toggle('mono', MONO.has(name));
+  slot.style.setProperty('--px', `url("${iconURL(name)}")`);
+}
+
 /** Turns the emoji of the interface's texts under `root` into pixel icons (the ones it knows). */
 export function pixelize(root) {
   if (!root || typeof document === 'undefined') return 0;

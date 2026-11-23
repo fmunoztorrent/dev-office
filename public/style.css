@@ -1773,6 +1773,7 @@ ol.arch-list { list-style: decimal; padding-left: 20px; }
 }
 @supports (width: round(nearest, 1em, 12px)) { .px { --s: max(12px, round(nearest, 1.1em, 12px)); } }
 .px.mono { background: currentColor; -webkit-mask: var(--px) center / 100% 100% no-repeat; mask: var(--px) center / 100% 100% no-repeat; }
+.px[hidden] { display: none; }
 
 /* ---------- the pixel details ---------- */
 /* the game's pointers, in pixel art (public/pixel-icons.js): an arrow over the office, a hand over what you can click */

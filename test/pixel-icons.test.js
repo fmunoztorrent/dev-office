@@ -5,7 +5,7 @@ import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { ICONS, PALETTE, EMOJI, MONO, EXTRA, SIZE, EMOJI_RE, iconOf, iconSVG, iconURL, drawIcon, leadingIcon, KEEP } from '../public/pixel-icons.js';
+import { ICONS, PALETTE, EMOJI, MONO, EXTRA, SIZE, EMOJI_RE, iconOf, iconSVG, iconURL, drawIcon, leadingIcon, selectIcons, KEEP } from '../public/pixel-icons.js';
 import en from '../public/locales/en.js';
 import es from '../public/locales/es.js';
 import { STATUS_ICON, PHASES, VISITORS } from '../public/sim.js';
@@ -91,4 +91,27 @@ test('un emoji se reconoce con o sin su selector de variante; el SVG y el canvas
   assert.equal(drawIcon(ctx, 'nada', 0, 0), false);
   // what stays as it is: what people say and write
   for (const sel of ['.talk', '.log', '.ar-read', 'textarea', 'select']) assert.ok(KEEP.includes(sel), sel);
+});
+
+test('un selector (el de los pisos, el del agente del encargo) no muestra emoji del sistema: su ícono va al lado, en pixel art', () => {
+  const opt = (text) => ({ textContent: text, dataset: {} });
+  const options = [opt('🏛 Dirección'), opt('🏢 Oficina principal'), opt('📚 Archivo'), opt('tienda · Pi'), opt('🦖 Sin dibujo')];
+  const sel = { options, selectedOptions: [options[2]] };
+  const css = {};
+  const classes = new Set();
+  const slot = { hidden: true, style: { setProperty: (k, v) => { css[k] = v; } }, classList: { toggle: (c, on) => (on ? classes.add(c) : classes.delete(c)) } };
+  selectIcons(sel, slot);
+  assert.deepEqual(options.map((o) => o.textContent), ['Dirección', 'Oficina principal', 'Archivo', 'tienda · Pi', '🦖 Sin dibujo'], 'sólo el texto; uno sin dibujo queda como está');
+  assert.deepEqual(options.map((o) => o.dataset.icon), ['pillars', 'building', 'books', undefined, undefined]);
+  assert.equal(slot.hidden, false);
+  assert.equal(css['--px'], `url("${iconURL('books')}")`, 'el ícono del piso elegido');
+  // again (the selector is filled again, or its value changes): idempotent, and without an icon the slot hides
+  sel.selectedOptions = [options[3]];
+  selectIcons(sel, slot);
+  assert.equal(options[0].textContent, 'Dirección');
+  assert.equal(slot.hidden, true);
+  // without a slot: only the options' text
+  const other = { options: [opt('🧩 Pagos · api → web')], selectedOptions: [] };
+  selectIcons(other);
+  assert.equal(other.options[0].textContent, 'Pagos · api → web');
 });
