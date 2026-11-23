@@ -2,7 +2,7 @@
 // departments with their characters, the projects with their instructions) is exported and imported;
 // what belongs to the game or is history is not; a project whose folder is not here is skipped.
 import './es.js';
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -12,7 +12,11 @@ import { openStore, DEFAULT_PREFS } from '../server/store.js';
 import { exportSettings, importSettings, parseSettings, SETTINGS_KIND } from '../server/settings-io.js';
 
 const tmp = () => fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dto-settings-')));
-const office = () => startServer({ port: 0, socket: null, db: ':memory:', weather: false, places: false, standup: { every: 0 } });
+const homes = [];
+after(() => { for (const h of homes) fs.rmSync(h, { recursive: true, force: true }); });
+// Each office with a HOME of its own: an export reads your skills from it and an import installs them
+// there, so a test never reads or writes the real one.
+const office = () => { const home = tmp(); homes.push(home); return startServer({ port: 0, socket: null, db: ':memory:', weather: false, places: false, standup: { every: 0 }, mine: { home } }); };
 const put = (server, body) => fetch(`${server.url}/v1/settings`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
 /** An export without what changes every time. */
 const same = (x) => { const { exportedAt, app, ...rest } = x; return rest; };
@@ -45,6 +49,7 @@ test('exportar: lo tuyo (ajustes, departamentos con sus personajes, proyectos co
     assert.deepEqual(x.relations, []);
     assert.deepEqual(Object.keys(x).sort(), ['app', 'areas', 'departments', 'experts', 'exportedAt', 'instructions', 'kind', 'mine', 'prefs', 'projects', 'relations', 'resources', 'skills', 'version'], 'ni la bitácora, ni encargos, ni directivas, ni el archivo');
     assert.ok(!JSON.stringify(x).includes('algo'), 'nada de la bitácora');
+    assert.deepEqual(x.skills, [], 'sólo las skills del HOME de la oficina (vacío), nunca las del real');
   } finally { await server.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -81,7 +86,7 @@ test('importar en otra oficina deja todo igual; lo que el archivo no trae se que
     assert.ok(b.store.getOffice(extra.id), 'lo que el archivo no trae se queda');
     assert.equal(b.company.info('pagos').name, 'Pagos', 'la empresa ya lo ve');
     // again: idempotent
-    const twice = importSettings(b.store, file);
+    const twice = importSettings(b.store, file, { mine: b.mine });
     assert.equal(twice.ok, true);
     assert.equal(b.store.listAgents().length, 1, 'no duplica proyectos');
     assert.equal(b.store.listOffices().filter((o) => o.name === 'Pagos').length, 1, 'ni departamentos');
