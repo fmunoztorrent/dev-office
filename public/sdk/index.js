@@ -208,3 +208,62 @@ export function pickWith(instance, scene, fx, fy) {
   else if (typeof instance.toWorld === 'function') { const p = instance.toWorld(fx, fy); t = p ? pickAt(scene, p.x, p.y) : null; }
   return isTarget(t, scene) ? t : null;
 }
+
+// ---------------------------------------------------------------- labels over the drawing
+
+/**
+ * Places labels over the drawing so that none covers another: the speech bubbles and the badges over
+ * people's heads. Each one prefers to sit centered just above its anchor (where its tail points); if that
+ * place is taken it tries higher up and to the sides, the closest free place first, always inside the
+ * bounds. A label keeps the place it had in the last frame while that place stays free, so labels do not
+ * jump around; the ones that matter more (`priority`) are placed first.
+ *
+ * @param items     [{ id, x, y (the anchor), w, h, priority = 0 }], in the canvas's units
+ * @param options   bounds { x0, y0, x1, y1 }; gap between labels; previous: Map id → { dx, dy } of the last frame
+ * @returns Map id → { x, y (top-left), w, h, dx, dy (its offset from the preferred place), free (no overlap) }
+ */
+export function layoutLabels(items, { bounds = null, gap = 4, previous = null } = {}) {
+  const placed = [];
+  const out = new Map();
+  const order = [...items].sort((a, b) => (b.priority || 0) - (a.priority || 0) || b.y - a.y || String(a.id).localeCompare(String(b.id)));
+  const clamp = (r) => {
+    if (!bounds) return r;
+    const x = Math.max(bounds.x0, Math.min(bounds.x1 - r.w, r.x)), y = Math.max(bounds.y0, Math.min(bounds.y1 - r.h, r.y));
+    return { ...r, x, y };
+  };
+  const overlap = (r) => {
+    let area = 0;
+    for (const p of placed) {
+      // (closer than `gap` counts as touching)
+      const ox = Math.min(r.x + r.w, p.x + p.w) - Math.max(r.x, p.x) + gap;
+      const oy = Math.min(r.y + r.h, p.y + p.h) - Math.max(r.y, p.y) + gap;
+      if (ox > 0 && oy > 0) area += ox * oy;
+    }
+    return area;
+  };
+  for (const it of order) {
+    const base = { x: it.x - it.w / 2, y: it.y - it.h, w: it.w, h: it.h };
+    // the candidates, closest first: up a row or two, then to the sides (a little, then a whole width)
+    const tries = [];
+    const last = previous?.get(it.id);
+    if (last) tries.push({ dx: last.dx, dy: last.dy, score: -1 });
+    for (let row = 0; row <= 3; row++) {
+      for (const side of [0, 0.6, -0.6, 1.15, -1.15]) {
+        const dx = side * (it.w + gap), dy = -row * (it.h + gap);
+        tries.push({ dx, dy, score: Math.abs(dy) + Math.abs(dx) * 0.8 });
+      }
+    }
+    tries.sort((a, b) => a.score - b.score);
+    let best = null;
+    for (const t of tries) {
+      const r = clamp({ ...base, x: base.x + t.dx, y: base.y + t.dy });
+      const area = overlap(r);
+      if (!best || area < best.area) best = { r, area };
+      if (area === 0) break;
+    }
+    const r = best.r;
+    placed.push(r);
+    out.set(it.id, { x: r.x, y: r.y, w: r.w, h: r.h, dx: r.x - base.x, dy: r.y - base.y, free: best.area === 0 });
+  }
+  return out;
+}

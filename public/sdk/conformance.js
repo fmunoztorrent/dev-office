@@ -27,7 +27,9 @@ export function fakeCanvas(width = 1216, height = 760) {
     getTransform: () => ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }),
     isPointInPath: () => false, isPointInStroke: () => false, getLineDash: () => [],
   };
-  const canvas = { width, height, style: {}, getBoundingClientRect: () => ({ left: 0, top: 0, width, height }) };
+  const classes = new Set();
+  const classList = { add: (c) => classes.add(c), remove: (c) => classes.delete(c), contains: (c) => classes.has(c), toggle: (c, on = !classes.has(c)) => (on ? classes.add(c) : classes.delete(c), on) };
+  const canvas = { width, height, style: {}, classList, getBoundingClientRect: () => ({ left: 0, top: 0, width, height }) };
   const state = {
     canvas, globalAlpha: 1, globalCompositeOperation: 'source-over', fillStyle: '#000', strokeStyle: '#000', lineWidth: 1,
     font: '10px sans-serif', textAlign: 'start', textBaseline: 'alphabetic', imageSmoothingEnabled: true, filter: 'none',

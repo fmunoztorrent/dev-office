@@ -14,8 +14,9 @@ import { isoCamera, apply, unapply, scaled, BACK, WALL_H } from './iso.js';
 import { t } from './i18n.js';
 import { createFloors, drawFloor, floorHit } from './floors.js';
 import { buildScene, personIn } from './scene.js';
-import { registerRenderer, getRenderer, createRenderer, createHost, pickWith, actionOf, propOf, boxOnScreen } from './sdk/index.js';
+import { registerRenderer, getRenderer, createRenderer, createHost, pickWith, actionOf, propOf, boxOnScreen, layoutLabels } from './sdk/index.js';
 import { drawAnime, ANIME_HEIGHT } from './anime.js';
+import { drawIcon, iconOf, leadingIcon } from './pixel-icons.js';
 export { TEAM, personOf, PHASES, phaseInfo } from './sim.js';
 
 const P = 3; // size of a sprite "pixel"
@@ -687,23 +688,25 @@ export function createCanvasRenderer(host) {
     }
     const icon = STATUS_ICON[a.state] || (a.subagents ? '🤖' : '');
     if (icon) {
-      ctx.font = `${fpx(16)}px ${EMOJI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-      const bob = Math.sin(now / 250) * 2;
-      ctx.fillText(icon, x + 20, y - 18 * P + bob);
+      const bob = Math.round(Math.sin(now / 250) * 2), px = iconOf(icon), sz = 18;
+      // in pixel art (public/pixel-icons.js); an emoji without a drawing, as it is
+      if (px) drawIcon(ctx, px, x + 20 - sz / 2, y - 18 * P + bob - sz, sz);
+      else { ctx.font = `${fpx(16)}px ${EMOJI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(icon, x + 20, y - 18 * P + bob); }
     }
     // what they eat at their desk
     if (a.seated && a.food) { ctx.font = `13px ${EMOJI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(a.food, a.cfg.seat.x - 30, a.cfg.seat.y - 18); }
     // Label of the role "on duty" with its phase (e.g. ▶ RED), to the left of the head.
     const { role: turn, phase: turnPhase } = scene.turn;
     if (turn === a.id && turnPhase) {
-      const label = `▶ ${phaseInfo(turnPhase).label}`;
+      const label = phaseInfo(turnPhase).label;
       ctx.font = `${fpx(15)}px ${FONT}`;
-      const w = ctx.measureText(label).width + 10, lh = fpx(15);
-      const tx = x - 20 - w, ty = y - 20 * P - 1 + Math.sin(now / 300) * 1.5;
+      const lh = Math.max(14, fpx(15)), w = ctx.measureText(label).width + 10 + 9;
+      const tx = Math.round(x - 20 - w), ty = Math.round(y - 20 * P - 1 + Math.sin(now / 300) * 1.5);
       R(tx, ty, w, lh, '#1b1f33');
       R(tx + 1, ty + 1, w - 2, lh - 2, PHASE_COLOR[turnPhase] || c.shirt);
+      drawIcon(ctx, 'play', tx + 3, ty + Math.round((lh - 6) / 2), 6, '#1b1f33'); // ▶, in pixels
       ctx.fillStyle = '#1b1f33'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      ctx.fillText(label, tx + 5, ty + lh / 2 + 1);
+      ctx.fillText(label, tx + 12, ty + lh / 2 + 1);
     }
     if (scene.hover === a.id && scene.selected !== a.id) {
       ctx.strokeStyle = '#ffffff99'; ctx.lineWidth = 2;
@@ -980,7 +983,7 @@ export function createCanvasRenderer(host) {
       R(x, y, w, h, Math.floor(now / 400) % 2 ? '#9d0208' : '#6a040f');
       R(x, y + k(4), w, k(9), '#ffd166');
       text(t('scene.tvBreaking'), x + w / 2, y + k(9), 12, '#6a040f', 'center');
-      ctx.font = `${k(14)}px ${EMOJI}`; ctx.textAlign = 'center'; ctx.fillText('🔥', x + k(12), y + k(23));
+      drawIcon(ctx, 'fire', Math.round(x + k(6)), Math.round(y + k(17)), k(12));
       text(t('scene.tvServer'), x + w / 2 + k(6), y + k(23), 13, '#ffffff', 'center');
       return;
     }
@@ -1124,6 +1127,95 @@ export function createCanvasRenderer(host) {
     R(bx + w / 2 - 2, by + h + 1, 4, 2, a.cfg.shirt || '#8d99ae'); // the tip, toward the head
     ctx.fillStyle = '#f1f3fa'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(text, bx + w / 2, by + h / 2 + 1);
+  }
+
+  // ---------------------------------------------------------------- what people say, over their heads
+  //
+  // The bubbles and the badges of a frame are placed together, on the screen (the SDK's layoutLabels): none
+  // covers another, each keeps its place while it can and glides when it must move, and a pixel tail (a
+  // dotted leader, when it had to move away) points at who speaks. Same in both views.
+  // per floor: id → { dx, dy (its place, for the next frame), sx, sy (where it is drawn: gliding to it) }
+  const speech = new Map();
+  let labelsAt = 0;
+  /** The colors of a bubble by its tone: border, paper. */
+  const TONE = { error: ['#e63946', '#ffe5e5'], warn: ['#f4a261', '#fff3e0'] };
+  function drawSpeech(now, people = [...Object.values(scene.team), ...scene.visitors], matrixOf = personM, key = 'office') {
+    use(ID);
+    const items = [], what = new Map();
+    const labels = speech.get(key) || speech.set(key, new Map()).get(key);
+    for (const a of people) {
+      if (a.hidden || a.gone || (a.ghost && a.fade < 0.5)) continue;
+      // in the transform the person is drawn with: its scale is the text's (front view 1, top-down smaller)
+      const m = matrixOf(a), k = Math.hypot(m[0], m[1]);
+      if (a.bubble) {
+        const fs = Math.round(fpx(16) * k), lh = Math.round(fpx(15) * k);
+        ctx.font = `${fs}px ${FONT}`;
+        const lines = wrap(a.bubble.text, fpx(176) * k, 3);
+        const w = Math.round(Math.min(fpx(190) * k, Math.max(...lines.map((l) => ctx.measureText(l).width)) + 14));
+        const h = lines.length * lh + 8;
+        const [ax, ay] = apply(m, a.x, feetY(a) - 22 * P - 2);
+        items.push({ id: a.id, x: ax, y: ay - 8, w, h, priority: a.bubble.tone ? 3 : 2 });
+        what.set(a.id, { a, lines, fs, lh, ax, ay });
+      } else if (a.badge && !a.hidden) {
+        const fs = Math.round(fpx(13) * k);
+        ctx.font = `${fs}px ${FONT}, ${EMOJI}`;
+        // its icon in pixel art (public/pixel-icons.js), then its word or two
+        const { icon, text } = leadingIcon(a.badge), is = icon ? Math.max(12, Math.round(fs / 12) * 12) : 0;
+        const w = Math.ceil(ctx.measureText(text).width) + 10 + (icon ? is + 4 : 0), h = Math.max(fs, is) + 4;
+        const [ax, ay] = apply(m, a.x, feetY(a) - tall() - (sitting(a) ? 0 : fpx(14)) - 2);
+        items.push({ id: a.id, x: ax, y: ay - 7, w, h, priority: 1 });
+        what.set(a.id, { a, tag: true, fs, ax, ay, icon, text, is });
+      }
+    }
+    const dt = Math.min(0.1, Math.max(0, (now - labelsAt) / 1000));
+    labelsAt = now;
+    const placed = layoutLabels(items, { bounds: { x0: 3, y0: 3, x1: WORLD_W - 3, y1: H - 3 }, gap: 4, previous: labels });
+    for (const id of [...labels.keys()]) if (!placed.has(id)) labels.delete(id);
+    // the badges first: a bubble goes on top
+    const order = [...placed].sort(([a], [b]) => (what.get(a).tag ? 0 : 1) - (what.get(b).tag ? 0 : 1));
+    for (const [id, p] of order) {
+      const was = labels.get(id), glide = was ? Math.min(1, dt * 10) : 1;
+      const sx = was ? was.sx + (p.dx - was.sx) * glide : p.dx, sy = was ? was.sy + (p.dy - was.sy) * glide : p.dy;
+      labels.set(id, { dx: p.dx, dy: p.dy, sx, sy });
+      const it = what.get(id), base = items.find((x) => x.id === id);
+      const bx = Math.round(base.x - p.w / 2 + sx), by = Math.round(base.y - p.h + sy);
+      if (it.tag) drawTagAt(it, bx, by, p.w, p.h);
+      else drawBubbleAt(it, bx, by, p.w, p.h, now);
+    }
+  }
+  /** A pixel tail from the box's bottom edge to (ax, ay): a short wedge, or dotted steps if the box moved away. */
+  function tail(bx, by, w, h, ax, ay, color) {
+    const tx = Math.max(bx + 8, Math.min(bx + w - 8, Math.round(ax)));
+    const gap = ay - (by + h);
+    R(tx - 6, by + h, 12, 2, color); R(tx - 4, by + h + 2, 8, 2, color); R(tx - 2, by + h + 4, 4, 2, color);
+    if (gap <= 12 && Math.abs(tx - ax) < 10) return;
+    // it had to move away: dotted steps down to who speaks
+    const n = Math.max(1, Math.floor(Math.hypot(ax - tx, gap - 6) / 7));
+    for (let i = 1; i < n; i++) R(Math.round(tx + ((ax - tx) * i) / n) - 1, Math.round(by + h + 6 + ((gap - 6) * i) / n) - 1, 3, 3, color);
+  }
+  function drawBubbleAt({ a, lines, fs, lh, ax, ay }, bx, by, w, h, now) {
+    const b = a.bubble;
+    ctx.globalAlpha = Math.max(0, Math.min(1, (b.until - now) / 300, (now - (b.at ?? -Infinity)) / 120));
+    const [border, paper] = TONE[b.tone] || ['#2b2d42', '#ffffff'];
+    R(bx - 2, by - 2, w + 4, h + 4, border);
+    R(bx, by, w, h, paper);
+    R(bx, by + h - 2, w, 2, b.tone ? '#00000014' : '#e6e8ef'); // a pixel of shade under the text
+    tail(bx, by, w, h, ax, ay, border);
+    ctx.font = `${fs}px ${FONT}`;
+    ctx.fillStyle = '#2b2d42'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    lines.forEach((l, i) => ctx.fillText(l, bx + 7, by + 4 + i * lh));
+    ctx.globalAlpha = 1;
+  }
+  function drawTagAt({ a, fs, ax, ay, icon, text, is }, bx, by, w, h) {
+    const edge = a.cfg.shirt || '#8d99ae';
+    R(bx - 1, by - 1, w + 2, h + 2, edge);
+    R(bx, by, w, h, '#161a2bee');
+    tail(bx, by, w, h, ax, ay, edge);
+    let x = bx + 5;
+    if (icon) { drawIcon(ctx, icon, x, by + Math.round((h - is) / 2), is, '#f1f3fa'); x += is + 4; }
+    ctx.font = `${fs}px ${FONT}, ${EMOJI}`;
+    ctx.fillStyle = '#f1f3fa'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, x, by + h / 2 + 1);
   }
 
   function drawBubble(a, now) {
@@ -1655,9 +1747,7 @@ export function createCanvasRenderer(host) {
     for (const a of Object.values(scene.team)) { use(personM(a)); drawDream(a, now); }
     const chosen = personIn(scene, scene.selected);
     if (chosen) { use(personM(chosen)); drawPlumbob(chosen, now); }
-    for (const a of [...Object.values(scene.team), ...scene.visitors]) if (!a.bubble) { use(personM(a)); drawTag(a, now); }
-    for (const a of Object.values(scene.team)) { use(personM(a)); drawBubble(a, now); }
-    for (const g of scene.visitors) if (g.fade > 0.5) { use(personM(g)); drawBubble(g, now); }
+    drawSpeech(now);
     use(ID);
     drawVignette();
     drawBanner(now);
@@ -1665,7 +1755,7 @@ export function createCanvasRenderer(host) {
 
   // What floors.js draws the shared floors with: the same people, window and volumes as the offices.
   const G = {
-    ctx, R, cam, box, poly, FONT, EMOJI, fit, drawPerson, drawBubble, drawPlumbob,
+    ctx, R, cam, box, poly, FONT, EMOJI, fit, drawPerson, drawBubble, drawSpeech, drawPlumbob,
     get iso() { return iso; },
     /** Their base transform: the canvas's in the top-down view, centered in the front one. */
     get ID() { return iso ? ID : FLOOR_FLAT; },
@@ -1845,9 +1935,7 @@ export function createCanvasRenderer(host) {
     drawLights(now, light);
     for (const a of Object.values(scene.team)) drawDream(a, now);
     drawPlumbob(personIn(scene, scene.selected), now);
-    for (const a of [...Object.values(scene.team), ...scene.visitors]) if (!a.bubble) drawTag(a, now);
-    for (const a of Object.values(scene.team)) drawBubble(a, now);
-    for (const g of scene.visitors) if (g.fade > 0.5) drawBubble(g, now);
+    drawSpeech(now);
     use(ID);
     drawVignette();
     drawBanner(now);
@@ -2053,14 +2141,14 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onRugC
     if (floor !== 'office') {
       const hit = own.pick(...fractions(e));
       floorHover = hit?.person || null;
-      canvas.style.cursor = hit ? 'pointer' : 'default';
+      canvas.classList.toggle('hot', !!hit); // the game's pixel hand (style.css)
       return;
     }
     const was = hover;
     const { target, action } = aim(e);
     hovered = target;
     hover = action?.type === 'select' ? action.person : null;
-    canvas.style.cursor = action ? 'pointer' : 'default';
+    canvas.classList.toggle('hot', !!action);
     // who is under the pointer (or whose desk), and where: the page shows what they do and what you can do
     if (was !== hover || hover) onHover?.(hover, { x: e.clientX, y: e.clientY });
   });

@@ -11,7 +11,7 @@ import { createSim, TEAM } from '../public/sim.js';
 import { buildScene } from '../public/scene.js';
 import {
   SDK_VERSION, WORLD, defineRenderer, registerRenderer, unregisterRenderer, getRenderer, listRenderers, createHost, createRenderer,
-  isTarget, actionOf, pickAt, pickByProjection, pickWith, boxOnScreen, propOf, INTERACTIVE, PERSON,
+  isTarget, actionOf, pickAt, pickByProjection, pickWith, boxOnScreen, propOf, INTERACTIVE, PERSON, layoutLabels,
 } from '../public/sdk/index.js';
 import * as sdk from '../public/sdk/index.js';
 import { checkRenderer, fakeCanvas, sampleScenes } from '../public/sdk/conformance.js';
@@ -237,4 +237,34 @@ test('el juego dibuja con el renderer que se le pide y le pregunta qué hay bajo
     unregisterRenderer('prueba');
     unregisterRenderer('falla');
   }
+});
+
+test('las etiquetas sobre el dibujo (burbujas, badges) no se tapan entre ellas y no saltan de un cuadro a otro', () => {
+  const bounds = { x0: 0, y0: 0, x1: 1216, y1: 760 };
+  // eight people talking around the meeting table: their anchors close together
+  const items = Array.from({ length: 8 }, (_, i) => ({ id: `p${i}`, x: 520 + (i % 4) * 40, y: 480 + Math.floor(i / 4) * 30, w: 150, h: 34, priority: i === 3 ? 2 : 0 }));
+  const placed = layoutLabels(items, { bounds, gap: 4 });
+  const boxes = [...placed.values()];
+  assert.equal(boxes.length, 8);
+  for (let i = 0; i < boxes.length; i++) {
+    const a = boxes[i];
+    assert.ok(a.free, `la ${i} encontró un lugar libre`);
+    assert.ok(a.x >= 0 && a.y >= 0 && a.x + a.w <= 1216 && a.y + a.h <= 760, 'dentro de la pantalla');
+    for (let j = i + 1; j < boxes.length; j++) {
+      const b = boxes[j];
+      const apart = a.x + a.w + 4 <= b.x || b.x + b.w + 4 <= a.x || a.y + a.h + 4 <= b.y || b.y + b.h + 4 <= a.y;
+      assert.ok(apart, `${i} y ${j} no se tocan`);
+    }
+  }
+  // the one that matters more keeps its preferred place: centered just above its anchor
+  assert.deepEqual([placed.get('p3').dx, placed.get('p3').dy], [0, 0]);
+  // alone, a label sits right above its anchor; at the edge, it stays inside
+  const one = layoutLabels([{ id: 'a', x: 300, y: 200, w: 100, h: 30 }], { bounds }).get('a');
+  assert.deepEqual([one.x, one.y], [250, 170]);
+  const edge = layoutLabels([{ id: 'a', x: 10, y: 10, w: 100, h: 30 }], { bounds }).get('a');
+  assert.deepEqual([edge.x, edge.y], [0, 0]);
+  // the next frame: each keeps its place while it is free (nothing jumps)
+  const previous = new Map([...placed].map(([id, p]) => [id, { dx: p.dx, dy: p.dy }]));
+  const again = layoutLabels(items, { bounds, gap: 4, previous });
+  for (const [id, p] of placed) assert.deepEqual([again.get(id).x, again.get(id).y], [p.x, p.y], id);
 });

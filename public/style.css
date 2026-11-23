@@ -1762,3 +1762,47 @@ ol.arch-list { list-style: decimal; padding-left: 20px; }
 :where(body:not(.in-settings)) .brief:not(.settings) .fl-label { font-size: 22px; color: var(--g-line); }
 :where(body:not(.in-settings)) .brief:not(.settings) .brief-foot { flex-wrap: wrap; row-gap: 10px; }
 :where(body:not(.in-settings)) .brief:not(.settings) #e2e-sum { font: 20px/1 var(--font-pixel); letter-spacing: .3px; }
+
+/* ---------- the interface's pixel icons (public/pixel-icons.js) ----------
+   An emoji of the interface becomes its 12 × 12 drawing, at a whole multiple of its pixels (12, 24 or 36
+   px, the closest to the text around it) so it stays crisp; a mono one takes the color of the text. */
+.px {
+  --s: 1.1em;
+  display: inline-block; width: var(--s); height: var(--s); flex: none; vertical-align: -0.2em;
+  background: var(--px) center / 100% 100% no-repeat; image-rendering: pixelated;
+}
+@supports (width: round(nearest, 1em, 12px)) { .px { --s: max(12px, round(nearest, 1.1em, 12px)); } }
+.px.mono { background: currentColor; -webkit-mask: var(--px) center / 100% 100% no-repeat; mask: var(--px) center / 100% 100% no-repeat; }
+
+/* ---------- the pixel details ---------- */
+/* the game's pointers, in pixel art (public/pixel-icons.js): an arrow over the office, a hand over what you can click */
+canvas#office { cursor: var(--cur-arrow, default); }
+canvas#office.hot, .screen :is(.hud-btn, .office-pick, .svc-chip, .ask-chip, .ctx-chip, .e2e-mini, .attention-go) { cursor: var(--cur-hand, pointer); }
+/* checkboxes and radio buttons in the game's voice: a pixel box, gold with an ink tick when on */
+:where(body:not(.in-settings)) .brief:not(.settings) input:is([type="checkbox"], [type="radio"]), .feed input[type="checkbox"], .sheet input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none; display: inline-grid; place-items: center; width: 16px; height: 16px; margin: 0; flex: none;
+  vertical-align: -3px; background: #fff; border: 0; border-radius: 0; box-shadow: 0 0 0 2px var(--g-line); cursor: pointer;
+}
+:where(body:not(.in-settings)) .brief:not(.settings) input[type="radio"] { width: 14px; height: 14px; }
+:where(body:not(.in-settings)) .brief:not(.settings) input:is([type="checkbox"], [type="radio"]):checked, .sheet input[type="checkbox"]:checked { background: var(--g-gold); }
+:where(body:not(.in-settings)) .brief:not(.settings) input[type="checkbox"]:checked::after, .feed input[type="checkbox"]:checked::after, .sheet input[type="checkbox"]:checked::after {
+  content: ""; width: 12px; height: 12px; background: var(--g-ink); -webkit-mask: var(--px-check) center / 12px 12px no-repeat; mask: var(--px-check) center / 12px 12px no-repeat;
+}
+:where(body:not(.in-settings)) .brief:not(.settings) input[type="radio"]:checked::after { content: ""; width: 6px; height: 6px; background: var(--g-ink); }
+:where(body:not(.in-settings)) .brief:not(.settings) input:is([type="checkbox"], [type="radio"]):focus-visible, .feed input[type="checkbox"]:focus-visible { outline: 3px solid #f4a261; outline-offset: 2px; }
+:where(body:not(.in-settings)) .brief:not(.settings) input:is([type="checkbox"], [type="radio"]):disabled { background: var(--g-paper-2); box-shadow: 0 0 0 2px #b9b4a6; cursor: not-allowed; }
+/* on the dark activity panel: a dark box, the phosphor's green when on */
+.feed input[type="checkbox"] { background: #23263a; box-shadow: 0 0 0 2px var(--g-ink), inset 0 0 0 1px var(--g-bevel); }
+.feed input[type="checkbox"]:checked { background: var(--phos); }
+/* its scrollbar, and the card's: pixel ones */
+.feed-body::-webkit-scrollbar { width: 10px; }
+.feed-body::-webkit-scrollbar-thumb { background: #3a3f58; box-shadow: inset 0 0 0 2px rgb(20 22 36); }
+.feed-body::-webkit-scrollbar-track { background: transparent; }
+.sheet ::-webkit-scrollbar { width: 10px; }
+.sheet ::-webkit-scrollbar-thumb { background: #c9c2ae; box-shadow: inset 0 0 0 2px var(--g-paper-2); }
+/* what slides in does it in steps, like a game's frames */
+.feed { animation-timing-function: steps(4); }
+.sheet { animation-timing-function: steps(4); }
+.dock-tip:not([hidden]) { animation: g-tip-in .12s steps(3); }
+@keyframes g-tip-in { from { opacity: 0; transform: translateX(-50%) translateY(4px); } }
+@media (prefers-reduced-motion: reduce) { .dock-tip:not([hidden]) { animation: none; } }

@@ -15,6 +15,7 @@ import { createE2E } from './e2e-ui.js';
 import './renderers/plan.js'; // the reference renderer of the SDK (public/sdk/index.js): ?renderer=plan
 import './renderers/blocks.js'; // a 3D one, in WebGL: ?renderer=blocks
 import { drawSprite } from './sprite.js';
+import { watchPixelIcons } from './pixel-icons.js';
 import { t, ta, setLanguage, onLanguage, getLanguage, timeOf } from './i18n.js';
 import { thresholdOf, kTokens } from './compact.js';
 
@@ -1460,6 +1461,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 applyI18n();
+// the interface's emoji as pixel icons (public/pixel-icons.js): now and whenever something in it changes
+watchPixelIcons(document.body);
 const welcome = sysLine(t('ui.welcome'));
 onLanguage(() => { welcome.textContent = t('ui.welcome'); });
 connect();

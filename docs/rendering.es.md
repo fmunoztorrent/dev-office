@@ -94,6 +94,10 @@ Un renderer no tiene que calcular los objetivos solo. `pickWith(instancia, escen
 
 Conteste lo que conteste, el juego sólo recibe un objetivo válido o `null` (`isTarget`). Y con `project` la página puede poner sus cosas sobre el dibujo: `game.boardBox()` es dónde está la pizarra (`boxOnScreen`), así que la pizarra expandida sale desde ahí en cualquier renderer.
 
+## Etiquetas sobre el dibujo
+
+Lo que dice la gente y los badges sobre sus cabezas se ubican juntos, en la pantalla, para que ninguno tape a otro: `layoutLabels(items, { bounds, gap, previous })` recibe el ancla de cada etiqueta (adonde apunta su cola) y su tamaño, y devuelve dónde va. Cada una prefiere quedar centrada justo encima de su ancla; si ese lugar está ocupado sube una fila o se corre, el lugar libre más cercano primero, siempre dentro de los bordes. Con `previous` (dónde estaba cada etiqueta en el cuadro anterior) una etiqueta conserva su lugar mientras siga libre, así que nada salta. El canvas ubica con él sus burbujas y sus badges, en las dos vistas y en los pisos compartidos, y desliza una etiqueta cuando tiene que moverse; otro renderer puede usar la misma ayuda con su propio `project`.
+
 ## Escribir un renderer
 
 ```js

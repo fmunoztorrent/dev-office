@@ -3,7 +3,7 @@
 import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createSim, assignees, PRODUCT, TECH, TEAM, UNICORN, SKULL, PIZZA, rainbowPixels, DINING, DINING_SEATS, RACK, SOFA, TV, HOT_DESKS, BATHROOM, ELEVATOR, OFFICE_DOOR, TAG_MS } from '../public/sim.js';
+import { createSim, assignees, PRODUCT, TECH, TEAM, UNICORN, SKULL, PIZZA, rainbowPixels, DINING, DINING_SEATS, RACK, SOFA, TV, HOT_DESKS, BATHROOM, ELEVATOR, OFFICE_DOOR, TAG_MS, SAY, readMs } from '../public/sim.js';
 import { Screen } from '../tui/screen.js';
 import { computeLayout, drawFrame } from '../tui/view.js';
 
@@ -18,7 +18,7 @@ function office(seed = 7, { hour = 10, weather = CLEAR } = {}) {
   const said = [];
   for (const a of Object.values(sim.agents)) {
     const say = a.say.bind(a);
-    a.say = (text, ...rest) => { said.push({ t, who: a.id, text }); say(text, ...rest); };
+    a.say = (text, ...rest) => { said.push({ t, who: a.id, text, scene: a.scene }); say(text, ...rest); };
   }
   const run = (seconds, every) => {
     for (let i = 0; i < seconds * 20; i++) {
@@ -512,7 +512,10 @@ test('cada subagente es alguien nuevo que llega, trabaja en un puesto temporal y
   assert.equal(a.state, 'working');
   assert.ok(!sim.agents.backend.history.some((h) => h.text === 'Corriendo los tests'), 'Diego no: el trabajo del subagente es del nuevo');
   sim.handle({ kind: 'subagent_end', role: 'backend', subId: 'a', text: 'listo' });
-  assert.ok(a.leaving && /me voy/.test(a.bubble?.text), 'se despide');
+  assert.ok(a.leaving, 'se va');
+  assert.ok(!/me voy/.test(a.bubble?.text) && /me voy/.test(a.nextLine?.text), 'la despedida espera a que se lea lo anterior');
+  run(2);
+  assert.match(a.bubble?.text || '', /me voy/, 'y se despide');
   run(30);
   assert.ok(!sim.ghosts.includes(a), 'se fue (por el ascensor, y su escritorio con él)');
   assert.equal(sim.ghosts.length, 2);
@@ -661,4 +664,49 @@ test('una herramienta que falla no deja al personaje "bloqueado"', () => {
   sim.handle({ kind: 'tool_end', role: 'backend', tool: 'Bash', session: 's1', ok: false, text: 'falló' });
   run(2);
   assert.notEqual(be.state, 'blocked');
+});
+
+test('una burbuja dura lo que se tarda en leerla, y una línea nueva no borra la anterior sin dejarla leer', () => {
+  const { sim, run } = office();
+  const tl = sim.agents.tl;
+  run(1);
+  // the time to read: a long line stays longer, never less than what it asks for, and not forever
+  assert.ok(readMs('Listo') < readMs('Revisé el flujo de pago completo y encontré dos casos sin test'));
+  assert.equal(readMs('ok', 5000), 5000);
+  assert.equal(readMs('x'.repeat(5000)), SAY.max);
+  tl.say('Revisé el flujo de pago completo y encontré dos casos sin test');
+  const long = tl.bubble.until - tl.bubble.at;
+  tl.bubble = null;
+  tl.say('Listo');
+  assert.ok(tl.bubble.until - tl.bubble.at < long);
+  // a new line right away waits for the current one (the latest one waiting wins)
+  tl.bubble = null;
+  tl.say('Primero esto');
+  tl.say('Después esto');
+  tl.say('Y al final esto');
+  assert.equal(tl.bubble.text, 'Primero esto', 'la de recién no se pisa');
+  assert.equal(tl.nextLine.text, 'Y al final esto');
+  run(SAY.min / 1000 + 0.2);
+  assert.equal(tl.bubble.text, 'Y al final esto', 'y aparece cuando ya se leyó la anterior');
+  // the same line again only keeps it up; an error does not wait
+  const until = tl.bubble.until;
+  tl.say('Y al final esto');
+  assert.ok(tl.bubble.until >= until && !tl.nextLine);
+  tl.say('¡Se cayó el build!', 4000, 'error');
+  assert.equal(tl.bubble.text, '¡Se cayó el build!');
+});
+
+test('en una conversación hablan de a uno: el siguiente contesta cuando el anterior ya se leyó', () => {
+  const { said, run } = office(11);
+  run(12 * 60);
+  const lines = said.filter((l) => l.scene);
+  assert.ok(lines.length >= 8, `conversaron (${lines.length} líneas)`);
+  let checked = 0;
+  for (let i = 1; i < lines.length; i++) {
+    const [a, b] = [lines[i - 1], lines[i]];
+    if (a.scene !== b.scene || a.who === b.who) continue;
+    checked++;
+    assert.ok(b.t - a.t >= readMs(a.text, 2600) * 0.85 + 200, `«${a.text}» → «${b.text}» a los ${b.t - a.t} ms`);
+  }
+  assert.ok(checked >= 3, `respuestas revisadas: ${checked}`);
 });

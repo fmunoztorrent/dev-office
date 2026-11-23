@@ -238,3 +238,12 @@ export function boxOnScreen(
   project: NonNullable<RendererInstance['project']>,
   box: Pick<Prop, 'x' | 'y' | 'w' | 'd' | 'h'> & { z?: number } | { x0: number; x1: number; y0: number; y1: number; z0?: number; z1?: number },
 ): { x: number; y: number; w: number; h: number } | null;
+
+/** A label to place over the drawing (a speech bubble, a badge): its anchor (where its tail points) and its size. */
+export interface LabelItem { id: string; x: number; y: number; w: number; h: number; priority?: number }
+/** Where a label ended up: its top-left corner, its size, its offset from the preferred place and whether it covers nothing. */
+export interface LabelPlace { x: number; y: number; w: number; h: number; dx: number; dy: number; free: boolean }
+export function layoutLabels(
+  items: LabelItem[],
+  options?: { bounds?: { x0: number; y0: number; x1: number; y1: number } | null; gap?: number; previous?: Map<string, { dx: number; dy: number }> | null },
+): Map<string, LabelPlace>;

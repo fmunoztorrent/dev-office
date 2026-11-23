@@ -10,7 +10,7 @@
 // The floors live on their own: their people chat, go for coffee and take the elevator, and they
 // react to what the server tells (a directive sent or finished, an entry saved, read, installed…).
 
-import { W, H, LEFT, ELEVATOR, rand, pick } from './sim.js';
+import { W, H, LEFT, ELEVATOR, rand, pick, SAY, readMs } from './sim.js';
 import { BACK, unapply } from './iso.js';
 import { t, ta } from './i18n.js';
 import { ANIME_FLOORS } from './themes.js';
@@ -71,7 +71,16 @@ class Person {
   }
   get walking() { return this.queue[0]?.t === 'walk'; }
   get free() { return this.seated && !this.queue.length; }
-  say(text, ms = 4200, tone) { this.bubble = { text, until: this.clock() + ms, tone }; return this; }
+  /** Says something, as the office's people do (sim.js): as long as it takes to read, and never over a line not read yet. */
+  say(text, ms = 4200, tone) {
+    text = String(text ?? '').trim();
+    if (!text) return this;
+    const now = this.clock(), b = this.bubble;
+    if (b && now < b.until && b.text === text) b.until = Math.max(b.until, now + readMs(text, ms));
+    else if (b && now < b.until && now - b.at < SAY.min && !tone) this.nextLine = { text, ms, tone };
+    else { this.bubble = { text, at: now, until: now + readMs(text, ms), tone }; this.nextLine = null; }
+    return this;
+  }
   setState(state, ms = 6000) { this.state = state; this.stateUntil = this.clock() + ms; }
   // along the walkway by the back wall: nobody crosses the boardroom table or the shelves
   goTo(pt) {
@@ -86,6 +95,11 @@ class Person {
   update(dt, now) {
     if (this.state !== 'idle' && now > this.stateUntil) this.state = 'idle';
     if (this.bubble && now > this.bubble.until) this.bubble = null;
+    if (this.nextLine && (!this.bubble || now - this.bubble.at >= SAY.min)) {
+      const { text, ms, tone } = this.nextLine;
+      this.nextLine = null;
+      this.bubble = { text, at: now, until: now + readMs(text, ms), tone };
+    }
     const job = this.queue[0];
     if (!job) return;
     if (job.t === 'walk') {
@@ -261,7 +275,7 @@ export function floorHit(floor, X, Y, { iso = false, cam } = {}) {
 // ---------------------------------------------------------------- drawing
 //
 // g: the game's toolkit — { ctx, R, use, ID, cam, box, poly, iso, FONT, EMOJI, fit, drawPerson,
-// drawBubble, drawPlumbob, outdoorAt, isoBackdrop, shadow, scale }
+// drawBubble, drawSpeech, drawPlumbob, outdoorAt, isoBackdrop, shadow, scale }
 
 export function drawFloor(g, floor, now, light, { hover, selected } = {}) {
   const { ctx } = g;
@@ -279,7 +293,8 @@ export function drawFloor(g, floor, now, light, { hover, selected } = {}) {
   }
   g.use(g.ID);
   if (dark > 0.05 && floor.kind === 'exec') { ctx.fillStyle = `rgba(10,14,40,${dark * 0.35})`; ctx.fillRect(0, 0, W, H); execGlow(g, dark); }
-  for (const p of Object.values(floor.people)) { g.use(personM(g, p)); g.drawBubble(p, now); }
+  // what they say: placed together so that no bubble covers another (game.js, the SDK's layoutLabels)
+  g.drawSpeech(now, Object.values(floor.people), (p) => personM(g, p), floor.kind);
   if (floor.people[selected]) { g.use(personM(g, floor.people[selected])); g.drawPlumbob(floor.people[selected], now); }
   if (floor.people[hover] && hover !== selected) {
     const p = floor.people[hover];

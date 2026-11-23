@@ -94,6 +94,10 @@ A renderer does not have to work targets out by itself. `pickWith(instance, scen
 
 Whatever it answers, the game only gets a valid target or `null` (`isTarget`). And with `project` the page can place its own things over the drawing: `game.boardBox()` is where the whiteboard is (`boxOnScreen`), so the expanded whiteboard grows out of it in any renderer.
 
+## Labels over the drawing
+
+What people say and the badges over their heads are placed together, on the screen, so that none covers another: `layoutLabels(items, { bounds, gap, previous })` takes each label's anchor (where its tail points) and size and gives back where it goes. Each one prefers to sit centered just above its anchor; if that place is taken it goes up a row or to the side, the closest free place first, always inside the bounds. With `previous` (each label's offset in the last frame) a label keeps its place while it stays free, so nothing jumps around. The canvas places its bubbles and badges with it, in both views and on the shared floors, and glides a label when it has to move; another renderer can use the same helper with its own `project`.
+
 ## Writing a renderer
 
 ```js

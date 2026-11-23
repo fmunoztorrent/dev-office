@@ -59,6 +59,7 @@ To add something:
 - **The game looks like a game.** What is over the office (the HUD, the dock, the activity, a character's card, the tips) and every dialog it opens use the game's skin: pixel panels and paper in a wooden frame, the pixel font on titles, labels, chips and buttons, ink outlines and hard shadows, no rounded corners. Long text (a description, what someone says, an archive entry) stays in the interface's font.
 - **The settings look like a tool:** the area `#settings` and the dialogs it opens (`.brief.settings`) keep the interface's look (hairlines, soft corners, the interface's font).
 - In `public/style.css` both share the layout (`.brief-head`, `.brief-body`, `.brief-foot`, `.b-field`, `.btn`); the game's skin is the block scoped to `:where(body:not(.in-settings)) .brief:not(.settings)` and the game's chrome block (its tokens are `--g-*`). Something new over the game goes in the game's voice; something new in the settings, in the tool's.
+- **Icons are pixel art.** An emoji the interface uses as an icon (a button's, a title's, a chip's, a badge's, a status over someone's head) has its 12 × 12 drawing in [`public/pixel-icons.js`](../public/pixel-icons.js): the page shows it as crisp SVG, the canvas draws it pixel by pixel. A new one needs its drawing (`ICONS`) and its emoji (`EMOJI`); `test/pixel-icons.test.js` fails otherwise. What people and agents write or say (a chat, a bubble, the log, the archive) keeps its emoji (`KEEP`).
 - The drawing itself goes through the renderer SDK ([`rendering.md`](rendering.md)).
 
 ## Events and roles

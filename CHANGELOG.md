@@ -4,9 +4,13 @@ All notable changes to Dev Team Office. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
-A renderer SDK, so any graphics engine can draw the office, and an interface with two clear voices: the game looks like a game, and the settings like a tool.
+A renderer SDK, so any graphics engine can draw the office; an interface with two clear voices (the game looks like a game, and the settings like a tool), its icons in pixel art; and people who talk one at a time, with bubbles that never cover each other.
 
 ### Added
+
+- **Pixel-art icons** for the whole interface: every emoji used as an icon (buttons, titles, tabs, chips, the settings' sections, the map, the badges over people's heads, their status, the turn's ▶) has its own 12 × 12 drawing in the game's palette, crisp at any size (`public/pixel-icons.js`). What people and agents say or write (a chat, a bubble, the log, the archive) keeps its emoji. A test fails if an emoji of the interface has no drawing.
+- **The game's own pointers:** a pixel arrow over the office and a pixel hand over what can be clicked; pixel checkboxes and radio buttons in the game's dialogs and the activity panel.
+- **`layoutLabels`** in the renderer SDK: places a frame's labels (bubbles, badges) so that none covers another, keeping each one's place between frames.
 
 - **The renderer SDK** (`public/sdk/`): the interfaces between the game (what moves and what a click does) and whatever draws it. A renderer registers itself (`registerRenderer`), gets a host (its canvas, its size, the view and the theme) and each frame's scene, and says what is under the pointer (`pick`, or just `project` / `toWorld` and the SDK works it out); the game turns that into an action (`actionOf`: select someone, the whiteboard, the services, the elevator, the rug). Its types are in `public/sdk/index.d.ts`, checked against the real scene by the tests. A renderer that fails while drawing is dropped and the game goes back to its own canvas.
 - **The game's own pixel art is one more renderer** (`canvas`, with its `flat` and `iso` views): its clicks, its views and its theme go through the same interfaces as any other.
@@ -16,6 +20,8 @@ A renderer SDK, so any graphics engine can draw the office, and an interface wit
 
 ### Changed
 
+- **How people talk:** a bubble stays as long as it takes to read it; a new line waits for the current one to be read instead of covering it (an error or a warning does not wait); the same line again only keeps it up. In a conversation they speak one at a time, each answer after the previous line has been read. The shared floors' people talk the same way.
+- **Bubbles never overlap:** the bubbles and badges of a frame are placed together on the screen, in both views and on the shared floors; one that had to move glides there and a dotted pixel leader points at who speaks. Bigger pixel tails.
 - **The game looks like a game.** Everything over the office is part of it: the HUD and the dock as pixel panels (an ink outline, a bevel, a hard shadow, the dock's gold border), the activity, a character's card, the tips and the rug's menu in the same voice. Every dialog the game opens (a brief, work, daily, retro, loops, services, the archive, directives, the impact, E2E, an agent's question, the inbox) is a sheet of paper in a wooden frame, pinned, with its title in the pixel font, pixel buttons that sink when pressed, fields outlined in ink, cards with a hard shadow and the brief's prompt on a post-it. They keep one layout (header, a body that scrolls, footer; labels next to their fields, stacked on a phone), and long text stays in the interface's font, to read.
 - **⚙ Settings is a tool:** it keeps the interface's look (hairlines, soft corners, the interface's font), a cleaner top bar (the search no longer hides the title), each section's icon in its header, its content in cards with a readable width, and a section picker that fits on a phone. A dialog opened from the settings looks like them.
 - **Buttons and fields** have one size and one set of kinds (primary, secondary, danger), in both voices.
