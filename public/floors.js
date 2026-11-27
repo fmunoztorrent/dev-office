@@ -256,6 +256,16 @@ export function floorHit(floor, X, Y, { iso = false, cam } = {}) {
     if (iso) [hx, hy] = cam.proj(p.x, p.y, 30);
     if (Math.hypot(X - hx, Y - hy) < (iso ? 26 : 34)) return { person: p.id };
   }
+  // the archive's mobile shelves, in the room: the archive too (the first thing you would click, and in
+  // front of the back wall, which the waiting banner can cover)
+  if (floor.kind !== 'exec') {
+    for (const r of ARCHIVE.rows) {
+      // its front, as the flat view draws it (in the top-down view, the box's front face) and its top
+      const front = { x: r.x0, y: r.y - 74, w: r.x1 - r.x0, h: 74 }, top = { x: r.x0, y: r.y - 40, w: r.x1 - r.x0, h: 40 };
+      const hit = iso ? inRect(...unapply(cam.front(r.y), X, Y), front) || inRect(...unapply(cam.floor(74), X, Y), top) : inRect(X, Y, front);
+      if (hit) return { what: 'knowledge' };
+    }
+  }
   const [x, y] = iso ? unapply(cam.front(BACK), X, Y) : [X, Y];
   if (y < 0 || y > BACK + 2) return null;
   if (iso && x >= ELEVATOR.x && x <= ELEVATOR.x + ELEVATOR.w) return { what: 'lift' }; // the building's, in the hallway

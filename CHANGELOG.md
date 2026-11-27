@@ -34,6 +34,13 @@ A renderer SDK, so any graphics engine can draw the office; an interface with tw
 - **A turn that ends in a model error is a failure, not a finished task.** When the provider refuses the answer (no balance, a bad key), Pi and OpenCode now report the error and a `turn_end` that carries it, and the brief the office sent to that session ends `failed` with the provider's reason (on the board, in the log and in the retro) instead of «finished». Pi waits until it stops retrying; a retry that works is a normal turn, and pressing Escape is not an error. Inside herdr, the session's verdict wins even if herdr saw the pane idle first. A Pi or OpenCode pipeline stage whose answer was refused fails the pipeline instead of moving on.
 - **Asking for a demo while one is running** says so ("a demo is already running") instead of "command not available: demo".
 - On a phone, a dialog's note goes above its buttons instead of squeezing into a column, and a footer with many buttons wraps instead of cutting one off.
+- **The floor picker's icons are pixel art too** (🏛 🏢 📚), and so is a project's 🧩 in the brief's agent picker: a native selector drew the system's emoji.
+- **Nothing the page lays over the office hides what happens in it.** A character's card sits between the waiting banner and the dock instead of under them, and people's bubbles and badges keep out of the banner, the HUD, the dock, the card, the activity and the E2E screen (the scene's `covered`, and `avoid` in the renderer SDK's `layoutLabels`); only when there is no room above or beside does a bubble go below who speaks, its tail pointing up.
+- **The archive's shelves in the room open the archive**, in both views, not only the shelf on the back wall (which the waiting banner can cover).
+- **The directives' picker starts with nothing ticked:** with a single project, every repository came ticked and the impact map counted them all as touched. What goes to the map is what you pick, and its note says who it goes to.
+- **The E2E screen's summary** reads «Ended · failed: 1» instead of a plural that did not agree with one.
+- **A provider's error reads as its message** («402 · Insufficient balance…»), not its raw JSON, in the log, the bubbles and the task's reason.
+- **Restarting the office inside herdr no longer opens the agent again:** if it is already open in a pane of the workspace, in its folder, the office follows that pane instead of adding another.
 
 ## [0.31.0] - 2026-11-18
 

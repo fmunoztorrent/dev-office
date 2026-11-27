@@ -314,7 +314,7 @@ export default {
     log: { start: '🎭 Corriendo {n} prueba(s) e2e de {project}', fail: '✗ Falló «{title}»', end: '🎭 e2e: {passed} ✓ · {failed} ✗ ({s} s)' },
     ui: {
       title: 'E2E', dialog: '🎭 Pruebas end-to-end', runs: 'La corrida', follow: '▶ Seguir en vivo', dismiss: 'Ocultar', expand: 'Ver las pruebas (e)',
-      live: 'EN VIVO', waitingFrames: 'La película de cada prueba llega cuando termina…', noFrames: 'Sin película (sin traza)', allPassed: 'Pasaron todas', ended: 'Terminó: {n} fallaron',
+      live: 'EN VIVO', waitingFrames: 'La película de cada prueba llega cuando termina…', noFrames: 'Sin película (sin traza)', allPassed: 'Pasaron todas', ended: 'Terminó · fallidas: {n}',
       status: { running: 'corriendo', passed: 'pasaron', failed: 'fallaron', interrupted: 'interrumpida', timedout: 'se pasó del tiempo' },
       retry: 'reintento {n}', movie: 'Película', video: 'Video', restart: 'Al inicio', play: 'Reproducir o pausar', seek: 'Ir a un momento', speed: 'Velocidad',
       runningNoMovie: 'La prueba está corriendo: sus pasos llegan en vivo, y su película cuando termine.', noMovie: 'Esta prueba no dejó película.',
@@ -484,7 +484,7 @@ export default {
       },
       title: '🏛 Directivas', text: '¿Qué tienen que hacer?', placeholder: 'Una orden para varios proyectos o repositorios: «Que todas las APIs expongan /health»',
       scope: 'A quién', all: 'todos sus repositorios ({n})', none: 'sin repositorios registrados', noAgents: 'Registra los repositorios de cada proyecto en ⚙ › Empresa (o ⚙ › Repositorios) para darles directivas.',
-      mapBtn: '🗺 Ver el impacto', mapNote: 'Toca {n} repositorio(s) de {d} proyecto(s): revisa a quién va (lo marcado) y contesta lo que no está en el mapa.', answerAll: 'Contesta qué es cada cosa que no está en el mapa (y en qué repositorio, si existe o hay que crearla)',
+      mapBtn: '🗺 Ver el impacto', mapNote: 'Va a {n} repositorio(s) de {d} proyecto(s): revisa a quién va (lo marcado) y contesta lo que no está en el mapa.', answerAll: 'Contesta qué es cada cosa que no está en el mapa (y en qué repositorio, si existe o hay que crearla)',
       ans: { pick: '— ¿qué es? —', exists: 'Existe, en el repositorio…', create: 'Hay que crearlo, en el repositorio…', repo: 'Es un repo aparte, en…', newRepo: 'Es un repo nuevo: crearlo en…', resource: 'Es infraestructura (un servicio, una API…)', department: 'Es un proyecto nuevo', ignore: 'No es parte del proyecto' }, ansProject: 'repositorio', ansPath: 'carpeta (opcional)', ansDept: 'nombre del proyecto',
       infraAns: { pick: '— ¿existe? —', exists: 'Ya existe…', create: 'Hay que crearla, la crea…', ignore: 'No es parte del proyecto' }, ansWhere: 'su carpeta o la URL del repo', ansNewPath: 'la carpeta nueva (ruta completa)', ansLocation: 'dónde vive (cuenta, cluster, URL…)', ansUsedBy: '— quién la usa (opcional) —', ansWho: '— qué repositorio la crea —', ansHarness: 'agente', ansOffice: 'proyecto', ansKind: 'qué es', ansHow: 'cómo',
       send: '▶ ¡Que lo hagan!', recent: 'Las últimas', empty: 'Todavía no hay directivas.', pick: 'Elige al menos un repositorio', write: 'Escribe la directiva',

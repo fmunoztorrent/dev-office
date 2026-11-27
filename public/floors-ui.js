@@ -88,7 +88,9 @@ export function createDirectivesUi({ getDirectives = () => [], getOffices = () =
     const any = groups.some((g) => g.projects.length);
     $('dv-offices').hidden = !any;
     $('dv-none').hidden = any;
-    st.chosen = scopePicker($('dv-offices'), groups, { checked: () => groups.length === 1 });
+    // nothing ticked: what goes to the impact map is what you pick, never a default (a ticked repo
+    // counts as impacted, and with one project that used to mark every repo of it)
+    st.chosen = scopePicker($('dv-offices'), groups);
     renderSystems();
     forget();
     $('dv-text').focus();

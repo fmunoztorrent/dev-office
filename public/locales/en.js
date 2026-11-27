@@ -314,7 +314,7 @@ export default {
     log: { start: '🎭 Running {n} e2e test(s) of {project}', fail: '✗ “{title}” failed', end: '🎭 e2e: {passed} ✓ · {failed} ✗ ({s} s)' },
     ui: {
       title: 'E2E', dialog: '🎭 End-to-end tests', runs: 'The run', follow: '▶ Follow live', dismiss: 'Hide', expand: 'See the tests (e)',
-      live: 'LIVE', waitingFrames: 'Each test’s movie arrives when it ends…', noFrames: 'No movie (no trace)', allPassed: 'All passed', ended: 'Ended: {n} failed',
+      live: 'LIVE', waitingFrames: 'Each test’s movie arrives when it ends…', noFrames: 'No movie (no trace)', allPassed: 'All passed', ended: 'Ended · failed: {n}',
       status: { running: 'running', passed: 'passed', failed: 'failed', interrupted: 'interrupted', timedout: 'timed out' },
       retry: 'retry {n}', movie: 'Movie', video: 'Video', restart: 'To the start', play: 'Play or pause', seek: 'Go to a moment', speed: 'Speed',
       runningNoMovie: 'The test is running: its steps arrive live, and its movie when it ends.', noMovie: 'This test left no movie.',
@@ -484,7 +484,7 @@ export default {
       },
       title: '🏛 Directives', text: 'What must they do?', placeholder: 'One order for several projects or repositories: "Every API exposes /health"',
       scope: 'Who', all: 'all its repositories ({n})', none: 'no registered repositories', noAgents: 'Register each project’s repositories in ⚙ › Company (or ⚙ › Repositories) to give them directives.',
-      mapBtn: '🗺 See the impact', mapNote: 'It touches {n} repo(s) in {d} project(s): check who gets it (the checked ones) and answer what is not on the map.', answerAll: 'Answer what each thing that is not on the map is (and in which repository, if it exists or must be created)',
+      mapBtn: '🗺 See the impact', mapNote: 'It goes to {n} repo(s) in {d} project(s): check who gets it (the checked ones) and answer what is not on the map.', answerAll: 'Answer what each thing that is not on the map is (and in which repository, if it exists or must be created)',
       ans: { pick: '— what is it? —', exists: 'It exists, in the repository…', create: 'Create it, in the repository…', repo: 'It is a separate repo, at…', newRepo: 'It is a new repo: create it at…', resource: 'It is infrastructure (a service, an API…)', department: 'It is a new project', ignore: 'It is not part of the project' }, ansProject: 'repository', ansPath: 'folder (optional)', ansDept: 'project name',
       infraAns: { pick: '— does it exist? —', exists: 'It exists…', create: 'Create it, by…', ignore: 'It is not part of the project' }, ansWhere: 'its folder or the repo’s URL', ansNewPath: 'the new folder (full path)', ansLocation: 'where it lives (account, cluster, URL…)', ansUsedBy: '— who uses it (optional) —', ansWho: '— which repository creates it —', ansHarness: 'agent', ansOffice: 'project', ansKind: 'what it is', ansHow: 'how',
       send: '▶ Make it happen!', recent: 'The latest', empty: 'No directives yet.', pick: 'Pick at least one repository', write: 'Write the directive',

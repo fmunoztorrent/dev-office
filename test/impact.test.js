@@ -89,6 +89,32 @@ test('el mapa de impacto: departamentos, proyectos y componentes que nombra; lo 
   } finally { store.close(); for (const d of dirs) fs.rmSync(d, { recursive: true, force: true }); }
 });
 
+test('un solo departamento con cuatro proyectos: el mapa marca sólo el que el pedido nombra', () => {
+  // the reported case: one department, four projects, and an order that names one of them. The picker
+  // ticks nothing by itself (public/floors-ui.js), so the plan only sees what the PO picks.
+  const store = openStore(':memory:');
+  const dirs = [];
+  const mk = (name) => { const d = mkdirs(tmp(), 'src'); dirs.push(d); return store.createAgent({ path: d, harness: 'pi', name }).agent; };
+  const office = mk('dev-team-office');
+  mk('Errementari'); mk('TestProject'); mk('todo-app');
+  const hub = Object.assign(new EventEmitter(), { tasks: new Map(), cancel() { return { ok: true }; } });
+  const registry = { run: () => ({ ok: true, task: { id: 't1', status: 'running' } }) };
+  const desk = new DirectiveDesk({ store, registry, hub, company: { info: (id) => ({ name: id }) } });
+  try {
+    const r = desk.plan({ text: 'necesito que dev team office sea un programa instalable para mac' });
+    assert.deepEqual(r.map.targets, [office.id], 'sólo el proyecto que nombra el pedido');
+    assert.deepEqual(r.map.departments[0].projects.map((p) => [p.name, p.why]),
+      [['dev-team-office', 'named'], ['Errementari', null], ['TestProject', null], ['todo-app', null]]);
+    assert.deepEqual(r.map.unknown, [], 'no nombra nada que no esté en el mapa');
+    assert.match(r.text, /📁 dev-team-office/);
+    const touched = r.text.split('\n').filter((l) => l.includes('📁')).join('\n');
+    assert.doesNotMatch(touched, /Errementari|TestProject|todo-app/, 'no nombra a los que no toca');
+    // the project's line lists its repos (the system), and marks with ✱ only the one it touches
+    assert.match(r.text, /dev-team-office ✱/);
+    assert.doesNotMatch(r.text, /(Errementari|TestProject|todo-app) ✱/);
+  } finally { store.close(); for (const d of dirs) fs.rmSync(d, { recursive: true, force: true }); }
+});
+
 test('lo que no está en el mapa se pregunta antes de enviar: existe (y dónde), crearlo, departamento nuevo o no es un componente', () => {
   const { store, desk, sent, pagos, tienda, dirs } = company();
   try {
