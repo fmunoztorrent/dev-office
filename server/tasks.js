@@ -19,7 +19,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { clip } from './roles.js';
 import { sanitizeProject } from './pipeline.js';
-import { agentCommand, officeAllows, modelArgs, HARNESSES, which, e2eEnv } from '../integrations/common/devteam.mjs';
+import { agentCommand, officeSettings, modelArgs, HARNESSES, which, e2eEnv } from '../integrations/common/devteam.mjs';
 import { guideFor, guideText, autonomyOf, GUIDE_MARK } from './guides.js';
 import { contextBlock } from './rag.js';
 import { t as tr } from '../public/i18n.js';
@@ -232,7 +232,7 @@ export class TaskHub extends EventEmitter {
     try {
       const prefs = this.prefs() || {};
       const { pane } = await this.herdr.launchAgent({
-        harness: task.agent, cwd: task.cwd, prompt: task.prompt || task.text, bin, args: [...withModel(task.agent, Array.isArray(args) ? args : [], task.model), ...officeAllows(task.agent, task.reads)], env: fenced(task.agent, env),
+        harness: task.agent, cwd: task.cwd, prompt: task.prompt || task.text, bin, args: [...withModel(task.agent, Array.isArray(args) ? args : [], task.model), ...officeSettings(task.agent, task.reads)], env: fenced(task.agent, env),
         direction: prefs.herdr?.direction, office: task.office, officeName: this.officeName?.(task.office) || '',
         role: 'manager', title: task.title, taskId: task.id, label: `${label} · ${path.basename(task.cwd)}`,
       });

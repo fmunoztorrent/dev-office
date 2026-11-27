@@ -508,6 +508,28 @@ export function officeAllows(harness, reads = []) {
 }
 
 /**
+ * The same permissions as a settings file (`--settings <file>`), for a session typed into a terminal
+ * (a herdr pane): the list of tools makes a command line of well over 1,024 bytes, the most a terminal
+ * takes as one typed line on macOS, and the rest is lost (the agent never starts). The file is named by
+ * its content, so the same permissions reuse it. `dir`: where it goes (the temporary folder).
+ */
+export function officeSettings(harness, reads = [], dir = path.join(os.tmpdir(), 'dev-team-office')) {
+  const args = officeAllows(harness, reads);
+  if (!args.length) return [];
+  const json = JSON.stringify({ permissions: { allow: args.slice(1) } });
+  let h = 0;
+  for (const c of json) h = (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0;
+  const file = path.join(dir, `claude-allow-${h.toString(36)}.json`);
+  try {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    if (!fs.existsSync(file)) fs.writeFileSync(file, json, { mode: 0o600 });
+    return ['--settings', file];
+  } catch {
+    return args; // it could not be written: the long form (the agent may still start)
+  }
+}
+
+/**
  * Executable and arguments for a new agent session, without a shell (the task goes as a single
  * argument). opts: { bin, args } of the registered agent; inv.model, the model profile's (if any);
  * inv.reads, the folders the brief may read besides its own.
