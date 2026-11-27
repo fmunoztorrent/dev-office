@@ -889,7 +889,7 @@ export default {
     logStart: '— bitácora: la actividad de los agentes —', opening: 'Abriendo {url} en el navegador…', back: '— de vuelta en la bitácora ({n} línea(s) nuevas) —', bye: 'Cerrando la oficina…',
     task: '📨 {text} → {status}{detail}', run: '▶ «{name}»: {status}{stage}', weather: '{icon} Afuera de {office}: {label}{temp}', lang: '⚙ Idioma: {lang}',
     officeAdded: '🏢 Nueva oficina: {name} ({tz})', officeRemoved: '🏢 Se eliminó la oficina {name}',
-    startAgent: '🪟 {agent} se abrió en el pane {pane} ({office}): desde ahí orquesta su trabajo (y puede abrir más panes)', startFailed: 'No se pudo abrir el agente en herdr: {error}',
+    startAgentOpen: '🪟 {agent} ya estaba abierto en el pane {pane} ({office}): la oficina lo sigue, sin abrir otro', startAgent: '🪟 {agent} se abrió en el pane {pane} ({office}): desde ahí orquesta su trabajo (y puede abrir más panes)', startFailed: 'No se pudo abrir el agente en herdr: {error}',
     attached: 'Ya había una oficina corriendo: abro su juego', 
   },
   cli: {

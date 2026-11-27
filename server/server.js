@@ -44,7 +44,7 @@ import { knownResources, RESOURCE_KINDS } from './resources.js';
 import { openStore, dbFile, MAIN_OFFICE, RELATION_HOWS } from './store.js';
 import { inferRelations, explainInfra } from './explore.js';
 import { Weather, findPlaces } from './weather.js';
-import { Herdr, paneRole, quote } from './herdr.js';
+import { Herdr, HERDR_KIND, paneRole, quote } from './herdr.js';
 import { clip, normRole } from './roles.js';
 import { SubPanes } from './subpanes.js';
 import { ServiceHub } from './services.js';
@@ -417,13 +417,23 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     }
     if (!installed(a.harness) && !a.bin) return { ok: false, error: t('err.notInstalled', { bin: HARNESSES[a.harness]?.bin || a.harness }) };
     const where = a.office || company.officeForPath(a.path) || view();
+    const label = `${AGENT_LABEL[a.harness] || a.harness} · ${a.name}`;
+    const who = { id: a.id || null, name: a.name, harness: a.harness, path: a.path, office: where };
+    // already open in this workspace, in its folder (the office restarted, or you opened it yourself): it is
+    // followed, not opened again (every restart used to add one more pane with the same agent)
+    const kind = HERDR_KIND[a.harness] || a.harness;
+    const open = (await herdr.list().catch(() => [])).find((p) => p.agent === kind && p.pane_id !== herdr.pane && [p.foreground_cwd, p.cwd].some((d) => d && inside(d, a.path)));
+    if (open) {
+      const p = herdr.track(open.pane_id, { office: where, role: 'manager', title: label, agent: a.harness, kind: 'agent', cwd: a.path });
+      p.main = true;
+      return { ok: true, pane: open.pane_id, reused: true, agent: who };
+    }
     const env = { DEV_TEAM_OFFICE_URL: officeUrl(), DEV_TEAM_OFFICE_OFFICE: where, ...(socketPath ? { DEV_TEAM_OFFICE_SOCKET: socketPath } : {}), ...(a.harness === 'claude-code' ? claudeCompactEnv(prefs()) : {}) };
     try {
-      const label = `${AGENT_LABEL[a.harness] || a.harness} · ${a.name}`;
       const out = await herdr.launchAgent({ harness: a.harness, cwd: a.path, bin: a.bin, args: a.args || [], env, direction: prefs().herdr.direction, office: where, officeName: company.info(where)?.name || '', role: 'manager', title: label, label });
       const p = herdr.tracked.get(out.pane);
       if (p) p.main = true;
-      return { ok: true, pane: out.pane, agent: { id: a.id || null, name: a.name, harness: a.harness, path: a.path, office: where } };
+      return { ok: true, pane: out.pane, agent: who };
     } catch (err) {
       return { ok: false, error: t('err.herdrFailed', { error: err.message }) };
     }

@@ -139,6 +139,34 @@ test('herdr: el pane de un comando se cierra solo cuando su proceso terminó', a
   assert.ok(!fake.panes.has(pane), 'se pidió cerrar el pane a herdr');
 });
 
+test('al abrir la oficina en herdr, el agente que ya está abierto en su carpeta no se abre otra vez: la oficina lo sigue', async () => {
+  const fake = fakeHerdr();
+  const herdr = new Herdr({ env: ENV, run: fake.run, every: 30 });
+  const store = openStore(':memory:');
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dto-herdr-')));
+  store.createOffice({ name: 'Pagos' });
+  store.createAgent({ path: dir, harness: 'pi', name: 'cobros', office: 'pagos', bin: '/no/existe/pi' });
+  // Pi already runs in a pane of this workspace, in a subfolder of the repo (the office restarted)
+  fake.panes.set('w1:p5', { pane_id: 'w1:p5', workspace_id: 'w1', cwd: dir, foreground_cwd: path.join(dir, 'src'), agent: 'pi', agent_status: 'idle' });
+  // and Claude in another folder: it does not count
+  fake.panes.set('w1:p6', { pane_id: 'w1:p6', workspace_id: 'w1', cwd: '/otra', foreground_cwd: '/otra', agent: 'claude', agent_status: 'idle' });
+  const server = await startServer({ port: 0, socket: null, db: store, weather: false, herdr });
+  try {
+    const start = await server.launchStartAgent({ cwd: dir });
+    assert.deepEqual([start.ok, start.reused, start.pane, start.agent.office], [true, true, 'w1:p5', 'pagos']);
+    assert.ok(!fake.calls.some((c) => c[1] === 'split'), 'no abrió otro pane');
+    assert.equal(server.herdr.status().panes.find((p) => p.pane === 'w1:p5')?.office, 'pagos', 'lo sigue, en su oficina');
+    // without it open, it opens as always
+    fake.panes.delete('w1:p5');
+    const again = await server.launchStartAgent({ cwd: dir });
+    assert.equal(again.ok, true, again.error);
+    assert.ok(!again.reused && again.pane !== 'w1:p5');
+    assert.ok(fake.calls.some((c) => c[1] === 'split'), 'ahora sí abre uno');
+  } finally {
+    await server.close();
+  }
+});
+
 test('herdr: un watch con el proceso vivo nunca se auto-cierra', async () => {
   const fake = fakeHerdr();
   const herdr = new Herdr({ env: ENV, run: fake.run });
@@ -199,34 +227,6 @@ test('la oficina dentro de herdr: el agente al abrir, las sesiones nuevas en pan
   }
 });
 
-test('en el juego: el pane es de alguien del equipo mientras siga abierto', () => {
-  let now = 0;
-  const sim = createSim({ clock: () => now, random: () => 0.5, wall: () => new Date(2026, 9, 16, 10).getTime() });
-  sim.handle({ kind: 'pane_open', role: 'qa', pane: 'w1:p7', text: 'tests en watch' });
-  let worked = false;
-  for (let i = 0; i < 300; i++) { now += 50; sim.step(0.05, now); worked ||= sim.agents.qa.state === 'working' && /tests en watch/.test(sim.agents.qa.text); }
-  assert.ok(sim.agents.qa.badges.has('pane:w1:p7'));
-  assert.ok(worked, 'Andrés trabaja en lo del pane');
-  assert.ok(sim.journal.some((j) => j.kind === 'pane' && /Andrés se encarga del pane w1:p7/.test(j.text)));
-  sim.handle({ kind: 'pane_close', role: 'qa', pane: 'w1:p7', text: 'tests en watch' });
-  assert.ok(!sim.agents.qa.badges.has('pane:w1:p7'));
-  sim.handle({ kind: 'pane_state', role: 'backend', pane: 'w1:p9', state: 'blocked', text: 'migración' });
-  assert.equal(sim.agents.manager.handUp, true);
-  assert.match(sim.agents.manager.bubble.text, /w1:p9 espera tu respuesta/);
-});
-
-test('dentro de herdr, cada subagente en su pane: bajo el del agente, uno al lado del otro, y se cierra al terminar', async () => {
-  const fake = fakeHerdr();
-  fake.panes.set('w1:p2', { pane_id: 'w1:p2', workspace_id: 'w1', cwd: '/proyectos/tienda', agent: 'pi', agent_status: 'working' });
-  const herdr = new Herdr({ env: ENV, run: fake.run, every: 30 });
-  const store = openStore(':memory:');
-  const server = await startServer({ port: 0, socket: null, db: store, weather: false, herdr });
-  const pi = (e) => server.company.ingest('pi', { session: 'pi-1', cwd: '/proyectos/tienda', pane: 'w1:p2', ...e });
-  const splits = () => fake.calls.filter((c) => c[1] === 'split');
-  try {
-    pi({ kind: 'session_start' });
-    pi({ kind: 'tool_start', tool: 'subagent_run', toolUseId: 'c1', input: { agent: 'ex-qa', label: 'RED: tests que fallen', task: 'Escribe tests que fallen para shipping()' } });
-    await until(() => server.subPanes.list().find((x) => x.pane));
 // herdr may see the pane idle before the session's own end arrives (Pi reports it once it settles,
 // after its retries): the session's verdict wins, once.
 test('dentro de herdr: si herdr ve el pane libre antes de que Pi avise que su turno terminó en un error, la tarea igual falla', async () => {
@@ -266,6 +266,34 @@ test('dentro de herdr: si herdr ve el pane libre antes de que Pi avise que su tu
   }
 });
 
+test('en el juego: el pane es de alguien del equipo mientras siga abierto', () => {
+  let now = 0;
+  const sim = createSim({ clock: () => now, random: () => 0.5, wall: () => new Date(2026, 9, 16, 10).getTime() });
+  sim.handle({ kind: 'pane_open', role: 'qa', pane: 'w1:p7', text: 'tests en watch' });
+  let worked = false;
+  for (let i = 0; i < 300; i++) { now += 50; sim.step(0.05, now); worked ||= sim.agents.qa.state === 'working' && /tests en watch/.test(sim.agents.qa.text); }
+  assert.ok(sim.agents.qa.badges.has('pane:w1:p7'));
+  assert.ok(worked, 'Andrés trabaja en lo del pane');
+  assert.ok(sim.journal.some((j) => j.kind === 'pane' && /Andrés se encarga del pane w1:p7/.test(j.text)));
+  sim.handle({ kind: 'pane_close', role: 'qa', pane: 'w1:p7', text: 'tests en watch' });
+  assert.ok(!sim.agents.qa.badges.has('pane:w1:p7'));
+  sim.handle({ kind: 'pane_state', role: 'backend', pane: 'w1:p9', state: 'blocked', text: 'migración' });
+  assert.equal(sim.agents.manager.handUp, true);
+  assert.match(sim.agents.manager.bubble.text, /w1:p9 espera tu respuesta/);
+});
+
+test('dentro de herdr, cada subagente en su pane: bajo el del agente, uno al lado del otro, y se cierra al terminar', async () => {
+  const fake = fakeHerdr();
+  fake.panes.set('w1:p2', { pane_id: 'w1:p2', workspace_id: 'w1', cwd: '/proyectos/tienda', agent: 'pi', agent_status: 'working' });
+  const herdr = new Herdr({ env: ENV, run: fake.run, every: 30 });
+  const store = openStore(':memory:');
+  const server = await startServer({ port: 0, socket: null, db: store, weather: false, herdr });
+  const pi = (e) => server.company.ingest('pi', { session: 'pi-1', cwd: '/proyectos/tienda', pane: 'w1:p2', ...e });
+  const splits = () => fake.calls.filter((c) => c[1] === 'split');
+  try {
+    pi({ kind: 'session_start' });
+    pi({ kind: 'tool_start', tool: 'subagent_run', toolUseId: 'c1', input: { agent: 'ex-qa', label: 'RED: tests que fallen', task: 'Escribe tests que fallen para shipping()' } });
+    await until(() => server.subPanes.list().find((x) => x.pane));
     // below the agent's pane (not the office's), with that subagent's viewer
     assert.deepEqual(splits()[0].slice(0, 7), ['pane', 'split', 'w1:p2', '--direction', 'down', '--ratio', '0.4']);
     const qa = server.subPanes.list()[0].pane;

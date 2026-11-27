@@ -889,7 +889,7 @@ export default {
     logStart: '— log: what the agents are doing —', opening: 'Opening {url} in the browser…', back: '— back in the log ({n} new line(s)) —', bye: 'Closing the office…',
     task: '📨 {text} → {status}{detail}', run: '▶ “{name}”: {status}{stage}', weather: '{icon} Outside {office}: {label}{temp}', lang: '⚙ Language: {lang}',
     officeAdded: '🏢 New office: {name} ({tz})', officeRemoved: '🏢 The office {name} was deleted',
-    startAgent: '🪟 {agent} opened in pane {pane} ({office}): it orchestrates its work from there (and can open more panes)', startFailed: 'Could not open the agent in herdr: {error}',
+    startAgentOpen: '🪟 {agent} was already open in pane {pane} ({office}): the office follows it instead of opening another', startAgent: '🪟 {agent} opened in pane {pane} ({office}): it orchestrates its work from there (and can open more panes)', startFailed: 'Could not open the agent in herdr: {error}',
     attached: 'An office was already running: opening its game', 
   },
   cli: {

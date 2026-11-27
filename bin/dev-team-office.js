@@ -84,7 +84,7 @@ const colorMode = () => (args.color === '256' ? '256' : args.color === 'truecolo
 async function launchAgent(server) {
   if (!server.herdr?.available || args.launch === false) return;
   const out = await server.launchStartAgent({ cwd: str(args.cwd) || process.cwd(), agent: str(args.agent) });
-  if (out.ok) server.bus.emit('log', { ts: Date.now(), office: out.agent.office, text: t('console.startAgent', { agent: `${out.agent.name} (${out.agent.harness})`, pane: out.pane, office: server.company.info(out.agent.office)?.name || '' }) });
+  if (out.ok) server.bus.emit('log', { ts: Date.now(), office: out.agent.office, text: t(out.reused ? 'console.startAgentOpen' : 'console.startAgent', { agent: `${out.agent.name} (${out.agent.harness})`, pane: out.pane, office: server.company.info(out.agent.office)?.name || '' }) });
   else if (!out.skipped) server.bus.emit('log', { ts: Date.now(), text: t('console.startFailed', { error: out.error }) });
 }
 
