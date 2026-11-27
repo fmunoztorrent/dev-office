@@ -87,3 +87,21 @@ test('un evento sin sesión pero con carpeta cae en la sesión más reciente de 
   assert.equal(ev.session, 'nueva');
   assert.equal(o.sessions.get('nueva').turn, 'qa');
 });
+
+test('Claude Code: estar inactivo en su prompt o haber iniciado sesión no es una pregunta; un permiso sí', () => {
+  const base = { hook_event_name: 'Notification', session_id: 'c1', cwd: '/tmp/tienda' };
+  const of = (p) => [].concat(adapt('claude-code', { ...base, ...p }) || []).filter(Boolean);
+  assert.deepEqual(of({ notification_type: 'idle_prompt', message: 'Claude is waiting for your input' }), []);
+  assert.deepEqual(of({ notification_type: 'auth_success', message: 'Login successful' }), []);
+  assert.deepEqual(of({ message: 'Claude is waiting for your input' }), [], 'sin tipo (versiones de antes), por su texto');
+  const perm = of({ notification_type: 'permission_prompt', message: 'Claude needs your permission to use Bash' });
+  assert.deepEqual(perm.map((e) => [e.kind, e.text]), [['waiting', 'Claude needs your permission to use Bash']]);
+  assert.equal(of({ message: 'Claude necesita tu permiso para usar Bash' })[0]?.kind, 'waiting');
+});
+
+test('Claude Code: el texto pegado (los encargos que pega herdr) llega sin su envoltorio <pasted_content>', () => {
+  const [ev] = [].concat(adapt('claude-code', { hook_event_name: 'UserPromptSubmit', session_id: 'c1', cwd: '/tmp/tienda', prompt: '<pasted_content id="7c61">\n📁 Trabaja sólo dentro de /tmp/tienda.\n\nagrega un descuento\n</pasted_content>' }));
+  assert.equal(ev.kind, 'task');
+  assert.equal(ev.text, '📁 Trabaja sólo dentro de /tmp/tienda.\n\nagrega un descuento');
+  assert.equal([].concat(adapt('claude-code', { hook_event_name: 'UserPromptSubmit', session_id: 'c1', cwd: '/x', prompt: 'hola' }))[0].text, 'hola');
+});

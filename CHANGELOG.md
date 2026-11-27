@@ -41,6 +41,12 @@ A renderer SDK, so any graphics engine can draw the office; an interface with tw
 - **The E2E screen's summary** reads «Ended · failed: 1» instead of a plural that did not agree with one.
 - **A provider's error reads as its message** («402 · Insufficient balance…»), not its raw JSON, in the log, the bubbles and the task's reason.
 - **Restarting the office inside herdr no longer opens the agent again:** if it is already open in a pane of the workspace, in its folder, the office follows that pane instead of adding another.
+- **A brief to a new Claude Code session inside herdr started nothing on macOS:** its permissions made a command line of about 1,600 bytes and a terminal takes 1,024 as one typed line, so it was cut and Claude never ran. They now go in a settings file (`--settings`).
+- **A subagent Claude runs in the background** no longer ends when it is launched, its hand-back (`<agent-message>`, `<task-notification>`) is not a new brief, and the task it belongs to ends with the turn after it, not with the turn that launched it.
+- **Claude idle at its prompt is not waiting for you:** its «waiting for your input» (and a login that went well) no longer raises the banner.
+- **One question, one entry:** a question on an agent's screen inside herdr and the same session's own notice no longer show up twice in the banner and the inbox.
+- **A brief pasted into Claude** (`<pasted_content>`) shows on the board as its text.
+- The canvas's strip at the bottom centers its text in the part nothing covers (the card, the activity).
 
 ## [0.31.0] - 2026-11-18
 

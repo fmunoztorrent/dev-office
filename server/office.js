@@ -153,6 +153,12 @@ export class Office extends EventEmitter {
         const agentType = input.subagent_type || input.agent || (Array.isArray(many) ? many[0]?.agent : undefined);
         const desc = input.description || input.label || (Array.isArray(many) ? many.map((x) => x.agent).join(' → ') : input.task || input.prompt);
         const task = typeof (input.task ?? input.prompt) === 'string' ? input.task ?? input.prompt : '';
+        if (!start && r.async) {
+          // launched in the background: it goes on working; it ends with its hand-back (or SubagentStop)
+          const bg = s.subagents.find((x) => x.open && x.toolUseId === r.toolUseId);
+          if (bg) { bg.background = true; if (r.asyncAgentId && !bg.agentId) bg.agentId = String(r.asyncAgentId); }
+          return null;
+        }
         return start
           ? this.#startSub(s, ev, { desc, agentType, toolUseId: r.toolUseId, task })
           : this.#endSub(s, ev, { toolUseId: r.toolUseId, desc: input.description, output: r.output });
@@ -237,7 +243,7 @@ export class Office extends EventEmitter {
       case 'subagent_start':
         return this.#startSub(s, ev, { desc: r.text, agentType: r.agentType, agentId: r.agentId, fromHook: true, role });
       case 'subagent_end':
-        return this.#endSub(s, ev, { agentId: r.agentId, toolUseId: r.toolUseId, subId: r.subId, fromHook: !r.toolUseId && !r.subId });
+        return this.#endSub(s, ev, { agentId: r.agentId, toolUseId: r.toolUseId, subId: r.subId, fromHook: r.exact || (!r.toolUseId && !r.subId), output: r.output });
       case 'task':
         // the scope line the office puts before a brief (tasks.js) is not part of the request
         if (typeof r.text === 'string') r.text = unguided(r.text); // the 📁 scope and the 📋 instructions are the office's
@@ -276,7 +282,10 @@ export class Office extends EventEmitter {
         // a turn that ended in a model error (the provider refused it): the task it was doing fails with it
         const error = typeof r.error === 'string' && r.error.trim() ? clip(providerError(r.error), 200) : '';
         if (error) return { ...ev, role: role || was || 'manager', ok: false, error, text: clip(r.text || t('events.turnFailed'), 140) };
-        return { ...ev, role: role || was || 'manager', text: clip(r.text || t('events.turnEnd', { text: '' }), 140) };
+        // subagents still working in the background: the turn ended, the work did not (their hand-back
+        // brings another turn)
+        const pending = s.subagents.filter((x) => x.open && x.background).length;
+        return { ...ev, role: role || was || 'manager', text: clip(r.text || t('events.turnEnd', { text: '' }), 140), ...(pending ? { pending } : {}) };
       }
       case 'done':
         // Pi's skill and extension may announce the end at the same time.

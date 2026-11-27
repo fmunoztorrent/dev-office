@@ -81,6 +81,50 @@ test('un turno que termina en un error del modelo: la tarea de esa sesión falla
   ws.close();
 }));
 
+test('un subagente en segundo plano: la tarea no termina con el turno que lo lanzó, sino cuando vuelve su trabajo y la sesión termina', () => withServer({}, async (server, base) => {
+  const ws = new WebSocket(base.replace('http', 'ws') + '/v1/ws');
+  ws.on('message', (d) => {
+    const m = JSON.parse(d);
+    if (m.type === 'task') ws.send(JSON.stringify({ type: 'task_update', id: m.id, status: 'accepted' }));
+  });
+  await new Promise((r) => ws.on('open', r));
+  ws.send(JSON.stringify({ type: 'register', agent: 'pi', session: 's-bg', cwd: '/proj' }));
+  await until(() => server.hub.snapshot().agents.length === 1);
+  const task = (await (await post(base, '/v1/tasks', { agent: 'pi', text: 'Agrega el descuento con su test' })).json()).task;
+  await until(() => server.hub.snapshot().tasks.find((x) => x.id === task.id).status === 'running');
+  const cc = (p) => server.office.ingest('claude-code', { session_id: 's-bg', cwd: '/proj', ...p });
+  // Claude launches a subagent in the background: its tool answers at once («async_launched»)
+  const input = { description: 'Write and run the test', prompt: 'write the test', subagent_type: 'general-purpose', run_in_background: true };
+  cc({ hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_use_id: 'tu1', tool_input: input });
+  cc({ hook_event_name: 'PostToolUse', tool_name: 'Agent', tool_use_id: 'tu1', tool_input: input, tool_response: { isAsync: true, status: 'async_launched', agentId: 'a71' } });
+  assert.ok(server.office.sessions.get('s-bg').subagents.find((x) => x.toolUseId === 'tu1').open, 'lanzado, no terminado');
+  assert.ok(!server.office.log.some((e) => e.kind === 'subagent_end'));
+  // the turn that launched it ends: the work goes on
+  cc({ hook_event_name: 'Stop' });
+  assert.equal(server.office.log.findLast((e) => e.kind === 'turn_end').pending, 1);
+  await new Promise((r) => setTimeout(r, 60));
+  assert.equal(server.hub.snapshot().tasks.find((x) => x.id === task.id).status, 'running', 'sigue en curso');
+  // its hand-back: the subagent ended (it is not a new brief), with what it said
+  cc({ hook_event_name: 'UserPromptSubmit', prompt: '<agent-message from="a71">\nTests pass: 4/4.\n</agent-message>' });
+  const end = server.office.log.findLast((e) => e.kind === 'subagent_end');
+  assert.equal(end.subId, 'tu1');
+  assert.match(end.output, /Tests pass: 4\/4/);
+  assert.ok(!server.office.log.some((e) => e.kind === 'task' && /agent-message/.test(e.text || '')), 'no es un encargo nuevo');
+  // and the session's turn after it: now the task is done
+  cc({ hook_event_name: 'Stop' });
+  await until(() => server.hub.snapshot().tasks.find((x) => x.id === task.id).status === 'done');
+  // the other form of the hand-back: the notice of a background task, with its tool_use_id
+  cc({ hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_use_id: 'tu2', tool_input: { ...input, description: 'Otro' } });
+  cc({ hook_event_name: 'PostToolUse', tool_name: 'Agent', tool_use_id: 'tu2', tool_input: input, tool_response: { isAsync: true, status: 'async_launched', agentId: 'a72' } });
+  // a background command's notice (not a subagent) closes nobody
+  cc({ hook_event_name: 'UserPromptSubmit', prompt: '<task-notification>\n<task-id>bash9</task-id>\n<tool-use-id>tuBash</tool-use-id>\n<status>completed</status>\n</task-notification>' });
+  assert.ok(server.office.sessions.get('s-bg').subagents.find((x) => x.toolUseId === 'tu2').open);
+  cc({ hook_event_name: 'UserPromptSubmit', prompt: '<task-notification>\n<task-id>a72</task-id>\n<tool-use-id>tu2</tool-use-id>\n<status>completed</status>\n<summary>Agent "Otro" completed</summary>\n</task-notification>' });
+  assert.equal(server.office.log.findLast((e) => e.kind === 'subagent_end').subId, 'tu2');
+  assert.ok(!server.office.log.some((e) => e.kind === 'task' && /task-notification/.test(e.text || '')), 'tampoco es un encargo nuevo');
+  ws.close();
+}));
+
 test('sin sesión conectada de Pi u OpenCode hay que pedir una nueva', () => withServer({}, async (_s, base) => {
   const res = await (await post(base, '/v1/tasks', { agent: 'opencode', text: 'x' })).json();
   assert.equal(res.ok, false);

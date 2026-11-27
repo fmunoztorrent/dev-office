@@ -352,7 +352,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   herdr?.on('screens', (screens) => prompts.round(screens));
   // herdr names Claude Code `claude`; the office, `claude-code`
   const harnessOf = (agent) => (agent === 'claude' ? 'claude-code' : agent || null);
-  const publicPrompt = ({ id, rev, pane, agent, cwd, office: o, question, summary, options, cursor, since }) => ({ id, rev, pane, agent: harnessOf(agent), project: cwd ? path.basename(cwd) : null, office: o, question, summary, options, cursor, since });
+  const publicPrompt = ({ id, rev, pane, agent, cwd, office: o, question, summary, options, cursor, since }) => ({ id, rev, pane, agent: harnessOf(agent), cwd: cwd || null, project: cwd ? path.basename(cwd) : null, office: o, question, summary, options, cursor, since });
   const promptsOf = (id) => prompts.list(valid(id)).map(publicPrompt);
   // a new question: the manager goes to your desk (the PO's) to ask, unless the agent's own event
   // (Claude Code's permission hook) has just sent him
@@ -422,7 +422,9 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     // already open in this workspace, in its folder (the office restarted, or you opened it yourself): it is
     // followed, not opened again (every restart used to add one more pane with the same agent)
     const kind = HERDR_KIND[a.harness] || a.harness;
-    const open = (await herdr.list().catch(() => [])).find((p) => p.agent === kind && p.pane_id !== herdr.pane && [p.foreground_cwd, p.cwd].some((d) => d && inside(d, a.path)));
+    // (a failed listing is asked again: an answer missing for a moment must not open a second agent)
+    const panes = await herdr.list().catch(() => new Promise((r) => setTimeout(r, 400)).then(() => herdr.list()).catch(() => []));
+    const open = panes.find((p) => p.agent === kind && p.pane_id !== herdr.pane && [p.foreground_cwd, p.cwd].some((d) => d && inside(d, a.path)));
     if (open) {
       const p = herdr.track(open.pane_id, { office: where, role: 'manager', title: label, agent: a.harness, kind: 'agent', cwd: a.path });
       p.main = true;
@@ -1281,7 +1283,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   company.on('event', (id, event, session) => toOffice(id, { type: 'event', event, session, office: id }));
   company.on('event', (id, event) => bus.emit('activity', id, event));
   // a turn that ended in an error (`turn_end` with its `error`) fails the task it was doing
-  company.on('event', (_id, event) => { if (event.kind === 'turn_end' || event.kind === 'done') hub.sessionSettled(event.session, event.kind === 'turn_end' ? event.error : null); });
+  // (not while its subagents still work in the background: `pending`; their hand-back brings another turn)
+  company.on('event', (_id, event) => { if ((event.kind === 'turn_end' && !event.pending) || event.kind === 'done') hub.sessionSettled(event.session, event.kind === 'turn_end' ? event.error : null); });
   // past your threshold, the agent is asked to compact its context (server/compact.js)
   const compactor = new Compactor({ prefs, hub, herdr, company });
   company.on('event', (id, event, session) => compactor.onEvent(id, event, session));

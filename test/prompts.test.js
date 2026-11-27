@@ -98,6 +98,8 @@ test('dentro de herdr: la pregunta llega al juego, el encargado va a tu escritor
     assert.deepEqual([q.agent, q.project, q.pane, q.options.map((o) => o.label)], ['pi', 'tienda', 'w1:p2', ['Yes', 'No']]);
     const got = await fetch(`${server.url}/v1/prompts`).then((r) => r.json());
     assert.equal(got.prompts[0].summary, '⚠️ Dangerous command: … Allow?');
+    // its folder too: the page joins it with the same session's own notice (one question, not two)
+    assert.match(got.prompts[0].cwd, /tienda$/);
     await until(() => sent.some((l) => l.length));
     // the manager goes to your desk: the office gets a 'waiting'
     assert.ok(server.company.get('main').log.some((e) => e.kind === 'waiting' && e.text === 'Pi te pregunta: ⚠️ Dangerous command: … Allow?'));

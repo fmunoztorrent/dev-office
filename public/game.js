@@ -1367,8 +1367,14 @@ export function createCanvasRenderer(host) {
     ctx.globalAlpha = pulse;
     R(0, bottom - 34, WORLD_W, 34, colors[0]);
     ctx.globalAlpha = 1;
+    // its text in the widest part of the strip nothing covers (the card on the right, the activity on the left)
+    const across = (scene.covered || []).map((r) => ({ x0: r.x * WORLD_W, x1: (r.x + r.w) * WORLD_W, y0: r.y * H, y1: (r.y + r.h) * H }))
+      .filter((r) => r.y0 < bottom && r.y1 > bottom - 34).sort((a, b) => a.x0 - b.x0);
+    let span = [0, 0], from = 0;
+    for (const r of across) { if (r.x0 - from > span[1] - span[0]) span = [from, r.x0]; from = Math.max(from, r.x1); }
+    if (WORLD_W - from > span[1] - span[0]) span = [from, WORLD_W];
     ctx.font = `20px ${FONT}`; ctx.fillStyle = colors[1]; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(fit(banner.text, WORLD_W - 260), WORLD_W / 2, bottom - 17);
+    ctx.fillText(fit(banner.text, Math.min(WORLD_W - 260, span[1] - span[0] - 40)), (span[0] + span[1]) / 2, bottom - 17);
   }
 
   // ---------------------------------------------------------------- the isometric view
