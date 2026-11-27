@@ -116,7 +116,7 @@ node scripts/check-renderer.mjs            # los renderers contra el contrato de
 
 Un cambio que vea el usuario no está listo hasta probarlo en el flujo real: la oficina instalada como la instala un usuario, una terminal de verdad con herdr, un agente real y el juego en el navegador. [`scripts/dev-session.sh`](scripts/dev-session.sh) lo arma siempre igual y aislado:
 
-1. **Crearlo:** `scripts/dev-session.sh up --agent pi` (se puede repetir `--agent`: `pi`, `opencode`, `codex`, `claude`). Deja en `/tmp/dto-dev`:
+1. **Crearlo:** `scripts/dev-session.sh up --agent pi` (se puede repetir `--agent`: `pi`, `opencode`, `codex`, `claude`; con `claude` en macOS el `HOME` temporal lleva un llavero propio, para que su `/login` se guarde sin tocar el tuyo). Deja en `/tmp/dto-dev`:
    - un `HOME` temporal con los logins del agente enlazados;
    - este checkout instalado con `install.sh` + `setup`;
    - un proyecto de prueba (`tienda`);

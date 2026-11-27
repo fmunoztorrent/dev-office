@@ -76,7 +76,19 @@ link_login() {
       mkdir -p "$H/.codex"
       [ -f "$REAL_HOME/.codex/auth.json" ] && ln -s "$REAL_HOME/.codex/auth.json" "$H/.codex/auth.json"
       ;;
-    claude) say "  claude: log in inside its pane (/login); its login is not linked" ;;
+    claude)
+      # on macOS Claude Code keeps its login in the keychain, and a HOME of its own has none: it gets
+      # a keychain of its own inside it (never yours, which stays as it is), deleted with everything
+      if [ "$(uname)" = Darwin ]; then
+        mkdir -p "$H/Library/Keychains" "$H/Library/Preferences"
+        kc="$H/Library/Keychains/login.keychain-db"
+        HOME=$H security create-keychain -p dto "$kc" >/dev/null 2>&1 || true
+        HOME=$H security list-keychains -d user -s "$kc" >/dev/null 2>&1 || true
+        HOME=$H security default-keychain -d user -s "$kc" >/dev/null 2>&1 || true
+        HOME=$H security set-keychain-settings "$kc" >/dev/null 2>&1 || true
+      fi
+      say "  claude: log in inside its pane (/login); its login is not linked (it stays in the session)"
+      ;;
     *) die "--agent: pi, opencode, codex or claude" ;;
   esac
   return 0
