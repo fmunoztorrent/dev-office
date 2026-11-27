@@ -215,15 +215,19 @@ export function pickWith(instance, scene, fx, fy) {
  * Places labels over the drawing so that none covers another: the speech bubbles and the badges over
  * people's heads. Each one prefers to sit centered just above its anchor (where its tail points); if that
  * place is taken it tries higher up and to the sides, the closest free place first, always inside the
- * bounds. A label keeps the place it had in the last frame while that place stays free, so labels do not
- * jump around; the ones that matter more (`priority`) are placed first.
+ * bounds and out of what the page covers (`avoid`: the waiting banner, the HUD, the dock…). Only when
+ * nothing above or beside is free does it go below its anchor. A label keeps the place it had in the last
+ * frame while that place stays free, so labels do not jump around; the ones that matter more (`priority`)
+ * are placed first.
  *
  * @param items     [{ id, x, y (the anchor), w, h, priority = 0 }], in the canvas's units
- * @param options   bounds { x0, y0, x1, y1 }; gap between labels; previous: Map id → { dx, dy } of the last frame
+ * @param options   bounds { x0, y0, x1, y1 }; gap between labels; previous: Map id → { dx, dy } of the last
+ *                  frame; avoid: [{ x, y, w, h }] that no label should cover (in the canvas's units)
  * @returns Map id → { x, y (top-left), w, h, dx, dy (its offset from the preferred place), free (no overlap) }
  */
-export function layoutLabels(items, { bounds = null, gap = 4, previous = null } = {}) {
-  const placed = [];
+export function layoutLabels(items, { bounds = null, gap = 4, previous = null, avoid = [] } = {}) {
+  // what the page covers counts as already taken
+  const placed = (avoid || []).filter((r) => r && r.w > 0 && r.h > 0).map(({ x, y, w, h }) => ({ x, y, w, h }));
   const out = new Map();
   const order = [...items].sort((a, b) => (b.priority || 0) - (a.priority || 0) || b.y - a.y || String(a.id).localeCompare(String(b.id)));
   const clamp = (r) => {
@@ -252,6 +256,10 @@ export function layoutLabels(items, { bounds = null, gap = 4, previous = null } 
         const dx = side * (it.w + gap), dy = -row * (it.h + gap);
         tries.push({ dx, dy, score: Math.abs(dy) + Math.abs(dx) * 0.8 });
       }
+    }
+    // the last resort: below its anchor (over who speaks), when everything above and beside is taken
+    for (let row = 1; row <= 3; row++) {
+      for (const side of [0, 0.6, -0.6]) tries.push({ dx: side * (it.w + gap), dy: row * (it.h + gap), score: 1e4 + row * (it.h + gap) + Math.abs(side) });
     }
     tries.sort((a, b) => a.score - b.score);
     let best = null;

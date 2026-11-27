@@ -268,3 +268,30 @@ test('las etiquetas sobre el dibujo (burbujas, badges) no se tapan entre ellas y
   const again = layoutLabels(items, { bounds, gap: 4, previous });
   for (const [id, p] of placed) assert.deepEqual([again.get(id).x, again.get(id).y], [p.x, p.y], id);
 });
+
+test('las etiquetas no quedan debajo de la interfaz de la página (el cartel de espera, el dock): se corren, y sólo si arriba y a los lados no hay lugar, van debajo', () => {
+  const bounds = { x0: 0, y0: 0, x1: 1216, y1: 760 };
+  const apart = (a, b) => a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y;
+  // a small box over its preferred place: it moves to a side, still above its anchor
+  const chip = { x: 260, y: 150, w: 80, h: 30 };
+  const side = layoutLabels([{ id: 'a', x: 300, y: 200, w: 100, h: 30 }], { bounds, avoid: [chip] }).get('a');
+  assert.ok(side.free && apart(side, chip), 'fuera del chip');
+  assert.ok(side.y + side.h <= 200, 'sigue arriba de quien habla');
+  // the waiting banner: the whole width above someone near the top wall: it goes below its anchor
+  const banner = { x: 0, y: 0, w: 1216, h: 190 };
+  const low = layoutLabels([{ id: 'a', x: 300, y: 200, w: 100, h: 30 }], { bounds, avoid: [banner] }).get('a');
+  assert.ok(low.free && apart(low, banner), 'no queda debajo del cartel');
+  assert.ok(low.y >= 200, 'debajo de quien habla');
+  // two people under it: neither under the banner, nor one over the other
+  const two = layoutLabels([{ id: 'a', x: 300, y: 200, w: 100, h: 30 }, { id: 'b', x: 330, y: 200, w: 100, h: 30 }], { bounds, gap: 4, avoid: [banner] });
+  const [a, b] = [two.get('a'), two.get('b')];
+  assert.ok(a.free && b.free && apart(a, b) && apart(a, banner) && apart(b, banner));
+  // without anything to avoid, the same as always (and an empty or invalid rect changes nothing)
+  assert.deepEqual(layoutLabels([{ id: 'a', x: 300, y: 200, w: 100, h: 30 }], { bounds, avoid: [{ x: 0, y: 0, w: 0, h: 0 }, null] }).get('a'), layoutLabels([{ id: 'a', x: 300, y: 200, w: 100, h: 30 }], { bounds }).get('a'));
+});
+
+test('la escena lleva lo que la página tapa del lienzo (covered), como fracciones', () => {
+  const s = buildScene(createSim(), { covered: [{ x: 0.2, y: 0.1, w: 0.6, h: 0.1, extra: 'no' }] });
+  assert.deepEqual(s.covered, [{ x: 0.2, y: 0.1, w: 0.6, h: 0.1 }]);
+  assert.deepEqual(buildScene(createSim()).covered, []);
+});

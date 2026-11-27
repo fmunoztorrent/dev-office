@@ -311,6 +311,30 @@ function renderAttention() {
 }
 setInterval(renderAttention, 15_000); // the "for N min" grows
 
+// ---------------------------------------------------------------- what the page lays over the office
+// The card on the right sits between the waiting banner and the dock (their heights go to the stylesheet:
+// --attention-h, --dock-h), and the game keeps people's bubbles and badges out of everything the page lays
+// over its canvas (scene.covered, as fractions of it).
+const OVERLAYS = ['attention', 'dock', 'sheet', 'feed', 'e2e-mini'];
+const overlayEls = () => [...OVERLAYS.map((id) => $(id)), ...document.querySelectorAll('.screen .hud-tl')].filter(Boolean);
+const shownEl = (el) => !el.hidden && el.getClientRects().length > 0;
+function trackOverlays() {
+  const bar = $('attention'), dock = $('dock');
+  $('screen').style.setProperty('--attention-h', shownEl(bar) ? `${bar.offsetHeight + 10}px` : '0px');
+  $('screen').style.setProperty('--dock-h', shownEl(dock) ? `${dock.offsetHeight}px` : '0px');
+  const c = $('office').getBoundingClientRect();
+  if (!c.width || !c.height) return;
+  game.setCovered(overlayEls().filter(shownEl).map((el) => {
+    const r = el.getBoundingClientRect();
+    return { x: (r.left - c.left) / c.width, y: (r.top - c.top) / c.height, w: r.width / c.width, h: r.height / c.height };
+  }).filter((r) => r.w > 0 && r.h > 0));
+}
+if (typeof ResizeObserver === 'function') {
+  const watch = new ResizeObserver(trackOverlays);
+  for (const el of [...overlayEls(), $('office')]) watch.observe(el); // shown, hidden or resized
+}
+setInterval(trackOverlays, 1000); // and where they end up after sliding in
+
 /** The inbox: everything waiting for you, in one list (oldest first), each with its own button. */
 function renderInbox(items = attentionItems()) {
   const ol = $('inbox-list');

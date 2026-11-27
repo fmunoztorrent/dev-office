@@ -96,7 +96,7 @@ Whatever it answers, the game only gets a valid target or `null` (`isTarget`). A
 
 ## Labels over the drawing
 
-What people say and the badges over their heads are placed together, on the screen, so that none covers another: `layoutLabels(items, { bounds, gap, previous })` takes each label's anchor (where its tail points) and size and gives back where it goes. Each one prefers to sit centered just above its anchor; if that place is taken it goes up a row or to the side, the closest free place first, always inside the bounds. With `previous` (each label's offset in the last frame) a label keeps its place while it stays free, so nothing jumps around. The canvas places its bubbles and badges with it, in both views and on the shared floors, and glides a label when it has to move; another renderer can use the same helper with its own `project`.
+What people say and the badges over their heads are placed together, on the screen, so that none covers another: `layoutLabels(items, { bounds, gap, previous, avoid })` takes each label's anchor (where its tail points) and size and gives back where it goes. Each one prefers to sit centered just above its anchor; if that place is taken it goes up a row or to the side, the closest free place first, always inside the bounds and out of `avoid` (the boxes the page lays over the drawing: the waiting banner, the HUD, the dock, the card); only when nothing above or beside is free does it go below its anchor, with its tail pointing up. With `previous` (each label's offset in the last frame) a label keeps its place while it stays free, so nothing jumps around. The canvas places its bubbles and badges with it, in both views and on the shared floors, and glides a label when it has to move; another renderer can use the same helper with its own `project`.
 
 ## Writing a renderer
 
@@ -140,7 +140,7 @@ The types (`Scene`, `Actor`, `World`, `Prop`, `Host`, `RendererInstance`, `Rende
 
 ## The scene
 
-`buildScene(sim, { now, floor, selected, hover, hovered, services })` → one frame:
+`buildScene(sim, { now, floor, selected, hover, hovered, services, covered })` → one frame:
 
 | Field | What it is |
 |---|---|
@@ -161,6 +161,7 @@ The types (`Scene`, `Actor`, `World`, `Prop`, `Host`, `RendererInstance`, `Rende
 | `lunch`, `news` | Whether it is lunchtime; the latest thing that happened, in words (the TV's ticker) |
 | `services` | The services the agents left running (`{ id, status, name }`): the rack's lights |
 | `selected`, `hover`, `hovered` | The viewer's: who is selected (the green diamond), who is under the pointer (or whose desk), and what is under it if clicking it does something (a target: the whiteboard and the rack light up) |
+| `covered` | What the page lays over the canvas with its own interface (the waiting banner, the HUD, the dock, the card…): `[{ x, y, w, h }]` as fractions of the canvas. Keep labels out of there (`layoutLabels`' `avoid`) |
 
 ### An actor
 

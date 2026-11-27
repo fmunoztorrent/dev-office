@@ -294,7 +294,8 @@ body[data-floor="exec"] .screen[data-view="flat"] .hud-tl, body[data-floor="arch
 
 /* ---------- talking to a character: on the right, as tall as the screen, the chat first ---------- */
 .sheet {
-  position: absolute; z-index: 4; right: 1.4cqi; top: calc(1.4cqi + var(--hud) + 12px); bottom: 1.4cqi;
+  /* between the waiting banner and the dock (main.js measures them: --attention-h, --dock-h) */
+  position: absolute; z-index: 4; right: 1.4cqi; top: calc(1.4cqi + var(--hud) + 12px + var(--attention-h, 0px)); bottom: calc(1.2cqi + var(--dock-h, 0px) + 12px);
   width: min(480px, 42cqi); display: flex; flex-direction: column; gap: 8px;
   padding: 10px; color: var(--ink); background: #f4f1e8;
   box-shadow: 0 0 0 3px var(--ink), 5px 5px 0 3px #000a;

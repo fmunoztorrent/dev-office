@@ -96,7 +96,7 @@ Conteste lo que conteste, el juego sólo recibe un objetivo válido o `null` (`i
 
 ## Etiquetas sobre el dibujo
 
-Lo que dice la gente y los badges sobre sus cabezas se ubican juntos, en la pantalla, para que ninguno tape a otro: `layoutLabels(items, { bounds, gap, previous })` recibe el ancla de cada etiqueta (adonde apunta su cola) y su tamaño, y devuelve dónde va. Cada una prefiere quedar centrada justo encima de su ancla; si ese lugar está ocupado sube una fila o se corre, el lugar libre más cercano primero, siempre dentro de los bordes. Con `previous` (dónde estaba cada etiqueta en el cuadro anterior) una etiqueta conserva su lugar mientras siga libre, así que nada salta. El canvas ubica con él sus burbujas y sus badges, en las dos vistas y en los pisos compartidos, y desliza una etiqueta cuando tiene que moverse; otro renderer puede usar la misma ayuda con su propio `project`.
+Lo que dice la gente y los badges sobre sus cabezas se ubican juntos, en la pantalla, para que ninguno tape a otro: `layoutLabels(items, { bounds, gap, previous, avoid })` recibe el ancla de cada etiqueta (adonde apunta su cola) y su tamaño, y devuelve dónde va. Cada una prefiere quedar centrada justo encima de su ancla; si ese lugar está ocupado sube una fila o se corre, el lugar libre más cercano primero, siempre dentro de los bordes y fuera de `avoid` (las cajas que la página pone sobre el dibujo: el cartel de espera, el HUD, el dock, la ficha); sólo si arriba y a los lados no hay lugar va debajo de su ancla, con la cola hacia arriba. Con `previous` (dónde estaba cada etiqueta en el cuadro anterior) una etiqueta conserva su lugar mientras siga libre, así que nada salta. El canvas ubica con él sus burbujas y sus badges, en las dos vistas y en los pisos compartidos, y desliza una etiqueta cuando tiene que moverse; otro renderer puede usar la misma ayuda con su propio `project`.
 
 ## Escribir un renderer
 
@@ -140,7 +140,7 @@ Los tipos (`Scene`, `Actor`, `World`, `Prop`, `Host`, `RendererInstance`, `Rende
 
 ## La escena
 
-`buildScene(sim, { now, floor, selected, hover, hovered, services })` → un cuadro:
+`buildScene(sim, { now, floor, selected, hover, hovered, services, covered })` → un cuadro:
 
 | Campo | Qué es |
 |---|---|
@@ -161,6 +161,7 @@ Los tipos (`Scene`, `Actor`, `World`, `Prop`, `Host`, `RendererInstance`, `Rende
 | `lunch`, `news` | Si es la hora de almuerzo; lo último que pasó, en palabras (el ticker de la tele) |
 | `services` | Los servicios que los agentes dejaron corriendo (`{ id, status, name }`): las luces del rack |
 | `selected`, `hover`, `hovered` | Los de quien mira: a quién eligió (el rombo verde), quién está bajo el puntero (o de quién es el escritorio) y qué hay bajo él si un clic hace algo (un objetivo: la pizarra y el rack se iluminan) |
+| `covered` | Lo que la página pone sobre el lienzo con su propia interfaz (el cartel de espera, el HUD, el dock, la ficha…): `[{ x, y, w, h }]` en fracciones del lienzo. Deja las etiquetas fuera de ahí (el `avoid` de `layoutLabels`) |
 
 ### Un actor
 

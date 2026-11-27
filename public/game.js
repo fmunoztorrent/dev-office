@@ -1169,7 +1169,9 @@ export function createCanvasRenderer(host) {
     }
     const dt = Math.min(0.1, Math.max(0, (now - labelsAt) / 1000));
     labelsAt = now;
-    const placed = layoutLabels(items, { bounds: { x0: 3, y0: 3, x1: WORLD_W - 3, y1: H - 3 }, gap: 4, previous: labels });
+    // out of what the page covers with its own interface (the waiting banner, the HUD, the dock…): fractions of the canvas
+    const avoid = (scene?.covered || []).map((r) => ({ x: r.x * WORLD_W, y: r.y * H, w: r.w * WORLD_W, h: r.h * H }));
+    const placed = layoutLabels(items, { bounds: { x0: 3, y0: 3, x1: WORLD_W - 3, y1: H - 3 }, gap: 4, previous: labels, avoid });
     for (const id of [...labels.keys()]) if (!placed.has(id)) labels.delete(id);
     // the badges first: a bubble goes on top
     const order = [...placed].sort(([a], [b]) => (what.get(a).tag ? 0 : 1) - (what.get(b).tag ? 0 : 1));
@@ -1186,6 +1188,15 @@ export function createCanvasRenderer(host) {
   /** A pixel tail from the box's bottom edge to (ax, ay): a short wedge, or dotted steps if the box moved away. */
   function tail(bx, by, w, h, ax, ay, color) {
     const tx = Math.max(bx + 8, Math.min(bx + w - 8, Math.round(ax)));
+    if (by >= ay) {
+      // it went below who speaks (everything above was taken): the wedge on its top edge, pointing up
+      R(tx - 2, by - 6, 4, 2, color); R(tx - 4, by - 4, 8, 2, color); R(tx - 6, by - 2, 12, 2, color);
+      const up = by - ay;
+      if (up <= 12 && Math.abs(tx - ax) < 10) return;
+      const n = Math.max(1, Math.floor(Math.hypot(ax - tx, up - 6) / 7));
+      for (let i = 1; i < n; i++) R(Math.round(tx + ((ax - tx) * i) / n) - 1, Math.round(by - 6 - ((up - 6) * i) / n) - 1, 3, 3, color);
+      return;
+    }
     const gap = ay - (by + h);
     R(tx - 6, by + h, 12, 2, color); R(tx - 4, by + h + 2, 8, 2, color); R(tx - 2, by + h + 4, 4, 2, color);
     if (gap <= 12 && Math.abs(tx - ax) < 10) return;
@@ -1350,11 +1361,14 @@ export function createCanvasRenderer(host) {
     if (!banner) return;
     const colors = { warn: ['#f4a261', '#2b2d42'], done: ['#2a9d8f', '#fff'], chat: ['#3f73f0', '#fff'], fire: ['#e85d04', '#fff'] }[banner.tone] || ['#2b2d42', '#fff'];
     const pulse = banner.tone === 'warn' || banner.tone === 'fire' ? 0.85 + Math.sin(now / 200) * 0.15 : 1;
+    // above what the page lays over the bottom middle of the canvas (the dock): it used to cut the text
+    const below = (scene.covered || []).filter((r) => r.y > 0.5 && (r.y + r.h) * H > H - 34 && r.x < 0.75 && r.x + r.w > 0.25);
+    const bottom = below.length ? Math.round(Math.min(...below.map((r) => r.y * H)) - 6) : H;
     ctx.globalAlpha = pulse;
-    R(0, H - 34, WORLD_W, 34, colors[0]);
+    R(0, bottom - 34, WORLD_W, 34, colors[0]);
     ctx.globalAlpha = 1;
     ctx.font = `20px ${FONT}`; ctx.fillStyle = colors[1]; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(fit(banner.text, WORLD_W - 260), WORLD_W / 2, H - 17);
+    ctx.fillText(fit(banner.text, WORLD_W - 260), WORLD_W / 2, bottom - 17);
   }
 
   // ---------------------------------------------------------------- the isometric view
@@ -2050,6 +2064,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onRugC
   let hover = null;       // who is under the pointer (or whose desk)
   let hovered = null;     // what is under the pointer, if clicking it does something (a target of the SDK)
   let services = [];      // the ones left running in the background: a light each on the rack
+  let covered = [];       // what the page covers with its own interface: fractions of the canvas (scene.covered)
   // the floor being watched: an office ('office'), the executive one or the archive (floors.js)
   let floor = 'office';
   let floorHover = null, floorSel = null;
@@ -2107,7 +2122,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onRugC
     sim.step(dt, now);
     floors.step(dt, now);
     const office = floor === 'office';
-    scene = buildScene(sim, { now, floor, selected: office ? selected : floorSel, hover: office ? hover : floorHover, hovered: office ? hovered : null, services });
+    scene = buildScene(sim, { now, floor, selected: office ? selected : floorSel, hover: office ? hover : floorHover, hovered: office ? hovered : null, services, covered });
     if (other) other.canvas.hidden = !office;
     try {
       drawing().draw(scene);
@@ -2185,6 +2200,8 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onRugC
     get renderer() { return other?.id || 'canvas'; },
     /** Draws the office with a registered renderer (null or 'canvas': this canvas's own). false if there is no such renderer. */
     setRenderer: (id) => useRenderer(id),
+    /** What the page covers of the canvas with its own interface ([{ x, y, w, h }], fractions of it): labels keep out. */
+    setCovered(rects) { covered = Array.isArray(rects) ? rects : []; },
     /** The last frame's scene (public/scene.js): what is on screen, as data. */
     get scene() { return scene; },
     /** The office's view: 'flat' (the front one, the default) or 'iso' (the isometric top-down one), or one of another renderer's. */

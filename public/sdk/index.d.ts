@@ -155,6 +155,8 @@ export interface Scene {
   selected: string | null;
   hover: string | null;
   hovered: Target | null;
+  /** What the page covers of the canvas with its own interface (the waiting banner, the HUD, the dock, the card…), as fractions of it: keep labels out of there (layoutLabels' `avoid`). */
+  covered: Array<{ x: number; y: number; w: number; h: number }>;
 }
 
 // ---------------------------------------------------------------- a renderer
@@ -245,5 +247,5 @@ export interface LabelItem { id: string; x: number; y: number; w: number; h: num
 export interface LabelPlace { x: number; y: number; w: number; h: number; dx: number; dy: number; free: boolean }
 export function layoutLabels(
   items: LabelItem[],
-  options?: { bounds?: { x0: number; y0: number; x1: number; y1: number } | null; gap?: number; previous?: Map<string, { dx: number; dy: number }> | null },
+  options?: { bounds?: { x0: number; y0: number; x1: number; y1: number } | null; gap?: number; previous?: Map<string, { dx: number; dy: number }> | null; avoid?: Array<{ x: number; y: number; w: number; h: number }> },
 ): Map<string, LabelPlace>;

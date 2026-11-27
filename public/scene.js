@@ -125,7 +125,7 @@ export const WORLD = Object.freeze({
  * @param extra   what the viewer adds: who is selected and hovered, what is under the pointer (a target of the
  *                SDK: { person } or { prop }), the services left running (the rack)
  */
-export function buildScene(sim, { now = 0, floor = 'office', selected = null, hover = null, hovered = null, services = [] } = {}) {
+export function buildScene(sim, { now = 0, floor = 'office', selected = null, hover = null, hovered = null, services = [], covered = [] } = {}) {
   const date = sim.date();
   const weather = sim.weather;
   const team = Object.fromEntries(Object.entries(sim.agents).map(([id, a]) => [id, actorOf(a, 'team')]));
@@ -156,6 +156,9 @@ export function buildScene(sim, { now = 0, floor = 'office', selected = null, ho
     // the viewer's: who is selected (the green diamond), who is under the pointer (or whose desk) and what is
     // hovered: { person } or { prop } (the whiteboard and the rack light up)
     selected, hover, hovered: hovered ? { ...hovered } : null,
+    // what the page covers of the canvas with its own interface (the waiting banner, the HUD, the dock, the
+    // card…), as fractions of it: a renderer keeps its labels out of there
+    covered: (covered || []).map(({ x, y, w, h }) => ({ x, y, w, h })),
   };
 }
 
