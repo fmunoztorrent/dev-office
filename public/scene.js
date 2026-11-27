@@ -7,7 +7,8 @@
 //   - the terminal one (tui/view.js), with half blocks;
 //   - the reference one (public/renderers/plan.js): a plain top-down plan, to check the contract and to
 //     start a new renderer from (open the game with `?renderer=plan`);
-//   - whatever comes next (a 3D one): it registers itself (public/renderers.js) and reads the same scene.
+//   - whatever comes next (a 3D one): it registers itself with the renderer SDK (public/sdk/index.js) and
+//     reads the same scene.
 //
 // Coordinates: the floor plane is x (left → right, LEFT..W) by y (back wall → front, 0..H), in world units
 // (WORLD.units.perMeter of them make a meter); height goes up from the floor. A person's (x, y) is where
@@ -15,12 +16,13 @@
 // the same as `scene.t`.
 //
 // The contract is versioned (SCENE_VERSION): a field is added without breaking anyone; one that changes
-// meaning gets a new version. docs/rendering.md describes it.
+// meaning gets a new version. Its types are in public/sdk/index.d.ts and docs/rendering.md describes it.
 
 import {
   W, H, LEFT, TEAM, BOARD, EASEL, CLOCK, GLASS, TV, SOFA, RACK, EXTINGUISHER, SPOT, PLANTS, HOT_DESKS, HALL, OFFICE_DOOR,
   ELEVATOR, BATHROOM, CAFE, DINING, DINING_SEATS, PARTITION, ALARM, SIGN, daylight, gait,
 } from './sim.js';
+// (the props' `action` is what clicking them does: the SDK's actionOf, public/sdk/index.js)
 import { season } from './sky.js';
 
 export const SCENE_VERSION = 1;
@@ -58,10 +60,11 @@ const box = (id, kind, x, y, w, d, h, extra = {}) => ({ id, kind, x, y, w, d, h,
 /**
  * The world that does not move: its rooms, walls, doors, windows, furniture and the named spots people
  * walk to. Each prop: { id, kind, x, y (the middle of its footprint, on the floor), w, d (its footprint),
- * h (its height) }, in world units.
+ * h (its height) }, in world units, and `action` if clicking it does something (select its owner, the
+ * whiteboard, the services, the elevator, the rug).
  */
 export const WORLD = Object.freeze({
-  units: { perMeter: 36, wallHeight: 122 },
+  units: { perMeter: 36, wallHeight: 122, personHeight: 63 },
   bounds: { x0: LEFT, x1: W, y0: 0, y1: H },
   rooms: [
     { id: 'office', x0: 0, x1: CAFE.x - 6, y0: 122, y1: H },
@@ -79,17 +82,25 @@ export const WORLD = Object.freeze({
   // the back wall is glass: the city, the sky and the weather behind it
   windows: [{ id: 'glass', wall: 'back', x0: GLASS.x0, x1: GLASS.x1, top: GLASS.top, bottom: GLASS.bottom }],
   props: [
-    ...Object.entries(TEAM).map(([role, c]) => box(`desk:${role}`, 'desk', c.seat.x, c.seat.y + 6, 100, 30, 26, { owner: role, prop: c.prop || null })),
+    ...Object.entries(TEAM).map(([role, c]) => box(`desk:${role}`, 'desk', c.seat.x, c.seat.y + 6, 100, 30, 26, { owner: role, prop: c.prop || null, action: 'select' })),
     ...HOT_DESKS.map((s, i) => box(`hotdesk:${i}`, 'hotdesk', s.x, s.y + 4, 72, 26, 22, { index: i })),
-    box('whiteboard', 'whiteboard', BOARD.x + BOARD.w / 2, EASEL.feet, BOARD.w, 12, EASEL.feet - EASEL.top, { face: { x: BOARD.x, y: BOARD.y, w: BOARD.w, h: BOARD.h } }),
+    // (its writable part: `face` in the front view's pixels, `surface` in the world: the plane y, from height z0 to z1)
+    box('whiteboard', 'whiteboard', BOARD.x + BOARD.w / 2, EASEL.feet, BOARD.w, 12, EASEL.feet - EASEL.top, {
+      face: { x: BOARD.x, y: BOARD.y, w: BOARD.w, h: BOARD.h },
+      surface: { x0: BOARD.x, x1: BOARD.x + BOARD.w, y: EASEL.feet, z0: EASEL.feet - BOARD.y - BOARD.h, z1: EASEL.feet - BOARD.y },
+      action: 'board',
+    }),
     box('clock', 'clock', CLOCK.x + CLOCK.w / 2, 0, CLOCK.w, 4, CLOCK.h, { wall: 'back', top: CLOCK.y }),
     box('alarm', 'alarm', ALARM.x, 0, 12, 12, 12, { ceiling: true }),
     box('sign', 'sign', SIGN.x, 0, 90, 2, 24, { wall: 'back', top: SIGN.y }),
     box('tv', 'tv', TV.x, TV.feet, TV.w, 14, TV.h + 40, { screen: { w: TV.w, h: TV.h } }),
     box('sofa', 'sofa', SOFA.x, SOFA.y + 10, 144, 40, 30, { seats: SOFA.seats.map((x) => ({ x, y: SOFA.y })) }),
-    box('rack', 'rack', RACK.x + RACK.w / 2, RACK.y + RACK.h, RACK.w, 30, RACK.h),
+    box('rack', 'rack', RACK.x + RACK.w / 2, RACK.y + RACK.h, RACK.w, 30, RACK.h, { action: 'services' }),
     box('extinguisher', 'extinguisher', EXTINGUISHER.x, EXTINGUISHER.y, 10, 10, 28),
-    box('meeting-table', 'table', SPOT.table.x, SPOT.table.y, 168, 52, 24, { shape: 'oval' }),
+    box('meeting-table', 'table', SPOT.table.x, SPOT.table.y, 168, 52, 24, { shape: 'oval', action: 'rug' }),
+    // the rugs, flat on the floor: the meeting table's (the daily and the retro are called from it) and the living room's
+    box('rug', 'rug', SPOT.table.x, SPOT.table.y + 11, 260, 126, 0, { action: 'rug' }),
+    box('living-rug', 'rug', SOFA.x, (TV.feet + 586) / 2, 192, 606 - TV.feet, 0),
     ...PLANTS.map(([x, y], i) => box(`plant:${i}`, 'plant', x, y, 24, 24, 40)),
     box('counter', 'counter', CAFE.counter.x + CAFE.counter.w / 2, CAFE.counter.top + 16, CAFE.counter.w, 32, 34),
     box('fridge', 'fridge', CAFE.fridge.x + CAFE.fridge.w / 2, CAFE.fridge.y + CAFE.fridge.h, CAFE.fridge.w, 24, CAFE.fridge.h),
@@ -100,7 +111,7 @@ export const WORLD = Object.freeze({
     ...BATHROOM.stalls.map((s, i) => box(`stall:${i}`, 'stall', s.x, 140, s.w, 60, 100, { index: i })),
     box('sink', 'sink', BATHROOM.sink.x, BATHROOM.sink.y, BATHROOM.sink.w, 20, 34, { mirror: true }),
     box('cooler', 'cooler', -212, 476, 16, 16, 44),
-    box('elevator', 'elevator', ELEVATOR.x + ELEVATOR.w / 2, 122, ELEVATOR.w, 6, 110),
+    box('elevator', 'elevator', ELEVATOR.x + ELEVATOR.w / 2, 122, ELEVATOR.w, 6, 110, { action: 'lift' }),
   ],
   // where people go: the whiteboard, the coffee, the meeting table, next to the sofa, the elevator
   spots: { ...Object.fromEntries(Object.entries(SPOT).map(([k, v]) => [k, { x: v.x, y: v.y }])), elevator: { ...ELEVATOR.spot } },
@@ -111,9 +122,10 @@ export const WORLD = Object.freeze({
  * @param sim     the simulation (public/sim.js)
  * @param now     the simulation's clock, now (ms)
  * @param floor   the floor being watched: 'office' (this one), 'exec' or 'archive' (those draw their own: floors.js)
- * @param extra   what the viewer adds: who is selected and hovered, the services left running (the rack)
+ * @param extra   what the viewer adds: who is selected and hovered, what is under the pointer (a target of the
+ *                SDK: { person } or { prop }), the services left running (the rack)
  */
-export function buildScene(sim, { now = 0, floor = 'office', selected = null, hover = null, services = [] } = {}) {
+export function buildScene(sim, { now = 0, floor = 'office', selected = null, hover = null, hovered = null, services = [], covered = [] } = {}) {
   const date = sim.date();
   const weather = sim.weather;
   const team = Object.fromEntries(Object.entries(sim.agents).map(([id, a]) => [id, actorOf(a, 'team')]));
@@ -141,8 +153,12 @@ export function buildScene(sim, { now = 0, floor = 'office', selected = null, ho
     // the latest thing that happened in the office, in words (the TV's ticker when there is no task)
     news: sim.journal.at(-1)?.text || '',
     services: (services || []).map((s) => ({ id: s.id, status: s.status, name: s.name || '' })),
-    // the viewer's: who is selected (the green diamond) and who is under the pointer
-    selected, hover,
+    // the viewer's: who is selected (the green diamond), who is under the pointer (or whose desk) and what is
+    // hovered: { person } or { prop } (the whiteboard and the rack light up)
+    selected, hover, hovered: hovered ? { ...hovered } : null,
+    // what the page covers of the canvas with its own interface (the waiting banner, the HUD, the dock, the
+    // card…), as fractions of it: a renderer keeps its labels out of there
+    covered: (covered || []).map(({ x, y, w, h }) => ({ x, y, w, h })),
   };
 }
 

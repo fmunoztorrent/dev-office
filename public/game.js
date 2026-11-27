@@ -1,17 +1,8 @@
-// Canvas renderer (browser) of the office: each frame the simulation (sim.js) moves and its scene
-// (scene.js: what is on screen, as plain data) is what gets drawn; another renderer (renderers.js) can
-// draw that same scene instead.
-// The world is x LEFT..W by y 0..H (the office, and left of it the hallway with the elevator and the
-// bathroom); the canvas is drawn at an integer multiple of that size so that in full screen
-// the "pixels" stay crisp. There are two views of the same office, to choose from (⚙ › The game,
-// the ◇ button or the v key): the usual front view (the default) and the isometric top-down view
-// (the floor as a rhombus, the back and left walls, furniture as volumes and people standing,
-// sorted by depth; see iso.js). The back wall is glass: behind it you see the city with the real
-// time, season and weather (sky.js). In the top-down view the office is the top floor of a glass
-// tower, with that same landscape behind it. On top of the scene goes a subtle lighting pass
-// (lamps, neon, monitors, the TV, the fire and the glow of the dreams).
-// The building has two more floors every office shares (floors.js): the executive one on top and
-// the archive in the basement; the game draws the floor being watched with this same toolkit.
+// The game in the browser: the host that runs the office (the simulation, sim.js, each frame) and draws it
+// with a renderer through the renderer SDK (public/sdk/index.js): every frame it builds the scene
+// (scene.js: what is on screen, as plain data), hands it to the renderer, and asks the renderer what is
+// under the pointer (a target) to turn it into an action. The game's own renderer is here too: the
+// pixel-art canvas (createCanvasRenderer), registered with the SDK as 'canvas', like any other.
 
 import {
   createSim, W, H, LEFT, WORLD_W, SPOT, PLANTS, STATUS_ICON, PHASE_COLOR, phaseInfo, onBoard, tvChannel,
@@ -23,8 +14,9 @@ import { isoCamera, apply, unapply, scaled, BACK, WALL_H } from './iso.js';
 import { t } from './i18n.js';
 import { createFloors, drawFloor, floorHit } from './floors.js';
 import { buildScene, personIn } from './scene.js';
-import { getRenderer } from './renderers.js';
+import { registerRenderer, getRenderer, createRenderer, createHost, pickWith, actionOf, propOf, boxOnScreen, layoutLabels } from './sdk/index.js';
 import { drawAnime, ANIME_HEIGHT } from './anime.js';
+import { drawIcon, iconOf, leadingIcon } from './pixel-icons.js';
 export { TEAM, personOf, PHASES, phaseInfo } from './sim.js';
 
 const P = 3; // size of a sprite "pixel"
@@ -38,44 +30,50 @@ const hslRgb = (h, s, l) => {
   return `${f(0)},${f(8)},${f(4)}`;
 };
 
+// ---------------------------------------------------------------- the canvas renderer
+//
+// The world is x LEFT..W by y 0..H (the office, and left of it the hallway with the elevator and the
+// bathroom); the canvas is drawn at an integer multiple of that size so that in full screen
+// the "pixels" stay crisp. There are two views of the same office, to choose from (⚙ › The game,
+// the ◇ button or the v key): the usual front view (the default) and the isometric top-down view
+// (the floor as a rhombus, the back and left walls, furniture as volumes and people standing,
+// sorted by depth; see iso.js). The back wall is glass: behind it you see the city with the real
+// time, season and weather (sky.js). In the top-down view the office is the top floor of a glass
+// tower, with that same landscape behind it. On top of the scene goes a subtle lighting pass
+// (lamps, neon, monitors, the TV, the fire and the glow of the dreams).
+// The building has two more floors every office shares (floors.js): the executive one on top and
+// the archive in the basement; the game draws the floor being watched with this same toolkit.
+
 /**
- * @param now   () => Date: the instant (daylight, clock, lunch). The real one by default.
- * @param zone  the office's time zone (null: the system's); changed with sim.setZone
+ * The game's own renderer (an SDK renderer: public/sdk/index.js): the pixel-art canvas, in its two views,
+ * the front one (`flat`) and the isometric top-down one (`iso`). It draws the office only from the scene,
+ * and the shared floors (not in the scene yet) from the host's `floors` (floors.js).
+ * @param host  { canvas, width, height, pixelRatio, view: 'flat' | 'iso', theme, floors }
  */
-export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onRugClick, onHover, onFloorClick, now: clockNow = () => new Date(), zone = null, view = 'flat', renderer = null } = {}) {
+export function createCanvasRenderer(host) {
+  const { canvas, floors = null } = host;
   const ctx = canvas.getContext('2d');
-  let iso = view !== 'flat';
+  let iso = host.view === 'iso';
   // the camera fits the whole floor (the office and the hallway, left of it) in the canvas
   const cam = isoCamera({ ox: 560, oy: 195 });
-  const sim = createSim({ wall: () => clockNow().getTime(), zone });
-  const { agents } = sim;
   // the frame's scene (public/scene.js): what the game says must be on screen. Everything below draws
-  // from it, never from the simulation (sim.step and sim.handle are the game's, not the drawing's)
+  // from it, and only from it
   let scene = null;
-  let selected = null;
-  let hover = null;
-  let hoverBoard = false;
-  let hoverRack = false;
-  let services = []; // the ones left running in the background: a light each on the rack
-  // the floor being watched: an office ('office'), the executive one or the archive (floors.js)
-  let floor = 'office';
-  const floors = createFloors();
-  let floorHover = null, floorSel = null;
+  /** Is this prop under the pointer? (the whiteboard and the rack light up) */
+  const hovering = (id) => scene?.hovered?.prop === id;
   // the graphic theme (public/themes.js): how the people are drawn (pixel art, or anime)
-  let theme = 'pixel';
+  let theme = host.theme === 'anime' ? 'anime' : 'pixel';
   /** How tall a person is drawn (name tags, bubbles and the plumbob go over it). */
   const tall = () => (theme === 'anime' ? ANIME_HEIGHT : 21 * P);
-  let last = performance.now();
   let scale = 1;
 
-  // Resolution: an integer multiple of the world, the smallest that covers the canvas's real pixels.
-  function fitResolution() {
-    const r = canvas.getBoundingClientRect();
-    const k = Math.max(1, Math.min(4, Math.ceil((r.width * (window.devicePixelRatio || 1)) / WORLD_W)));
-    if (k !== scale || canvas.width !== WORLD_W * k) { scale = k; canvas.width = WORLD_W * k; canvas.height = H * k; }
+  // Resolution: an integer multiple of the world, the smallest that covers the canvas's real pixels
+  // (so that in full screen the "pixels" stay crisp).
+  function resize(width, _height, pixelRatio = 1) {
+    const k = Math.max(1, Math.min(4, Math.ceil(((width || WORLD_W) * (pixelRatio || 1)) / WORLD_W)));
+    if (k !== scale || canvas.width !== WORLD_W * k || canvas.height !== H * k) { scale = k; canvas.width = WORLD_W * k; canvas.height = H * k; }
   }
-  if (typeof ResizeObserver === 'function') new ResizeObserver(fitResolution).observe(canvas);
-  fitResolution();
+  resize(host.width, host.height, host.pixelRatio);
 
   // ---------------------------------------------------------------- dibujo
 
@@ -526,7 +524,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onRugC
     R(lt - 1, EASEL.top - 2, 3, 3, woodDark); R(rt - 1, EASEL.top - 2, 3, 3, woodDark);
     drawClock(now);
     // the board
-    R(x - 4, y - 4, w + 8, h + 8, hoverBoard ? '#ffd166' : '#8d99ae');
+    R(x - 4, y - 4, w + 8, h + 8, hovering('whiteboard') ? '#ffd166' : '#8d99ae');
     R(x, y, w, h, '#f8f9fa');
     ctx.font = `15px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     ctx.fillStyle = '#2b2d42';
@@ -548,7 +546,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onRugC
       });
       if (items.length > 3) { ctx.fillStyle = '#6c757d'; ctx.fillText(`+${items.length - 3}`, cx + cw - 22, y + 22); }
     });
-    if (hoverBoard) {
+    if (hovering('whiteboard')) {
       ctx.font = `14px ${FONT}`;
       const tip = t(board.todos.length ? 'scene.boardTipTickets' : 'scene.boardTip');
       const tw = ctx.measureText(tip).width + 12;
@@ -690,23 +688,25 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onRugC
     }
     const icon = STATUS_ICON[a.state] || (a.subagents ? '🤖' : '');
     if (icon) {
-      ctx.font = `${fpx(16)}px ${EMOJI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-      const bob = Math.sin(now / 250) * 2;
-      ctx.fillText(icon, x + 20, y - 18 * P + bob);
+      const bob = Math.round(Math.sin(now / 250) * 2), px = iconOf(icon), sz = 18;
+      // in pixel art (public/pixel-icons.js); an emoji without a drawing, as it is
+      if (px) drawIcon(ctx, px, x + 20 - sz / 2, y - 18 * P + bob - sz, sz);
+      else { ctx.font = `${fpx(16)}px ${EMOJI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(icon, x + 20, y - 18 * P + bob); }
     }
     // what they eat at their desk
     if (a.seated && a.food) { ctx.font = `13px ${EMOJI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(a.food, a.cfg.seat.x - 30, a.cfg.seat.y - 18); }
     // Label of the role "on duty" with its phase (e.g. ▶ RED), to the left of the head.
     const { role: turn, phase: turnPhase } = scene.turn;
     if (turn === a.id && turnPhase) {
-      const label = `▶ ${phaseInfo(turnPhase).label}`;
+      const label = phaseInfo(turnPhase).label;
       ctx.font = `${fpx(15)}px ${FONT}`;
-      const w = ctx.measureText(label).width + 10, lh = fpx(15);
-      const tx = x - 20 - w, ty = y - 20 * P - 1 + Math.sin(now / 300) * 1.5;
+      const lh = Math.max(14, fpx(15)), w = ctx.measureText(label).width + 10 + 9;
+      const tx = Math.round(x - 20 - w), ty = Math.round(y - 20 * P - 1 + Math.sin(now / 300) * 1.5);
       R(tx, ty, w, lh, '#1b1f33');
       R(tx + 1, ty + 1, w - 2, lh - 2, PHASE_COLOR[turnPhase] || c.shirt);
+      drawIcon(ctx, 'play', tx + 3, ty + Math.round((lh - 6) / 2), 6, '#1b1f33'); // ▶, in pixels
       ctx.fillStyle = '#1b1f33'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      ctx.fillText(label, tx + 5, ty + lh / 2 + 1);
+      ctx.fillText(label, tx + 12, ty + lh / 2 + 1);
     }
     if (scene.hover === a.id && scene.selected !== a.id) {
       ctx.strokeStyle = '#ffffff99'; ctx.lineWidth = 2;
@@ -901,7 +901,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onRugC
     // each service running in the background lights a unit (cyan, with its own heartbeat)
     const running = scene.services.filter((s) => s.status === 'running');
     running.slice(0, 6).forEach((s, i) => R(rx + 25, ry + 9 + i * 14, 9, 3, (Math.floor(now / 700) + i) % 3 ? '#7ff7ff' : '#2bb7c9'));
-    if (hoverRack) { ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2; ctx.strokeRect(rx - 1, ry - 1, 44, 94); }
+    if (hovering('rack')) { ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2; ctx.strokeRect(rx - 1, ry - 1, 44, 94); }
     if (!iso && scene.services.length) drawServiceTag(rx + 21, ry - 4, running.length);
     drawFire(now);
   }
@@ -983,7 +983,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onRugC
       R(x, y, w, h, Math.floor(now / 400) % 2 ? '#9d0208' : '#6a040f');
       R(x, y + k(4), w, k(9), '#ffd166');
       text(t('scene.tvBreaking'), x + w / 2, y + k(9), 12, '#6a040f', 'center');
-      ctx.font = `${k(14)}px ${EMOJI}`; ctx.textAlign = 'center'; ctx.fillText('🔥', x + k(12), y + k(23));
+      drawIcon(ctx, 'fire', Math.round(x + k(6)), Math.round(y + k(17)), k(12));
       text(t('scene.tvServer'), x + w / 2 + k(6), y + k(23), 13, '#ffffff', 'center');
       return;
     }
@@ -1129,6 +1129,106 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onRugC
     ctx.fillText(text, bx + w / 2, by + h / 2 + 1);
   }
 
+  // ---------------------------------------------------------------- what people say, over their heads
+  //
+  // The bubbles and the badges of a frame are placed together, on the screen (the SDK's layoutLabels): none
+  // covers another, each keeps its place while it can and glides when it must move, and a pixel tail (a
+  // dotted leader, when it had to move away) points at who speaks. Same in both views.
+  // per floor: id → { dx, dy (its place, for the next frame), sx, sy (where it is drawn: gliding to it) }
+  const speech = new Map();
+  let labelsAt = 0;
+  /** The colors of a bubble by its tone: border, paper. */
+  const TONE = { error: ['#e63946', '#ffe5e5'], warn: ['#f4a261', '#fff3e0'] };
+  function drawSpeech(now, people = [...Object.values(scene.team), ...scene.visitors], matrixOf = personM, key = 'office') {
+    use(ID);
+    const items = [], what = new Map();
+    const labels = speech.get(key) || speech.set(key, new Map()).get(key);
+    for (const a of people) {
+      if (a.hidden || a.gone || (a.ghost && a.fade < 0.5)) continue;
+      // in the transform the person is drawn with: its scale is the text's (front view 1, top-down smaller)
+      const m = matrixOf(a), k = Math.hypot(m[0], m[1]);
+      if (a.bubble) {
+        const fs = Math.round(fpx(16) * k), lh = Math.round(fpx(15) * k);
+        ctx.font = `${fs}px ${FONT}`;
+        const lines = wrap(a.bubble.text, fpx(176) * k, 3);
+        const w = Math.round(Math.min(fpx(190) * k, Math.max(...lines.map((l) => ctx.measureText(l).width)) + 14));
+        const h = lines.length * lh + 8;
+        const [ax, ay] = apply(m, a.x, feetY(a) - 22 * P - 2);
+        items.push({ id: a.id, x: ax, y: ay - 8, w, h, priority: a.bubble.tone ? 3 : 2 });
+        what.set(a.id, { a, lines, fs, lh, ax, ay });
+      } else if (a.badge && !a.hidden) {
+        const fs = Math.round(fpx(13) * k);
+        ctx.font = `${fs}px ${FONT}, ${EMOJI}`;
+        // its icon in pixel art (public/pixel-icons.js), then its word or two
+        const { icon, text } = leadingIcon(a.badge), is = icon ? Math.max(12, Math.round(fs / 12) * 12) : 0;
+        const w = Math.ceil(ctx.measureText(text).width) + 10 + (icon ? is + 4 : 0), h = Math.max(fs, is) + 4;
+        const [ax, ay] = apply(m, a.x, feetY(a) - tall() - (sitting(a) ? 0 : fpx(14)) - 2);
+        items.push({ id: a.id, x: ax, y: ay - 7, w, h, priority: 1 });
+        what.set(a.id, { a, tag: true, fs, ax, ay, icon, text, is });
+      }
+    }
+    const dt = Math.min(0.1, Math.max(0, (now - labelsAt) / 1000));
+    labelsAt = now;
+    // out of what the page covers with its own interface (the waiting banner, the HUD, the dock…): fractions of the canvas
+    const avoid = (scene?.covered || []).map((r) => ({ x: r.x * WORLD_W, y: r.y * H, w: r.w * WORLD_W, h: r.h * H }));
+    const placed = layoutLabels(items, { bounds: { x0: 3, y0: 3, x1: WORLD_W - 3, y1: H - 3 }, gap: 4, previous: labels, avoid });
+    for (const id of [...labels.keys()]) if (!placed.has(id)) labels.delete(id);
+    // the badges first: a bubble goes on top
+    const order = [...placed].sort(([a], [b]) => (what.get(a).tag ? 0 : 1) - (what.get(b).tag ? 0 : 1));
+    for (const [id, p] of order) {
+      const was = labels.get(id), glide = was ? Math.min(1, dt * 10) : 1;
+      const sx = was ? was.sx + (p.dx - was.sx) * glide : p.dx, sy = was ? was.sy + (p.dy - was.sy) * glide : p.dy;
+      labels.set(id, { dx: p.dx, dy: p.dy, sx, sy });
+      const it = what.get(id), base = items.find((x) => x.id === id);
+      const bx = Math.round(base.x - p.w / 2 + sx), by = Math.round(base.y - p.h + sy);
+      if (it.tag) drawTagAt(it, bx, by, p.w, p.h);
+      else drawBubbleAt(it, bx, by, p.w, p.h, now);
+    }
+  }
+  /** A pixel tail from the box's bottom edge to (ax, ay): a short wedge, or dotted steps if the box moved away. */
+  function tail(bx, by, w, h, ax, ay, color) {
+    const tx = Math.max(bx + 8, Math.min(bx + w - 8, Math.round(ax)));
+    if (by >= ay) {
+      // it went below who speaks (everything above was taken): the wedge on its top edge, pointing up
+      R(tx - 2, by - 6, 4, 2, color); R(tx - 4, by - 4, 8, 2, color); R(tx - 6, by - 2, 12, 2, color);
+      const up = by - ay;
+      if (up <= 12 && Math.abs(tx - ax) < 10) return;
+      const n = Math.max(1, Math.floor(Math.hypot(ax - tx, up - 6) / 7));
+      for (let i = 1; i < n; i++) R(Math.round(tx + ((ax - tx) * i) / n) - 1, Math.round(by - 6 - ((up - 6) * i) / n) - 1, 3, 3, color);
+      return;
+    }
+    const gap = ay - (by + h);
+    R(tx - 6, by + h, 12, 2, color); R(tx - 4, by + h + 2, 8, 2, color); R(tx - 2, by + h + 4, 4, 2, color);
+    if (gap <= 12 && Math.abs(tx - ax) < 10) return;
+    // it had to move away: dotted steps down to who speaks
+    const n = Math.max(1, Math.floor(Math.hypot(ax - tx, gap - 6) / 7));
+    for (let i = 1; i < n; i++) R(Math.round(tx + ((ax - tx) * i) / n) - 1, Math.round(by + h + 6 + ((gap - 6) * i) / n) - 1, 3, 3, color);
+  }
+  function drawBubbleAt({ a, lines, fs, lh, ax, ay }, bx, by, w, h, now) {
+    const b = a.bubble;
+    ctx.globalAlpha = Math.max(0, Math.min(1, (b.until - now) / 300, (now - (b.at ?? -Infinity)) / 120));
+    const [border, paper] = TONE[b.tone] || ['#2b2d42', '#ffffff'];
+    R(bx - 2, by - 2, w + 4, h + 4, border);
+    R(bx, by, w, h, paper);
+    R(bx, by + h - 2, w, 2, b.tone ? '#00000014' : '#e6e8ef'); // a pixel of shade under the text
+    tail(bx, by, w, h, ax, ay, border);
+    ctx.font = `${fs}px ${FONT}`;
+    ctx.fillStyle = '#2b2d42'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    lines.forEach((l, i) => ctx.fillText(l, bx + 7, by + 4 + i * lh));
+    ctx.globalAlpha = 1;
+  }
+  function drawTagAt({ a, fs, ax, ay, icon, text, is }, bx, by, w, h) {
+    const edge = a.cfg.shirt || '#8d99ae';
+    R(bx - 1, by - 1, w + 2, h + 2, edge);
+    R(bx, by, w, h, '#161a2bee');
+    tail(bx, by, w, h, ax, ay, edge);
+    let x = bx + 5;
+    if (icon) { drawIcon(ctx, icon, x, by + Math.round((h - is) / 2), is, '#f1f3fa'); x += is + 4; }
+    ctx.font = `${fs}px ${FONT}, ${EMOJI}`;
+    ctx.fillStyle = '#f1f3fa'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, x, by + h / 2 + 1);
+  }
+
   function drawBubble(a, now) {
     const b = a.bubble;
     if (!b || a.hidden) return;
@@ -1261,11 +1361,20 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onRugC
     if (!banner) return;
     const colors = { warn: ['#f4a261', '#2b2d42'], done: ['#2a9d8f', '#fff'], chat: ['#3f73f0', '#fff'], fire: ['#e85d04', '#fff'] }[banner.tone] || ['#2b2d42', '#fff'];
     const pulse = banner.tone === 'warn' || banner.tone === 'fire' ? 0.85 + Math.sin(now / 200) * 0.15 : 1;
+    // above what the page lays over the bottom middle of the canvas (the dock): it used to cut the text
+    const below = (scene.covered || []).filter((r) => r.y > 0.5 && (r.y + r.h) * H > H - 34 && r.x < 0.75 && r.x + r.w > 0.25);
+    const bottom = below.length ? Math.round(Math.min(...below.map((r) => r.y * H)) - 6) : H;
     ctx.globalAlpha = pulse;
-    R(0, H - 34, WORLD_W, 34, colors[0]);
+    R(0, bottom - 34, WORLD_W, 34, colors[0]);
     ctx.globalAlpha = 1;
+    // its text in the widest part of the strip nothing covers (the card on the right, the activity on the left)
+    const across = (scene.covered || []).map((r) => ({ x0: r.x * WORLD_W, x1: (r.x + r.w) * WORLD_W, y0: r.y * H, y1: (r.y + r.h) * H }))
+      .filter((r) => r.y0 < bottom && r.y1 > bottom - 34).sort((a, b) => a.x0 - b.x0);
+    let span = [0, 0], from = 0;
+    for (const r of across) { if (r.x0 - from > span[1] - span[0]) span = [from, r.x0]; from = Math.max(from, r.x1); }
+    if (WORLD_W - from > span[1] - span[0]) span = [from, WORLD_W];
     ctx.font = `20px ${FONT}`; ctx.fillStyle = colors[1]; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(fit(banner.text, WORLD_W - 260), WORLD_W / 2, H - 17);
+    ctx.fillText(fit(banner.text, Math.min(WORLD_W - 260, span[1] - span[0] - 40)), (span[0] + span[1]) / 2, bottom - 17);
   }
 
   // ---------------------------------------------------------------- the isometric view
@@ -1656,10 +1765,9 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onRugC
     drawParticlesIso();
     drawLightsIso(now, light);
     for (const a of Object.values(scene.team)) { use(personM(a)); drawDream(a, now); }
-    if (person(selected)) { use(personM(person(selected))); drawPlumbob(personIn(scene, scene.selected), now); }
-    for (const a of [...Object.values(scene.team), ...scene.visitors]) if (!a.bubble) { use(personM(a)); drawTag(a, now); }
-    for (const a of Object.values(scene.team)) { use(personM(a)); drawBubble(a, now); }
-    for (const g of scene.visitors) if (g.fade > 0.5) { use(personM(g)); drawBubble(g, now); }
+    const chosen = personIn(scene, scene.selected);
+    if (chosen) { use(personM(chosen)); drawPlumbob(chosen, now); }
+    drawSpeech(now);
     use(ID);
     drawVignette();
     drawBanner(now);
@@ -1667,7 +1775,7 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onRugC
 
   // What floors.js draws the shared floors with: the same people, window and volumes as the offices.
   const G = {
-    ctx, R, cam, box, poly, FONT, EMOJI, fit, drawPerson, drawBubble, drawPlumbob,
+    ctx, R, cam, box, poly, FONT, EMOJI, fit, drawPerson, drawBubble, drawSpeech, drawPlumbob,
     get iso() { return iso; },
     /** Their base transform: the canvas's in the top-down view, centered in the front one. */
     get ID() { return iso ? ID : FLOOR_FLAT; },
@@ -1795,36 +1903,27 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onRugC
     },
   };
 
-  function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000);
-    last = now;
-    const t = now / 1000;
-    sim.step(dt, now);
-    floors.step(dt, now);
-    scene = buildScene(sim, { now, floor, selected, hover, services });
-    const light = scene.light;
-    // a registered renderer (public/renderers.js) draws the office instead of this canvas's own
-    if (external && floor === 'office') { drawExternal(); requestAnimationFrame(frame); return; }
+  /** Draws a frame: the scene of that frame, and nothing else. */
+  function draw(frameScene) {
+    scene = frameScene;
+    const now = scene.t, t = now / 1000, light = scene.light;
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     ctx.imageSmoothingEnabled = false;
-    if (floor !== 'office') {
+    if (scene.floor !== 'office') {
+      const model = floors?.[scene.floor];
+      if (!model) return;
       // the shared floors keep the office's 960-wide plan: in the front view, scaled to fit under the HUD's band
       ctx.save();
       // (around the archive, the ground it is dug into, with its fossils)
-      if (!iso) { use(ID); if (floor === 'archive') drawUnderground(); else R(0, 0, WORLD_W, H, '#1b1f33'); use(FLOOR_FLAT); ctx.beginPath(); ctx.rect(0, 0, W, FLOOR_H); ctx.clip(); }
-      drawFloor(G, floors[floor], now, light, { hover: floorHover, selected: floorSel });
+      if (!iso) { use(ID); if (scene.floor === 'archive') drawUnderground(); else R(0, 0, WORLD_W, H, '#1b1f33'); use(FLOOR_FLAT); ctx.beginPath(); ctx.rect(0, 0, W, FLOOR_H); ctx.clip(); }
+      drawFloor(G, model, now, light, { hover: scene.hover, selected: scene.selected });
       ctx.restore();
       use(ID);
       drawVignette();
-      requestAnimationFrame(frame);
       return;
     }
-    if (!iso) use(FLAT);
-    if (iso) {
-      frameIso(now, t, light);
-      requestAnimationFrame(frame);
-      return;
-    }
+    if (iso) { frameIso(now, t, light); return; }
+    use(FLAT);
 
     drawRoom(t, now, light);
     drawBoard(now);
@@ -1856,116 +1955,244 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onRugC
     drawLights(now, light);
     for (const a of Object.values(scene.team)) drawDream(a, now);
     drawPlumbob(personIn(scene, scene.selected), now);
-    for (const a of [...Object.values(scene.team), ...scene.visitors]) if (!a.bubble) drawTag(a, now);
-    for (const a of Object.values(scene.team)) drawBubble(a, now);
-    for (const g of scene.visitors) if (g.fade > 0.5) drawBubble(g, now);
+    drawSpeech(now);
     use(ID);
     drawVignette();
     drawBanner(now);
-    requestAnimationFrame(frame);
   }
-  requestAnimationFrame(frame);
 
-  // ---------------------------------------------------------------- another renderer (public/renderers.js)
+  // ---------------------------------------------------------------- what is where (the SDK's pick, project, toWorld)
 
-  // a registered renderer draws the office on a canvas of its own (WebGL, if it wants), and that canvas is
-  // copied onto this one: so the page, the HUD and the clicks stay the same whatever draws
-  let external = null;
-  function useRenderer(id) {
-    try { external?.instance.dispose?.(); } catch { /* it is going away anyway */ }
-    external = null;
-    const spec = id && getRenderer(id);
-    if (!spec) return false;
-    const own = document.createElement('canvas');
-    own.width = canvas.width; own.height = canvas.height;
-    external = { id, canvas: own, instance: spec.create(own, { world: { width: WORLD_W, height: H } }) };
-    return true;
-  }
-  function drawExternal() {
-    const { canvas: own, instance } = external;
-    if (own.width !== canvas.width || own.height !== canvas.height) { own.width = canvas.width; own.height = canvas.height; instance.resize?.(own.width, own.height); }
-    instance.draw(scene);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(own, 0, 0, canvas.width, canvas.height);
-  }
-  useRenderer(renderer);
-
-  // ---------------------------------------------------------------- interaction
-
-  /** A character of the team, or a newcomer ('new:<subId>') while they are in the office. */
-  const person = (id) => agents[id] || sim.ghosts.find((g) => g.id === id && !g.gone) || null;
-  function agentAt(mx, my) {
-    if (external) return external.instance.pick?.(mx / WORLD_W, my / H)?.person || null;
+  /** Who is at a point of the canvas (its own pixels): a person, or nobody there but their desk (a desk is its owner's). */
+  function personAt(mx, my) {
     let best = null, bestD = iso ? 40 * SP : 40;
-    if (!scene) return null;
     for (const a of [...Object.values(scene.team), ...scene.visitors.filter((g) => g.fade > 0.3 && !g.gone)]) {
       if (a.hidden) continue;
       const [hx, hy] = apply(personM(a), a.x, feetY(a) - 33);
       const d = Math.hypot(mx - hx, my - hy);
-      if (d < bestD) { best = a.id; bestD = d; }
+      if (d < bestD) { best = { person: a.id }; bestD = d; }
     }
     if (best) return best;
-    // nobody there: their desk (the team's, even when they are away from it) is theirs too
+    // nobody there: their desk (the team's, even when they are away from it)
     for (const a of Object.values(scene.team)) {
       const s = a.cfg?.seat;
       if (!s) continue;
       const [dx, dy] = apply(iso ? cam.billboard(s.x, s.y, ...anchor({ ...a, x: s.x, y: s.y })) : FLAT, s.x, s.y - 30);
       const d = Math.hypot(mx - dx, my - dy);
-      if (d < bestD + (iso ? 16 * SP : 16)) { best = a.id; bestD = d; }
+      if (d < bestD + (iso ? 16 * SP : 16)) { best = { prop: `desk:${a.id}` }; bestD = d; }
     }
     return best;
   }
-  /** Is the pointer over the whiteboard? (in the isometric view, it is mapped to the whiteboard's plane) */
   /** Is the pointer over the elevator's doors (at the end of the hallway, on the back wall)? */
   const overLift = (x, y) => {
     const [wx, wy] = iso ? unapply(cam.front(BACK), x, y) : [x + LEFT, y];
     return wx >= ELEVATOR.x && wx <= ELEVATOR.x + ELEVATOR.w && wy >= 8 && wy <= 122;
   };
+  /** Over the whiteboard? (in the isometric view, mapped to the whiteboard's plane) */
   const overBoard = (x, y) => (iso ? onBoard(...unapply(BOARD_M(), x, y)) : onBoard(x + LEFT, y));
-  /** Is the pointer over the meeting table's rug (the daily and the retro are called from it)? */
+  /** Over the meeting table's rug (the daily and the retro are called from it)? */
   const overRug = (x, y) => {
     const [wx, wy] = iso ? unapply(cam.floor(), x, y) : [x + LEFT, y];
     return wx >= SPOT.table.x - 130 && wx <= SPOT.table.x + 130 && wy >= SPOT.table.y - 52 && wy <= SPOT.table.y + 74;
   };
-  /** The pointer, in the canvas's own pixels (the front view's world is shifted by LEFT). */
-  const toWorld = (e) => {
-    const r = canvas.getBoundingClientRect();
-    return [((e.clientX - r.left) / r.width) * WORLD_W, ((e.clientY - r.top) / r.height) * H];
+
+  /**
+   * What is at a point of the canvas (fractions of it): { person } or { prop } of the office. On a shared
+   * floor (not in the scene yet), its own targets: { person } of that floor or { prop: what } of floors.js.
+   */
+  function pick(fx, fy) {
+    if (!scene) return null;
+    const x = fx * WORLD_W, y = fy * H;
+    if (scene.floor !== 'office') {
+      const model = floors?.[scene.floor];
+      const hit = model && floorHit(model, ...(iso ? [x, y] : toFloor(x, y)), { iso, cam });
+      return hit ? (hit.person ? { person: hit.person } : { prop: hit.what }) : null;
+    }
+    return personAt(x, y)
+      || (overLift(x, y) && { prop: 'elevator' })
+      || (overBoard(x, y) && { prop: 'whiteboard' })
+      || (overRack(x, y) && { prop: 'rack' })
+      || (overRug(x, y) && { prop: 'rug' })
+      || null;
+  }
+  /** Where a point of the world (x, y on the floor, z up) lands on the canvas, as fractions of it. */
+  function project(x, y, z = 0) {
+    const [X, Y] = iso ? cam.proj(x, y, z) : [x - LEFT, y - z];
+    return { x: X / WORLD_W, y: Y / H };
+  }
+  /** The point of the floor under a point of the canvas (fractions of it). */
+  function toWorld(fx, fy) {
+    const X = fx * WORLD_W, Y = fy * H;
+    if (!iso) return { x: X + LEFT, y: Y };
+    const [x, y] = unapply(cam.floor(0), X, Y);
+    return { x, y };
+  }
+
+  return {
+    draw,
+    resize,
+    pick,
+    project,
+    toWorld,
+    setView(v) { iso = v === 'iso'; },
+    setTheme(id) { theme = id === 'anime' ? 'anime' : 'pixel'; },
+    get view() { return iso ? 'iso' : 'flat'; },
+    dispose() { scene = null; },
   };
+}
+
+registerRenderer({ id: 'canvas', label: 'Pixel art', views: ['flat', 'iso'], builtIn: true, create: createCanvasRenderer });
+
+// ---------------------------------------------------------------- the game (the host)
+
+/** Sizes a canvas the host made for a renderer: its size on the page times the screen's pixel ratio. */
+const fitCanvas = (c, { width, height, pixelRatio }) => {
+  const w = Math.max(1, Math.round(width * pixelRatio)), h = Math.max(1, Math.round(height * pixelRatio));
+  if (c.width !== w) c.width = w;
+  if (c.height !== h) c.height = h;
+};
+
+/**
+ * The game: the office's simulation, run every frame and drawn by a renderer of the SDK (the canvas's own,
+ * or the one asked for: `renderer`), plus the clicks on what the renderer says is under the pointer.
+ * @param now       () => Date: the instant (daylight, clock, lunch). The real one by default.
+ * @param zone      the office's time zone (null: the system's); changed with sim.setZone
+ * @param view      'flat' (the front view, the default) or 'iso' (the isometric top-down one)
+ * @param renderer  a registered renderer's id (public/sdk/index.js) to draw the office with; null: the canvas's own
+ */
+export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onRugClick, onHover, onFloorClick, now: clockNow = () => new Date(), zone = null, view = 'flat', renderer = null } = {}) {
+  const sim = createSim({ wall: () => clockNow().getTime(), zone });
+  const { agents } = sim;
+  // the two shared floors (floors.js): they live on their own and the canvas's renderer draws them
+  const floors = createFloors();
+  let scene = null;
+  let selected = null;    // who is selected (their card is open)
+  let hover = null;       // who is under the pointer (or whose desk)
+  let hovered = null;     // what is under the pointer, if clicking it does something (a target of the SDK)
+  let services = [];      // the ones left running in the background: a light each on the rack
+  let covered = [];       // what the page covers with its own interface: fractions of the canvas (scene.covered)
+  // the floor being watched: an office ('office'), the executive one or the archive (floors.js)
+  let floor = 'office';
+  let floorHover = null, floorSel = null;
+  let mode = view === 'iso' ? 'iso' : 'flat';
+  let theme = 'pixel';
+  let last = performance.now();
+
+  /** The canvas's size on the page and the screen's pixel ratio (what a renderer is told). */
+  const size = () => {
+    const r = canvas.getBoundingClientRect();
+    return { width: r.width || canvas.width, height: r.height || canvas.height, pixelRatio: globalThis.devicePixelRatio || 1 };
+  };
+  // the canvas's own renderer: the office when no other draws it, and always the shared floors
+  const own = createRenderer(getRenderer('canvas'), createHost(canvas, { ...size(), view: mode, theme, floors }));
+  // another renderer of the SDK, on a canvas of its own laid over this one (it can ask it for WebGL)
+  let other = null; // { id, spec, canvas, instance, view }
+  function useRenderer(id) {
+    if (other) {
+      try { other.instance.dispose?.(); } catch { /* it is going away anyway */ }
+      other.canvas.remove();
+      other = null;
+    }
+    if (!id || id === 'canvas') return true;
+    const spec = getRenderer(id);
+    if (!spec || typeof document === 'undefined') return false;
+    const layer = document.createElement('canvas');
+    layer.className = 'renderer-layer';
+    layer.dataset.renderer = spec.id;
+    canvas.after(layer);
+    const s = size();
+    fitCanvas(layer, s);
+    try {
+      const start = spec.views.includes(mode) ? mode : spec.views[0];
+      other = { id: spec.id, spec, canvas: layer, view: start, instance: createRenderer(spec, createHost(layer, { ...s, view: start, theme })) };
+    } catch (e) {
+      console.error(`renderer ${spec.id}:`, e);
+      layer.remove();
+      return false;
+    }
+    return true;
+  }
+  /** The renderer drawing what is on screen now: another one draws only the office. */
+  const drawing = () => (other && floor === 'office' ? other.instance : own);
+
+  function resizeAll() {
+    const s = size();
+    own.resize(s.width, s.height, s.pixelRatio);
+    if (other) { if (other.instance.resize) other.instance.resize(s.width, s.height, s.pixelRatio); else fitCanvas(other.canvas, s); }
+  }
+  if (typeof ResizeObserver === 'function') new ResizeObserver(resizeAll).observe(canvas);
+
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    sim.step(dt, now);
+    floors.step(dt, now);
+    const office = floor === 'office';
+    scene = buildScene(sim, { now, floor, selected: office ? selected : floorSel, hover: office ? hover : floorHover, hovered: office ? hovered : null, services, covered });
+    if (other) other.canvas.hidden = !office;
+    try {
+      drawing().draw(scene);
+    } catch (e) {
+      // a renderer that fails is dropped: the canvas's own draws again
+      if (drawing() === own) throw e;
+      console.error(`renderer ${other.id} failed; back to the canvas:`, e);
+      useRenderer(null);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  useRenderer(renderer);
+
+  // ---------------------------------------------------------------- the pointer
+
+  /** The pointer, as fractions of the canvas (what a renderer is asked about). */
+  const fractions = (e) => {
+    const r = canvas.getBoundingClientRect();
+    return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
+  };
+  // what the page does with each action (the SDK's actionOf): one without a handler is not offered
+  const HANDLED = { select: true, board: !!onBoardClick, services: !!onRackClick, lift: !!onFloorClick, rug: !!onRugClick };
+  /** What is under the pointer in the office, and what clicking it does (null: nothing). */
+  function aim(e) {
+    const target = pickWith(drawing(), scene, ...fractions(e));
+    const action = actionOf(target);
+    return action && HANDLED[action.type] ? { target, action } : { target: null, action: null };
+  }
   canvas.addEventListener('mousemove', (e) => {
-    const [x, y] = toWorld(e);
     if (floor !== 'office') {
-      const hit = floorHit(floors[floor], ...(iso ? [x, y] : toFloor(x, y)), { iso, cam });
+      const hit = own.pick(...fractions(e));
       floorHover = hit?.person || null;
-      canvas.style.cursor = hit ? 'pointer' : 'default';
+      canvas.classList.toggle('hot', !!hit); // the game's pixel hand (style.css)
       return;
     }
     const was = hover;
-    hover = agentAt(x, y);
-    hoverBoard = !hover && overBoard(x, y);
-    hoverRack = !hover && !hoverBoard && !!onRackClick && overRack(x, y);
-    canvas.style.cursor = hover || hoverBoard || hoverRack || overLift(x, y) || (!!onRugClick && overRug(x, y)) ? 'pointer' : 'default';
+    const { target, action } = aim(e);
+    hovered = target;
+    hover = action?.type === 'select' ? action.person : null;
+    canvas.classList.toggle('hot', !!action);
     // who is under the pointer (or whose desk), and where: the page shows what they do and what you can do
     if (was !== hover || hover) onHover?.(hover, { x: e.clientX, y: e.clientY });
   });
-  canvas.addEventListener('mouseleave', () => { hover = null; hoverBoard = false; hoverRack = false; onHover?.(null); });
+  canvas.addEventListener('mouseleave', () => { hover = null; hovered = null; onHover?.(null); });
   canvas.addEventListener('click', (e) => {
-    const [x, y] = toWorld(e);
     if (floor !== 'office') {
-      const hit = floorHit(floors[floor], ...(iso ? [x, y] : toFloor(x, y)), { iso, cam });
+      const hit = own.pick(...fractions(e));
       floorSel = hit?.person || null;
       if (hit?.person) floors[floor].intro(hit.person);
-      else if (hit?.what) onFloorClick?.(floor, hit.what);
+      else if (hit?.prop) onFloorClick?.(floor, hit.prop);
       return;
     }
-    const who = agentAt(x, y);
-    if (!who && overLift(x, y)) return onFloorClick?.('office', 'lift');
-    if (!who && overBoard(x, y)) return onBoardClick?.();
-    if (!who && onRackClick && overRack(x, y)) return onRackClick();
-    if (!who && onRugClick && overRug(x, y)) return onRugClick({ x: e.clientX, y: e.clientY });
-    selected = who;
+    const { action } = aim(e);
+    if (action?.type === 'lift') return onFloorClick('office', 'lift');
+    if (action?.type === 'board') return onBoardClick();
+    if (action?.type === 'services') return onRackClick();
+    if (action?.type === 'rug') return onRugClick({ x: e.clientX, y: e.clientY });
+    selected = action?.person || null;
     onSelect?.(selected);
   });
+
+  /** A character of the team, or a newcomer ('new:<subId>') while they are in the office. */
+  const person = (id) => agents[id] || sim.ghosts.find((g) => g.id === id && !g.gone) || null;
 
   return {
     handle: sim.handle,
@@ -1975,26 +2202,40 @@ export function createGame(canvas, { onSelect, onBoardClick, onRackClick, onRugC
     select(id) { selected = id; },
     person,
     reset: sim.reset,
-    /** The renderer drawing the office: 'flat' or 'iso' (this canvas's own) or a registered one (public/renderers.js). */
-    get renderer() { return external?.id || (iso ? 'iso' : 'flat'); },
-    /** Draws with a registered renderer (null: this canvas's own again). false if there is no such renderer. */
+    /** The renderer drawing the office: 'canvas' (this canvas's own) or a registered one (public/sdk/index.js). */
+    get renderer() { return other?.id || 'canvas'; },
+    /** Draws the office with a registered renderer (null or 'canvas': this canvas's own). false if there is no such renderer. */
     setRenderer: (id) => useRenderer(id),
+    /** What the page covers of the canvas with its own interface ([{ x, y, w, h }], fractions of it): labels keep out. */
+    setCovered(rects) { covered = Array.isArray(rects) ? rects : []; },
     /** The last frame's scene (public/scene.js): what is on screen, as data. */
     get scene() { return scene; },
-    /** 'flat' (the front view, the default) or 'iso' (the isometric top-down one): the office view. */
-    get view() { return iso ? 'iso' : 'flat'; },
-    setView(v) { iso = v !== 'flat'; },
+    /** The office's view: 'flat' (the front one, the default) or 'iso' (the isometric top-down one), or one of another renderer's. */
+    get view() { return other ? other.view : mode; },
+    /** The views of the renderer drawing the office (the `v` key goes through them). */
+    get views() { return other ? [...other.spec.views] : ['flat', 'iso']; },
+    setView(v) {
+      if (other?.spec.views.includes(v)) { other.view = v; other.instance.setView?.(v); return; }
+      if (!['flat', 'iso'].includes(v)) return;
+      mode = v;
+      own.setView(mode);
+    },
     /** The graphic theme: the people's drawing, and the shared floors' cast. */
-    setTheme(id) { theme = id === 'anime' ? 'anime' : 'pixel'; floors.setTheme?.(theme); },
+    setTheme(id) {
+      theme = id === 'anime' ? 'anime' : 'pixel';
+      floors.setTheme?.(theme);
+      own.setTheme(theme);
+      other?.instance.setTheme?.(theme);
+    },
     get theme() { return theme; },
     /** The services left running in the background (server/services.js): the rack shows them. */
     setServices(list) { services = Array.isArray(list) ? list : []; },
-    /** Where the whiteboard is on the canvas, as fractions of it ({ x, y, w, h }), in either view. */
+    /** Where a point of the world lands on the canvas, as fractions of it (null: the renderer cannot say). */
+    project(x, y, z = 0) { return drawing().project?.(x, y, z) || null; },
+    /** Where the whiteboard is on the canvas, as fractions of it ({ x, y, w, h }), whatever draws it; null if it cannot say. */
     boardBox() {
-      const m = iso ? BOARD_M() : FLAT;
-      const pts = [[BOARD.x, BOARD.y], [BOARD.x + BOARD.w, BOARD.y + BOARD.h]].map(([x, y]) => apply(m, x, y));
-      const [x0, x1] = [pts[0][0], pts[1][0]].sort((a, b) => a - b), [y0, y1] = [pts[0][1], pts[1][1]].sort((a, b) => a - b);
-      return { x: x0 / WORLD_W, y: y0 / H, w: (x1 - x0) / WORLD_W, h: (y1 - y0) / H };
+      const r = drawing(), s = propOf('whiteboard').surface;
+      return r.project ? boxOnScreen(r.project, { x0: s.x0, x1: s.x1, y0: s.y, y1: s.y, z0: s.z0, z1: s.z1 }) : null;
     },
     /** The two shared floors (floors.js): what they show, what happens on them and who presides. */
     floors,

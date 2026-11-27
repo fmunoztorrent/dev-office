@@ -19,7 +19,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { clip } from './roles.js';
 import { sanitizeProject } from './pipeline.js';
-import { agentCommand, officeAllows, modelArgs, HARNESSES, which, e2eEnv } from '../integrations/common/devteam.mjs';
+import { agentCommand, officeSettings, modelArgs, HARNESSES, which, e2eEnv } from '../integrations/common/devteam.mjs';
 import { guideFor, guideText, autonomyOf, GUIDE_MARK } from './guides.js';
 import { contextBlock } from './rag.js';
 import { t as tr } from '../public/i18n.js';
@@ -47,6 +47,9 @@ const HARNESS_IDS = ['claude-code', 'opencode', 'pi', 'codex'];
 const TASKS_MAX = 50;
 const TEXT_MAX = 4000;
 const OUTPUT_LINES = 40;
+// how long after herdr saw a pane idle the session's own end may still turn its task into failed
+// (Pi retries a model error with backoff before giving up)
+const PANE_VERDICT_MS = 120_000;
 
 // A brief starts with its scope: the agent works only inside its project's folder, and only on what
 // is asked (the stay-focused skill). The 📁 line is the office's: it is taken out of the board's title.
@@ -229,7 +232,7 @@ export class TaskHub extends EventEmitter {
     try {
       const prefs = this.prefs() || {};
       const { pane } = await this.herdr.launchAgent({
-        harness: task.agent, cwd: task.cwd, prompt: task.prompt || task.text, bin, args: [...withModel(task.agent, Array.isArray(args) ? args : [], task.model), ...officeAllows(task.agent, task.reads)], env: fenced(task.agent, env),
+        harness: task.agent, cwd: task.cwd, prompt: task.prompt || task.text, bin, args: [...withModel(task.agent, Array.isArray(args) ? args : [], task.model), ...officeSettings(task.agent, task.reads)], env: fenced(task.agent, env),
         direction: prefs.herdr?.direction, office: task.office, officeName: this.officeName?.(task.office) || '',
         role: 'manager', title: task.title, taskId: task.id, label: `${label} · ${path.basename(task.cwd)}`,
       });
@@ -260,21 +263,39 @@ export class TaskHub extends EventEmitter {
   /** A pane's agent ended its turn (herdr sees it idle or done): its task is done. */
   paneSettled(pane) {
     const t = [...this.tasks.values()].find((x) => x.pane === pane && x.status === 'running');
-    if (t) this.#set(t, 'done', tr('task.paneIdle', { pane }));
+    if (!t) return;
+    t.paneDoneAt = Date.now(); // herdr's guess: the session's own end, if it comes soon after, has the last word
+    this.#set(t, 'done', tr('task.paneIdle', { pane }));
   }
 
   /**
    * The session ended its turn (its own event, without depending on herdr recognizing the agent):
-   * what was sent to it, in its pane or to the open session, is done. Without a pane, what was
-   * launched in the background is closed by its exit code, and Claude gets the task right at its Stop.
+   * what was sent to it, in its pane or to the open session, is done, or failed if the turn ended in
+   * an error (`error`: the provider refused the model's answer). Without a pane, what was launched in
+   * the background is closed by its exit code (the error, if any, waits for it), and Claude gets the
+   * task right at its Stop.
    */
-  sessionSettled(session) {
+  sessionSettled(session, error = null) {
+    if (!session) return;
+    const now = Date.now();
     for (const t of this.tasks.values()) {
-      if (t.status !== 'running' || !session || t.session !== session) continue;
-      if (!t.pane && (t.mode !== 'session' || t.agent === 'claude-code')) continue;
-      this.#set(t, 'done', tr('task.finished'));
+      if (t.session !== session) continue;
+      // herdr may see the pane idle before the session's own end arrives: the session's verdict wins, once
+      if (t.status === 'done' && t.paneDoneAt) {
+        if (error && now - t.paneDoneAt < PANE_VERDICT_MS) this.#fail(t, error);
+        t.paneDoneAt = 0;
+        continue;
+      }
+      if (t.status !== 'running') continue;
+      if (!t.pane && t.mode !== 'session') { t.turnError = error || null; continue; }
+      if (!t.pane && t.agent === 'claude-code') continue;
+      if (error) this.#fail(t, error);
+      else this.#set(t, 'done', tr('task.finished'));
     }
   }
+
+  /** The agent's turn ended in an error: the task failed, with the reason (the event that told it is already in the log). */
+  #fail(t, error) { this.#set(t, 'failed', clip(error, 200) || tr('task.failedDefault')); }
 
   /** The session opened by a pane's agent (it arrives with its first event). */
   paneSession(pane, session) {
@@ -313,7 +334,9 @@ export class TaskHub extends EventEmitter {
     child.on('close', (code, signal) => {
       this.children.delete(task.id);
       if (task.status === 'cancelled') return this.#changed();
-      if (code === 0) this.#set(task, 'done', tr('task.finished'));
+      // its turn ended in a model error: the reason, not the exit code (an agent may exit with 0 anyway)
+      if (task.turnError && !signal) this.#fail(task, task.turnError);
+      else if (code === 0) this.#set(task, 'done', tr('task.finished'));
       else this.#set(task, 'failed', signal ? tr('task.killed', { signal }) : tr('task.exitCode', { code, last: task.output.length ? `: ${task.output.at(-1)}` : '' }));
     });
   }

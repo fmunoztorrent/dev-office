@@ -298,3 +298,20 @@ export function humanizeTool(tool) {
   const words = name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[-_]+/g, ' ').trim().toLowerCase();
   return words ? t('act.toolUse', { tool: words }) : t('events.working');
 }
+
+/**
+ * A provider's error as a person reads it: «402: {"type":"invalid_request_error","message":"Insufficient
+ * balance…"}» (what Pi and OpenCode pass on) becomes «402 · Insufficient balance…». Text that is not a
+ * code with a JSON body stays as it is.
+ */
+export function providerError(text) {
+  const s = String(text ?? '').trim();
+  const m = s.match(/^(?:(?:error|http)\s*)?(\d{3})?\s*[:·-]?\s*(\{[\s\S]*\})\s*$/i);
+  if (!m) return s;
+  let body;
+  try { body = JSON.parse(m[2]); } catch { return s; }
+  const msg = [body?.error?.message, body?.message, typeof body?.error === 'string' ? body.error : null, body?.detail]
+    .find((x) => typeof x === 'string' && x.trim());
+  if (!msg) return s;
+  return m[1] ? `${m[1]} · ${msg.trim()}` : msg.trim();
+}

@@ -2,6 +2,52 @@
 
 All notable changes to Dev Team Office. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/) (while it is `0.x`, a minor version may change behavior).
 
+## [Unreleased]
+
+A renderer SDK, so any graphics engine can draw the office; an interface with two clear voices (the game looks like a game, and the settings like a tool), its icons in pixel art; and people who talk one at a time, with bubbles that never cover each other.
+
+### Added
+
+- **Pixel-art icons** for the whole interface: every emoji used as an icon (buttons, titles, tabs, chips, the settings' sections, the map, the badges over people's heads, their status, the turn's ▶) has its own 12 × 12 drawing in the game's palette, crisp at any size (`public/pixel-icons.js`). What people and agents say or write (a chat, a bubble, the log, the archive) keeps its emoji. A test fails if an emoji of the interface has no drawing.
+- **The game's own pointers:** a pixel arrow over the office and a pixel hand over what can be clicked; pixel checkboxes and radio buttons in the game's dialogs and the activity panel.
+- **`layoutLabels`** in the renderer SDK: places a frame's labels (bubbles, badges) so that none covers another, keeping each one's place between frames.
+
+- **The renderer SDK** (`public/sdk/`): the interfaces between the game (what moves and what a click does) and whatever draws it. A renderer registers itself (`registerRenderer`), gets a host (its canvas, its size, the view and the theme) and each frame's scene, and says what is under the pointer (`pick`, or just `project` / `toWorld` and the SDK works it out); the game turns that into an action (`actionOf`: select someone, the whiteboard, the services, the elevator, the rug). Its types are in `public/sdk/index.d.ts`, checked against the real scene by the tests. A renderer that fails while drawing is dropped and the game goes back to its own canvas.
+- **The game's own pixel art is one more renderer** (`canvas`, with its `flat` and `iso` views): its clicks, its views and its theme go through the same interfaces as any other.
+- **A 3D renderer in plain WebGL** (`?renderer=blocks`), as the example of another engine: the office and its people as lit blocks, two cameras (`orbit` and `top`, the `v` key), and every click of the game working through the SDK.
+- **A conformance kit** (`public/sdk/conformance.js`, `node scripts/check-renderer.mjs <module>`): creates a renderer in each of its views, draws sample scenes (frozen: it fails if the renderer changes them), resizes it, asks it what is at points of its canvas and checks that what it draws, projects and picks agree.
+- The world says more: the rugs, a person's height, the whiteboard's writable surface in the world, and what each prop does when clicked (`action`).
+
+### Changed
+
+- **How people talk:** a bubble stays as long as it takes to read it; a new line waits for the current one to be read instead of covering it (an error or a warning does not wait); the same line again only keeps it up. In a conversation they speak one at a time, each answer after the previous line has been read. The shared floors' people talk the same way.
+- **Bubbles never overlap:** the bubbles and badges of a frame are placed together on the screen, in both views and on the shared floors; one that had to move glides there and a dotted pixel leader points at who speaks. Bigger pixel tails.
+- **The game looks like a game.** Everything over the office is part of it: the HUD and the dock as pixel panels (an ink outline, a bevel, a hard shadow, the dock's gold border), the activity, a character's card, the tips and the rug's menu in the same voice. Every dialog the game opens (a brief, work, daily, retro, loops, services, the archive, directives, the impact, E2E, an agent's question, the inbox) is a sheet of paper in a wooden frame, pinned, with its title in the pixel font, pixel buttons that sink when pressed, fields outlined in ink, cards with a hard shadow and the brief's prompt on a post-it. They keep one layout (header, a body that scrolls, footer; labels next to their fields, stacked on a phone), and long text stays in the interface's font, to read.
+- **⚙ Settings is a tool:** it keeps the interface's look (hairlines, soft corners, the interface's font), a cleaner top bar (the search no longer hides the title), each section's icon in its header, its content in cards with a readable width, and a section picker that fits on a phone. A dialog opened from the settings looks like them.
+- **Buttons and fields** have one size and one set of kinds (primary, secondary, danger), in both voices.
+- **The archive's kinds are tabs**, **an agent's options are rows** with their key, and **a loop's form** takes the whole dialog when there are no loops yet.
+- **"Project", not "department",** in every text of the interface (the company is areas and projects since 0.31.0).
+- The README's and the settings guide's screenshots show the new look.
+
+### Fixed
+
+- **A turn that ends in a model error is a failure, not a finished task.** When the provider refuses the answer (no balance, a bad key), Pi and OpenCode now report the error and a `turn_end` that carries it, and the brief the office sent to that session ends `failed` with the provider's reason (on the board, in the log and in the retro) instead of «finished». Pi waits until it stops retrying; a retry that works is a normal turn, and pressing Escape is not an error. Inside herdr, the session's verdict wins even if herdr saw the pane idle first. A Pi or OpenCode pipeline stage whose answer was refused fails the pipeline instead of moving on.
+- **Asking for a demo while one is running** says so ("a demo is already running") instead of "command not available: demo".
+- On a phone, a dialog's note goes above its buttons instead of squeezing into a column, and a footer with many buttons wraps instead of cutting one off.
+- **The floor picker's icons are pixel art too** (🏛 🏢 📚), and so is a project's 🧩 in the brief's agent picker: a native selector drew the system's emoji.
+- **Nothing the page lays over the office hides what happens in it.** A character's card sits between the waiting banner and the dock instead of under them, and people's bubbles and badges keep out of the banner, the HUD, the dock, the card, the activity and the E2E screen (the scene's `covered`, and `avoid` in the renderer SDK's `layoutLabels`); only when there is no room above or beside does a bubble go below who speaks, its tail pointing up.
+- **The archive's shelves in the room open the archive**, in both views, not only the shelf on the back wall (which the waiting banner can cover).
+- **The directives' picker starts with nothing ticked:** with a single project, every repository came ticked and the impact map counted them all as touched. What goes to the map is what you pick, and its note says who it goes to.
+- **The E2E screen's summary** reads «Ended · failed: 1» instead of a plural that did not agree with one.
+- **A provider's error reads as its message** («402 · Insufficient balance…»), not its raw JSON, in the log, the bubbles and the task's reason.
+- **Restarting the office inside herdr no longer opens the agent again:** if it is already open in a pane of the workspace, in its folder, the office follows that pane instead of adding another.
+- **A brief to a new Claude Code session inside herdr started nothing on macOS:** its permissions made a command line of about 1,600 bytes and a terminal takes 1,024 as one typed line, so it was cut and Claude never ran. They now go in a settings file (`--settings`).
+- **A subagent Claude runs in the background** no longer ends when it is launched, its hand-back (`<agent-message>`, `<task-notification>`) is not a new brief, and the task it belongs to ends with the turn after it, not with the turn that launched it.
+- **Claude idle at its prompt is not waiting for you:** its «waiting for your input» (and a login that went well) no longer raises the banner.
+- **One question, one entry:** a question on an agent's screen inside herdr and the same session's own notice no longer show up twice in the banner and the inbox.
+- **A brief pasted into Claude** (`<pasted_content>`) shows on the board as its text.
+- The canvas's strip at the bottom centers its text in the part nothing covers (the card, the activity).
+
 ## [0.31.0] - 2026-11-18
 
 The company as it really is (areas, projects, repositories and how they relate, read from the code), a lighter settings area, and a team that answers like a team.

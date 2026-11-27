@@ -43,3 +43,21 @@ test('una página del navegador que no dice `client` (cargada de una oficina vie
     await server.close();
   }
 });
+
+test('una segunda demo mientras corre otra dice que ya hay una (no «comando no disponible»); terminada, se puede pedir otra', async () => {
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
+  const post = (action) => fetch(`${server.url}/v1/commands`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, speed: 50 }) }).then(async (r) => ({ status: r.status, ...(await r.json()) }));
+  try {
+    assert.equal((await post('demo')).ok, true);
+    const again = await post('demo');
+    assert.equal(again.status, 400);
+    assert.match(again.error, /demo is already running/);
+    assert.doesNotMatch(again.error, /not available/);
+    assert.equal((await post('stop-demo')).ok, true);
+    assert.equal((await post('demo')).ok, true);
+    assert.match((await post('nope')).error, /command not available: nope/);
+    await post('stop-demo');
+  } finally {
+    await server.close();
+  }
+});

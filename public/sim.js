@@ -253,6 +253,12 @@ const FADE_MS = 900;
 export const TAG_MS = 120_000;
 /** How long an open turn counts as working without any event from it (a stuck session does not work forever). */
 const OPEN_TURN_MS = 10 * 60_000;
+// How long a line stays over someone's head: long enough to read it (a base plus a little per letter, a
+// lot at most), and never less than what the line asks for. A line that comes while the previous one has
+// been up less than SAY_MIN_MS waits for it, so no bubble flashes by unread.
+export const SAY = Object.freeze({ base: 1300, perChar: 48, max: 12_000, min: 1400 });
+/** How long `text` takes to read, at least `ms`. */
+export const readMs = (text, ms = 0) => Math.max(ms, Math.min(SAY.max, SAY.base + String(text ?? '').length * SAY.perChar));
 const TURN_KINDS = new Set(['tool_start', 'tool_end', 'thinking', 'phase']);
 const DEVS = ['backend', 'frontend', 'designer'];
 const SPEED = 120; // world px per second when walking
@@ -488,7 +494,8 @@ class Agent {
     this.state = 'idle';
     this.stateUntil = 0;
     this.text = '';
-    this.bubble = null;
+    this.bubble = null;    // what they say: { text, at, until, tone }
+    this.nextLine = null;  // a line waiting for the current bubble to be read
     this.badges = new Map(); // assigned subagents: id → description
     this.tag = null;         // what their agent is doing, as a badge over their head: { text, session, until }
     this.openTurn = null;    // { session, at }: their agent's turn is open (it works even when no event arrives for a while)
@@ -518,7 +525,23 @@ class Agent {
   get away() { return !this.seated || this.queue.length > 0; }
   get walking() { return this.queue[0]?.t === 'walk'; }
 
-  say(text, ms = 3800, tone) { this.bubble = { text, until: this.clock() + ms, tone }; }
+  /**
+   * Says something: a bubble over their head for as long as it takes to read it (at least `ms`). The same
+   * line again only keeps it up longer. A new line that comes while the current one has been up less than
+   * SAY.min waits until then (the latest one waiting wins), so nobody's bubble flickers; an error or a
+   * warning does not wait.
+   */
+  say(text, ms = 3800, tone) {
+    text = String(text ?? '').trim();
+    if (!text) return;
+    const now = this.clock(), b = this.bubble;
+    if (b && now < b.until && b.text === text) { b.until = Math.max(b.until, now + readMs(text, ms)); return; }
+    if (b && now < b.until && now - b.at < SAY.min && !tone) { this.nextLine = { text, ms, tone }; return; }
+    this.bubble = { text, at: now, until: now + readMs(text, ms), tone };
+    this.nextLine = null;
+  }
+  /** Lets the current bubble go soon (someone else answers it), keeping it a moment to finish reading. */
+  hush(ms = 1200) { if (this.bubble) this.bubble.until = Math.min(this.bubble.until, this.clock() + ms); }
   /** The badge over their head (what their agent is doing), while it lasts. */
   get badge() { return this.tag && !this.hidden && this.clock() < this.tag.until ? this.tag.text : null; }
 
@@ -554,6 +577,12 @@ class Agent {
     }
     if (this.state === 'blocked' && now > this.stateUntil + 4000) this.state = 'idle';
     if (this.bubble && now > this.bubble.until) this.bubble = null;
+    // the line that was waiting for the previous one to be read
+    if (this.nextLine && (!this.bubble || now - this.bubble.at >= SAY.min)) {
+      const { text, ms, tone } = this.nextLine;
+      this.nextLine = null;
+      this.bubble = { text, at: now, until: now + readMs(text, ms), tone };
+    }
 
     const job = this.queue[0];
     if (!job) return;
@@ -1300,9 +1329,9 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
   /** Someone else joins the scene to reply; the scene lasts until `end`. */
   function join(sc, id, lines, end) {
     sc.lines.push(...lines.map(([text, at]) => ({ who: id, text, at })));
-    sc.end = Math.max(sc.end, end);
     if (!sc.members.includes(id)) { sc.members.push(id); agents[id].scene = sc; }
-    for (const m of sc.members) agents[m].queue = agents[m].queue.map((j) => (j.t === 'until' ? { ...j, at: sc.end } : j));
+    sc.end = Math.max(sc.end, end) - 1;
+    extend(sc, sc.end + 1);
   }
 
   const lower = (s) => String(s || '').replace(/^./, (c) => c.toLocaleLowerCase());
@@ -1695,7 +1724,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
         const door = { x: BATHROOM.stalls[i].x, y: 142 }, sink = sinkSpot(i);
         const jobs = [
           { t: 'walk', path: route({ x: x.x, y: x.y }, door), end: door },
-          { t: 'fn', fn: (y) => { y.hidden = true; y.bubble = null; bath.doorAt[i] = simNow; } },
+          { t: 'fn', fn: (y) => { y.hidden = true; y.bubble = null; y.nextLine = null; bath.doorAt[i] = simNow; } },
           { t: 'wait', ms: R(4000, 9000) },
           { t: 'fn', fn: (y) => { y.hidden = false; bath.doorAt[i] = simNow; bath.stalls[i] = null; } },
           { t: 'walk', path: [sink], end: sink },
@@ -2140,11 +2169,30 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     if (mind.coffee >= 1 && a.state === 'idle' && a.badges.size === 0 && !lunch) coffee(a);
   }
 
+  /** Makes a scene last until `end` (its members wait for it before going back). */
+  function extend(sc, end) {
+    if (end <= sc.end) return;
+    sc.end = end;
+    for (const m of sc.members) agents[m].queue = agents[m].queue.map((j) => (j.t === 'until' ? { ...j, at: sc.end } : j));
+  }
+
+  /**
+   * The conversations, a line at a time: the next one is said when its time comes and the previous one has
+   * been read (a long line makes the answer wait), and then the one who spoke before lets their bubble
+   * go. The scene lasts as long as its lines need.
+   */
   function runScenes() {
     for (const sc of scenes) {
-      for (const l of sc.lines) {
-        if (!l.said && simNow >= l.at) { l.said = true; agents[l.who]?.say(l.text, 3000); }
-      }
+      const next = sc.lines.filter((l) => !l.said).sort((a, b) => a.at - b.at)[0];
+      if (!next || simNow < next.at || simNow < (sc.free || 0)) continue;
+      next.said = true;
+      const who = agents[next.who];
+      if (!who) continue;
+      for (const id of sc.members) if (id !== next.who) agents[id]?.hush();
+      who.say(next.text, 2600);
+      sc.free = simNow + readMs(next.text, 2600) * 0.85 + 250;
+      const left = sc.lines.filter((l) => !l.said).length;
+      extend(sc, Math.max(sc.free, ...sc.lines.filter((l) => !l.said).map((l) => l.at)) + left * 1800 + 600);
     }
     for (const sc of scenes.filter((x) => simNow >= x.end)) {
       for (const id of sc.members) if (agents[id].scene === sc) agents[id].scene = null;
@@ -2241,7 +2289,7 @@ export function createSim({ clock = () => performance.now(), random = Math.rando
     },
     reset() {
       for (const a of Object.values(agents)) {
-        Object.assign(a, { stress: null, tired: false, taskAt: -Infinity, queue: [], seated: true, x: a.cfg.seat.x, y: a.cfg.seat.y, state: 'idle', bubble: null, handUp: false, history: [], dream: null, scene: null, carry: false, perch: false, hidden: false, dance: false, food: null, lunch: null, back: false, tvSeat: null, diningSeat: null, tag: null, openTurn: null });
+        Object.assign(a, { stress: null, tired: false, taskAt: -Infinity, queue: [], seated: true, x: a.cfg.seat.x, y: a.cfg.seat.y, state: 'idle', bubble: null, nextLine: null, handUp: false, history: [], dream: null, scene: null, carry: false, perch: false, hidden: false, dance: false, food: null, lunch: null, back: false, tvSeat: null, diningSeat: null, tag: null, openTurn: null });
         a.badges.clear();
       }
       ghosts.clear();

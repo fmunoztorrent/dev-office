@@ -420,7 +420,7 @@ La oficina también funciona al revés: puedes mandarle una tarea al agente.
 | `session` (por defecto) | Inmediata a la sesión conectada. Pi la recibe con `pi.sendUserMessage` (como follow-up si está ocupado) y OpenCode con `client.session.prompt` | En cola. Cuando Claude termina su turno, el hook `Stop` responde `{"decision":"block","reason":"<tarea>"}` y Claude sigue con ella. Si la sesión está esperando tu mensaje, la entrega ocurre al terminar el siguiente turno |
 | `launch` | Dentro de herdr, el agente en un pane nuevo (interactivo) con la tarea como prompt. Fuera, la oficina abre `opencode run "<tarea>"` / `pi -p "<tarea>"` en `cwd` | Dentro de herdr, en un pane nuevo. Fuera, la oficina abre `claude -p "<tarea>" --permission-mode acceptEdits` en `cwd` |
 
-Estados de una tarea: `queued` → `sent` → `running` → `done`, `failed` o `cancelled`. La tarea se pasa como un único argumento, sin shell, así que su texto nunca se interpreta como comando.
+Estados de una tarea: `queued` → `sent` → `running` → `done`, `failed` o `cancelled`. Una tarea enviada a una sesión termina con el `turn_end` de esa sesión: `done`, o `failed` con la razón en `detail` cuando el turno terminó en un error (el proveedor rechazó la respuesta del modelo: sin saldo, una clave vencida). Pi y OpenCode informan ese `error` en su `turn_end`; Pi, cuando deja de reintentar. La tarea se pasa como un único argumento, sin shell, así que su texto nunca se interpreta como comando.
 
 ### Protocolo para agentes (plugins y extensiones)
 
@@ -454,6 +454,7 @@ Una conexión registrada no recibe la difusión de eventos de la oficina, sólo 
   "input": { "file_path": "src/App.tsx" },  // decide el personaje: file_path | filePath | path | command
   "text": "texto libre",
   "ok": true,                         // tool_end: false si falló
+  "error": "402 Insufficient balance",  // turn_end: el turno terminó en un error, y por qué (la tarea que hacía falla)
   "role": "frontend",                 // opcional: fuerza el personaje
   "phase": "red",                     // kind: phase
   "from": "tl",                       // kind: phase, opcional
@@ -489,6 +490,7 @@ suyos: no cambian la sesión del padre. Una `phase` suya cambia la fase del suba
 | `dispatch` | Tarea enviada desde la oficina (la emite el servidor) | Tú (la PO) le llevas la tarjeta al manager |
 | `waiting` | El agente espera al usuario | Banner naranja; el manager va a tu escritorio (el de la PO) y levanta la mano |
 | `error` | Error general | El personaje se bloquea |
+| `turn_end` | El agente termina su turno; con `error`, su turno terminó en un error (el proveedor rechazó la respuesta del modelo) | El rol de turno lo dice y vuelve a descansar. La tarea enviada a esa sesión queda `done`, o `failed` con ese `error` |
 | `compact` | Compactación de contexto | El manager ordena notas; la barra de contexto la muestra recién compactada hasta la próxima respuesta |
 | `autocompact` | La oficina le pidió al agente que compacte (lo emite el servidor): `via` `agent` \| `pane` \| `manual` \| `failed` | Una línea en la bitácora |
 | `done` | Fin de la tarea | Celebración en la mesa |

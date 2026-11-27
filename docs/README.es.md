@@ -38,7 +38,7 @@ Dev Team Office muestra a tus agentes de código trabajando como un equipo de de
 | Guía | Qué cubre |
 |---|---|
 | [Cómo está hecha](internals.es.md) | Las piezas, cómo viaja un evento por ellas y el mapa del código |
-| [Rendering](rendering.es.md) | La escena: el contrato entre el juego y lo que lo dibuja |
+| [Rendering](rendering.es.md) | El SDK de renderers: la escena, las interfaces entre el juego y lo que lo dibuje, y cómo agregar un motor |
 | [Convenciones](conventions.es.md) | Código, textos, tests y documentación |
 | [Contribuir](../CONTRIBUTING.es.md) | Correrla desde el código, los tests y cómo entra un cambio |
 

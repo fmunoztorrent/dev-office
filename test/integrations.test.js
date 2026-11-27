@@ -576,3 +576,130 @@ test('plugin de OpenCode: el contexto (sin contar el resumen de una compactació
     await server.close();
   }
 });
+
+// A model error (the provider refused: no balance) ends Pi's answer with stopReason 'error'. Pi may
+// retry it, so the extension waits until Pi settles: then it reports the error and a turn_end that
+// carries it, and the task the office sent fails with that reason. A retry that works is a normal turn.
+test('extensión de Pi: un turno que termina en un error del modelo es un error, y su tarea falla con la razón', { skip: !process.features?.typescript && 'Node sin soporte de TypeScript' }, async () => {
+  const dir = tempProject();
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
+  const cwd = process.cwd();
+  const isTTY = process.stdin.isTTY;
+  process.chdir(dir);
+  process.stdin.isTTY = true; // the extension only connects in interactive sessions
+  const handlers = {}, sent = [];
+  const ctx = { isIdle: () => true, model: { provider: 'opencode-go', id: 'kimi', contextWindow: 200_000 }, getContextUsage: () => null };
+  const fire = async (name, ev = {}) => { for (const h of handlers[name] || []) await h(ev, ctx); };
+  const pi = { on: (name, h) => { (handlers[name] ||= []).push(h); }, registerCommand: () => {}, setModel: async () => true, setThinkingLevel: () => {}, sendUserMessage: (text) => { sent.push(text); } };
+  const refused = { role: 'assistant', stopReason: 'error', errorMessage: '402 Insufficient balance', content: [], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0 } };
+  const answer = { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'listo' }], usage: { input: 900, output: 100, cacheRead: 0, cacheWrite: 0, totalTokens: 1000 } };
+  const taskOf = (id) => server.hub.snapshot().tasks.find((x) => x.id === id);
+  const mine = (kind) => server.office.log.filter((e) => e.session === 'pi-err' && e.kind === kind);
+  try {
+    await withEnv({ DEV_TEAM_OFFICE_URL: server.url, DEV_TEAM_OFFICE_LIB: path.join(ROOT, 'integrations', 'common', 'devteam.mjs'), DEV_TEAM_OFFICE_SESSION: 'pi-err', DEV_TEAM_OFFICE_AUTOSTART: '0' }, async () => {
+      (await import(pathToFileURL(path.join(ROOT, 'integrations', 'pi', 'dev-team-office.ts')).href + '?err')).default(pi);
+      await fire('session_start');
+      await until(() => server.hub.snapshot().agents.some((a) => a.session === 'pi-err'));
+
+      // a brief from the board: Pi takes it, and the provider refuses the answer
+      const first = (await call(server.url, 'POST', '/v1/tasks', { agent: 'pi', session: 'pi-err', text: 'Arregla el login' })).task;
+      await until(() => sent.length === 1 && taskOf(first.id).status === 'running');
+      await fire('before_agent_start', { messageType: 'user', prompt: sent[0] });
+      await fire('turn_start');
+      await fire('message_end', { message: refused });
+      await fire('turn_end', { message: refused });
+      await fire('agent_end', { messages: [{ role: 'user', content: sent[0] }, refused] });
+      // Pi may still retry it: no verdict yet
+      await sleep(120);
+      assert.equal(taskOf(first.id).status, 'running');
+      assert.deepEqual([mine('turn_end').length, mine('error').length], [0, 0]);
+      // Pi settled (no retry left): the error, and the end of the turn with it
+      await fire('agent_settled', { aborted: false });
+      const failed = await until(() => taskOf(first.id).status === 'failed' && taskOf(first.id));
+      assert.equal(failed.detail, '402 Insufficient balance');
+      assert.match(mine('error')[0].text, /402 Insufficient balance/);
+      const end = mine('turn_end')[0];
+      assert.deepEqual([end.ok, end.error], [false, '402 Insufficient balance']);
+      assert.ok(!mine('context').length, 'una respuesta rechazada no mueve la barra del contexto');
+
+      // the next brief: the first try fails, Pi's retry works: a normal turn, the task is done
+      const second = (await call(server.url, 'POST', '/v1/tasks', { agent: 'pi', session: 'pi-err', text: 'Sube la cobertura' })).task;
+      await until(() => sent.length === 2 && taskOf(second.id).status === 'running');
+      await fire('before_agent_start', { messageType: 'user', prompt: sent[1] });
+      await fire('message_end', { message: refused });
+      await fire('agent_end', { messages: [refused] });
+      await fire('message_end', { message: answer });
+      await fire('agent_end', { messages: [answer] });
+      await fire('agent_settled', { aborted: false });
+      await until(() => taskOf(second.id).status === 'done');
+      await sleep(80);
+      assert.equal(mine('turn_end').length, 2, 'un solo fin de turno por la tarea');
+      assert.equal(mine('error').length, 1, 'el error que se reintentó y salió bien no es un error');
+
+      // Escape while Pi waited to retry: the turn ends, but it is not an error
+      const third = (await call(server.url, 'POST', '/v1/tasks', { agent: 'pi', session: 'pi-err', text: 'Revisa el README' })).task;
+      await until(() => sent.length === 3 && taskOf(third.id).status === 'running');
+      await fire('message_end', { message: refused });
+      await fire('agent_end', { messages: [refused] });
+      await fire('agent_settled', { aborted: true });
+      await until(() => taskOf(third.id).status === 'done');
+      assert.equal(mine('error').length, 1);
+      await fire('session_shutdown');
+    });
+  } finally {
+    process.chdir(cwd);
+    process.stdin.isTTY = isTTY;
+    await server.close();
+  }
+});
+
+// OpenCode: a prompt whose answer the provider refused still resolves (its message carries the error),
+// and session.error comes before session.idle. The task fails with the reason, and so does the turn.
+test('plugin de OpenCode: una respuesta que termina en un error del modelo hace fallar la tarea y el turno', async () => {
+  const dir = tempProject();
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
+  const apiError = { name: 'APIError', data: { message: '402 Insufficient balance', statusCode: 402 } };
+  let fail = true;
+  const client = {
+    session: {
+      prompt: async () => ({ data: { info: { role: 'assistant', ...(fail ? { error: apiError } : {}) }, parts: [] } }),
+      abort: async () => ({ data: true }),
+    },
+    config: { providers: async () => ({ data: { providers: [] } }) },
+    tui: { showToast: async () => {}, appendPrompt: async () => {}, submitPrompt: async () => {} },
+  };
+  const taskOf = (id) => server.hub.snapshot().tasks.find((x) => x.id === id);
+  try {
+    await withEnv({ DEV_TEAM_OFFICE_URL: server.url, DEV_TEAM_OFFICE_LIB: path.join(ROOT, 'integrations', 'common', 'devteam.mjs') }, async () => {
+      const { DevTeamOffice } = await import(pathToFileURL(path.join(ROOT, 'integrations', 'opencode', 'dev-team-office.js')).href + '?err');
+      const hooks = await DevTeamOffice({ client, directory: dir });
+      await hooks.event({ event: { type: 'session.created', properties: { info: { id: 'ses_e' } } } });
+      await until(() => server.hub.snapshot().agents.some((a) => a.session === 'ses_e'));
+
+      const first = (await call(server.url, 'POST', '/v1/tasks', { agent: 'opencode', session: 'ses_e', text: 'Arregla el login' })).task;
+      const failed = await until(() => taskOf(first.id).status === 'failed' && taskOf(first.id));
+      assert.equal(failed.detail, '402 Insufficient balance');
+      await hooks['chat.message']({ sessionID: 'ses_e' }, { parts: [{ type: 'text', text: 'Arregla el login' }] });
+      await hooks.event({ event: { type: 'session.error', properties: { sessionID: 'ses_e', error: apiError } } });
+      await hooks.event({ event: { type: 'session.idle', properties: { sessionID: 'ses_e' } } });
+      const end = await until(() => server.office.log.find((e) => e.session === 'ses_e' && e.kind === 'turn_end'));
+      assert.deepEqual([end.ok, end.error], [false, '402 Insufficient balance']);
+
+      // the next one works: done, and its turn ends without an error (the old one does not stay)
+      fail = false;
+      const second = (await call(server.url, 'POST', '/v1/tasks', { agent: 'opencode', session: 'ses_e', text: 'Sube la cobertura' })).task;
+      await until(() => taskOf(second.id).status === 'done');
+      await hooks.event({ event: { type: 'session.idle', properties: { sessionID: 'ses_e' } } });
+      const next = await until(() => server.office.log.filter((e) => e.session === 'ses_e' && e.kind === 'turn_end')[1]);
+      assert.ok(next.ok !== false && !next.error);
+      // stopping it yourself (Esc) is not an error
+      await hooks['chat.message']({ sessionID: 'ses_e' }, { parts: [{ type: 'text', text: 'otra cosa' }] });
+      await hooks.event({ event: { type: 'session.error', properties: { sessionID: 'ses_e', error: { name: 'MessageAbortedError', data: { message: 'Aborted' } } } } });
+      await hooks.event({ event: { type: 'session.idle', properties: { sessionID: 'ses_e' } } });
+      const aborted = await until(() => server.office.log.filter((e) => e.session === 'ses_e' && e.kind === 'turn_end')[2]);
+      assert.ok(aborted.ok !== false && !aborted.error);
+    });
+  } finally {
+    await server.close();
+  }
+});

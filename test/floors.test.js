@@ -344,6 +344,23 @@ test('en la vista cenital los pisos compartidos tienen el pasillo de la oficina:
   }
 });
 
+test('en el archivo, las estanterías de la sala también abren el archivo, en las dos vistas (no sólo el estante del fondo)', async () => {
+  const { createFloors, floorHit, ARCHIVE } = await import('../public/floors.js');
+  const { isoCamera } = await import('../public/iso.js');
+  const cam = isoCamera();
+  const floors = createFloors({ clock: () => 0 });
+  for (const p of Object.values(floors.archive.people)) p.hidden = true; // nobody in front
+  for (const r of ARCHIVE.rows) {
+    const cx = (r.x0 + r.x1) / 2;
+    assert.deepEqual(floorHit(floors.archive, cx, r.y - 30, { iso: false }), { what: 'knowledge' }, `vista frontal, fila ${r.y}`);
+    assert.deepEqual(floorHit(floors.archive, ...cam.proj(cx, r.y, 37), { iso: true, cam }), { what: 'knowledge' }, `cenital, su frente (fila ${r.y})`);
+    assert.deepEqual(floorHit(floors.archive, ...cam.proj(cx, r.y - 20, 74), { iso: true, cam }), { what: 'knowledge' }, `cenital, su techo (fila ${r.y})`);
+  }
+  // in between the rows (the aisle) is nothing, and the executive floor has no shelves
+  assert.equal(floorHit(floors.archive, 180, 300, { iso: false }), null);
+  assert.equal(floorHit(floors.exec, 180, ARCHIVE.rows[0].y - 30, { iso: false }), null);
+});
+
 test('la salud de cada departamento en dirección: errores de la última hora, el contexto que le queda y cuánto te espera', async () => {
   const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false, places: false });
   try {
@@ -376,7 +393,7 @@ test('operaciones no satura un departamento: toma hasta `capacity` encargos abie
   const desk = new DirectiveDesk({ store, registry, hub, archive: null, company: null });
   const d = desk.create({ text: 'Logger nuevo en todos lados', offices: ['Pagos'] }).directive;
   assert.deepEqual(d.parts.map((p) => p.status), ['running', 'waiting', 'waiting', 'waiting'], 'una cabe (ya tenía uno abierto)');
-  assert.match(d.parts[1].detail, /^el departamento tiene 2 encargo\(s\) abiertos$/);
+  assert.match(d.parts[1].detail, /^el proyecto tiene 2 encargo\(s\) abiertos$/);
   // one ends: the next one goes
   hub.tasks.get('t0').status = 'done';
   hub.emit('change');

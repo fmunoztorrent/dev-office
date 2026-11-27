@@ -44,7 +44,7 @@ import { knownResources, RESOURCE_KINDS } from './resources.js';
 import { openStore, dbFile, MAIN_OFFICE, RELATION_HOWS } from './store.js';
 import { inferRelations, explainInfra } from './explore.js';
 import { Weather, findPlaces } from './weather.js';
-import { Herdr, paneRole, quote } from './herdr.js';
+import { Herdr, HERDR_KIND, paneRole, quote } from './herdr.js';
 import { clip, normRole } from './roles.js';
 import { SubPanes } from './subpanes.js';
 import { ServiceHub } from './services.js';
@@ -352,7 +352,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   herdr?.on('screens', (screens) => prompts.round(screens));
   // herdr names Claude Code `claude`; the office, `claude-code`
   const harnessOf = (agent) => (agent === 'claude' ? 'claude-code' : agent || null);
-  const publicPrompt = ({ id, rev, pane, agent, cwd, office: o, question, summary, options, cursor, since }) => ({ id, rev, pane, agent: harnessOf(agent), project: cwd ? path.basename(cwd) : null, office: o, question, summary, options, cursor, since });
+  const publicPrompt = ({ id, rev, pane, agent, cwd, office: o, question, summary, options, cursor, since }) => ({ id, rev, pane, agent: harnessOf(agent), cwd: cwd || null, project: cwd ? path.basename(cwd) : null, office: o, question, summary, options, cursor, since });
   const promptsOf = (id) => prompts.list(valid(id)).map(publicPrompt);
   // a new question: the manager goes to your desk (the PO's) to ask, unless the agent's own event
   // (Claude Code's permission hook) has just sent him
@@ -417,13 +417,25 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
     }
     if (!installed(a.harness) && !a.bin) return { ok: false, error: t('err.notInstalled', { bin: HARNESSES[a.harness]?.bin || a.harness }) };
     const where = a.office || company.officeForPath(a.path) || view();
+    const label = `${AGENT_LABEL[a.harness] || a.harness} · ${a.name}`;
+    const who = { id: a.id || null, name: a.name, harness: a.harness, path: a.path, office: where };
+    // already open in this workspace, in its folder (the office restarted, or you opened it yourself): it is
+    // followed, not opened again (every restart used to add one more pane with the same agent)
+    const kind = HERDR_KIND[a.harness] || a.harness;
+    // (a failed listing is asked again: an answer missing for a moment must not open a second agent)
+    const panes = await herdr.list().catch(() => new Promise((r) => setTimeout(r, 400)).then(() => herdr.list()).catch(() => []));
+    const open = panes.find((p) => p.agent === kind && p.pane_id !== herdr.pane && [p.foreground_cwd, p.cwd].some((d) => d && inside(d, a.path)));
+    if (open) {
+      const p = herdr.track(open.pane_id, { office: where, role: 'manager', title: label, agent: a.harness, kind: 'agent', cwd: a.path });
+      p.main = true;
+      return { ok: true, pane: open.pane_id, reused: true, agent: who };
+    }
     const env = { DEV_TEAM_OFFICE_URL: officeUrl(), DEV_TEAM_OFFICE_OFFICE: where, ...(socketPath ? { DEV_TEAM_OFFICE_SOCKET: socketPath } : {}), ...(a.harness === 'claude-code' ? claudeCompactEnv(prefs()) : {}) };
     try {
-      const label = `${AGENT_LABEL[a.harness] || a.harness} · ${a.name}`;
       const out = await herdr.launchAgent({ harness: a.harness, cwd: a.path, bin: a.bin, args: a.args || [], env, direction: prefs().herdr.direction, office: where, officeName: company.info(where)?.name || '', role: 'manager', title: label, label });
       const p = herdr.tracked.get(out.pane);
       if (p) p.main = true;
-      return { ok: true, pane: out.pane, agent: { id: a.id || null, name: a.name, harness: a.harness, path: a.path, office: where } };
+      return { ok: true, pane: out.pane, agent: who };
     } catch (err) {
       return { ok: false, error: t('err.herdrFailed', { error: err.message }) };
     }
@@ -467,7 +479,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       case 'reset': company.reset(id); return true;
       case 'demo':
       case 'demo-pi':
-        if (stopDemo) return false;
+        // one demo at a time: a second one says so (not "command not available")
+        if (stopDemo) return 'busy';
         stopDemo = runDemo((p) => company.ingest(action === 'demo' ? 'claude-code' : 'pi', { ...p, office: id }), {
           script: action === 'demo' ? demoScript : piDemoScript, speed: Number(speed) || 1, onEnd: () => (stopDemo = null),
         });
@@ -585,6 +598,7 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
       }
       case 'command': {
         const ok = command(msg.action, { ...msg, office: here });
+        if (ok === 'busy') return { ok: false, error: t('err.demoRunning') };
         return ok ? { ok: true } : { ok: false, error: t('err.unknownCommand', { action: msg.action }) };
       }
       // The viewer chooses which office to watch (and it is saved).
@@ -1268,7 +1282,9 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   };
   company.on('event', (id, event, session) => toOffice(id, { type: 'event', event, session, office: id }));
   company.on('event', (id, event) => bus.emit('activity', id, event));
-  company.on('event', (_id, event) => { if (event.kind === 'turn_end' || event.kind === 'done') hub.sessionSettled(event.session); });
+  // a turn that ended in an error (`turn_end` with its `error`) fails the task it was doing
+  // (not while its subagents still work in the background: `pending`; their hand-back brings another turn)
+  company.on('event', (_id, event) => { if ((event.kind === 'turn_end' && !event.pending) || event.kind === 'done') hub.sessionSettled(event.session, event.kind === 'turn_end' ? event.error : null); });
   // past your threshold, the agent is asked to compact its context (server/compact.js)
   const compactor = new Compactor({ prefs, hub, herdr, company });
   company.on('event', (id, event, session) => compactor.onEvent(id, event, session));

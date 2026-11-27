@@ -3,7 +3,7 @@
 import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { humanizeCommand, humanizeTool, segments, badgeFor } from '../server/humanize.js';
+import { humanizeCommand, humanizeTool, segments, badgeFor, providerError } from '../server/humanize.js';
 import { describe } from '../server/roles.js';
 
 test('un comando dicho en palabras: tests, scripts, git, archivos, la web', () => {
@@ -74,4 +74,22 @@ test('el badge: un ícono y una o dos palabras, nunca el comando entero', () => 
   ];
   for (const [tool, input, want] of cases) assert.equal(badgeFor(tool, input), want, `${tool} ${JSON.stringify(input)}`);
   for (const [tool, input] of cases) assert.ok([...badgeFor(tool, input)].length <= 16, 'corto');
+});
+
+test('el error de un proveedor se lee como lo diría una persona: el código y su mensaje, sin el JSON', async () => {
+  assert.equal(providerError('402: {"type":"invalid_request_error","message":"Insufficient balance. Top up at https://opencode.ai/billing"}'), '402 · Insufficient balance. Top up at https://opencode.ai/billing');
+  assert.equal(providerError('401 {"error":{"type":"authentication_error","message":"invalid x-api-key"}}'), '401 · invalid x-api-key');
+  assert.equal(providerError('{"error":"overloaded"}'), 'overloaded');
+  // what is not a code with a JSON body stays as it is
+  assert.equal(providerError('Connection refused'), 'Connection refused');
+  assert.equal(providerError('402: {not json'), '402: {not json');
+  assert.equal(providerError(''), '');
+  // the office uses it: in the log, the bubble and the task's reason
+  const { Office } = await import('../server/office.js');
+  const office = new Office();
+  const raw = '402: {"type":"invalid_request_error","message":"Insufficient balance."}';
+  const [err] = office.ingest('generic', { session: 's1', kind: 'error', text: raw });
+  assert.equal(err.text, '402 · Insufficient balance.');
+  const [end] = office.ingest('generic', { session: 's1', kind: 'turn_end', error: raw });
+  assert.equal(end.error, '402 · Insufficient balance.');
 });

@@ -12,8 +12,10 @@ import { createPhone } from './phone-ui.js';
 import { createPulse } from './pulse-ui.js';
 import { renderImpact, impactQuestions } from './impact-ui.js';
 import { createE2E } from './e2e-ui.js';
-import './renderers/plan.js'; // the reference renderer (public/scene.js): ?renderer=plan
+import './renderers/plan.js'; // the reference renderer of the SDK (public/sdk/index.js): ?renderer=plan
+import './renderers/blocks.js'; // a 3D one, in WebGL: ?renderer=blocks
 import { drawSprite } from './sprite.js';
+import { watchPixelIcons, selectIcons } from './pixel-icons.js';
 import { t, ta, setLanguage, onLanguage, getLanguage, timeOf } from './i18n.js';
 import { thresholdOf, kTokens } from './compact.js';
 
@@ -43,7 +45,7 @@ let loops = []; // the projects' loops (server/loops.js): the 🔁 chip and its 
 // the whiteboard: with tickets it expands to show them as post-its; without them, a new brief
 // the PO is you: with a question pending, clicking it (or the manager, hand up) opens the questions
 const game = createGame($('office'), {
-  // another renderer of the scene (public/renderers.js), from the address: ?renderer=plan (the canvas's own by default)
+  // another renderer of the SDK (public/sdk/index.js), from the address: ?renderer=plan (the canvas's own by default)
   renderer: new URLSearchParams(location.search).get('renderer'),
   onSelect: (id) => ((id === 'po' || id === 'manager') && asking.length ? promptsUi.open() : select(id)),
   onBoardClick: () => (boardView.hasTickets() ? boardView.open() : openBrief()),
@@ -65,6 +67,7 @@ const boardView = createBoardView({
   // where the small whiteboard is on the page (in either view)
   boardRect: () => {
     const r = $('office').getBoundingClientRect(), b = game.boardBox();
+    if (!b) return null; // a renderer that cannot say where it is: the board just opens
     return { left: r.left + b.x * r.width, top: r.top + b.y * r.height, width: b.w * r.width, height: b.h * r.height };
   },
 });
@@ -308,6 +311,30 @@ function renderAttention() {
 }
 setInterval(renderAttention, 15_000); // the "for N min" grows
 
+// ---------------------------------------------------------------- what the page lays over the office
+// The card on the right sits between the waiting banner and the dock (their heights go to the stylesheet:
+// --attention-h, --dock-h), and the game keeps people's bubbles and badges out of everything the page lays
+// over its canvas (scene.covered, as fractions of it).
+const OVERLAYS = ['attention', 'dock', 'sheet', 'feed', 'e2e-mini'];
+const overlayEls = () => [...OVERLAYS.map((id) => $(id)), ...document.querySelectorAll('.screen .hud-tl')].filter(Boolean);
+const shownEl = (el) => !el.hidden && el.getClientRects().length > 0;
+function trackOverlays() {
+  const bar = $('attention'), dock = $('dock');
+  $('screen').style.setProperty('--attention-h', shownEl(bar) ? `${bar.offsetHeight + 10}px` : '0px');
+  $('screen').style.setProperty('--dock-h', shownEl(dock) ? `${dock.offsetHeight}px` : '0px');
+  const c = $('office').getBoundingClientRect();
+  if (!c.width || !c.height) return;
+  game.setCovered(overlayEls().filter(shownEl).map((el) => {
+    const r = el.getBoundingClientRect();
+    return { x: (r.left - c.left) / c.width, y: (r.top - c.top) / c.height, w: r.width / c.width, h: r.height / c.height };
+  }).filter((r) => r.w > 0 && r.h > 0));
+}
+if (typeof ResizeObserver === 'function') {
+  const watch = new ResizeObserver(trackOverlays);
+  for (const el of [...overlayEls(), $('office')]) watch.observe(el); // shown, hidden or resized
+}
+setInterval(trackOverlays, 1000); // and where they end up after sliding in
+
 /** The inbox: everything waiting for you, in one list (oldest first), each with its own button. */
 function renderInbox(items = attentionItems()) {
   const ol = $('inbox-list');
@@ -549,6 +576,8 @@ function renderOffices() {
   for (const o of offices) sel.append(new Option(`🏢 ${o.name}`, o.id));
   sel.append(new Option(t('floors.name.archive'), FLOOR_VALUE.archive));
   sel.value = game.floor === 'office' ? office?.id || '' : FLOOR_VALUE[game.floor];
+  // each floor's icon in pixel art, in front of the selector (an option only draws text)
+  selectIcons(sel, $('office-pick-icon'));
 }
 // the office asked for, until its snapshot arrives (the elevator does not wait for it)
 let wanted = null;
@@ -557,7 +586,7 @@ function viewOffice(id) {
   wanted = id;
   send({ type: 'view', office: id });
 }
-$('office-select').onchange = (e) => pickFloor(e.target.value);
+$('office-select').onchange = (e) => { selectIcons(e.target, $('office-pick-icon')); pickFloor(e.target.value); };
 /** o: the next floor going down (and from the archive, back to the executive floor). */
 function nextOffice() { moveFloor(1); }
 
@@ -1267,6 +1296,7 @@ function renderBrief() {
   const o = brief.opts = briefOptions({ targets: all, models: prefs?.models }, brief.sel);
   if (all.length) fillByProject($('b-agent'), all, brief.sel.target);
   else fillSelect($('b-agent'), [{ label: t('brief.noAgentWeb') }], 0);
+  selectIcons($('b-agent')); // a system's 🧩 is not drawn by the system's emoji font
   $('b-agent').disabled = !all.length;
   fillSelect($('b-pipeline'), o.entries.length ? o.entries : [{ label: '—' }], Math.max(0, o.entries.indexOf(o.entry)));
   $('b-desc').textContent = o.entry ? [o.entry.description, o.entry.source && o.entry.source !== 'agente' ? `(${o.entry.source})` : ''].filter(Boolean).join(' ')
@@ -1411,12 +1441,14 @@ function toggleFullscreen() {
   else { const root = doc.documentElement; (root.requestFullscreen || root.webkitRequestFullscreen)?.call(root); }
 }
 $('fullscreen').onclick = toggleFullscreen;
-// front or top-down: it switches right away and stays in the settings (the other viewers see it too)
+// front or top-down: it switches right away and stays in the settings (the other viewers see it too). With
+// another renderer (?renderer=…), the next of its views, only on this screen
 function toggleView() {
-  game.setView(game.view === 'iso' ? 'flat' : 'iso');
+  const views = game.views;
+  game.setView(views[(views.indexOf(game.view) + 1) % views.length]);
   $('view-mode').setAttribute('aria-pressed', String(game.view === 'iso'));
   $('screen').dataset.view = game.view;
-  send({ type: 'prefs', prefs: { view: { mode: game.view } } });
+  if (game.view === 'flat' || game.view === 'iso') send({ type: 'prefs', prefs: { view: { mode: game.view } } });
 }
 $('view-mode').onclick = toggleView;
 const onFs = () => $('fullscreen').setAttribute('aria-pressed', String(!!(document.fullscreenElement || document.webkitFullscreenElement)));
@@ -1456,6 +1488,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 applyI18n();
+// the interface's emoji as pixel icons (public/pixel-icons.js): now and whenever something in it changes
+watchPixelIcons(document.body);
 const welcome = sysLine(t('ui.welcome'));
 onLanguage(() => { welcome.textContent = t('ui.welcome'); });
 connect();

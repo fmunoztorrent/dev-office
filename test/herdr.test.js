@@ -139,6 +139,34 @@ test('herdr: el pane de un comando se cierra solo cuando su proceso terminó', a
   assert.ok(!fake.panes.has(pane), 'se pidió cerrar el pane a herdr');
 });
 
+test('al abrir la oficina en herdr, el agente que ya está abierto en su carpeta no se abre otra vez: la oficina lo sigue', async () => {
+  const fake = fakeHerdr();
+  const herdr = new Herdr({ env: ENV, run: fake.run, every: 30 });
+  const store = openStore(':memory:');
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dto-herdr-')));
+  store.createOffice({ name: 'Pagos' });
+  store.createAgent({ path: dir, harness: 'pi', name: 'cobros', office: 'pagos', bin: '/no/existe/pi' });
+  // Pi already runs in a pane of this workspace, in a subfolder of the repo (the office restarted)
+  fake.panes.set('w1:p5', { pane_id: 'w1:p5', workspace_id: 'w1', cwd: dir, foreground_cwd: path.join(dir, 'src'), agent: 'pi', agent_status: 'idle' });
+  // and Claude in another folder: it does not count
+  fake.panes.set('w1:p6', { pane_id: 'w1:p6', workspace_id: 'w1', cwd: '/otra', foreground_cwd: '/otra', agent: 'claude', agent_status: 'idle' });
+  const server = await startServer({ port: 0, socket: null, db: store, weather: false, herdr });
+  try {
+    const start = await server.launchStartAgent({ cwd: dir });
+    assert.deepEqual([start.ok, start.reused, start.pane, start.agent.office], [true, true, 'w1:p5', 'pagos']);
+    assert.ok(!fake.calls.some((c) => c[1] === 'split'), 'no abrió otro pane');
+    assert.equal(server.herdr.status().panes.find((p) => p.pane === 'w1:p5')?.office, 'pagos', 'lo sigue, en su oficina');
+    // without it open, it opens as always
+    fake.panes.delete('w1:p5');
+    const again = await server.launchStartAgent({ cwd: dir });
+    assert.equal(again.ok, true, again.error);
+    assert.ok(!again.reused && again.pane !== 'w1:p5');
+    assert.ok(fake.calls.some((c) => c[1] === 'split'), 'ahora sí abre uno');
+  } finally {
+    await server.close();
+  }
+});
+
 test('herdr: un watch con el proceso vivo nunca se auto-cierra', async () => {
   const fake = fakeHerdr();
   const herdr = new Herdr({ env: ENV, run: fake.run });
@@ -196,6 +224,45 @@ test('la oficina dentro de herdr: el agente al abrir, las sesiones nuevas en pan
     assert.deepEqual(server.herdr.status().panes.map((p) => p.pane).sort(), ['w1:p2', 'w1:p3']);
   } finally {
     await server.close();
+  }
+});
+
+// herdr may see the pane idle before the session's own end arrives (Pi reports it once it settles,
+// after its retries): the session's verdict wins, once.
+test('dentro de herdr: si herdr ve el pane libre antes de que Pi avise que su turno terminó en un error, la tarea igual falla', async () => {
+  const fake = fakeHerdr();
+  const herdr = new Herdr({ env: ENV, run: fake.run, every: 30 });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dto-herdr-'));
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false, herdr });
+  const settle = async (pane) => {
+    fake.panes.get(pane).agent_status = 'working';
+    await sleep(80);
+    fake.panes.get(pane).agent_status = 'idle';
+  };
+  const taskOf = (id) => server.hub.snapshot().tasks.find((x) => x.id === id);
+  try {
+    const a = server.hub.submit({ agent: 'pi', mode: 'launch', text: 'Arregla el login', cwd: dir, launch: { bin: process.execPath } });
+    assert.equal(a.ok, true, a.error);
+    const task = await until(() => taskOf(a.task.id)?.pane && taskOf(a.task.id));
+    assert.equal(task.session, `pi-${task.id}`);
+    await settle(task.pane);
+    await until(() => taskOf(task.id).status === 'done');
+    server.company.ingest('pi', { session: task.session, cwd: dir, kind: 'turn_end', error: '402 Insufficient balance' });
+    await until(() => taskOf(task.id).status === 'failed');
+    assert.equal(taskOf(task.id).detail, '402 Insufficient balance');
+
+    // a turn that ended well, seen first by herdr: a later error of that session does not change it
+    const b = server.hub.submit({ agent: 'pi', mode: 'launch', text: 'Sube la cobertura', cwd: dir, launch: { bin: process.execPath } });
+    const other = await until(() => taskOf(b.task.id)?.pane && taskOf(b.task.id));
+    await settle(other.pane);
+    await until(() => taskOf(other.id).status === 'done');
+    server.company.ingest('pi', { session: other.session, cwd: dir, kind: 'turn_end' });
+    server.company.ingest('pi', { session: other.session, cwd: dir, kind: 'turn_end', error: 'otro turno' });
+    await sleep(50);
+    assert.equal(taskOf(other.id).status, 'done');
+  } finally {
+    await server.close();
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 

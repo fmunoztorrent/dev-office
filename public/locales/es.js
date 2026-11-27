@@ -264,7 +264,7 @@ export default {
     thinking: 'Pensando…', waiting: 'El agente espera tu aprobación', error: 'Algo salió mal', compact: 'Ordena las notas (compacta el contexto)',
     autocompact: { agent: '🗜 El contexto va en {used} (tope {at}): le pido al agente que lo compacte', pane: '🗜 El contexto va en {used} (tope {at}): /compact en su pane', manual: '🗜 El contexto va en {used} (tope {at}): escribe /compact en su sesión para compactarlo', failed: '🗜 No se pudo compactar: {reason}' },
     done: '¡Tarea terminada!', sessionStart: 'Nueva sesión de trabajo', sessionEnd: 'Sesión cerrada', serviceUp: 'Levantó un servicio: {name}', serviceDown: 'El servicio se detuvo: {name}', you: 'Tú', office: 'Oficina', subtask: 'Subtarea',
-    permission: 'Permiso para {tool}', interrupted: 'Interrumpido', turnEnd: 'termina su turno{text}',
+    permission: 'Permiso para {tool}', interrupted: 'Interrumpido', turnEnd: 'termina su turno{text}', turnFailed: 'termina su turno con un error',
     read: 'Leyendo {file}', write: 'Creando {file}', edit: 'Editando {file}', grep: 'Buscando "{pattern}"', glob: 'Revisando {pattern}', files: 'archivos',
     websearch: 'Investigando: {query}', webfetch: 'Leyendo {host}', web: 'Leyendo una web', ask: 'Te pregunta algo', askWhat: 'Te pregunta: {question}',
     plan: 'Presenta el plan', planning: 'Planificando', skill: 'Usando skill {skill}', working: 'Trabajando',
@@ -292,9 +292,9 @@ export default {
   settingsIo: { skillsWhere: 'las skills', skillIn: 'la skill {name} en {where}', area: 'Área {name}', relation: 'Relación {from} → {to}', skill: 'Skill {name}', tool: 'Herramienta {name}', expert: 'Experto en «{skill}»', resource: 'Infraestructura {name}', system: 'Proyecto {name}', systemParts: 'Artefactos de {name} sin su repo aquí: {parts}', department: 'Proyecto {name}', characters: 'Personajes de {name}', pref: 'Ajuste {key}', project: 'Repositorio {name}', component: 'Componente {name} de {project}', instructions: 'Indicaciones de {path}' },
   // el mapa de impacto de una directiva (server/components.js)
   impact: {
-    ask: '¿Existe «{what}»? ¿En qué repositorio y carpeta está, o hay que crearlo?', none: 'No identifiqué qué departamentos ni repositorios toca: elígelos o nómbralos.', unknownHead: 'Nombra cosas que no están en el mapa:',
-    why: { named: 'lo nombra', chosen: 'lo elegiste', part: 'nombra un componente suyo', department: 'nombra su departamento', system: 'es parte del proyecto {via}', uses: 'usa {via}, que cambia', resource: 'usa {via}, que nombra', model: 'lo dice el análisis' },
-    newDesc: 'nuevo (lo pidió una directiva)', needAnswers: 'Antes de enviarla, dime qué es {what}: si existe y dónde, si hay que crearlo o si es un departamento nuevo.', badAnswer: '¿Qué es «{what}»? Contesta: existe, crearlo, un repo aparte, un repo nuevo, infraestructura, departamento nuevo o no es parte del proyecto.', deptEmpty: 'Se creó {names}, pero todavía no tiene repositorios: súmale uno (⚙ › Departamentos) y vuelve a enviar la directiva.',
+    ask: '¿Existe «{what}»? ¿En qué repositorio y carpeta está, o hay que crearlo?', none: 'No identifiqué qué proyectos ni repositorios toca: elígelos o nómbralos.', unknownHead: 'Nombra cosas que no están en el mapa:',
+    why: { named: 'lo nombra', chosen: 'lo elegiste', part: 'nombra un componente suyo', department: 'nombra su proyecto', system: 'es parte del proyecto {via}', uses: 'usa {via}, que cambia', resource: 'usa {via}, que nombra', model: 'lo dice el análisis' },
+    newDesc: 'nuevo (lo pidió una directiva)', needAnswers: 'Antes de enviarla, dime qué es {what}: si existe y dónde, si hay que crearlo o si es un proyecto nuevo.', badAnswer: '¿Qué es «{what}»? Contesta: existe, crearlo, un repo aparte, un repo nuevo, infraestructura, proyecto nuevo o no es parte del proyecto.', deptEmpty: 'Se creó {names}, pero todavía no tiene repositorios: súmale uno (⚙ › Empresa) y vuelve a enviar la directiva.',
     askInfra: '«{what}» ({kind}): ¿ya existe, y dónde? ¿O hay que crearla, y quién?', whoCreates: '¿Qué repositorio crea «{what}»? Elige uno.', needWhere: '¿Dónde está «{what}»? Escribe su carpeta o la URL de su repositorio.', noFolder: 'No existe la carpeta {path}', repoExists: 'La carpeta {path} ya existe y no está vacía: si ya es un repo, contesta «Es un repo aparte».',
     ui: {
     talkManagerPh: 'Una orden para el equipo (va a trabajo ya), o una pregunta con ?', talkEmptyManager: 'Dile a {name} qué hacer y va a trabajo de inmediato (al repositorio que nombres, o al único del proyecto). Con ? es una pregunta sobre el equipo, el plan o lo que está bloqueado.',
@@ -314,7 +314,7 @@ export default {
     log: { start: '🎭 Corriendo {n} prueba(s) e2e de {project}', fail: '✗ Falló «{title}»', end: '🎭 e2e: {passed} ✓ · {failed} ✗ ({s} s)' },
     ui: {
       title: 'E2E', dialog: '🎭 Pruebas end-to-end', runs: 'La corrida', follow: '▶ Seguir en vivo', dismiss: 'Ocultar', expand: 'Ver las pruebas (e)',
-      live: 'EN VIVO', waitingFrames: 'La película de cada prueba llega cuando termina…', noFrames: 'Sin película (sin traza)', allPassed: 'Pasaron todas', ended: 'Terminó: {n} fallaron',
+      live: 'EN VIVO', waitingFrames: 'La película de cada prueba llega cuando termina…', noFrames: 'Sin película (sin traza)', allPassed: 'Pasaron todas', ended: 'Terminó · fallidas: {n}',
       status: { running: 'corriendo', passed: 'pasaron', failed: 'fallaron', interrupted: 'interrumpida', timedout: 'se pasó del tiempo' },
       retry: 'reintento {n}', movie: 'Película', video: 'Video', restart: 'Al inicio', play: 'Reproducir o pausar', seek: 'Ir a un momento', speed: 'Velocidad',
       runningNoMovie: 'La prueba está corriendo: sus pasos llegan en vivo, y su película cuando termine.', noMovie: 'Esta prueba no dejó película.',
@@ -410,7 +410,7 @@ export default {
       markMet: 'Se cumple (tu marca queda)', markUnmet: 'No se cumple', byYou: 'tú',
       criteriaPh: 'Un criterio por línea · «texto :: comando que lo verifica»', stepPh: '¿Qué hay que hacer en este paso?', stepCriteria: 'Sus criterios de éxito', stepN: 'Paso {n}', removeStep: 'Quitar el paso',
       saved: 'Guardado.', created: 'Loop creado: su primer paso va ahora (si el repositorio está libre).', editTitle: 'Cambiar «{name}»', newTitle: 'Nuevo loop',
-      noProjects: 'Este departamento no tiene repositorios registrados (⚙ › Repositorios).', name: 'Nombre', project: 'Repositorio', every: 'Cada (min)', triesLabel: 'Intentos',
+      noProjects: 'Este proyecto no tiene repositorios registrados (⚙ › Repositorios).', name: 'Nombre', project: 'Repositorio', every: 'Cada (min)', triesLabel: 'Intentos',
       addStepBtn: '＋ Paso', cancel: 'Cancelar', save: 'Guardar', create: '🔁 Crear el loop',
     },
     minuteTitle: 'Loop «{name}»', minuteProject: 'Repositorio: {project}', minuteTries: '{n} intentos',
@@ -440,7 +440,7 @@ export default {
         impact: '🗺 Armo el mapa de impacto: toca {n} repositorio(s)', impactAsk: 'y hay {n} cosa(s) que no tengo mapeadas: hay que preguntarlas',
         think: '🧠 Leí el análisis: toca {n} repositorio(s) y hay {q} pregunta(s)', thinkFailed: '🧠 El análisis no llegó: seguimos con el mapa por palabras',
         split: 'Lo reparto a {n} repositorio(s): {offices}',
-        department: 'Nuevo departamento: {name}. Le faltan sus repositorios, su personal y sus indicaciones para poder recibir órdenes', departmentOk: 'Bien: déjenlo listo',
+        department: 'Nuevo proyecto: {name}. Le faltan sus repositorios, su personal y sus indicaciones para poder recibir órdenes', departmentOk: 'Bien: déjenlo listo',
         tech: ['Reviso que cada uno lo haga a su manera', 'Que cada equipo use su propio harness', 'Ojo con romper las APIs entre proyectos'],
         done: '¡Directiva cumplida! «{title}» ({done}/{total}) 🎉', trouble: 'La directiva «{title}» tuvo problemas: {done} de {total} bien',
       },
@@ -465,7 +465,7 @@ export default {
   },
   exec: {
     from: 'Dirección',
-    waitTurn: 'el departamento tiene {n} encargo(s) abiertos',
+    waitTurn: 'el proyecto tiene {n} encargo(s) abiertos',
     waitFor: 'espera a {names} (lo usa)', depFailed: 'no partió: {name} no terminó', handoffFrom: 'Lo que dejó {name} (lo usas):', noHandoff: 'no dejó traspaso: revisa sus cambios recientes en {path} (puedes leerlo).',
     leaveHandoff: 'Lo usan {list}, que trabajan después de ti: al terminar, deja el traspaso con la herramienta MCP handoff (qué cambió en lo que exponen: endpoints, tipos, eventos, y cómo probarlo).',
     brief: '🏛 Directiva de la dirección: «{title}». También la trabajan: {others}. Haz la parte de este repositorio.',
@@ -473,23 +473,23 @@ export default {
     newRepo: 'Este repositorio es nuevo (una carpeta vacía): ármalo desde cero para lo que sigue (git init, su estructura, su README).', createResource: 'Hay que crear {what}: créala como parte de este trabajo (y, ya creada, declárala con la herramienta MCP declare_resource).', touchesResource: 'Toca {what} ({how}).', externalRepo: '«{name}» vive en un repositorio que la oficina no tiene: {where}. No lo cambies desde aquí: si hace falta, dilo en tu resumen.', analysis: 'Según el análisis: {how}',
     interrupted: 'la oficina se reinició antes de que terminara',
     minuteTitle: 'Acta: {title}', minuteAsked: 'Pedido por: {who}', minuteParts: 'Cómo terminó en cada repositorio:',
-    log: { created: '🏛 Directiva «{title}» a {n} repositorio(s): {offices}', department: '🏛 Nuevo departamento: {name}', ended: '🏛 Directiva «{title}»: {status} ({done}/{total})' },
+    log: { created: '🏛 Directiva «{title}» a {n} repositorio(s): {offices}', department: '🏛 Nuevo proyecto: {name}', ended: '🏛 Directiva «{title}»: {status} ({done}/{total})' },
     ui: {
       systems: 'Proyectos (sus artefactos van en orden):', handoffLeft: 'Dejó su traspaso para los que lo usan',
       company: 'La empresa · últimos 7 días',
       health: { ok: 'sana', warn: 'atenta', bad: 'te necesita' },
       co: {
-        col: { dept: 'Departamento', now: 'Ahora', autonomy: 'Autonomía', briefs: 'Encargos', ok: 'Sin fallar', lead: 'Tiempo (mediana)' },
+        col: { dept: 'Proyecto', now: 'Ahora', autonomy: 'Autonomía', briefs: 'Encargos', ok: 'Sin fallar', lead: 'Tiempo (mediana)' },
         waiting: '✋ espera hace {min} min', errors: '{n} errores/h', context: 'contexto {pct}%', fine: 'todo bien', companyAutonomy: 'la de la empresa', flow: '{n} ({done} hechos)', lead: '{min} min',
       },
-      title: '🏛 Directivas', text: '¿Qué tienen que hacer?', placeholder: 'Una orden para varios departamentos o repositorios: «Que todas las APIs expongan /health»',
-      scope: 'A quién', all: 'todos sus repositorios ({n})', none: 'sin repositorios registrados', noAgents: 'Registra los repositorios de cada departamento en ⚙ › Departamentos (o ⚙ › Repositorios) para darles directivas.',
-      mapBtn: '🗺 Ver el impacto', mapNote: 'Toca {n} repositorio(s) de {d} departamento(s): revisa a quién va (lo marcado) y contesta lo que no está en el mapa.', answerAll: 'Contesta qué es cada cosa que no está en el mapa (y en qué repositorio, si existe o hay que crearla)',
-      ans: { pick: '— ¿qué es? —', exists: 'Existe, en el repositorio…', create: 'Hay que crearlo, en el repositorio…', repo: 'Es un repo aparte, en…', newRepo: 'Es un repo nuevo: crearlo en…', resource: 'Es infraestructura (un servicio, una API…)', department: 'Es un departamento nuevo', ignore: 'No es parte del proyecto' }, ansProject: 'repositorio', ansPath: 'carpeta (opcional)', ansDept: 'nombre del departamento',
-      infraAns: { pick: '— ¿existe? —', exists: 'Ya existe…', create: 'Hay que crearla, la crea…', ignore: 'No es parte del proyecto' }, ansWhere: 'su carpeta o la URL del repo', ansNewPath: 'la carpeta nueva (ruta completa)', ansLocation: 'dónde vive (cuenta, cluster, URL…)', ansUsedBy: '— quién la usa (opcional) —', ansWho: '— qué repositorio la crea —', ansHarness: 'agente', ansOffice: 'departamento', ansKind: 'qué es', ansHow: 'cómo',
+      title: '🏛 Directivas', text: '¿Qué tienen que hacer?', placeholder: 'Una orden para varios proyectos o repositorios: «Que todas las APIs expongan /health»',
+      scope: 'A quién', all: 'todos sus repositorios ({n})', none: 'sin repositorios registrados', noAgents: 'Registra los repositorios de cada proyecto en ⚙ › Empresa (o ⚙ › Repositorios) para darles directivas.',
+      mapBtn: '🗺 Ver el impacto', mapNote: 'Va a {n} repositorio(s) de {d} proyecto(s): revisa a quién va (lo marcado) y contesta lo que no está en el mapa.', answerAll: 'Contesta qué es cada cosa que no está en el mapa (y en qué repositorio, si existe o hay que crearla)',
+      ans: { pick: '— ¿qué es? —', exists: 'Existe, en el repositorio…', create: 'Hay que crearlo, en el repositorio…', repo: 'Es un repo aparte, en…', newRepo: 'Es un repo nuevo: crearlo en…', resource: 'Es infraestructura (un servicio, una API…)', department: 'Es un proyecto nuevo', ignore: 'No es parte del proyecto' }, ansProject: 'repositorio', ansPath: 'carpeta (opcional)', ansDept: 'nombre del proyecto',
+      infraAns: { pick: '— ¿existe? —', exists: 'Ya existe…', create: 'Hay que crearla, la crea…', ignore: 'No es parte del proyecto' }, ansWhere: 'su carpeta o la URL del repo', ansNewPath: 'la carpeta nueva (ruta completa)', ansLocation: 'dónde vive (cuenta, cluster, URL…)', ansUsedBy: '— quién la usa (opcional) —', ansWho: '— qué repositorio la crea —', ansHarness: 'agente', ansOffice: 'proyecto', ansKind: 'qué es', ansHow: 'cómo',
       send: '▶ ¡Que lo hagan!', recent: 'Las últimas', empty: 'Todavía no hay directivas.', pick: 'Elige al menos un repositorio', write: 'Escribe la directiva',
       sent: 'Directiva enviada a {n} repositorio(s)', stop: '⏹ Detener', progress: '{done} de {total}', by: 'por {who}',
-      deptPh: 'Un departamento que todavía no existe…', deptAdd: '＋ Nuevo departamento', deptName: 'Escribe el nombre del departamento nuevo', deptCreated: 'Departamento «{name}» creado: agrega sus repositorios, su personal y sus indicaciones en ⚙ › Departamentos.',
+      deptPh: 'Un proyecto que todavía no existe…', deptAdd: '＋ Nuevo proyecto', deptName: 'Escribe el nombre del proyecto nuevo', deptCreated: 'Proyecto «{name}» creado: agrega sus repositorios, su personal y sus indicaciones en ⚙ › Empresa.',
     },
   },
   archive: {
@@ -547,7 +547,7 @@ export default {
     agentExists: 'ese agente ya está registrado en esa ruta', saveFailed: 'no se pudo guardar: {error}', agentsMax: 'como máximo {n} agentes',
     unknownAgent: 'agente desconocido', unknownGap: 'vacío desconocido', componentName: 'el componente necesita un nombre', componentPath: 'la carpeta del componente va dentro del repositorio (relativa, sin ..)', unknownComponent: 'componente desconocido', systemName: 'el proyecto necesita un nombre', unknownSystem: 'proyecto desconocido: {system}', systemExists: 'ya hay un proyecto que se llama «{name}»', systemParts: 'un proyecto tiene hasta {n} artefactos', systemPartName: 'cada artefacto necesita un nombre', systemPartTwice: 'dos artefactos con el mismo nombre', systemKind: 'el tipo de un artefacto es uno de: {kinds}', systemUses: '«{name}» usa «{uses}», que no está en el proyecto', systemCycle: 'lo que usan forma un círculo: {names}', handoffEmpty: 'el traspaso está vacío', noHandoff: 'no hay un encargo de proyecto en curso en esta carpeta', mineKind: 'es una skill o una herramienta (kind: skill | tool)', mineName: 'el nombre va en minúsculas, con guiones, de 2 a 40 caracteres (empieza con una letra)', mineTitle: 'falta qué hace y cuándo usarla', mineScript: 'la herramienta necesita su programa', unknownMine: 'no existe esa skill o herramienta tuya', mineExists: 'ya tienes una que se llama «{name}»', mineMax: 'puedes tener hasta {n}', mineRun: 'se corre con uno de: {runs}', mineParams: 'hasta 8 parámetros', mineParam: 'el parámetro «{name}» va en minúsculas (letras, números y _) y sin repetirse', mineTimeout: 'el tope es de 1 a 600 segundos', settingsFile: { json: 'ese archivo no es JSON', kind: 'eso no son ajustes de Dev Team Office (su "kind" debe ser "dev-team-office/settings")', version: 'esos ajustes son de una versión más nueva de Dev Team Office: actualízala primero (dev-team-office update)' }, character: { json: 'ese archivo no es JSON', kind: 'eso no es un personaje de Dev Team Office (su "kind" debe ser "dev-team-office/character")' }, unknownRole: 'rol desconocido: {role}', oneOf: '{role}: «{key}» debe ser uno de: {values}', notEditable: '{role}: no se puede cambiar "{key}"',
     color: '{role}.{key}: usa un color como #3f73f0', empty: '{role}.{key} no puede quedar vacío',
-    unknownArea: 'área desconocida: {area}', areaName: 'ponle un nombre al área', areaExists: 'ya hay un área que se llama «{name}»', areasMax: 'como máximo {n} áreas', defaultArea: 'el área general no se puede eliminar (sus proyectos no tendrían a dónde ir)', relationSelf: 'un repositorio no se usa a sí mismo', relationHow: 'cómo lo usa es uno de: {hows}', relationsMax: 'como máximo {n} relaciones', relationCycle: '«{from}» no puede usar «{to}»: dentro de un proyecto lo que usan no puede formar un círculo (es el orden en que va un cambio)', unknownRelation: 'relación desconocida', systemGone: 'los proyectos ahora son lo que eran los departamentos: elimina el proyecto {id} en ⚙ › Empresa', pickProject: 'elige el proyecto al que pertenece', unknownOffice: 'proyecto desconocido: {office}', officeName: 'ponle un nombre al proyecto', officeExists: 'ya hay un proyecto con ese nombre', autonomy: 'la autonomía debe ser una de: {levels} (o vacía: la de la empresa)',
+    unknownArea: 'área desconocida: {area}', areaName: 'ponle un nombre al área', areaExists: 'ya hay un área que se llama «{name}»', areasMax: 'como máximo {n} áreas', defaultArea: 'el área general no se puede eliminar (sus proyectos no tendrían a dónde ir)', relationSelf: 'un repositorio no se usa a sí mismo', relationHow: 'cómo lo usa es uno de: {hows}', relationsMax: 'como máximo {n} relaciones', relationCycle: '«{from}» no puede usar «{to}»: dentro de un proyecto lo que usan no puede formar un círculo (es el orden en que va un cambio)', unknownRelation: 'relación desconocida', systemGone: 'los proyectos ahora son lo que eran los proyectos: elimina el proyecto {id} en ⚙ › Empresa', pickProject: 'elige el proyecto al que pertenece', unknownOffice: 'proyecto desconocido: {office}', officeName: 'ponle un nombre al proyecto', officeExists: 'ya hay un proyecto con ese nombre', autonomy: 'la autonomía debe ser una de: {levels} (o vacía: la de la empresa)',
     officesMax: 'como máximo {n} proyectos', mainOffice: 'el proyecto principal no se puede eliminar', timezone: 'zona horaria desconocida: {tz}',
     language: 'idioma desconocido: {lang}', pref: 'ajuste desconocido: {key}', prefValue: '{key}: valor no válido',
     taskEmpty: 'la tarea está vacía', taskTooLong: 'la tarea supera {n} caracteres', taskNoAgent: 'falta el agente destino', cantLaunch: 'no sé lanzar "{agent}"',
@@ -557,7 +557,7 @@ export default {
     pipelineIssues: 'el pipeline tiene errores: {issue}', unknownPipeline: 'pipeline desconocido', pipelineDone: 'el pipeline ya está {status}',
     promptEmpty: 'el prompt está vacío', targetUnknown: 'ese agente no está registrado ni conectado', noEntry: 'el harness de {name} no tiene la entrada "{entry}"',
     sessionGone: 'esa sesión ya no está abierta', needsSession: '«{label}» lo corre una sesión abierta: abre {agent} en {path} con su integración', noPath: 'no existe {path}', notInstalled: 'no encuentro "{bin}" en el PATH',
-    invalidMessage: 'mensaje inválido', registerWs: 'register sólo por WebSocket', updateWs: 'task_update sólo por WebSocket', unknownCommand: 'comando no disponible: {action}',
+    invalidMessage: 'mensaje inválido', registerWs: 'register sólo por WebSocket', updateWs: 'task_update sólo por WebSocket', unknownCommand: 'comando no disponible: {action}', demoRunning: 'ya hay una demo corriendo: termina sola',
     unknownType: 'tipo desconocido: {type}', notFound: 'ruta no encontrada', fullPath: 'usa la ruta completa', hostDenied: 'host no permitido', originDenied: 'origen no permitido',
     tooLarge: 'payload demasiado grande', noHerdr: 'no estás dentro de herdr (HERDR_ENV=1)', unknownService: 'no existe ese servicio', serviceNoLog: 'ese servicio no tiene un log que seguir', herdrFailed: 'herdr: {error}', paneMissing: 'falta el pane',
     promptGone: 'esa pregunta ya no está', promptChanged: 'la pregunta cambió en la pantalla del agente: ésta es la que muestra ahora', promptOption: 'esa opción no existe',
@@ -565,7 +565,7 @@ export default {
     knowledgeName: 'ponle un nombre (letras, números y guiones)', knowledgeExists: 'ya hay otra con el nombre «{name}»', knowledgeMax: 'el archivo guarda como máximo {n} entradas',
     connectorUrl: 'la URL del conector debe empezar con http:// o https://', connectorHow: 'un conector necesita un comando (servidor MCP local) o una URL (remoto)',
     unknownKnowledge: 'no existe esa entrada del archivo', notInstallable: 'sólo las skills y los conectores se instalan en un repositorio', installFailed: 'no se instaló en ningún repositorio',
-    pickProjects: 'elige al menos un departamento o un repositorio registrado', unknownProject: 'repositorio desconocido: {project}', tooManyProjects: 'como máximo {n} repositorios por directiva', unknownDirective: 'no existe esa directiva',
+    pickProjects: 'elige al menos un proyecto o un repositorio registrado', unknownProject: 'repositorio desconocido: {project}', tooManyProjects: 'como máximo {n} repositorios por directiva', unknownDirective: 'no existe esa directiva',
     loopName: 'ponle un nombre al loop', loopExists: 'ya hay un loop que se llama «{name}»', loopsMax: 'como máximo {n} loops', unknownLoop: 'no existe ese loop: {loop}', loopInterval: 'el intervalo va en minutos, de 1 a 1440', loopTries: 'los intentos por paso van de 1 a 50', loopSteps: 'los pasos son una lista', loopStepsMax: 'como máximo {n} pasos', loopStepEmpty: 'cada paso necesita qué hacer', loopCriteria: 'los criterios son una lista', loopCriteriaMax: 'como máximo {n} criterios', loopCriterionEmpty: 'el criterio está vacío', unknownStep: 'no existe ese paso: {step}', unknownCriterion: 'no existe ese criterio: {criterion}', loopDone: 'el loop ya terminó', loopNotRunning: 'el loop está {status}', noLoopHere: 'no hay un loop en curso en esta carpeta', loopNoResults: 'falta cómo va cada criterio',
     expertSkill: 'la skill del experto: su nombre, en minúsculas (letras, números, puntos y guiones)', unknownExpert: 'no existe ese experto: {expert}', expertExists: 'la skill «{skill}» ya tiene su experto', expertName: 'el experto necesita un nombre', expertsMax: 'como máximo {n} expertos', expertAction: 'cada acción necesita una etiqueta y un texto', expertActionsMax: 'como máximo {n} acciones por experto', expertNoAgent: 'no hay un repositorio registrado con la skill «{skill}» para mandarle la tarea',
     resourceKind: 'el tipo es uno de: {kinds}', resourceName: 'falta su nombre', unknownResource: 'no existe esa infraestructura: {resource}', resourceExists: 'ya hay una «{name}» de ese tipo', resourceHow: 'cómo la usa es uno de: {hows}', resourcesMax: 'como máximo {n}',
@@ -766,18 +766,18 @@ export default {
       cardPlace: 'Dónde está la empresa', cardView: 'La vista', cardLog: 'La bitácora', cardAlerts: 'Cuando te esperan', alertsHint: 'Estos dos son de este navegador: no se guardan con la oficina.',
       clarifyHint: 'Antes de que un encargo pase a trabajo, la analista se lo da a leer al agente del repositorio (sólo lectura) y te trae sólo las preguntas que cambiarían el resultado.',
       autonomousHint: 'Cada encargo dice que el agente puede decidir lo menor y seguir hasta el final, en vez de detenerse a preguntar.',
-      autonomyDepts: 'Cada departamento puede tener su propio nivel: Departamentos →',
+      autonomyDepts: 'Cada proyecto puede tener su propio nivel: ⚙ › Empresa →',
       cardEmbeddings: 'Búsqueda por significado', cardIndex: 'El índice', cardData: 'Dónde se guarda todo', dataFile: 'Base de datos',
       dataHint: 'Todo lo que sabe la oficina está en ese único archivo SQLite: cópialo para respaldarlo todo, con su historial. La exportación de arriba lleva sólo tu configuración.',
       io: 'Tus ajustes (archivo JSON)', ioHint: 'Exporta lo que es tuyo: los ajustes generales, las áreas y sus proyectos (con sus indicaciones, su autonomía y sus personajes), los repositorios registrados con sus indicaciones y sus relaciones, la infraestructura, los expertos y tus skills con sus archivos (las privadas, las de las carpetas personales de tus agentes y las que usan tus expertos). No van la bitácora, los encargos, las directivas, los loops ni el archivo. Importar reemplaza lo que trae el archivo y deja lo demás; tú eliges dónde van sus skills; un repositorio cuya carpeta no está en esta máquina se salta.', ioExport: '⬇ Exportar ajustes', ioImport: '⬆ Importar ajustes', ioDone: 'Ajustes importados: {prefs} ajustes, {areas} áreas, {departments} proyectos, {characters} personajes, {projects} repositorios, {relations} relaciones, {skills} skills privadas, {installed} skills instaladas, {tools} herramientas, {experts} expertos, {resources} de infraestructura.',
       archive: 'Archivo (lo que saben los agentes)', archivePush: 'Lo que sabe el archivo va arriba de cada encargo y pregunta (los términos del glosario y los fragmentos más relevantes)', embeddings: 'Búsqueda semántica', embed_off: 'Apagada: sólo por palabras (sin internet)', embed_ollama: 'Ollama, en esta máquina', embed_openai: 'Una API compatible con OpenAI (OpenAI, Voyage…)', embedModel: 'Modelo de embeddings', embedUrl: 'Dirección', embedOllamaHint: 'Instala Ollama y corre: ollama pull nomic-embed-text. Nada sale de esta máquina.', embedKeyHint: 'Su clave va en la variable de entorno DEV_TEAM_OFFICE_EMBED_KEY (nunca en la base). El texto del archivo se manda a esa API para sacar sus embeddings.', indexStatus: '🧠 {chunks} fragmento(s) indexado(s) · {embedded} con embedding', reindex: '↻ Indexarlo de nuevo',
       theme: 'Estilo', theme_pixel: 'Pixel art (el equipo de siempre)', theme_anime: 'Anime (un equipo de mujeres)', themeHint: 'Cómo se ve la gente de la oficina. Cada estilo tiene su propio elenco, y lo que cambies en ⚙ › Personajes queda en el estilo que estés usando.', themeAnimeHint: 'Un equipo de mujeres adultas al estilo del anime japonés, con sus propios nombres, peinados y ropa (y la tuya, la de la PO). Aquí no hay hombres. Lo que cambies en ⚙ › Personajes queda en este estilo; la terminal sigue en pixel art, con este elenco.',
-      intel: '🧠 Inteligencia', intelHint: 'El modelo en que se apoya la oficina para dimensionar el impacto de un pedido: cómo toca cada repo y qué necesita que no está en el mapa (componentes, repos, colas, bases de datos, APIs…). Sólo lee y contesta; no cambia nada.', intelProvider: 'Proveedor', intel_off: 'Ninguno: sólo las palabras del pedido', intel_agent: 'Uno de tus agentes (su CLI, sólo lectura)', intel_anthropic: 'La API de Claude (Anthropic)', intel_openai: 'Una API compatible con OpenAI (OpenAI, OpenRouter, LM Studio…)', intel_ollama: 'Ollama, en esta máquina',
+      intel: '🧠 Inteligencia', intelHint: 'El modelo en que se apoya la oficina para dimensionar el impacto de un pedido: cómo toca cada repo y qué necesita que no está en el mapa (componentes, repos, colas, bases de datos, APIs…). Sólo lee y contesta; no cambia nada.', intelProvider: 'Proveedor', intel_off: 'Ninguno: sólo las palabras del pedido', narr_off: 'Ninguno: por reglas, de la bitácora', intel_agent: 'Uno de tus agentes (su CLI, sólo lectura)', intel_anthropic: 'La API de Claude (Anthropic)', intel_openai: 'Una API compatible con OpenAI (OpenAI, OpenRouter, LM Studio…)', intel_ollama: 'Ollama, en esta máquina',
       intelHarness: 'Agente', intelModel: 'Modelo', intelModelAgent: 'el suyo (opcional: otro modelo de su CLI)', intelUrl: 'Dirección', intelTimeout: 'Tope (segundos)', intelAgentHint: 'Usa el login de ese agente; corre en una carpeta neutra, en modo sólo lectura, y la oficina no lo cuenta como trabajo.', intelKeyAnthropic: 'Su clave va en la variable de entorno ANTHROPIC_API_KEY (o DEV_TEAM_OFFICE_MODEL_KEY), nunca en la base. El pedido y el mapa de la empresa (nombres de repos, componentes e infraestructura) se mandan a esa API.', intelKeyOpenai: 'Su clave va en la variable de entorno DEV_TEAM_OFFICE_MODEL_KEY (u OPENAI_API_KEY), nunca en la base. El pedido y el mapa de la empresa se mandan a esa API.', intelOllamaHint: 'Instala Ollama y corre: ollama pull llama3.1 (o el modelo que elijas). Nada sale de esta máquina.',
       intelTest: '🧪 Probar', intelTesting: 'Preguntándole…', intelOk: '✓ Contestó {model} en {s} s', intelFail: '✗ {error}',
       compact: 'Contexto de los agentes', compactAuto: 'Compactarlo solo al pasar el tope', compactAt: 'Tope', compact_tokens: 'tokens', compact_pct: '% de su ventana', compactHint: 'Pasado el tope, la oficina le pide al agente que compacte su contexto cuando termina su turno: Pi y OpenCode lo hacen solos; en herdr, se escribe /compact en su pane; los Claude Code que abre la oficina compactan solos en ese tope. Si no, la bitácora te avisa.',
       autonomy: 'Autonomía', clarify: 'Antes de que un encargo pase a trabajo, la analista revisa que tenga todo (y te pregunta sólo lo que falta)', autonomous: 'Los agentes trabajan solos hasta terminar (preguntan sólo lo que únicamente tú puedes responder)',
-      language: 'Idioma', timezone: 'Zona horaria', tzSystem: 'la del sistema ({tz})', tzHint: 'De la zona horaria salen la fecha, la hora y el país. Cada oficina puede tener la suya (⚙ › Departamentos).',
+      language: 'Idioma', timezone: 'Zona horaria', tzSystem: 'la del sistema ({tz})', tzHint: 'De la zona horaria salen la fecha, la hora y el país. Cada proyecto puede tener la suya (⚙ › Empresa).',
       city: 'Ciudad', cityZone: 'la de la zona horaria ({city})', cityHint: 'De la ciudad salen el clima, el sol y la luna. Escribe para buscar entre las ciudades del país de la zona horaria: en Chile, por ejemplo, Concepción y Punta Arenas comparten la zona horaria de Santiago.',
       cityNone: 'no hay una ciudad así en {country}', cityOffline: 'sin conexión: escribe la ciudad o sus coordenadas (lat, lon)',
       tzSearch: 'escribe para buscar (p. ej. Madrid)', country: 'País', weather: 'Clima real', weatherOn: 'sí (Open-Meteo, gratis)', weatherOff: 'no (simulado según la estación)',
@@ -889,7 +889,7 @@ export default {
     logStart: '— bitácora: la actividad de los agentes —', opening: 'Abriendo {url} en el navegador…', back: '— de vuelta en la bitácora ({n} línea(s) nuevas) —', bye: 'Cerrando la oficina…',
     task: '📨 {text} → {status}{detail}', run: '▶ «{name}»: {status}{stage}', weather: '{icon} Afuera de {office}: {label}{temp}', lang: '⚙ Idioma: {lang}',
     officeAdded: '🏢 Nueva oficina: {name} ({tz})', officeRemoved: '🏢 Se eliminó la oficina {name}',
-    startAgent: '🪟 {agent} se abrió en el pane {pane} ({office}): desde ahí orquesta su trabajo (y puede abrir más panes)', startFailed: 'No se pudo abrir el agente en herdr: {error}',
+    startAgentOpen: '🪟 {agent} ya estaba abierto en el pane {pane} ({office}): la oficina lo sigue, sin abrir otro', startAgent: '🪟 {agent} se abrió en el pane {pane} ({office}): desde ahí orquesta su trabajo (y puede abrir más panes)', startFailed: 'No se pudo abrir el agente en herdr: {error}',
     attached: 'Ya había una oficina corriendo: abro su juego', 
   },
   cli: {
@@ -897,7 +897,7 @@ export default {
     join: {
       started: '🏢 Dev Team Office partió en {url}', running: '🏢 Dev Team Office está corriendo en {url}', notRunning: '🏢 Dev Team Office no está corriendo: {what} para cuando abra (dev-team-office)',
       saved: 'guardado', registered: 'registrado',
-      added: '✓ Registrado: {name} — {harness} en {path} (departamento {office})', already: '✓ Ya estaba registrado: {name} — {harness} en {path} (departamento {office})',
+      added: '✓ Registrado: {name} — {harness} en {path} (proyecto {office})', already: '✓ Ya estaba registrado: {name} — {harness} en {path} (proyecto {office})',
       wholeTeam: '✓ No tenía subagentes con rol, así que la oficina le dio su equipo ({team}): {n} subagente(s) en {dir}/.',
       someTeam: '✓ No tenía subagente para {roles}, así que la oficina le agregó {names} de su equipo ({team}) en {dir}/.',
       reload: { 'claude-code': 'Reinicia Claude Code para cargarlos (`claude --continue` mantiene la conversación).', 'claude-code-warm': 'Claude Code los carga en unos segundos.', opencode: 'Reinicia OpenCode para cargarlos.', pi: 'Pi los usa desde la próxima llamada a un subagente.', codex: 'Abre una sesión nueva de Codex para cargarlos.' },
@@ -928,7 +928,7 @@ Uso:
   dev-team-office watch [url]     Mira una oficina que ya está corriendo (por defecto la local).
   dev-team-office status          ¿Hay una oficina corriendo? Muestra versión y endpoints.
   dev-team-office demo [--pi]     Reproduce una sesión de ejemplo (Claude Code, o flujo TDD de Pi).
-  dev-team-office offices         Los departamentos de la empresa (oficinas: equipos o dominios). También: departments.
+  dev-team-office offices         Los proyectos de la empresa (oficinas: cada uno un piso con su personal). También: departments.
   dev-team-office offices add "<nombre>" [--timezone Europe/Madrid] [--location "Madrid"] [--instructions "<cómo se trabaja ahí>"]
   dev-team-office offices set <id> [--name …] [--timezone …] [--location …] [--instructions …]
   dev-team-office offices rm <id>
@@ -980,8 +980,8 @@ Uso:
                                   La daily a pedido, para saber lo último: qué hizo cada uno desde la última daily y en
                                   qué está ahora (en el juego se juntan en la mesa). --all: la de toda la empresa.
   dev-team-office architecture [--json]
-                                  La arquitectura de la empresa como esquema (también: map): cada departamento con sus
-                                  repositorios, sus componentes e infraestructura, cada proyecto en el orden en que va un cambio,
+                                  La arquitectura de la empresa como esquema (también: map): cada área con sus proyectos,
+                                  sus repositorios y cómo se relacionan, la infraestructura, el orden en que va un cambio,
                                   y la revisión. El mismo que leen los agentes con la herramienta MCP get_architecture. --json: el grafo.
   dev-team-office e2e -- <comando>
                                   Corre tus pruebas end-to-end (Playwright) con la oficina mirando: cada prueba y cada
@@ -1025,8 +1025,8 @@ API: docs/api.es.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
     noAgents: '(ningún repositorio registrado)  →  dev-team-office agents add <ruta completa> --agent claude|opencode|pi|codex', openSession: ' · ● sesión abierta',
     promptUsage: 'Uso: dev-team-office prompt <id> "<texto>" [--pipeline <entrada>] [--new]   (los id: dev-team-office agents)',
     unknownCommand: 'Comando desconocido: {cmd}',
-    offices: 'Departamentos:', officeLine: '  {id}  {name}  · {tz}{country}  · {agents} repositorio(s){viewing}', viewing: '  ← la que se mira',
-    officeAdded: 'Departamento creado: {id}  ({name}, {tz})', officeSaved: 'Departamento actualizado: {id}', agentSaved: 'Repositorio actualizado: {id}', agentsUsage: 'Uso: dev-team-office agents [add <ruta completa> --agent … | set <id> | rm <id>] [--name …] [--office …] [--instructions …]', characterUsage: 'Uso: dev-team-office character export <rol> [--office <id>] [--out <archivo>]  ·  character import <archivo.json> [--role <rol>] [--office <id>]', characterRole: '¿Para qué rol es? Agrega --role qa|backend|frontend|tl|manager|analyst|designer|po|devops|security', characterExported: '{name} exportado a {file}', characterImported: '{name} es ahora el {role} de {office}', officeRemoved: 'Departamento eliminado: {id} (sus repositorios pasaron al principal)',
+    offices: 'Proyectos:', officeLine: '  {id}  {name}  · {tz}{country}  · {agents} repositorio(s){viewing}', viewing: '  ← la que se mira',
+    officeAdded: 'Proyecto creado: {id}  ({name}, {tz})', officeSaved: 'Proyecto actualizado: {id}', agentSaved: 'Repositorio actualizado: {id}', agentsUsage: 'Uso: dev-team-office agents [add <ruta completa> --agent … | set <id> | rm <id>] [--name …] [--office …] [--instructions …]', characterUsage: 'Uso: dev-team-office character export <rol> [--office <id>] [--out <archivo>]  ·  character import <archivo.json> [--role <rol>] [--office <id>]', characterRole: '¿Para qué rol es? Agrega --role qa|backend|frontend|tl|manager|analyst|designer|po|devops|security', characterExported: '{name} exportado a {file}', characterImported: '{name} es ahora el {role} de {office}', officeRemoved: 'Proyecto eliminado: {id} (sus repositorios pasaron al principal)',
     officesUsage: 'Uso: dev-team-office offices [add "<nombre>" | set <id> | rm <id>] [--name …] [--timezone …] [--location …]',
     config: 'Ajustes (en {file}):', configSaved: '{key} = {value}', configUnknown: 'Ajuste desconocido: {key}. Los ajustes: {keys}', configBool: '{key} es on u off', configLimit: 'compact.at es un número de tokens (400k, 400000) o una parte de la ventana (80%)',
     paneUsage: 'Uso: dev-team-office pane [--role qa] [--title "tests"] [--agent pi|claude|opencode|codex] -- <comando o prompt>',
@@ -1094,7 +1094,7 @@ API: docs/api.es.md (POST /v1/events/<source>, GET /v1/state, WS /v1/ws)`,
     removedProfile: '✓ quité nuestra línea del PATH de {file}',
     profileAsk: '¿Agrego {dir} a tu PATH en {file}, para que las terminales nuevas encuentren `dev-team-office`?',
     profileAdded: '✓ {file}: las terminales nuevas encontrarán `dev-team-office`',
-    keptData: '· dejé tus datos en {path} (repositorios, departamentos, ajustes): --purge también los borra',
+    keptData: '· dejé tus datos en {path} (repositorios, proyectos, ajustes): --purge también los borra',
     nothing: 'No hay nada que quitar.',
     done: 'Listo. Abre la oficina con: dev-team-office   ·   revísala con: dev-team-office doctor',
     doneNewTerminal: 'Listo. Abre una terminal nueva y corre: dev-team-office   ·   ahora mismo, en ésta: {cmd}',

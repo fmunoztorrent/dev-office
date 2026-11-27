@@ -341,6 +341,26 @@ test('una sesión de Claude que lanza la oficina puede usar las herramientas de 
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('en un pane (una terminal) los permisos de Claude van en un archivo: la línea tipeada no pasa de 1024 bytes (macOS corta lo demás)', () => {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dto-settings-')));
+  const reads = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dto-reads-')));
+  try {
+    const long = lib.officeAllows('claude-code', [reads]);
+    assert.ok(['claude', ...long].join(' ').length > 1024, 'la forma larga no cabía en una línea tipeada');
+    const args = lib.officeSettings('claude-code', [reads], dir);
+    assert.equal(args[0], '--settings');
+    assert.ok(['claude', ...args].join(' ').length < 300, 'la línea queda corta');
+    // the same permissions, in the file
+    assert.deepEqual(JSON.parse(fs.readFileSync(args[1], 'utf8')), { permissions: { allow: long.slice(1) } });
+    // the same permissions reuse the same file; other ones, another
+    assert.equal(lib.officeSettings('claude-code', [reads], dir)[1], args[1]);
+    assert.notEqual(lib.officeSettings('claude-code', [], dir)[1], args[1]);
+    assert.equal(fs.readdirSync(dir).length, 2);
+    // the other harnesses: nothing
+    assert.deepEqual(lib.officeSettings('pi', [reads], dir), []);
+  } finally { for (const d of [dir, reads]) fs.rmSync(d, { recursive: true, force: true }); }
+});
+
 test('perfiles de modelos: el agente arranca con el modelo del perfil y las etapas sin modelo toman el de su rol', () => {
   assert.deepEqual(lib.modelArgs('claude-code', 'anthropic/claude-opus-5-5'), ['--model', 'claude-opus-5-5']);
   assert.deepEqual(lib.modelArgs('opencode', 'opencode/big-pickle'), ['-m', 'opencode/big-pickle']);

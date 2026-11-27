@@ -131,7 +131,8 @@ El navegador (public/)
   public/main.js           la página: la conexión, el HUD, los diálogos y las teclas
   public/sim.js            la simulación (personajes, rutas, reacciones, vida de la oficina); la comparte con la terminal
   public/scene.js          lo que hay en pantalla cada cuadro, como datos planos: la capa entre el juego y sus renderers
-  public/renderers.js      el registro de renderers; renderers/plan.js es el de referencia
+  public/sdk/              el SDK de renderers: las interfaces con cualquier motor gráfico (index.js, index.d.ts) y su
+                           kit de conformidad; renderers/plan.js (el de referencia) y renderers/blocks.js (3D, WebGL)
   public/game.js · iso.js  la oficina en canvas, en vista frontal y en la cenital isométrica
   public/themes.js · anime.js  los temas gráficos, y el elenco anime dibujado con trazos vectoriales
   public/sprite.js         el retrato de un personaje (ficha y ajustes)

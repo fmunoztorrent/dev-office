@@ -1,14 +1,14 @@
 // The scene (public/scene.js): the layer between what the game decides (public/sim.js) and what a graphics
 // engine draws. Each frame is plain data (it could be sent or saved); the canvas (front and isometric), the
 // terminal and the reference plan draw only from it, and another renderer (a 3D one) can register itself
-// (public/renderers.js) and draw the same scene.
+// with the renderer SDK (public/sdk/index.js, test/sdk.test.js) and draw the same scene.
 import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createSim, setExperts, TEAM, HOT_DESKS } from '../public/sim.js';
 import { buildScene, peopleOf, personIn, WORLD, SCENE_VERSION } from '../public/scene.js';
-import { registerRenderer, getRenderer, listRenderers } from '../public/renderers.js';
+import { registerRenderer, getRenderer, listRenderers, unregisterRenderer } from '../public/sdk/index.js';
 import { drawPlan } from '../public/renderers/plan.js';
 import { Screen } from '../tui/screen.js';
 import { computeLayout, drawFrame } from '../tui/view.js';
@@ -85,8 +85,9 @@ test('los renderers se registran; el plano de referencia dibuja la oficina sólo
   assert.throws(() => registerRenderer({ id: 'sin-create' }), /create/);
   const seen = [];
   registerRenderer({ id: 'prueba-3d', label: '3D', create: () => ({ draw: (scene) => seen.push(scene.v) }) });
-  getRenderer('prueba-3d').create(null).draw({ v: 1 });
+  getRenderer('prueba-3d').create({}).draw({ v: 1 });
   assert.deepEqual(seen, [1]);
+  unregisterRenderer('prueba-3d');
   assert.ok(listRenderers().some((r) => r.id === 'plan'));
   const { sim, now } = office();
   const calls = [];
@@ -112,10 +113,11 @@ test('los renderers no leen la simulación: el canvas y la terminal dibujan sól
   const game = fs.readFileSync(new URL('../public/game.js', import.meta.url), 'utf8');
   // (without the comments: they may name the simulation)
   const code = (src) => src.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*\*)/.test(l)).map((l) => l.replace(/\s\/\/ .*$/, '')).join('\n');
-  const drawing = code(game.slice(0, game.indexOf('// ---------------------------------------------------------------- another renderer')));
-  const reads = [...drawing.matchAll(/\bsim\.(\w+)/g)].map((m) => m[1]).filter((k) => k !== 'js');
-  assert.deepEqual([...new Set(reads)], ['step'], 'del canvas, sólo hacer avanzar la simulación');
-  assert.doesNotMatch(drawing.replace('const { agents } = sim;', ''), /\bagents\b[.[]|Object\.values\(agents\)/);
+  // the canvas's renderer: from createCanvasRenderer to its registration with the SDK
+  const drawing = code(game.slice(game.indexOf('export function createCanvasRenderer'), game.indexOf("registerRenderer({ id: 'canvas'")));
+  assert.ok(drawing.length > 50000, 'el renderer del canvas está entero');
+  assert.deepEqual([...drawing.matchAll(/\bsim\.(\w+)/g)].map((m) => m[1]).filter((k) => k !== 'js'), [], 'el canvas no toca la simulación');
+  assert.doesNotMatch(drawing, /\bagents\b|\bcreateSim\b|\bbuildScene\b/);
   const view = code(fs.readFileSync(new URL('../tui/view.js', import.meta.url), 'utf8'));
   assert.deepEqual([...view.matchAll(/\bsim\.(\w+)/g)].map((m) => m[1]).filter((k) => k !== 'js'), []);
 });
