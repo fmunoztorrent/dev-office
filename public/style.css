@@ -139,6 +139,18 @@ body[data-floor="exec"] .screen[data-view="flat"] .hud-tl, body[data-floor="arch
   animation: attention-pulse 1.1s ease-in-out infinite alternate;
 }
 .attention[hidden] { display: none; }
+/* an agent installed here that is not connected: under the waiting banner, quieter, with its command */
+.setup-note {
+  position: absolute; z-index: 7; top: calc(1.4cqi + var(--hud) + 10px + var(--attention-only-h, 0px)); left: 50%; transform: translateX(-50%);
+  width: min(760px, calc(100% - 32px)); display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px 10px 14px;
+  color: #e8e9f1; background: #1b1f33; font: 14px/1.35 "Space Grotesk", sans-serif;
+  box-shadow: 0 0 0 3px #ffd166, 6px 6px 0 3px #000a;
+}
+.setup-note[hidden] { display: none; }
+.setup-note-text { flex: 1 1 260px; min-width: 0; }
+.setup-note-cmd { font: 13px/1.3 ui-monospace, Menlo, monospace; color: #ffd166; background: #0d1020; padding: 6px 8px; user-select: all; overflow-wrap: anywhere; }
+.setup-note .attention-go { color: #1b1f33; background: #ffd166; }
+.setup-note-x { flex: none; border: 0; cursor: pointer; background: none; color: #e8e9f1; font: 18px/1 "VT323", monospace; padding: 4px; }
 .attention-hand { font-size: 28px; line-height: 1; animation: attention-wave 1.1s ease-in-out infinite; transform-origin: 70% 90%; }
 .attention-text { flex: 1; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .attention-text b { font-weight: 700; }
@@ -246,7 +258,8 @@ body[data-floor="exec"] .screen[data-view="flat"] .hud-tl, body[data-floor="arch
 .log time { color: var(--muted); margin-right: 6px; font-variant-numeric: tabular-nums; }
 .log b { font-weight: 600; }
 .log .err { color: #ff8fa3; }
-.log .src { color: #5d6283; font-size: 11px; }
+.log li.story { cursor: default; }
+.log .trip { color: #ffd59a; } /* a snag on the way: told, not shouted (its detail is in the tooltip) */
 .log li.life { color: #b9bdd3; }
 .log li.life b { color: var(--accent); }
 .log li.event-fire { color: #ffb37a; }
@@ -295,8 +308,10 @@ body[data-floor="exec"] .screen[data-view="flat"] .hud-tl, body[data-floor="arch
 /* ---------- talking to a character: on the right, as tall as the screen, the chat first ---------- */
 .sheet {
   /* between the waiting banner and the dock (main.js measures them: --attention-h, --dock-h) */
-  position: absolute; z-index: 4; right: 1.4cqi; top: calc(1.4cqi + var(--hud) + 12px + var(--attention-h, 0px)); bottom: calc(1.2cqi + var(--dock-h, 0px) + 12px);
-  width: min(480px, 42cqi); display: flex; flex-direction: column; gap: 8px;
+  position: absolute; z-index: 4; right: 1.4cqi; top: calc(1.4cqi + var(--hud) + 12px + var(--attention-h, 0px));
+  /* as tall as what it holds: no empty box when there is no conversation */
+  max-height: calc(100% - 2.6cqi - var(--hud) - 24px - var(--attention-h, 0px) - var(--dock-h, 0px));
+  width: min(480px, 42cqi); display: flex; flex-direction: column; gap: 8px; overflow: hidden auto; /* a short screen: it scrolls, nothing spills out */
   padding: 10px; color: var(--ink); background: #f4f1e8;
   box-shadow: 0 0 0 3px var(--ink), 5px 5px 0 3px #000a;
   font: 14px/1.4 "Space Grotesk", sans-serif; animation: slide-in .16s ease-out;
@@ -312,18 +327,33 @@ body[data-floor="exec"] .screen[data-view="flat"] .hud-tl, body[data-floor="arch
 .sheet-icon { font-size: 20px; }
 .sheet-icon:hover { transform: rotate(-12deg); }
 .sheet-x:focus-visible, .sheet-icon:focus-visible { outline: 2px solid #f4a261; }
-.sheet-more { font-size: 12px; color: #555b70; }
-.sheet-more summary { cursor: pointer; }
-.sheet-history { list-style: none; margin: 4px 0 0; padding: 0; max-height: 120px; overflow-y: auto; }
-.sheet-history li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sheet-now { flex: 0 1 auto; min-height: 48px; display: flex; flex-direction: column; }
+.sheet-now h3 { margin: 0 0 2px; font: 17px/1 "VT323", monospace; color: #555b70; font-weight: normal; }
+.sheet-history { list-style: none; margin: 0; padding: 0; min-height: 0; max-height: 132px; overflow-y: auto; font-size: 13px; line-height: 1.35; }
+.sheet-history li { display: flex; gap: 8px; padding: 3px 0; border-bottom: 1px dashed #d6cfbc; }
+.sheet-history li:last-child { border-bottom: 0; }
+.sheet-history li.none { color: #7a7f93; }
+.sheet-history time { flex: none; color: #7a7f93; font-variant-numeric: tabular-nums; }
+.sheet-actions { flex: none; display: flex; flex-wrap: wrap; gap: 6px; }
+.sheet-actions:empty { display: none; }
+.sheet-actions .act { text-align: left; cursor: pointer; font: 13px/1.3 "Space Grotesk", sans-serif; color: var(--ink); background: #fff; border: 0; border-left: 6px solid #e9c46a; box-shadow: 0 0 0 2px var(--ink), 2px 2px 0 1px #0002; padding: 6px 9px; }
+.sheet-actions .act.ask { border-left-color: #8ecae6; }
+.sheet-actions .act:hover, .sheet-actions .act:focus-visible { background: #fff3c4; outline: none; }
+.sheet-actions .act:active { transform: translate(1px, 1px); }
+.sheet-idle { flex-basis: 100%; margin: 0; color: #555b70; font-size: 13px; }
 /* the conversation: it takes all the room there is */
-.talk { flex: 1; min-height: 120px; list-style: none; margin: 0; padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; background: #e9e4d6; box-shadow: inset 0 0 0 2px #d6cfbc; font-size: 14px; line-height: 1.45; }
+.talk { flex: 1 1 auto; min-height: 80px; list-style: none; margin: 0; padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; background: #e9e4d6; box-shadow: inset 0 0 0 2px #d6cfbc; font-size: 14px; line-height: 1.45; }
 .talk-empty { margin: auto; max-width: 32ch; text-align: center; color: #7a7f93; font-size: 13px; background: none !important; box-shadow: none !important; align-self: center !important; }
 .talk li { padding: 6px 10px; max-width: 90%; overflow-wrap: anywhere; white-space: pre-wrap; background: #fff; box-shadow: 0 0 0 2px var(--ink); align-self: flex-start; user-select: text; }
 .talk li.you { align-self: flex-end; background: #fff3c4; }
 .talk li b { display: block; font: 15px/1 "VT323", monospace; color: #6c757d; margin-bottom: 2px; }
 .talk li.asking span::after { content: ' ▍'; animation: btw-blink 1s steps(2) infinite; }
 .talk li.failed span { color: #b3261e; }
+/* who to talk to for what (your own sheet, and someone who is not working) */
+.talk li.talk-guide { align-self: stretch; max-width: none; background: #f6f1e4; }
+.talk .routes { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.talk .route { text-align: left; cursor: pointer; font: 13px/1.3 "Space Grotesk", sans-serif; color: var(--ink); background: #fff; border: 0; border-left: 6px solid #8d8d8d; box-shadow: 0 0 0 2px var(--ink); padding: 6px 8px; }
+.talk .route:hover, .talk .route:focus-visible { background: #fff3c4; outline: none; }
 .say { display: flex; gap: 8px; align-items: flex-end; }
 .say textarea { flex: 1; min-width: 0; resize: none; min-height: 44px; max-height: 180px; font: 14px/1.4 "Space Grotesk", sans-serif; color: var(--ink); background: #fff; border: 0; box-shadow: 0 0 0 2px var(--ink); padding: 8px 10px; }
 .say textarea:focus-visible { outline: 2px solid #f4a261; outline-offset: 2px; }
@@ -1446,8 +1476,8 @@ ol.arch-list { list-style: decimal; padding-left: 20px; }
 .sheet-x:hover, .sheet-icon:hover { background: rgb(43 45 66 / .08); color: var(--g-line); }
 .sheet-icon:hover { transform: rotate(-12deg); }
 .sheet-x:focus-visible, .sheet-icon:focus-visible { outline: 3px solid #f4a261; outline-offset: 1px; box-shadow: none; }
-.sheet-more { font-size: 12.5px; color: var(--g-muted); }
-.sheet-more summary { font: 18px/1.2 var(--font-pixel); }
+.sheet-now h3 { font: 18px/1.2 var(--font-pixel); color: var(--g-muted); }
+.sheet-actions .act { box-shadow: 0 0 0 2px var(--g-line), 3px 3px 0 1px rgb(0 0 0 / .18); }
 .talk { padding: 12px; gap: 10px; background: #e9e4d6; border: 0; border-radius: 0; box-shadow: inset 0 0 0 2px #d6cfbc; }
 .talk li { padding: 7px 11px; border: 0; border-radius: 0; background: #fff; box-shadow: 0 0 0 2px var(--g-line), 3px 3px 0 1px rgb(0 0 0 / .18); }
 .talk li.you { background: #fff3c4; }

@@ -95,7 +95,8 @@ export function runTui({ feed, endpoints = [], colorMode = detectColorMode(), no
 
     const send = (msg, ok) => {
       const out = feed.send(msg);
-      flash(out?.ok === false ? t('tui.flash.failed', { error: out.error }) : ok);
+      // someone who is not working answers who to go to instead: that is an answer, not a failure
+      flash(out?.ok === false ? (out.code === 'idle' ? out.error : t('tui.flash.failed', { error: out.error })) : ok);
     };
 
     // The office selector (top left, or the o key): the company's next one.

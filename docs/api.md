@@ -23,7 +23,7 @@ The port is changed with `--port` or `$DEV_TEAM_OFFICE_PORT`; the socket, with `
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| `GET` | `/v1/health` | | `{ ok, name, version, pid, uptime, url, socket, lang, herdr, mode, root }` (`mode`: `terminal` or `background`; `root`: the install folder) |
+| `GET` | `/v1/health` | | `{ ok, name, version, pid, uptime, url, socket, lang, herdr, mode, root, unconnected }` (`mode`: `terminal` or `background`; `root`: the install folder; `unconnected`: the agents installed here that are not connected, `[{ id, label, fix }]`) |
 | `GET` | `/v1/state?office=<id>` | | An office's state (by default, the one being watched): `{ sessions, roles, log, tasks, pipelines, targets, appearance, weather, office, offices, prefs, herdr, asks }` |
 | `POST` | `/v1/events/<source>` | An event or an array of events | `{ ok, accepted, ids }` |
 | `POST` | `/v1/events?source=<source>` | Same as above | Same |
@@ -49,6 +49,8 @@ An event can say which **office** it goes to (`office`, or `devteam_office` in a
 | `GET` | `/v1/asks?office=<id>&limit=20` | | `{ ok, asks }`: the latest ones, with `{ id, office, agent, question, answer, status, error, from, forked, role, createdAt }` |
 
 The question is answered by the office's agent on duty (the most recent session, forked and read-only; or the office's registered agent). `status`: `asking` → `answered` | `failed`. In the office they arrive as `btw` events with `phase` `ask`, `answer` or `failed`, and to that office's viewers as `{ type: "ask", ask }`.
+
+A `role` that is asked about what it is doing (anyone but `analyst`, `tl` and `manager`) and is not working on anything right now, without a `session`: `400 { ok: false, code: "idle", error }`, where `error` says who to go to instead. No agent runs and nothing is logged.
 
 ## Projects and areas (the company)
 

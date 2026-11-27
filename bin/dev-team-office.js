@@ -44,6 +44,8 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2));
 // your Claude Code settings: the office keeps your auto-compaction threshold there (server/compact.js)
 const CLAUDE_SETTINGS = path.join(os.homedir(), '.claude', 'settings.json');
+// the agents installed on this machine that cannot tell the office what they do (bin/setup.js): it says so
+const INTEGRATIONS = async () => (await import('./setup.js')).unconnected;
 const port = Number(args.port || process.env.DEV_TEAM_OFFICE_PORT) || DEFAULT_PORT;
 const host = args.host || process.env.DEV_TEAM_OFFICE_HOST || DEFAULT_HOST;
 const socket = args.socket === false ? null : typeof args.socket === 'string' ? args.socket : defaultSocketPath();
@@ -100,7 +102,7 @@ async function cmdOpen({ game = false, notes: carried = [] } = {}) {
   let started = false;
   let server;
   try {
-    server = await startServer({ port, host, socket, log: (m) => { if (!started) notes.push(m); }, herdr: args.herdr !== false, claudeSettings: CLAUDE_SETTINGS });
+    server = await startServer({ port, host, socket, log: (m) => { if (!started) notes.push(m); }, herdr: args.herdr !== false, claudeSettings: CLAUDE_SETTINGS, integrations: await INTEGRATIONS() });
     started = true;
   } catch (err) {
     if (err.code !== 'EADDRINUSE') throw err;
@@ -173,7 +175,7 @@ async function cmdServe() {
   let started = false;
   let server;
   try {
-    server = await startServer({ port, host, socket, log: (m) => { if (!started) notes.push(m); }, herdr: args.herdr !== false, mode: 'background', claudeSettings: CLAUDE_SETTINGS });
+    server = await startServer({ port, host, socket, log: (m) => { if (!started) notes.push(m); }, herdr: args.herdr !== false, mode: 'background', claudeSettings: CLAUDE_SETTINGS, integrations: await INTEGRATIONS() });
     started = true;
   } catch (err) {
     if (err.code === 'EADDRINUSE') fail(t('cli.portBusy', { port }));

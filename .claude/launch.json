@@ -1,0 +1,40 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "office",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "start"
+      ],
+      "port": 4317
+    },
+    {
+      "name": "office-demo",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "PORT=4320 DEV_TEAM_OFFICE_SOCKET=/tmp/dto-demo.sock DEV_TEAM_OFFICE_WEATHER=off DEV_TEAM_OFFICE_DB=/private/tmp/claude-501/-Users-fabianmunoz-Workspace-dev-team-office/4489806a-5502-4b4c-baa3-6309f9abe4d2/scratchpad/demo.db node server/index.js & sleep 1; node test/fixtures/fake-agent.mjs --url http://127.0.0.1:4320 --delay 450 & wait"
+      ],
+      "port": 4320
+    },
+    {
+      "name": "office-city",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "PORT=4321 DEV_TEAM_OFFICE_SOCKET=/private/tmp/claude-501/-Users-fabianmunoz-Workspace-dev-team-office/4489806a-5502-4b4c-baa3-6309f9abe4d2/scratchpad/city.sock DEV_TEAM_OFFICE_DB=/private/tmp/claude-501/-Users-fabianmunoz-Workspace-dev-team-office/4489806a-5502-4b4c-baa3-6309f9abe4d2/scratchpad/city.db DEV_TEAM_OFFICE_LANG=es node server/index.js"
+      ],
+      "port": 4321
+    },
+    {
+      "name": "office-check",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "mkdir -p /private/tmp/claude-501/-Users-fabianmunoz-Workspace-dev-team-office/0ca958fc-80f3-411b-952e-ee3628b9605f/scratchpad/check-home && HOME=/private/tmp/claude-501/-Users-fabianmunoz-Workspace-dev-team-office/0ca958fc-80f3-411b-952e-ee3628b9605f/scratchpad/check-home PORT=4322 DEV_TEAM_OFFICE_SOCKET=/private/tmp/claude-501/-Users-fabianmunoz-Workspace-dev-team-office/0ca958fc-80f3-411b-952e-ee3628b9605f/scratchpad/check.sock DEV_TEAM_OFFICE_WEATHER=off DEV_TEAM_OFFICE_LANG=es DEV_TEAM_OFFICE_DB=/private/tmp/claude-501/-Users-fabianmunoz-Workspace-dev-team-office/0ca958fc-80f3-411b-952e-ee3628b9605f/scratchpad/check.db node server/index.js & sleep 1; node test/fixtures/fake-agent.mjs --url http://127.0.0.1:4322 --delay 700 & wait"
+      ],
+      "port": 4322
+    }
+  ]
+}

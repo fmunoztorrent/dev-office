@@ -47,6 +47,9 @@ const ANNOUNCEMENTS = new Set(['dispatch', 'clarify', 'standup', 'retro', 'narra
 /** What state a character ends up in after one of its events (shared by the office and the monitor).
  *  A failed tool is not "blocked": the agent reads the error and goes on, so it keeps working.
  *  `null` for announcements, which do not change the state (nor set it to idle). */
+// Ends of a turn: what a role did before one is not what it is doing now (Office.working).
+const TURN_MARKS = new Set(['turn_end', 'done', 'session_end']);
+const WORKING_MS = 30 * 60_000;
 export const roleStatus = (ev) => (ANNOUNCEMENTS.has(ev.kind) ? null : ev.phase === 'red' ? 'red' : ev.kind === 'waiting' ? 'waiting' : ev.kind === 'done' ? 'done' : ev.kind === 'turn_end' || ev.kind === 'session_end' ? 'idle' : 'working');
 const SUB_TOOLS = new Set(['task', 'agent', 'subagent', 'subagent_run', 'subagent_continue']);
 const COMMAND_TOOLS = new Set(['bash', 'shell', 'exec', 'exec_command', 'local_shell', 'unified_exec', 'bash_background']);
@@ -449,6 +452,21 @@ export class Office extends EventEmitter {
     }
     this.log.push(ev);
     if (this.log.length > LOG_MAX) this.log.splice(0, this.log.length - LOG_MAX);
+  }
+
+  /**
+   * Whether that role is doing something right now: a subagent of its role still open, or the last
+   * thing it did belongs to a turn that has not ended (in a session that is still open, and not long
+   * ago). What it did in a turn that ended is not "now".
+   */
+  working(role, now = Date.now()) {
+    for (const s of this.sessions.values()) if (s.subagents?.some((x) => x.open && x.role === role)) return true;
+    const r = this.roles[role];
+    if (!r || !['working', 'red', 'waiting'].includes(r.status) || now - r.ts > WORKING_MS) return false;
+    const s = this.sessions.get(r.session);
+    if (!s || s.status === 'done' || s.status === 'ended') return false;
+    const last = this.log.findLast((e) => e.session === r.session && TURN_MARKS.has(e.kind) && e.ts >= r.ts);
+    return !last;
   }
 
   /**

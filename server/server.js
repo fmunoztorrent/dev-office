@@ -93,7 +93,7 @@ class HttpError extends Error {
  *                 says it, so `update` knows whether it can bring the office back by itself
  * @returns {Promise<{company, office, url, socket, command, handleMessage, close, …}>}
  */
-export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {}, clarify: clarifyOpt = {}, rag: ragOpt = {}, standup: standupOpt = {}, mine: mineOpt = {}, loops: loopsOpt = {}, claudeSettings = null, intelligence: intelOpt = {}, e2e: e2eOpt = {}, mode = 'terminal', outdatedAfter = 3000 } = {}) {
+export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, socket = defaultSocketPath(), log = () => {}, db, weather: weatherOpt, places: placesOpt, services: servicesOpt, herdr: herdrOpt, asks: asksOpt = {}, clarify: clarifyOpt = {}, rag: ragOpt = {}, standup: standupOpt = {}, mine: mineOpt = {}, loops: loopsOpt = {}, claudeSettings = null, integrations = null, intelligence: intelOpt = {}, e2e: e2eOpt = {}, mode = 'terminal', outdatedAfter = 3000 } = {}) {
   const ownStore = !db || typeof db === 'string';
   const store = ownStore ? openStore(db || dbFile()) : db; // oficinas, agentes, ajustes e historial
   setLanguage(store.getPrefs().lang);
@@ -621,7 +621,16 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
 
   // ---------- HTTP ----------
 
-  const info = () => ({ ok: true, name: 'dev-team-office', version: VERSION, pid: process.pid, uptime: Math.round((Date.now() - startedAt) / 1000), url: `http://${host}:${port}`, socket: socketPath, lang: getLanguage(), herdr: !!herdr?.available, mode, root: path.dirname(path.dirname(CLI)) });
+  // The agents installed here that are not connected (bin/setup.js `unconnected`): only the real office
+  // passes `integrations` (it reads your HOME); looked at again at most every 30 s.
+  let gaps = { at: 0, list: [] };
+  const unconnected = () => {
+    if (typeof integrations !== 'function') return [];
+    if (Date.now() - gaps.at > 30_000) { try { gaps = { at: Date.now(), list: integrations() || [] }; } catch { gaps = { at: Date.now(), list: [] }; } }
+    return gaps.list;
+  };
+  for (const a of unconnected()) log(t('server.unconnected', { agent: a.label, fix: a.fix }));
+  const info = () => ({ ok: true, name: 'dev-team-office', version: VERSION, pid: process.pid, uptime: Math.round((Date.now() - startedAt) / 1000), url: `http://${host}:${port}`, socket: socketPath, lang: getLanguage(), herdr: !!herdr?.available, mode, root: path.dirname(path.dirname(CLI)), unconnected: unconnected() });
   // the request's JSON: an empty body is `{}`, and a body that is not JSON fails here and becomes a 400
   // in the handler's catch below (it already says what is wrong)
   const body = async (req) => {

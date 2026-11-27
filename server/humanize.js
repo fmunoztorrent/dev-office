@@ -162,7 +162,8 @@ function say({ prog, args }) {
   }
   if (['grep', 'rg', 'ag', 'ack', 'egrep'].includes(prog)) {
     const pat = args.find((w, i) => !flag(w) && !(i > 0 && /^-(e|f|g|t|A|B|C|m)$/.test(args[i - 1])));
-    return pat ? t('act.search', { pattern: short(pat, 30) }) : t('act.find');
+    // a word is worth saying («total»); a regular expression is not (it reads like code)
+    return pat && !/[\\|^$[\]{}*+?]/.test(pat) && pat.length <= 24 ? t('act.search', { pattern: pat }) : pat ? t('act.searchCode') : t('act.find');
   }
   if (prog === 'sed' || prog === 'awk' || prog === 'perl') return t('act.editText');
   if (prog === 'mkdir') return t('act.mkdir', { dir: short(base(lastArg(args) || ''), 30) });
@@ -232,6 +233,8 @@ export function myToolOf(tool, input = {}) {
 // 🧪 tests, 💾 commit). The bubble and the log say it in full; the badge is to see it at a glance.
 
 const BADGE_MAX = 12;
+// A browser the agent drives through an MCP (to look at the page it builds): said as that, not by its tool's name.
+const BROWSER = /^mcp__(claude[-_]?browser|claude[-_]in[-_]chrome|playwright|puppeteer|chrome[-_]devtools|browser)/i;
 const tag = (icon, word) => `${icon} ${short(word, BADGE_MAX)}`.trim();
 
 /** One simple command, as a badge. */
@@ -256,7 +259,7 @@ function commandBadge({ prog, args }) {
   if (['build', 'compile', 'package'].includes(sub) || ['tsc', 'webpack', 'esbuild', 'rollup', 'tsup', 'make'].includes(prog)) return tag('🔨', prog === 'make' && sub ? sub : 'build');
   if (['eslint', 'biome', 'ruff', 'flake8', 'pylint', 'rubocop', 'golangci-lint', 'shellcheck', 'prettier', 'black', 'gofmt', 'rustfmt'].includes(prog)) return tag('🧹', prog);
   if (['grep', 'rg', 'ag', 'ack', 'find', 'fd'].includes(prog)) return tag('🔍', prog);
-  if (['cat', 'head', 'tail', 'less', 'bat', 'ls', 'tree'].includes(prog)) { const f = lastArg(args); return tag('📖', f ? base(f) : prog); }
+  if (['cat', 'head', 'tail', 'less', 'bat', 'ls', 'tree'].includes(prog) || (prog === 'sed' && args.includes('-n'))) { const f = lastArg(args.filter((w) => !/^\d+(,\d+)?p$/.test(w))); return tag('📖', f ? base(f) : prog); }
   if (['curl', 'wget', 'http', 'xh'].includes(prog)) { const url = args.find((w) => /^https?:\/\//.test(w)); try { return tag('🌐', new URL(url).host); } catch { return tag('🌐', 'web'); } }
   if (['docker', 'podman', 'docker-compose', 'kubectl', 'helm', 'terraform'].includes(prog)) return tag('🐳', sub || prog);
   if (['vite', 'next', 'nuxt', 'astro'].includes(prog)) return tag('▶️', prog);
@@ -284,6 +287,7 @@ export function badgeFor(tool, input = {}) {
   if (/^(todowrite|todo|update_plan|taskcreate|taskupdate)$/.test(tl)) return tag('📋', t('badge.plan'));
   if (/^(askuserquestion|question|ask_user_choice|ask_user_question|ask_user)$/.test(tl)) return t('badge.ask');
   if (/^(task|agent|subagent|subagent_run|subagent_continue)$/.test(tl)) return tag('👥', input.subagent_type || input.agent || t('badge.team'));
+  if (BROWSER.test(tl)) return tag('🌐', t('badge.browser'));
   if (/^mcp__/.test(tl)) { const [, server, ...rest] = String(tool).split('__'); return tag('🔌', server === 'dev-team-office' ? rest.join(' ') : server); }
   return tl ? tag('🛠', tool) : null;
 }
@@ -291,6 +295,7 @@ export function badgeFor(tool, input = {}) {
 /** A tool with no description of its own (an MCP's, an extension's): its name, in words. */
 export function humanizeTool(tool) {
   const name = String(tool || '');
+  if (BROWSER.test(name)) return t('act.browser');
   if (/^mcp__/.test(name)) {
     const [, server, ...rest] = name.split('__');
     return t('act.mcp', { server: server.replace(/[-_]+/g, ' '), what: rest.join(' ').replace(/[-_]+/g, ' ') });
@@ -314,4 +319,22 @@ export function providerError(text) {
     .find((x) => typeof x === 'string' && x.trim());
   if (!msg) return s;
   return m[1] ? `${m[1]} · ${msg.trim()}` : msg.trim();
+}
+
+// What a CLI prints that is not why it failed: warnings (its own, Node's, an extension's), Node's
+// hints and deprecation notes. An agent with extensions installed may print several before the error.
+const CLI_NOISE = /^\s*(?:\(node:\d+\)\s*)?(?:\[?warn(?:ing)?\]?\b|\w*warning\b|deprecat|\(use `?node --trace|npm warn|debugger )/i;
+const FAILURE = /\b(?:error|failed|failure|denied|refused|expired|invalid|unauthori[sz]ed|forbidden|not found|insufficient|quota|rate.?limit|timed? ?out)\b|^\s*\d{3}\s*[:·]/i;
+
+/**
+ * Why an agent's CLI failed, from what it printed (stderr, or its last lines): the warnings go,
+ * the line that says what went wrong stays, and a provider's error reads like one ("401 · This API
+ * key has expired…"). '' when it only printed noise.
+ */
+export function agentFailure(text) {
+  const lines = String(text ?? '').replace(/\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07/g, '').replace(/\r/g, '')
+    .split('\n').map((l) => l.trim()).filter((l) => l && !CLI_NOISE.test(l));
+  if (!lines.length) return '';
+  const line = lines.findLast((l) => FAILURE.test(l)) || lines.at(-1);
+  return providerError(line);
 }

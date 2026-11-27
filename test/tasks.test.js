@@ -179,6 +179,24 @@ test('una sesión nueva en segundo plano: si su turno terminó en un error del m
   }
 }));
 
+test('una sesión en segundo plano que sale con error: el motivo es su error, no la advertencia de una extensión', () => withServer({}, async (server) => {
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'dto-bin-'));
+  const pi = path.join(bin, 'pi');
+  fs.writeFileSync(pi, `#!/bin/sh
+echo '401: {"type":"authentication_error","message":"This API key has expired."}' >&2
+echo 'Warning: Extension package "/x/ext/package.json": Host-provided extension packages must be declared in peerDependencies' >&2
+exit 1
+`, { mode: 0o755 });
+  try {
+    const res = server.hub.submit({ agent: 'pi', mode: 'launch', text: 'Arregla el login', cwd: bin, launch: { bin: pi } });
+    assert.equal(res.ok, true, res.error);
+    const task = await until(() => server.hub.snapshot().tasks[0].status === 'failed' && server.hub.snapshot().tasks[0]);
+    assert.equal(task.detail, t('task.exitCode', { code: 1, last: ': 401 · This API key has expired.' }));
+  } finally {
+    fs.rmSync(bin, { recursive: true, force: true });
+  }
+}));
+
 // fake herdr whose prompt never starts the turn (always agent_prompt_stalled)
 function stalledPaneHerdr() {
   const calls = [];

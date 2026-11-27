@@ -225,6 +225,8 @@ In the browser, `http://127.0.0.1:4317` shows the office. Two useful shortcuts:
 - **⚙ › General** picks the language, the time zone, the **city** (for the weather, the sun and the moon: a time zone covers many cities) and **⚙ › The game**, the **view**: the usual **front** view or the **top-down (isometric)** one. It also switches with the ◇ button or `v`.
 - **⚙ › Repositories** shows what got registered.
 
+If an agent installed on your machine is not connected (its integration or its hooks are missing), the office says so when it starts and at the top of the game, with the command that connects it (`dev-team-office setup --only <agent>`); its work does not show until then.
+
 ## 7. Where everything lives
 
 | What | Where |
@@ -267,5 +269,6 @@ Either way `update` ends with `setup`, so the office's skills are this version's
 | Port 4317 is taken | `dev-team-office --port 4318`, or `DEV_TEAM_OFFICE_PORT=4318` |
 | Pi shows nothing | `dev-team-office doctor`; check that the extension is in `~/.pi/agent/extensions/` and that Pi is ≥ 1.2 if you use gentle-pi |
 | Codex does not report | Trust the new hooks with `/hooks` |
+| Claude Code (in the terminal, or in the Claude desktop app's Code tab) does not show up | `dev-team-office doctor`; if it says Claude Code is missing, `dev-team-office setup --only claude-code`. The desktop app reads the same `~/.claude/settings.json`: once connected, its sessions show up too |
 | Subagents show up as the wrong character | Add `role: <role>` to their file (`analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`) and run `join` again |
 | Inside herdr no pane opens per subagent | ⚙ › Terminal › "Each subagent in its pane", or `dev-team-office config herdr.subagents on` |

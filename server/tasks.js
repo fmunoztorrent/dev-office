@@ -25,6 +25,10 @@ import { contextBlock } from './rag.js';
 import { t as tr } from '../public/i18n.js';
 import { MAIN_OFFICE } from './store.js';
 import { claudeCompactEnv } from './compact.js';
+import { agentFailure } from './humanize.js';
+
+// The end of what a session printed that says why it failed (not a warning of one of its extensions).
+const lastWords = (output) => { const why = agentFailure(output.slice(-20).join('\n')); return why ? `: ${clip(why, 200)}` : ''; };
 
 export const AGENT_LABEL = { 'claude-code': 'Claude Code', opencode: 'OpenCode', pi: 'Pi' };
 /**
@@ -337,7 +341,7 @@ export class TaskHub extends EventEmitter {
       // its turn ended in a model error: the reason, not the exit code (an agent may exit with 0 anyway)
       if (task.turnError && !signal) this.#fail(task, task.turnError);
       else if (code === 0) this.#set(task, 'done', tr('task.finished'));
-      else this.#set(task, 'failed', signal ? tr('task.killed', { signal }) : tr('task.exitCode', { code, last: task.output.length ? `: ${task.output.at(-1)}` : '' }));
+      else this.#set(task, 'failed', signal ? tr('task.killed', { signal }) : tr('task.exitCode', { code, last: lastWords(task.output) }));
     });
   }
 

@@ -3,7 +3,7 @@
 import './es.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { humanizeCommand, humanizeTool, segments, badgeFor, providerError } from '../server/humanize.js';
+import { humanizeCommand, humanizeTool, segments, badgeFor, providerError, agentFailure } from '../server/humanize.js';
 import { describe } from '../server/roles.js';
 
 test('un comando dicho en palabras: tests, scripts, git, archivos, la web', () => {
@@ -92,4 +92,23 @@ test('el error de un proveedor se lee como lo diría una persona: el código y s
   assert.equal(err.text, '402 · Insufficient balance.');
   const [end] = office.ingest('generic', { session: 's1', kind: 'turn_end', error: raw });
   assert.equal(end.error, '402 · Insufficient balance.');
+});
+
+test('por qué falló la CLI de un agente: el error, no las advertencias que imprimió antes', () => {
+  const warn = 'Warning: Extension package "/x/.pi/agent/npm/node_modules/ext/package.json": Host-provided extension packages must be declared in peerDependencies';
+  assert.equal(agentFailure(`${warn}\n401: {"type":"authentication_error","message":"This API key has expired."}\n`), '401 · This API key has expired.');
+  assert.equal(agentFailure('(node:12) ExperimentalWarning: x\n(Use `node --trace-warnings ...` to show where)\nError: no session found\nbye'), 'Error: no session found', 'la línea que dice el error, aunque no sea la última');
+  assert.equal(agentFailure(`\x1b[33m${warn}\x1b[0m\nnpm warn deprecated x`), '', 'sólo advertencias: no hay error que mostrar');
+  assert.equal(agentFailure('algo salió raro'), 'algo salió raro');
+});
+
+test('una expresión regular, el navegador y un sed -n se dicen en palabras, no como código', () => {
+  assert.equal(humanizeCommand('grep -n "renderTalk\\|function talk" public/main.js'), 'Buscando en el código');
+  assert.equal(humanizeCommand('rg "^export" server'), 'Buscando en el código');
+  assert.equal(humanizeCommand('grep -rn total src'), 'Buscando «total»');
+  assert.equal(humanizeTool('mcp__Claude_Browser__javascript_tool'), 'Revisando la página en el navegador');
+  assert.equal(humanizeTool('mcp__claude-in-chrome__navigate'), 'Revisando la página en el navegador');
+  assert.equal(humanizeTool('mcp__playwright__browser_click'), 'Revisando la página en el navegador');
+  assert.equal(badgeFor('mcp__Claude_Browser__preview_start', {}), '🌐 navegador');
+  assert.equal(badgeFor('Bash', { command: 'sed -n 60,130p public/index.html' }), '📖 index.html');
 });

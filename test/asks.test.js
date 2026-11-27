@@ -221,3 +221,50 @@ test('una orden al manager va a trabajo de inmediato, al repositorio que nombra 
   assert.match(r.error, /\/nonexistent\/claude/, 'y fue a lanzarlo de inmediato (aquí su CLI no existe)');
   assert.equal(server.clarify.list?.().length ?? 0, 0, 'la analista no la revisa');
 }));
+
+test('si la CLI falla, se ve el error del proveedor, no las advertencias que imprimen sus extensiones antes', () => withServer(async (server) => {
+  const dir = tmp('dto-btw-warn-');
+  server.company.ingest('claude-code', { session_id: 'sess-4444', cwd: dir, hook_event_name: 'SessionStart' });
+  process.env.FAKE_BTW_FAIL = 'provider';
+  try {
+    const done = await server.asks.ask({ text: '¿qué hay?' }).done;
+    assert.equal(done.status, 'failed');
+    assert.equal(done.error, '401 · This API key has expired.');
+  } finally { delete process.env.FAKE_BTW_FAIL; }
+}));
+
+test('quien no está trabajando no tiene nada que contar: te dice con quién hablar, sin correr ningún agente', () => withServer(async (server, log) => {
+  const dir = tmp('dto-btw-idle-');
+  assert.equal(server.store.createAgent({ path: dir, harness: 'pi', bin: FAKE }).ok, true);
+  const pi = (e) => server.company.ingest('pi', { session: 's-idle', cwd: dir, ...e });
+  pi({ kind: 'task', text: 'Carrito' });
+  pi({ kind: 'phase', role: 'backend', phase: 'implementa', text: 'Editando src/cart.js' });
+  const office = server.company.get('main');
+  assert.equal(office.working('backend'), true, 'a mitad de turno, trabaja');
+  pi({ kind: 'turn_end' });
+  assert.equal(office.working('backend'), false, 'su turno terminó');
+  assert.equal(office.working('qa'), false, 'nunca hizo nada');
+
+  const out = server.asks.ask({ text: '¿qué estás haciendo?', role: 'backend' });
+  assert.equal(out.ok, false);
+  assert.equal(out.code, 'idle');
+  assert.match(out.error, /Valentina[\s\S]*Tomás[\s\S]*Marco[\s\S]*pizarra/, 'a quién ir: negocio, técnico, ya, y la pizarra');
+  assert.deepEqual(readLog(log), [], 'no se corrió ningún agente');
+  assert.equal(office.log.filter((e) => e.kind === 'btw').length, 0, 'no va a la bitácora');
+
+  // the analyst, the tech lead and the manager are asked about the project, whatever they are doing
+  const done = await server.asks.ask({ text: '¿para quién es el carrito?', role: 'analyst' }).done;
+  assert.equal(done.status, 'answered');
+  assert.match(readLog(log).at(-1).args.at(-1), /responde como esa persona, sobre este proyecto/);
+
+  // a newcomer (a subagent) or a chosen session are asked about that one, as always
+  const ws = new WebSocket(server.url.replace('http', 'ws') + '/v1/ws');
+  const msgs = [];
+  ws.on('message', (d) => msgs.push(JSON.parse(d)));
+  await new Promise((r) => ws.on('open', r));
+  try {
+    ws.send(JSON.stringify({ type: 'ask', text: '¿cómo vas?', role: 'qa', id: 'ask:1' }));
+    const ack = await until(() => msgs.find((m) => m.type === 'ack' && m.id === 'ask:1'));
+    assert.deepEqual([ack.ok, ack.code], [false, 'idle'], 'el juego recibe la guía como respuesta de su pregunta');
+  } finally { ws.close(); }
+}));

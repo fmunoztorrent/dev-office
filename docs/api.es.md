@@ -23,7 +23,7 @@ El puerto se cambia con `--port` o `$DEV_TEAM_OFFICE_PORT`; el socket, con `--so
 
 | Método | Ruta | Cuerpo | Respuesta |
 |---|---|---|---|
-| `GET` | `/v1/health` | | `{ ok, name, version, pid, uptime, url, socket, lang, herdr, mode, root }` (`mode`: `terminal` o `background`; `root`: la carpeta de la instalación) |
+| `GET` | `/v1/health` | | `{ ok, name, version, pid, uptime, url, socket, lang, herdr, mode, root, unconnected }` (`mode`: `terminal` o `background`; `root`: la carpeta de la instalación; `unconnected`: los agentes instalados aquí que no están conectados, `[{ id, label, fix }]`) |
 | `GET` | `/v1/state?office=<id>` | | El estado de una oficina (por defecto, la que se está mirando): `{ sessions, roles, log, tasks, pipelines, targets, appearance, weather, office, offices, prefs, herdr, asks }` |
 | `POST` | `/v1/events/<source>` | Un evento o un array de eventos | `{ ok, accepted, ids }` |
 | `POST` | `/v1/events?source=<source>` | Igual que la anterior | Igual |
@@ -49,6 +49,8 @@ Un evento puede decir a qué **oficina** va (`office`, o `devteam_office` en el 
 | `GET` | `/v1/asks?office=<id>&limit=20` | | `{ ok, asks }`: las últimas, con `{ id, office, agent, question, answer, status, error, from, forked, role, createdAt }` |
 
 La pregunta la contesta el agente de turno de la oficina (la sesión más reciente, bifurcada y en sólo lectura; o el agente registrado de la oficina). `status`: `asking` → `answered` | `failed`. En la oficina llegan como eventos `btw` con `phase` `ask`, `answer` o `failed`, y a los visores de esa oficina como `{ type: "ask", ask }`.
+
+Un `role` al que se le pregunta por lo que hace (cualquiera salvo `analyst`, `tl` y `manager`) y que ahora no trabaja en nada, sin `session`: `400 { ok: false, code: "idle", error }`, donde `error` dice con quién ir. No corre ningún agente y no queda en la bitácora.
 
 ## Proyectos y áreas (la empresa)
 

@@ -18,6 +18,8 @@ import { drawSprite } from './sprite.js';
 import { watchPixelIcons, selectIcons } from './pixel-icons.js';
 import { t, ta, setLanguage, onLanguage, getLanguage, timeOf } from './i18n.js';
 import { thresholdOf, kTokens } from './compact.js';
+import { createStory } from './story.js';
+import { sheetActions, ADVISORS } from './sheet.js';
 
 const $ = (id) => document.getElementById(id);
 const OFFICE_SESSION = 'office'; // chat, greetings and panes: not an agent session
@@ -113,7 +115,7 @@ function connect() {
     let msg;
     try { msg = JSON.parse(m.data); } catch { return; } // a frame that is not ours: nothing to do
     // the office was restarted with another version (an update): this page has the old code
-    if (msg.type === 'hello') { if (served && msg.version && msg.version !== served) location.reload(); served = msg.version || served; }
+    if (msg.type === 'hello') { if (served && msg.version && msg.version !== served) location.reload(); served = msg.version || served; onUnconnected(msg.unconnected); }
     if (msg.type === 'snapshot') {
       const st = msg.state;
       if (st.prefs) onPrefs(st.prefs);
@@ -154,7 +156,8 @@ function connect() {
     if (msg.type === 'event') onEvent(msg.event, msg.session);
     if (msg.type === 'ask') onAsk(msg.ask);
     if (msg.type === 'tasks') onTasks(msg);
-    if (msg.type === 'ack' && msg.ok === false) alertTask(msg.error);
+    if (msg.type === 'ack' && msg.ok === false && !askAck(msg)) alertTask(msg.error);
+    if (msg.type === 'ack' && msg.ok) askRefs.delete(msg.id);
     if (msg.type === 'ack' && msg.ok && msg.run) $('brief').close();
     if (msg.type === 'error') alertTask(msg.error);
   };
@@ -315,12 +318,40 @@ setInterval(renderAttention, 15_000); // the "for N min" grows
 // The card on the right sits between the waiting banner and the dock (their heights go to the stylesheet:
 // --attention-h, --dock-h), and the game keeps people's bubbles and badges out of everything the page lays
 // over its canvas (scene.covered, as fractions of it).
-const OVERLAYS = ['attention', 'dock', 'sheet', 'feed', 'e2e-mini'];
+const OVERLAYS = ['attention', 'setup-note', 'dock', 'sheet', 'feed', 'e2e-mini'];
 const overlayEls = () => [...OVERLAYS.map((id) => $(id)), ...document.querySelectorAll('.screen .hud-tl')].filter(Boolean);
 const shownEl = (el) => !el.hidden && el.getClientRects().length > 0;
+// ---------------------------------------------------------------- agents that are not connected
+
+// An agent installed on this machine whose integration is missing works without the office seeing it:
+// the office says so at the top, with the command that connects it, until it is connected or you hide
+// it (for that same list of agents). While it shows, it looks again every minute.
+let setupGaps = [];
+let setupTimer = null;
+const setupKey = (list) => list.map((a) => a.id).sort().join(',');
+function onUnconnected(list) {
+  setupGaps = Array.isArray(list) ? list.filter((a) => a?.id && a?.label) : [];
+  const note = $('setup-note');
+  const show = setupGaps.length > 0 && localStorage.getItem('dto.setupNoteHidden') !== setupKey(setupGaps);
+  note.hidden = !show;
+  clearInterval(setupTimer);
+  if (!show) return;
+  const labels = setupGaps.map((a) => a.label);
+  $('setup-note-text').textContent = labels.length === 1 ? t('ui.setupOne', { agent: labels[0] }) : t('ui.setupMany', { agents: t('narrate.list', { first: labels.slice(0, -1).join(', '), last: labels.at(-1) }) });
+  $('setup-note-cmd').textContent = setupGaps.length === 1 ? setupGaps[0].fix : `dev-team-office setup --only ${setupGaps.map((a) => a.id).join(',')}`;
+  setupTimer = setInterval(() => fetch('/v1/health').then((r) => r.json()).then((h) => onUnconnected(h.unconnected)).catch(() => {}), 60_000);
+}
+$('setup-note-copy').onclick = () => {
+  navigator.clipboard?.writeText($('setup-note-cmd').textContent).then(() => { $('setup-note-copy').textContent = t('ui.setupCopied'); setTimeout(() => { $('setup-note-copy').textContent = t('ui.setupCopy'); }, 1500); }).catch(() => {});
+};
+$('setup-note-x').onclick = () => { localStorage.setItem('dto.setupNoteHidden', setupKey(setupGaps)); onUnconnected(setupGaps); };
+onLanguage(() => onUnconnected(setupGaps));
+
 function trackOverlays() {
   const bar = $('attention'), dock = $('dock');
-  $('screen').style.setProperty('--attention-h', shownEl(bar) ? `${bar.offsetHeight + 10}px` : '0px');
+  const note = $('setup-note');
+  $('screen').style.setProperty('--attention-h', `${(shownEl(bar) ? bar.offsetHeight + 10 : 0) + (shownEl(note) ? note.offsetHeight + 10 : 0)}px`);
+  $('screen').style.setProperty('--attention-only-h', shownEl(bar) ? `${bar.offsetHeight + 10}px` : '0px');
   $('screen').style.setProperty('--dock-h', shownEl(dock) ? `${dock.offsetHeight}px` : '0px');
   const c = $('office').getBoundingClientRect();
   if (!c.width || !c.height) return;
@@ -697,6 +728,7 @@ function onSnapshot(state) {
   sessions.clear();
   for (const s of state.sessions) if (s.id !== OFFICE_SESSION) sessions.set(s.id, s);
   $('log').querySelectorAll('li[data-ev]').forEach((li) => li.remove()); // the events arrive again with the snapshot
+  story.clear();
   state.log.forEach((ev) => addLog(ev, { quiet: true }));
   if (focus && !sessions.has(focus)) focus = null;
   renderSessions();
@@ -814,8 +846,36 @@ function renderContext() {
 const projectOf = (session) => { const cwd = sessions.get(session)?.cwd; return cwd ? cwd.split('/').filter(Boolean).pop() : ''; };
 const severalProjects = () => new Set([...sessions.values()].filter((s) => s.cwd && Date.now() - s.lastAt < 6 * 3600_000).map((s) => s.cwd)).size > 1;
 
+// What the agents do with their tools is told as a story (story.js): one line per person and stretch
+// of work, which grows ("Diego reads 3 files and searches the code"); the commands are in its tooltip.
+const story = createStory();
+const storyLis = new Map(); // story line id → its <li>
+function storyLine(ev, { line, isNew }, opts) {
+  let li = storyLis.get(line.id);
+  if (isNew || !li?.isConnected) {
+    li = el('li', 'story');
+    li.dataset.ev = '1';
+    storyLis.set(line.id, li);
+    for (const id of storyLis.keys()) { if (storyLis.size <= 300) break; storyLis.delete(id); }
+    pushLine(li, opts);
+  }
+  const cfg = personOf(ev.role) || (ev.expert ? expertPerson(ev.expert) : null);
+  const name = el('b', '', `${cfg?.name || t('events.office')} `);
+  if (cfg) name.style.color = cfg.shirt;
+  const project = severalProjects() ? projectOf(ev.session) : '';
+  const body = el('span', line.trips ? 'trip' : '');
+  body.append(name, ...(project ? [el('span', 'proj', `[${project}] `)] : []), document.createTextNode(line.text));
+  li.replaceChildren(el('time', '', hhmm(line.first)), body);
+  li.title = [AGENT_NAME[ev.source] || ev.source, ...line.details].filter(Boolean).join('\n');
+  if (!isNew) scrollLog();
+}
+
 function addLog(ev, opts) {
   if (ev.kind === 'context') return; // it only moves the context bar
+  const told = story.tell(ev);
+  if (told?.skip) return;
+  if (told) { storyLine(ev, told, opts); return; }
+  story.mark();
   const li = document.createElement('li');
   li.dataset.ev = '1';
   const cfg = personOf(ev.role) || (ev.expert ? expertPerson(ev.expert) : null);
@@ -826,15 +886,18 @@ function addLog(ev, opts) {
     text = `${ph.icon} ${ph.label}${ev.text ? `: ${ev.text}` : ''}`;
   }
   if (ev.kind === 'phase_end') text = t('events.turnEnd', { text: ev.text ? `: ${ev.text}` : '' });
+  if (ev.kind === 'task' && ev.role === 'po' && ev.text) text = t('events.asks', { text: ev.text.length > 220 ? `${ev.text.slice(0, 219)}…` : ev.text }); // what you asked for
   if (ev.kind === 'pane_open' || ev.kind === 'pane_close') text = `🪟 ${ev.pane} · ${ev.text}${ev.kind === 'pane_close' ? ' ✔' : ''}`;
   if (ev.kind === 'standup') text = t('events.standup', { text: ev.text || '' });
   if (ev.kind === 'clarify') text = t(`events.clarify.${ev.phase}`, { project: ev.project || '', n: ev.n || 0, text: ev.text || '' });
   if (ev.kind === 'btw') text = ev.phase === 'ask' ? `❓ btw: ${ev.text}` : ev.phase === 'answer' ? `💡 ${ev.text}` : `✖ btw: ${ev.text}`;
-  const name = el('b', '', `${ev.kind === 'btw' && ev.phase === 'ask' ? ev.from : who}: `);
+  // a sentence goes after the name ("Marco ends the turn"); anything else after a colon
+  const name = el('b', '', `${ev.kind === 'btw' && ev.phase === 'ask' ? ev.from : who}${/^\p{Ll}/u.test(text) ? ' ' : ': '}`);
   if (cfg) name.style.color = cfg.shirt;
   const body = el('span', ev.ok === false || (ev.kind === 'btw' && ev.phase === 'failed') ? 'err' : '');
   const project = severalProjects() ? projectOf(ev.session) : '';
-  body.append(name, ...(project ? [el('span', 'proj', `[${project}] `)] : []), document.createTextNode(text), el('span', 'src', `  ${ev.source || ''}`));
+  body.append(name, ...(project ? [el('span', 'proj', `[${project}] `)] : []), document.createTextNode(text));
+  if (ev.source) li.title = AGENT_NAME[ev.source] || ev.source; // which agent: on hover, not on every line
   li.append(el('time', '', hhmm(ev.ts)), body);
   pushLine(li, opts);
 }
@@ -870,14 +933,56 @@ const talks = new Map(); // role → [{ who: 'you' | 'them', text, ts, ask?, sta
 const isQuestion = (text) => /\?\s*$/.test(text) || /^\s*¿/.test(text);
 function talk(role, line) {
   const list = talks.get(role) || [];
-  list.push({ ts: Date.now(), ...line });
+  const entry = { ts: Date.now(), ...line };
+  list.push(entry);
   while (list.length > 30) list.shift();
   talks.set(role, list);
   if (selected === role) renderTalk();
-  return line;
+  return entry; // the one in the chat: changing it changes the chat
 }
 
 const asked = new Map(); // a question (its text, then its id) → whose chat it goes to (a newcomer's is not their role's)
+// Who you ask about the project whatever they are doing (server/asks.js, ADVISORS): the analyst (the
+// business), the tech lead (the technical side) and the manager (the team, and orders). The rest are
+// asked about what they are doing, so only while they do something.
+const busyNow = (p) => !!p && (!!p.ghost || p.badges?.size > 0 || ['working', 'thinking', 'red', 'blocked', 'waiting'].includes(p.state));
+const idleWorker = (id = selected) => !!id && id !== 'po' && !ADVISORS.has(id) && !busyNow(who(id));
+
+/** Who to talk to for what: buttons to the analyst, the tech lead, the manager and the whiteboard. */
+function routes() {
+  const li = el('li', 'talk-guide');
+  const row = el('div', 'routes');
+  for (const [key, role] of [['business', 'analyst'], ['tech', 'tl'], ['now', 'manager']]) {
+    const p = who(role);
+    if (!p) continue;
+    const b = el('button', 'route', t(`ui.route.${key}`, { name: p.cfg.name }));
+    b.type = 'button';
+    b.style.borderLeftColor = p.cfg.shirt;
+    b.onclick = () => select(role);
+    row.append(b);
+  }
+  const board = el('button', 'route', t('ui.route.board'));
+  board.type = 'button';
+  board.title = t('ui.route.boardTitle');
+  board.onclick = () => { select(null); openBrief(); };
+  row.append(board);
+  li.append(el('b', '', t('ui.talkGuide')), row);
+  return li;
+}
+
+// The answer to a question that never reached an agent (the ack of its `ask`): someone who is not
+// working says who to go to instead; anything else is why it could not be asked.
+const askRefs = new Map(); // ack id → the pending line
+let askSeq = 0;
+function askAck(msg) {
+  const line = askRefs.get(msg.id);
+  if (!line) return false;
+  askRefs.delete(msg.id);
+  if (line.status !== 'asking') return true;
+  Object.assign(line, msg.code === 'idle' ? { status: undefined, text: msg.error, guide: true, ask: undefined } : { status: 'failed', text: t('ui.btwFailed', { error: msg.error || '' }), ask: undefined });
+  renderTalk();
+  return true;
+}
 function say(text) {
   const q = String(text || '').trim();
   if (!q || !selected) return;
@@ -885,10 +990,12 @@ function say(text) {
   talk(selected, { who: 'you', text: q });
   const p = who();
   if (selected !== 'po' && isQuestion(q)) {
-    talk(selected, { who: 'them', text: '', status: 'asking', ask: 'pending', question: q });
+    const line = talk(selected, { who: 'them', text: '', status: 'asking', ask: 'pending', question: q });
     asked.set(q, selected);
+    const ref = `ask:${++askSeq}`;
+    askRefs.set(ref, line);
     // a newcomer answers from their own session (their subagent's), as one of their role
-    return p.ghost ? askBtw(q, p.role, p.session, p.subId) : askBtw(q, selected);
+    return p.ghost ? askBtw(q, p.role, p.session, p.subId, ref) : askBtw(q, selected, focus, undefined, ref);
   }
   if (p?.ghost) {
     // a newcomer is only in this office's game: they answer here, in their own words
@@ -912,9 +1019,9 @@ function say(text) {
 // in a forked session, without interrupting it; the answer shows on that character's sheet (or, if
 // it is not open, in a card at the top) and in the log.
 let btwTimer = null;
-function askBtw(question, role = selected, session = focus, subId) {
+function askBtw(question, role = selected, session = focus, subId, id) {
   // the character you asked answers, from the project and the task it is working on (or the chosen session)
-  send({ type: 'ask', text: question, role: role || undefined, session: session || undefined, subId: subId || undefined });
+  send({ type: 'ask', text: question, role: role || undefined, session: session || undefined, subId: subId || undefined, id });
 }
 function onAsk(a) {
   if (!a || (office && a.office !== office.id)) return;
@@ -953,11 +1060,44 @@ function heardReply(ev) {
   if (text) talk(role, { who: 'them', text, by: who });
 }
 
+// What you can do with someone, one click each (sheet.js): a question they can answer (it is sent as
+// if you wrote it) or a place to go. Someone of the team who is not working has nothing to tell you:
+// no actions, no box to write in, just what they did last.
+const GO = {
+  board: () => { select(null); openBrief(); },
+  daily: () => { select(null); openDaily(); },
+  architecture: () => { select(null); settings.open('architecture'); },
+};
+function actionsFor(id = selected) {
+  return sheetActions(id, { idle: idleWorker(id), present: (r) => !!who(r) }).map((a) => {
+    if (a.ask) return { ask: true, label: `💬 ${t(`ui.act.${a.ask}`)}`, run: () => say(t(`ui.act.${a.ask}`)) };
+    if (a.go === 'route') return { label: t(`ui.route.${a.key}`, { name: who(a.to).cfg.name }), color: who(a.to).cfg.shirt, run: () => select(a.to) };
+    return { label: t(`ui.act.${a.go}`), run: GO[a.go] };
+  });
+}
+
+let talkIdle = false; // they are not working: no actions and nothing to write (it changes when they start)
+function renderActions() {
+  const box = $('sheet-actions');
+  talkIdle = idleWorker();
+  box.replaceChildren();
+  if (!who()) return;
+  if (talkIdle) box.append(el('p', 'sheet-idle', t('ui.talkIdle', { name: who().cfg.name })));
+  for (const a of actionsFor()) {
+    const b = el('button', `act${a.ask ? ' ask' : ''}`, a.label);
+    b.type = 'button';
+    if (a.color) b.style.borderLeftColor = a.color;
+    b.onclick = a.run;
+    box.append(b);
+  }
+  $('sheet-say').hidden = talkIdle;
+}
+
 function renderTalk() {
   const ol = $('sheet-talk');
   const list = talks.get(selected) || [];
   ol.innerHTML = '';
-  if (!list.length && who()) ol.append(el('li', 'talk-empty', selected === 'po' ? t('ui.talkEmptyTeam') : selected === 'manager' ? t('ui.talkEmptyManager', { name: who().cfg.name }) : t('ui.talkEmpty', { name: who().cfg.name })));
+  ol.hidden = !list.length; // no conversation yet: no empty box
   for (const x of list.slice(-12)) {
     const by = x.who === 'you' ? null : who(x.by || selected)?.cfg;
     const li = el('li', `${x.who}${x.status ? ` ${x.status}` : ''}`);
@@ -965,6 +1105,7 @@ function renderTalk() {
     if (by) name.style.color = by.shirt;
     li.append(name, el('span', '', x.status === 'asking' ? t('ui.btwThinking') : x.text));
     ol.append(li);
+    if (x.guide) ol.append(routes());
   }
   ol.scrollTop = ol.scrollHeight;
 }
@@ -1065,10 +1206,11 @@ function select(id) {
   game.select(id);
   renderTeam();
   renderSheet(true);
+  renderActions();
   renderTalk();
   if (id && changed) {
     const p = who(id);
-    $('say-text').placeholder = id === 'po' ? t('ui.talkTeamPh') : id === 'manager' ? t('ui.talkManagerPh', { name: p.cfg.name }) : t('ui.talkPh', { name: p.cfg.name });
+    $('say-text').placeholder = t(`ui.${{ po: 'talkTeamPh', manager: 'talkManagerPh', analyst: 'talkAnalystPh', tl: 'talkTlPh' }[id] || 'talkPh'}`, { name: p.cfg.name });
     $('say-text').value = '';
     fitSay();
   }
@@ -1092,11 +1234,24 @@ function renderSheet(full) {
   }
   $('sheet-mood').textContent = `${moodOf(a)}${a.text && ['working', 'thinking', 'red'].includes(a.state) ? `: ${a.text}` : ''}`;
   narrateSheet(a);
-  if (box.querySelector('.sheet-more').open || full) {
-    const ul = $('sheet-history');
-    ul.innerHTML = '';
-    if (!a.history.length) ul.append(el('li', '', t('ui.nothingYet')));
-    for (const h of a.history.slice(0, 8)) ul.append(el('li', '', `${hhmm(h.ts)} — ${h.text}`));
+  renderLately(a, full);
+}
+/** What they did lately, newest first: the log's story lines of them (or, before any, what the game saw). */
+let latelyKey = '';
+function renderLately(a, full) {
+  const told = story.recent(a.ghost ? { subId: a.subId } : { role: selected }, 4);
+  const items = told.length ? told.map((l) => ({ ts: l.ts, text: l.text, title: l.details.join('\n') })) : a.history.slice(0, 4).map((h) => ({ ts: h.ts, text: h.text }));
+  const key = `${selected}|${items.map((x) => `${x.ts}${x.text}`).join('|')}`;
+  if (!full && key === latelyKey) return;
+  latelyKey = key;
+  const ul = $('sheet-history');
+  ul.replaceChildren();
+  if (!items.length) ul.append(el('li', 'none', t('ui.nothingYet')));
+  for (const x of items) {
+    const li = el('li', '');
+    li.append(el('time', '', hhmm(x.ts)), document.createTextNode(x.text));
+    if (x.title) li.title = x.title;
+    ul.append(li);
   }
 }
 /** What they did lately, in one sentence (server/narrator.js): asked again only when they did something new. */
@@ -1110,12 +1265,17 @@ function narrateSheet(a) {
   const q = new URLSearchParams({ role: a.ghost ? a.role : selected, name: a.cfg.name, title: a.cfg.title || '', ...(a.subId ? { sub: a.subId } : {}) });
   fetch(`/v1/offices/${encodeURIComponent(office?.id || 'main')}/narrate?${q}`).then((r) => r.json()).then((r) => {
     if (didFor !== key) return;
-    p.hidden = !r?.text;
+    // the rules only list what they did, and «What they did lately» already tells it: only a model's sentence shows
+    p.hidden = !r?.text || r.source !== 'model';
     p.textContent = r?.text ? `📝 ${r.text}` : '';
     p.title = r?.source === 'model' ? t('ui.didModel') : t('ui.didRules');
   }).catch(() => { p.hidden = true; });
 }
-setInterval(() => { renderSheet(); if ($('work').open) renderTeam(); }, 500);
+setInterval(() => {
+  renderSheet();
+  if ($('work').open) renderTeam();
+  if (selected && idleWorker() !== talkIdle) renderActions();
+}, 500);
 $('sheet-close').onclick = () => select(null);
 $('poke').onclick = () => {
   if (!selected) return;
@@ -1485,6 +1645,8 @@ document.addEventListener('keydown', (e) => {
   else if (k === 'i') { e.preventDefault(); loopsUi.open(); }
   else if (k === 'e' && e2eUi.any) { e.preventDefault(); e2eUi.open(); }
   else if (k === 'r') { if (promptsUi.open()) e.preventDefault(); }
+  // who to talk to for what: your own sheet (the PO's) has the guide
+  else if (e.key === '?') { e.preventDefault(); select(selected === 'po' ? null : 'po'); }
 });
 
 applyI18n();

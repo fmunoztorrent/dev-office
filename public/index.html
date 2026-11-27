@@ -48,6 +48,14 @@
         <button id="attention-all" class="attention-go ghost" type="button" hidden></button>
       </div>
 
+      <!-- an agent installed on this machine that does not tell the office what it does: how to connect it -->
+      <div id="setup-note" class="setup-note" hidden role="status">
+        <span id="setup-note-text" class="setup-note-text"></span>
+        <code id="setup-note-cmd" class="setup-note-cmd"></code>
+        <button id="setup-note-copy" class="attention-go" type="button" data-i18n="ui.setupCopy">Copy</button>
+        <button id="setup-note-x" class="setup-note-x" type="button" data-i18n-aria="ui.setupDismiss" data-i18n-title="ui.setupDismiss">✕</button>
+      </div>
+
       <!-- btw: a side question to the agent on duty, and its answer -->
       <aside id="btw-card" class="btw-card" hidden aria-live="polite" aria-labelledby="btw-q">
         <header class="btw-head">
@@ -74,11 +82,14 @@
           <button id="poke" class="sheet-icon" type="button" data-i18n-title="ui.poke" data-i18n-aria="ui.poke">👋</button>
           <button id="sheet-close" class="sheet-x" type="button" data-i18n-aria="ui.sheetClose">✕</button>
         </header>
-        <ol id="sheet-talk" class="talk" aria-live="polite"></ol>
-        <details class="sheet-more">
-          <summary data-i18n="ui.lately">What they did lately</summary>
+        <!-- what they did lately, told like the log (story.js): newest first -->
+        <section class="sheet-now" aria-labelledby="sheet-now-title">
+          <h3 id="sheet-now-title" data-i18n="ui.lately">What they did lately</h3>
           <ul id="sheet-history" class="sheet-history"></ul>
-        </details>
+        </section>
+        <!-- what you can do with them, by who they are (main.js, actionsFor); someone with nothing to tell has none -->
+        <div id="sheet-actions" class="sheet-actions"></div>
+        <ol id="sheet-talk" class="talk" aria-live="polite" hidden></ol>
         <form id="sheet-say" class="say">
           <textarea id="say-text" rows="2" maxlength="2000" autocomplete="off"></textarea>
           <button id="say-go" class="say-go" type="submit" data-i18n-aria="ui.send">➤</button>

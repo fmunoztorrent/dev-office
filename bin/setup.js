@@ -542,6 +542,22 @@ export function detect(only) {
 }
 
 /**
+ * The agents on this machine that cannot tell the office what they do: found, but their integration
+ * (and, for Claude Code and Codex, their hooks) is not installed, and no plugin brings it. A missing
+ * MCP or skill does not count here (`doctor` says so): the office still sees them work.
+ * [{ id, label, fix }]
+ */
+export function unconnected() {
+  return detect().filter((a) => a.found).flatMap((a) => {
+    const def = AGENTS[a.id];
+    if (def.plugin?.()) return [];
+    const steps = def.steps();
+    const live = ['integration', 'hooks'].filter((n) => steps[n]);
+    return live.every((n) => steps[n].check()) ? [] : [{ id: a.id, label: def.label, fix: `dev-team-office setup --only ${a.id}` }];
+  });
+}
+
+/**
  * Installs and connects. opts: { only: ['claude', 'codex'…], dry, cli (use `claude mcp`, yes by default), run }
  * Returns { ok, lines, agents: [{ id, label, done: [...], failed: [...] }] }
  */

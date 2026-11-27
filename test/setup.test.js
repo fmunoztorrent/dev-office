@@ -16,7 +16,7 @@ process.env.DEV_TEAM_OFFICE_BIN_DIR = BIN_DIR;
 process.env.PATH = path.join(HOME, 'nada'); // no agent "installed": they are detected by their folder
 assert.equal(os.homedir(), HOME, 'os.homedir() ignoró $HOME');
 
-const { setup, uninstall, doctor, parseJsonc, shimPath, ephemeral, shellProfile, addPathToProfile, profileHasPath, removePathFromProfiles, PROFILE_MARK, MARK } = await import('../bin/setup.js');
+const { setup, uninstall, doctor, unconnected, parseJsonc, shimPath, ephemeral, shellProfile, addPathToProfile, profileHasPath, removePathFromProfiles, PROFILE_MARK, MARK } = await import('../bin/setup.js');
 await import('./es.js');
 
 after(() => {
@@ -65,6 +65,12 @@ test('una simulación (--dry-run) no escribe nada', () => {
   assert.equal(fs.existsSync(shimPath()), false);
   assert.equal(read(CLAUDE), before.claude);
   assert.equal(read(CODEX_TOML), before.toml);
+});
+
+test('antes de setup, la oficina sabe qué agentes instalados no le cuentan lo que hacen (y cómo conectarlos)', () => {
+  const list = unconnected();
+  assert.deepEqual(list.map((a) => a.id).sort(), ['claude-code', 'codex', 'opencode', 'pi'], 'los que sólo tienen MCP (Gemini, Cursor) no reportan actividad');
+  assert.deepEqual(list.find((a) => a.id === 'claude-code'), { id: 'claude-code', label: 'Claude Code', fix: 'dev-team-office setup --only claude-code' });
 });
 
 test('setup conecta cada agente encontrado sin pisar lo que había', () => {
@@ -132,6 +138,10 @@ test('correrlo de nuevo no duplica nada', () => {
   assert.deepEqual(snap(), first);
 });
 
+test('después de setup no falta ninguno', () => {
+  assert.deepEqual(unconnected(), []);
+});
+
 test('el hook del lanzador nunca rompe al agente: sin oficina sale con 0 y en silencio', () => {
   const r = execFileSync(shimPath(), ['hook', 'codex'], { input: JSON.stringify({ session_id: 's', hook_event_name: 'Stop', cwd: HOME }), env: { ...process.env, DEV_TEAM_OFFICE_URL: 'http://127.0.0.1:9', PATH: '/usr/bin:/bin' } });
   assert.equal(r.toString(), '');
@@ -169,6 +179,7 @@ test('un JSON roto no se pisa: se avisa y lo demás sigue; con el plugin de Clau
   assert.ok(out.lines.some((l) => /no es un JSON válido/.test(l)));
   assert.equal(by['claude-code'].plugin, true);
   assert.equal(JSON.stringify(json(CLAUDE).hooks).includes('dev-team-office'), false, 'el plugin ya trae los hooks');
+  assert.equal(unconnected().some((a) => a.id === 'claude-code'), false, 'con el plugin, Claude Code está conectado');
   assert.deepEqual(by.codex.failed, []);
   uninstall({ cli: false });
 });

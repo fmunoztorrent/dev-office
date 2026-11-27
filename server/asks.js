@@ -25,12 +25,17 @@ import { defaultLook } from '../public/sim.js';
 import { guideFor, guideText } from './guides.js';
 import { contextBlock } from './rag.js';
 import { techLeadContext } from './people.js';
+import { agentFailure } from './humanize.js';
 
 const ANSI = /\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07/g;
 const SOURCE_HARNESS = { 'claude-code': 'claude-code', claude: 'claude-code', codex: 'codex', opencode: 'opencode', pi: 'pi' };
 const FORKABLE = new Set(['claude-code', 'opencode']); // the ones that expose a session id their CLI understands
 const ANSWER_MAX = 4000; // an explanatory or teacher answer is longer
 const RECENT_MS = 12 * 3600_000;
+// Who you ask about the project, whatever they are doing: the analyst (the business), the tech lead
+// (the technical side) and the manager (the team and the plan). The others are asked about what they
+// are doing, so only while they are doing something.
+export const ADVISORS = new Set(['analyst', 'tl', 'manager']);
 let seq = 0;
 
 export class AskDesk extends EventEmitter {
@@ -84,6 +89,9 @@ export class AskDesk extends EventEmitter {
     return a ? { harness: a.harness, session: null, sessionId: null, cwd: a.path, agentId: a.id, bin: a.bin, turn: null, title: '', name: a.name } : null;
   }
 
+  /** A character's name in this office (yours, or the theme's). */
+  #name(officeId, role) { return this.store.getAppearance?.(officeId)?.[role]?.name || defaultLook(role)?.name || role; }
+
   /** The character asked, with the office's names and their way of being: "Diego (Backend, focused)". */
   #who(officeId, role) {
     const look = this.store.getAppearance?.(officeId)?.[role] || {};
@@ -103,7 +111,7 @@ export class AskDesk extends EventEmitter {
     const s = duty.sessionId ? office?.sessions?.get(duty.sessionId) : null;
     const lines = [t('btw.ctxOffice', { office: info?.name || officeId })];
     if (duty.cwd) lines.push(t('btw.ctxProject', { project: duty.cwd.split('/').filter(Boolean).pop() || duty.cwd, dir: duty.cwd }));
-    if (role) lines.push(t('btw.ctxRole', { who: this.#who(officeId, role) }));
+    if (role) lines.push(t(ADVISORS.has(role) ? 'btw.ctxAdvisor' : 'btw.ctxRole', { who: this.#who(officeId, role) }));
     // how to work with this project and its department (their instructions)
     const guide = guideText(guideFor(this.store, duty.cwd, officeId));
     if (guide) lines.push(guide);
@@ -162,6 +170,10 @@ export class AskDesk extends EventEmitter {
     const officeId = this.company.has(office) ? office : MAIN_OFFICE;
     if (this.running.has(officeId)) return { ok: false, error: t('btw.busy') };
     const asked = defaultLook(role) && role !== 'po' ? role : null; // you are the PO: you do not ask yourself
+    // someone who is not working on anything has nothing to tell: who to go to instead (no agent runs)
+    if (asked && !ADVISORS.has(asked) && !session && !subId && !this.company.get(officeId)?.working?.(asked)) {
+      return { ok: false, code: 'idle', role: asked, error: t('btw.idle', { name: this.#name(officeId, asked), analyst: this.#name(officeId, 'analyst'), tl: this.#name(officeId, 'tl'), manager: this.#name(officeId, 'manager') }) };
+    }
     const duty = this.onDuty(officeId, { session: typeof session === 'string' ? session : undefined, role: asked });
     if (!duty) return { ok: false, error: t('btw.noAgent') };
     const prompt = (forked) => this.#prompt(clip(question, 600), officeId, duty, asked, forked);
@@ -211,7 +223,8 @@ export class AskDesk extends EventEmitter {
       child.on('close', (code) => {
         const answer = out.replace(ANSI, '').replace(/\r/g, '').trim();
         if (code === 0 && answer) finish('answered', answer);
-        else finish('failed', null, err.replace(ANSI, '').trim().split('\n').filter(Boolean).slice(-3).join(' · ') || t('btw.noAnswer', { code }));
+        // why it failed, not the warnings it printed first (an extension's, Node's)
+        else finish('failed', null, agentFailure(err) || (code === 0 ? '' : agentFailure(out)) || t('btw.noAnswer', { code }));
       });
     });
     return { ok: true, ask, done };

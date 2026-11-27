@@ -225,6 +225,8 @@ En el navegador, `http://127.0.0.1:4317` muestra la oficina. Dos atajos útiles:
 - **⚙ › General** elige el idioma, la zona horaria, la **ciudad** (para el clima, el sol y la luna: una zona horaria abarca muchas ciudades), y **⚙ › El juego**, la **vista**: la **frontal** de siempre o la **cenital (isométrica)**. También se cambia con el botón ◇ o con `v`.
 - **⚙ › Repositorios** muestra lo que quedó registrado.
 
+Si un agente instalado en tu máquina no está conectado (le falta su integración o sus hooks), la oficina lo dice al arrancar y arriba en el juego, con el comando que lo conecta (`dev-team-office setup --only <agente>`); hasta entonces su trabajo no se ve.
+
 ## 7. Dónde queda cada cosa
 
 | Qué | Dónde |
@@ -266,6 +268,7 @@ De cualquiera de las dos formas, `update` termina con `setup`, así que las skil
 | El agente se conecta pero no hace nada | No tiene login o no tiene modelo: ver [El login de tu agente](#el-login-de-tu-agente) |
 | El puerto 4317 está ocupado | `dev-team-office --port 4318`, o `DEV_TEAM_OFFICE_PORT=4318` |
 | Pi no muestra nada | `dev-team-office doctor`; revisa que la extensión esté en `~/.pi/agent/extensions/` y que Pi sea ≥ 1.2 si usas gentle-pi |
+| Claude Code (en la terminal, o en la pestaña Code de la app de escritorio de Claude) no aparece | `dev-team-office doctor`; si dice que a Claude Code le falta algo, `dev-team-office setup --only claude-code`. La app de escritorio lee el mismo `~/.claude/settings.json`: conectado, sus sesiones también aparecen |
 | Codex no reporta | Confía en los hooks nuevos con `/hooks` |
 | Los subagentes salen con el personaje equivocado | Agrega `role: <rol>` a su archivo (`analyst`, `manager`, `tl`, `qa`, `backend`, `frontend`, `designer`) y vuelve a correr `join` |
 | Dentro de herdr no se abren panes por subagente | ⚙ › Terminal › «Cada subagente en su pane», o `dev-team-office config herdr.subagents on` |

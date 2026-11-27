@@ -61,3 +61,24 @@ test('una segunda demo mientras corre otra dice que ya hay una (no «comando no 
     await server.close();
   }
 });
+
+test('la oficina dice qué agentes instalados no están conectados: en el arranque, en /v1/health y en el hello del juego', async () => {
+  const lines = [];
+  const gaps = [{ id: 'claude-code', label: 'Claude Code', fix: 'dev-team-office setup --only claude-code' }];
+  let calls = 0;
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false, log: (m) => lines.push(m), integrations: () => { calls++; return gaps; } });
+  try {
+    assert.ok(lines.some((l) => l.includes('Claude Code') && l.includes('dev-team-office setup --only claude-code')), lines.join('\n'));
+    const health = await (await fetch(`${server.url}/v1/health`)).json();
+    assert.deepEqual(health.unconnected, gaps);
+    const ws = new WebSocket(`${server.url.replace('http', 'ws')}/v1/ws`);
+    const hello = await new Promise((resolve, reject) => { ws.onmessage = (e) => resolve(JSON.parse(e.data)); ws.onerror = reject; });
+    ws.close();
+    assert.deepEqual([hello.type, hello.unconnected], ['hello', gaps]);
+    assert.equal(calls, 1, 'se mira a lo más cada 30 s, no en cada pedido');
+  } finally { await server.close(); }
+
+  // the tests (and any office that does not pass `integrations`) never look at your HOME
+  const plain = await startServer({ port: 0, socket: null, db: ':memory:', weather: false });
+  try { assert.deepEqual((await (await fetch(`${plain.url}/v1/health`)).json()).unconnected, []); } finally { await plain.close(); }
+});
