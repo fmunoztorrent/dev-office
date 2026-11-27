@@ -227,6 +227,45 @@ test('dentro de herdr, cada subagente en su pane: bajo el del agente, uno al lad
     pi({ kind: 'session_start' });
     pi({ kind: 'tool_start', tool: 'subagent_run', toolUseId: 'c1', input: { agent: 'ex-qa', label: 'RED: tests que fallen', task: 'Escribe tests que fallen para shipping()' } });
     await until(() => server.subPanes.list().find((x) => x.pane));
+// herdr may see the pane idle before the session's own end arrives (Pi reports it once it settles,
+// after its retries): the session's verdict wins, once.
+test('dentro de herdr: si herdr ve el pane libre antes de que Pi avise que su turno terminó en un error, la tarea igual falla', async () => {
+  const fake = fakeHerdr();
+  const herdr = new Herdr({ env: ENV, run: fake.run, every: 30 });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dto-herdr-'));
+  const server = await startServer({ port: 0, socket: null, db: ':memory:', weather: false, herdr });
+  const settle = async (pane) => {
+    fake.panes.get(pane).agent_status = 'working';
+    await sleep(80);
+    fake.panes.get(pane).agent_status = 'idle';
+  };
+  const taskOf = (id) => server.hub.snapshot().tasks.find((x) => x.id === id);
+  try {
+    const a = server.hub.submit({ agent: 'pi', mode: 'launch', text: 'Arregla el login', cwd: dir, launch: { bin: process.execPath } });
+    assert.equal(a.ok, true, a.error);
+    const task = await until(() => taskOf(a.task.id)?.pane && taskOf(a.task.id));
+    assert.equal(task.session, `pi-${task.id}`);
+    await settle(task.pane);
+    await until(() => taskOf(task.id).status === 'done');
+    server.company.ingest('pi', { session: task.session, cwd: dir, kind: 'turn_end', error: '402 Insufficient balance' });
+    await until(() => taskOf(task.id).status === 'failed');
+    assert.equal(taskOf(task.id).detail, '402 Insufficient balance');
+
+    // a turn that ended well, seen first by herdr: a later error of that session does not change it
+    const b = server.hub.submit({ agent: 'pi', mode: 'launch', text: 'Sube la cobertura', cwd: dir, launch: { bin: process.execPath } });
+    const other = await until(() => taskOf(b.task.id)?.pane && taskOf(b.task.id));
+    await settle(other.pane);
+    await until(() => taskOf(other.id).status === 'done');
+    server.company.ingest('pi', { session: other.session, cwd: dir, kind: 'turn_end' });
+    server.company.ingest('pi', { session: other.session, cwd: dir, kind: 'turn_end', error: 'otro turno' });
+    await sleep(50);
+    assert.equal(taskOf(other.id).status, 'done');
+  } finally {
+    await server.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
     // below the agent's pane (not the office's), with that subagent's viewer
     assert.deepEqual(splits()[0].slice(0, 7), ['pane', 'split', 'w1:p2', '--direction', 'down', '--ratio', '0.4']);
     const qa = server.subPanes.list()[0].pane;

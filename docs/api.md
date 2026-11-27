@@ -419,7 +419,7 @@ The office also works the other way around: you can send the agent a task.
 | `session` (default) | Immediately to the connected session. Pi receives it with `pi.sendUserMessage` (as a follow-up if busy) and OpenCode with `client.session.prompt` | Queued. When Claude ends its turn, the `Stop` hook answers `{"decision":"block","reason":"<task>"}` and Claude carries on with it. If the session is waiting for your message, delivery happens when the next turn ends |
 | `launch` | Inside herdr, the agent in a new (interactive) pane with the task as its prompt. Outside, the office opens `opencode run "<task>"` / `pi -p "<task>"` in `cwd` | Inside herdr, in a new pane. Outside, the office opens `claude -p "<task>" --permission-mode acceptEdits` in `cwd` |
 
-A task's states: `queued` → `sent` → `running` → `done`, `failed` or `cancelled`. The task is passed as a single argument, without a shell, so its text is never interpreted as a command.
+A task's states: `queued` → `sent` → `running` → `done`, `failed` or `cancelled`. A task sent to a session ends with that session's `turn_end`: `done`, or `failed` with the reason in `detail` when the turn ended in an error (the provider refused the model's answer: no balance, a bad key). Pi and OpenCode report that `error` on their `turn_end`; Pi does it once it stops retrying. The task is passed as a single argument, without a shell, so its text is never interpreted as a command.
 
 ### Protocol for agents (plugins and extensions)
 
@@ -453,6 +453,7 @@ A registered connection does not receive the office's event broadcast, only its 
   "input": { "file_path": "src/App.tsx" },  // decides the character: file_path | filePath | path | command
   "text": "free text",
   "ok": true,                         // tool_end: false if it failed
+  "error": "402 Insufficient balance",  // turn_end: the turn ended in an error, and why (the task it was doing fails)
   "role": "frontend",                 // optional: forces the character
   "phase": "red",                     // kind: phase
   "from": "tl",                       // kind: phase, optional
@@ -489,6 +490,7 @@ it received, or the oldest open one) and its work is done by that subagent's cha
 | `dispatch` | A task sent from the office (emitted by the server) | You (the PO) take the card to the manager |
 | `waiting` | The agent waits for the user | Orange banner; the manager goes to your desk (the PO's) and raises his hand |
 | `error` | A general error | The character gets stuck |
+| `turn_end` | The agent ends its turn; with `error`, its turn ended in an error (the provider refused the model's answer) | The role on duty says so and goes back to rest. The task sent to that session is `done`, or `failed` with that `error` |
 | `compact` | Context compaction | The manager tidies up notes; the context bar shows it as just compacted until the next answer |
 | `autocompact` | The office asked the agent to compact (emitted by the server): `via` `agent` \| `pane` \| `manual` \| `failed` | A line in the log |
 | `done` | End of the task | Celebration at the table |

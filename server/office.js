@@ -4,7 +4,7 @@ import { ALL_ROLE_IDS, roleForTool, roleForText, describe, clip, normRole, agent
 import { t } from '../public/i18n.js';
 import { realDir, insideDir } from './paths.js';
 import { unguided } from './guides.js';
-import { badgeFor, myToolOf } from './humanize.js';
+import { badgeFor, myToolOf, providerError } from './humanize.js';
 
 const LOG_MAX = 300;
 const SESSIONS_MAX = 30;
@@ -258,7 +258,7 @@ export class Office extends EventEmitter {
         return { ...ev, role: 'manager', text: t('events.updateBoard') };
       case 'thinking': return { ...ev, role: role || s.turn || 'tl', text: clip(r.text || t('events.thinking')), badge: t('badge.think') };
       case 'waiting': return { ...ev, role: (sub && role) || 'manager', text: clip(r.text || t('events.waiting'), 140) };
-      case 'error': return { ...ev, ok: false, role: role || 'tl', text: clip(r.text || t('events.error'), 140) };
+      case 'error': return { ...ev, ok: false, role: role || 'tl', text: clip(providerError(r.text) || t('events.error'), 140) };
       // the office asked the agent to compact (server/compact.js): how, and why
       // (failed: the agent could not; it says why, and it is asked again later)
       case 'autocompact': {
@@ -273,6 +273,9 @@ export class Office extends EventEmitter {
       case 'turn_end': {
         const was = s.turn;
         s.turn = s.phase = null;
+        // a turn that ended in a model error (the provider refused it): the task it was doing fails with it
+        const error = typeof r.error === 'string' && r.error.trim() ? clip(providerError(r.error), 200) : '';
+        if (error) return { ...ev, role: role || was || 'manager', ok: false, error, text: clip(r.text || t('events.turnFailed'), 140) };
         return { ...ev, role: role || was || 'manager', text: clip(r.text || t('events.turnEnd', { text: '' }), 140) };
       }
       case 'done':

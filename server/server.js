@@ -1270,7 +1270,8 @@ export async function startServer({ port = DEFAULT_PORT, host = DEFAULT_HOST, so
   };
   company.on('event', (id, event, session) => toOffice(id, { type: 'event', event, session, office: id }));
   company.on('event', (id, event) => bus.emit('activity', id, event));
-  company.on('event', (_id, event) => { if (event.kind === 'turn_end' || event.kind === 'done') hub.sessionSettled(event.session); });
+  // a turn that ended in an error (`turn_end` with its `error`) fails the task it was doing
+  company.on('event', (_id, event) => { if (event.kind === 'turn_end' || event.kind === 'done') hub.sessionSettled(event.session, event.kind === 'turn_end' ? event.error : null); });
   // past your threshold, the agent is asked to compact its context (server/compact.js)
   const compactor = new Compactor({ prefs, hub, herdr, company });
   company.on('event', (id, event, session) => compactor.onEvent(id, event, session));

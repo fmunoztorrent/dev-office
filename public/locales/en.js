@@ -264,7 +264,7 @@ export default {
     thinking: 'Thinking…', waiting: 'The agent is waiting for your approval', error: 'Something went wrong', compact: 'Tidies up the notes (compacts the context)',
     autocompact: { agent: '🗜 The context is at {used} (limit {at}): asking the agent to compact it', pane: '🗜 The context is at {used} (limit {at}): /compact in its pane', manual: '🗜 The context is at {used} (limit {at}): type /compact in its session to compact it', failed: '🗜 It could not compact: {reason}' },
     done: 'Task done!', sessionStart: 'New work session', sessionEnd: 'Session closed', serviceUp: 'Started a service: {name}', serviceDown: 'The service stopped: {name}', you: 'You', office: 'Office', subtask: 'Subtask',
-    permission: 'Permission for {tool}', interrupted: 'Interrupted', turnEnd: 'ends the turn{text}',
+    permission: 'Permission for {tool}', interrupted: 'Interrupted', turnEnd: 'ends the turn{text}', turnFailed: 'ends the turn with an error',
     read: 'Reading {file}', write: 'Creating {file}', edit: 'Editing {file}', grep: 'Searching "{pattern}"', glob: 'Looking through {pattern}', files: 'files',
     websearch: 'Researching: {query}', webfetch: 'Reading {host}', web: 'Reading a web page', ask: 'Asks you something', askWhat: 'Asks you: {question}',
     plan: 'Presents the plan', planning: 'Planning', skill: 'Using skill {skill}', working: 'Working',

@@ -264,7 +264,7 @@ export default {
     thinking: 'Pensando…', waiting: 'El agente espera tu aprobación', error: 'Algo salió mal', compact: 'Ordena las notas (compacta el contexto)',
     autocompact: { agent: '🗜 El contexto va en {used} (tope {at}): le pido al agente que lo compacte', pane: '🗜 El contexto va en {used} (tope {at}): /compact en su pane', manual: '🗜 El contexto va en {used} (tope {at}): escribe /compact en su sesión para compactarlo', failed: '🗜 No se pudo compactar: {reason}' },
     done: '¡Tarea terminada!', sessionStart: 'Nueva sesión de trabajo', sessionEnd: 'Sesión cerrada', serviceUp: 'Levantó un servicio: {name}', serviceDown: 'El servicio se detuvo: {name}', you: 'Tú', office: 'Oficina', subtask: 'Subtarea',
-    permission: 'Permiso para {tool}', interrupted: 'Interrumpido', turnEnd: 'termina su turno{text}',
+    permission: 'Permiso para {tool}', interrupted: 'Interrumpido', turnEnd: 'termina su turno{text}', turnFailed: 'termina su turno con un error',
     read: 'Leyendo {file}', write: 'Creando {file}', edit: 'Editando {file}', grep: 'Buscando "{pattern}"', glob: 'Revisando {pattern}', files: 'archivos',
     websearch: 'Investigando: {query}', webfetch: 'Leyendo {host}', web: 'Leyendo una web', ask: 'Te pregunta algo', askWhat: 'Te pregunta: {question}',
     plan: 'Presenta el plan', planning: 'Planificando', skill: 'Usando skill {skill}', working: 'Trabajando',

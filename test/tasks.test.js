@@ -47,6 +47,40 @@ test('una tarea llega a la sesión de Pi conectada y queda en curso al aceptarla
   await until(() => server.hub.snapshot().agents.length === 0);
 }));
 
+// A turn that ends in a model error (the provider refused it: no balance, a bad key) is not a
+// finished task: the session's `turn_end` carries the `error`, and the task fails with that reason.
+test('un turno que termina en un error del modelo: la tarea de esa sesión falla con la razón, no queda terminada', () => withServer({}, async (server, base) => {
+  const ws = new WebSocket(base.replace('http', 'ws') + '/v1/ws');
+  ws.on('message', (d) => {
+    const m = JSON.parse(d);
+    if (m.type === 'task') ws.send(JSON.stringify({ type: 'task_update', id: m.id, status: 'accepted' }));
+  });
+  await new Promise((r) => ws.on('open', r));
+  ws.send(JSON.stringify({ type: 'register', agent: 'pi', session: 'pi-2', cwd: '/proj' }));
+  await until(() => server.hub.snapshot().agents.length === 1);
+
+  const first = (await (await post(base, '/v1/tasks', { agent: 'pi', text: 'Arregla el login' })).json()).task;
+  await until(() => server.hub.snapshot().tasks.find((x) => x.id === first.id).status === 'running');
+  server.office.ingest('pi', { session: 'pi-2', cwd: '/proj', kind: 'error', text: '402 Insufficient balance' });
+  server.office.ingest('pi', { session: 'pi-2', cwd: '/proj', kind: 'turn_end', error: '402 Insufficient balance' });
+  const failed = await until(() => server.hub.snapshot().tasks.find((x) => x.id === first.id && x.status === 'failed'));
+  assert.equal(failed.detail, '402 Insufficient balance');
+  // the end of the turn says it ended badly, and keeps the reason
+  const end = server.office.log.findLast((e) => e.kind === 'turn_end' && e.session === 'pi-2');
+  assert.deepEqual([end.ok, end.error, end.text], [false, '402 Insufficient balance', t('events.turnFailed')]);
+  assert.ok(server.office.log.some((e) => e.kind === 'error' && e.session === 'pi-2' && /402 Insufficient balance/.test(e.text)));
+
+  // a turn that ends well is still done
+  const second = (await (await post(base, '/v1/tasks', { agent: 'pi', text: 'Sube la cobertura' })).json()).task;
+  await until(() => server.hub.snapshot().tasks.find((x) => x.id === second.id).status === 'running');
+  server.office.ingest('pi', { session: 'pi-2', cwd: '/proj', kind: 'turn_end' });
+  await until(() => server.hub.snapshot().tasks.find((x) => x.id === second.id).status === 'done');
+  const fine = server.office.log.findLast((e) => e.kind === 'turn_end');
+  assert.ok(fine.ok !== false && !fine.error);
+  assert.equal(server.hub.snapshot().tasks.find((x) => x.id === first.id).status, 'failed', 'la anterior no cambia');
+  ws.close();
+}));
+
 test('sin sesión conectada de Pi u OpenCode hay que pedir una nueva', () => withServer({}, async (_s, base) => {
   const res = await (await post(base, '/v1/tasks', { agent: 'opencode', text: 'x' })).json();
   assert.equal(res.ok, false);
@@ -81,6 +115,24 @@ test('una sesión nueva: la oficina abre el CLI del agente (sin shell) y se pued
   assert.equal(server.hub.snapshot().tasks[0].session, `pi-${res.task.id}`); // the Pi extension adopts this id
   assert.equal((await (await post(base, `/v1/tasks/${res.task.id}/cancel`, {})).json()).ok, true);
   await until(() => server.hub.snapshot().tasks[0].status === 'cancelled');
+}));
+
+// In the background, a Pi that exits with 0 after a model error: its session already said the turn
+// ended in an error, and that is the task's verdict (not the exit code).
+test('una sesión nueva en segundo plano: si su turno terminó en un error del modelo, la tarea falla aunque salga con 0', () => withServer({}, async (server) => {
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'dto-bin-'));
+  const pi = path.join(bin, 'pi');
+  fs.writeFileSync(pi, '#!/bin/sh\nsleep 0.4\nexit 0\n', { mode: 0o755 });
+  try {
+    const res = server.hub.submit({ agent: 'pi', mode: 'launch', text: 'Arregla el login', cwd: bin, launch: { bin: pi } });
+    assert.equal(res.ok, true, res.error);
+    await until(() => server.hub.snapshot().tasks[0].status === 'running');
+    server.office.ingest('pi', { session: `pi-${res.task.id}`, cwd: bin, kind: 'turn_end', error: '402 Insufficient balance' });
+    const task = await until(() => ['done', 'failed'].includes(server.hub.snapshot().tasks[0].status) && server.hub.snapshot().tasks[0]);
+    assert.deepEqual([task.status, task.detail], ['failed', '402 Insufficient balance']);
+  } finally {
+    fs.rmSync(bin, { recursive: true, force: true });
+  }
 }));
 
 // fake herdr whose prompt never starts the turn (always agent_prompt_stalled)

@@ -59,6 +59,11 @@ const unwrap = (res) => {
   if (res?.error) throw new Error(errText(res.error));
   return res?.data ?? res;
 };
+/**
+ * The error an answer ended in (the provider refused it: no balance, a bad key…), or ''. Stopping it
+ * yourself (Esc) is not an error. A prompt with an error still resolves: its message carries it.
+ */
+const answerError = (err) => (err && err.name !== 'MessageAbortedError' ? String(err.data?.message || err.message || err.name || 'error') : '');
 
 export const DevTeamOffice = async ({ client, directory }) => {
   // a side question (btw) launched by the office: it is not the team's work, it is not reported
@@ -127,7 +132,7 @@ export const DevTeamOffice = async ({ client, directory }) => {
       ? client.session.command({ path: { id }, body: { command: msg.command, arguments: msg.args ?? '' } })
       : client.session.prompt({ path: { id }, body: { parts: [{ type: 'text', text: msg.text }] } });
     sent
-      .then((res) => { unwrap(res); ack(msg.id, 'done'); })
+      .then((res) => { const failed = answerError(unwrap(res)?.info?.error); ack(msg.id, failed ? 'failed' : 'done', failed || undefined); })
       .catch((err) => toTui(msg.text).catch(() => ack(msg.id, 'failed', errText(err))));
   }
 
@@ -169,7 +174,8 @@ export const DevTeamOffice = async ({ client, directory }) => {
     compactAsked.delete(session);
     client.session.summarize({ path: { id: session }, body: model }).then(unwrap).catch((err) => send({ session, cwd, kind: 'autocompact', via: 'failed', text: errText(err) }));
   }
-  const busy = (session) => { if (session) idle.delete(session); };
+  const turnErrors = new Map();    // session → the error its turn ended in, for its turn_end
+  const busy = (session) => { if (session) { idle.delete(session); turnErrors.delete(session); } };
 
   // ---- pipelines inside the session ----
 
@@ -206,7 +212,8 @@ export const DevTeamOffice = async ({ client, directory }) => {
       try {
         const res = unwrap(await client.session.prompt({ path: { id: runSession }, body }));
         if (run !== me) break; // cancelled while running
-        step = await run.advance(lib.textOf(res) || lib.textOf(res?.info));
+        const failed = answerError(res?.info?.error);
+        step = failed ? run.fail(`OpenCode: ${failed}`) : await run.advance(lib.textOf(res) || lib.textOf(res?.info));
       } catch (err) {
         if (run !== me) break;
         step = run.fail(`OpenCode: ${errText(err)}`);
@@ -275,8 +282,18 @@ export const DevTeamOffice = async ({ client, directory }) => {
         case 'session.idle':
           idle.add(session);
           compactIfAsked(session);
-          return run && session === runSession ? undefined : send({ ...at, cwd, kind: 'turn_end' });
-        case 'session.error': return send({ ...at, cwd, kind: 'error', text: p.error?.data?.message || p.error?.name });
+          if (run && session === runSession) return undefined;
+          {
+            // a turn that ended in an error (session.error first): the office fails the task it was doing
+            const error = turnErrors.get(session);
+            turnErrors.delete(session);
+            return send({ ...at, cwd, kind: 'turn_end', ...(error ? { error } : {}) });
+          }
+        case 'session.error': {
+          const error = answerError(p.error);
+          if (error) turnErrors.set(session, error);
+          return send({ ...at, cwd, kind: 'error', text: p.error?.data?.message || p.error?.name });
+        }
         case 'session.compacted': lastContext.delete(session); return send({ ...at, cwd, kind: 'compact' });
         case 'permission.updated':
         case 'permission.asked': return send({ ...at, cwd, kind: 'waiting', text: p.title || 'OpenCode pide permiso' });

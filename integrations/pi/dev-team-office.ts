@@ -276,8 +276,15 @@ export default function (pi: ExtensionAPI) {
     lastContext = key;
     report({ kind: 'context', context: { used, max } });
   };
+  // A model error (the provider refused: no balance, a bad key, overloaded) ends Pi's answer with
+  // stopReason 'error' and its errorMessage. Pi may retry it (agent_end, then another run), so the
+  // turn's verdict waits until Pi settles: a turn that ends in an error is an error for the office
+  // (the task it was doing fails with that reason), never a finished turn.
+  let turnError = '';     // the error the last answer ended in ('' if it ended well)
+  let endHeld = false;    // agent_end held the turn's end back, waiting to know whether Pi retries
+  const errorOf = (m: any) => (m?.role === 'assistant' && m.stopReason === 'error' ? String(m.errorMessage || '').trim().slice(0, 500) || 'error' : '');
   pi.on('message_end', async (event: any, c: any) => {
-    if (event.message?.role === 'assistant') reportContext(c || ctx, event.message);
+    if (event.message?.role === 'assistant') { reportContext(c || ctx, event.message); turnError = errorOf(event.message); }
     if (event.message?.role !== 'assistant' || !lib) return;
     const t = lib.textOf(event.message);
     if (t) lastText = t;
@@ -285,12 +292,25 @@ export default function (pi: ExtensionAPI) {
   pi.on('turn_end', async (_e: any, c: any) => { ctx = c; reportContext(c); });
   pi.on('session_compact', async () => { lastContext = ''; compacting = false; report({ kind: 'compact' }); });
   // with a pipeline in progress each stage ends a turn: the pipeline says "done" at the end
-  pi.on('agent_end', async (_e: any, c: any) => { ctx = c; reportContext(c); if (!run) report({ kind: 'turn_end' }); });
+  pi.on('agent_end', async (event: any, c: any) => {
+    ctx = c;
+    reportContext(c);
+    const last = Array.isArray(event?.messages) ? event.messages.findLast((m: any) => m?.role === 'assistant') : null;
+    if (last) turnError = errorOf(last);
+    endHeld = !run && !!turnError;
+    if (!run && !turnError) report({ kind: 'turn_end' });
+  });
   pi.on('agent_settled', async (event: any, c: any) => {
     ctx = c;
+    // settled: no retry is coming. An error that stayed is the turn's (pressing Escape is not an error)
+    const failed = event.aborted ? '' : turnError;
+    turnError = '';
+    if (failed) report({ kind: 'error', text: failed });
+    if (endHeld) { endHeld = false; report({ kind: 'turn_end', ...(failed ? { error: failed } : {}) }); }
     if (!run || !waiting) return compactIfAsked();
     waiting = false;
     if (event.aborted) { run.cancel('cancelado en Pi'); return finish(); }
+    if (failed) return apply(run.fail(`Pi: ${failed}`));
     await apply(await run.advance(lastText));
   });
 

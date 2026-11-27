@@ -31,6 +31,7 @@ A renderer SDK, so any graphics engine can draw the office; an interface with tw
 
 ### Fixed
 
+- **A turn that ends in a model error is a failure, not a finished task.** When the provider refuses the answer (no balance, a bad key), Pi and OpenCode now report the error and a `turn_end` that carries it, and the brief the office sent to that session ends `failed` with the provider's reason (on the board, in the log and in the retro) instead of «finished». Pi waits until it stops retrying; a retry that works is a normal turn, and pressing Escape is not an error. Inside herdr, the session's verdict wins even if herdr saw the pane idle first. A Pi or OpenCode pipeline stage whose answer was refused fails the pipeline instead of moving on.
 - **Asking for a demo while one is running** says so ("a demo is already running") instead of "command not available: demo".
 - On a phone, a dialog's note goes above its buttons instead of squeezing into a column, and a footer with many buttons wraps instead of cutting one off.
 
